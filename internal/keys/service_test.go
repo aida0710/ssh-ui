@@ -306,6 +306,68 @@ func TestChangePassphraseKeepsKeyMaterialOutOfTheBackupDirectory(t *testing.T) {
 	assertNoKeyMaterialInBackups(t, workspace)
 }
 
+func TestRevealReturnsTheKeyAndRecordsAnAuditFact(t *testing.T) {
+	service, workspace := newTestService(t, newQueryRunner())
+	if _, err := service.Generate(GenerateRequest{
+		Algorithm:  AlgorithmEd25519,
+		FileName:   "id_work",
+		Comment:    "aida@laptop",
+		Passphrase: []byte("correct horse"),
+	}); err != nil {
+		t.Fatalf("Generate error = %v", err)
+	}
+
+	revealed, err := service.Reveal(ItemID("id_work"))
+	if err != nil {
+		t.Fatalf("Reveal error = %v", err)
+	}
+	if !revealed.Encrypted {
+		t.Errorf("Encrypted = false, want true")
+	}
+	onDisk, err := os.ReadFile(filepath.Join(workspace.Root(), "id_work"))
+	if err != nil {
+		t.Fatalf("read key: %v", err)
+	}
+	if string(revealed.Contents) != string(onDisk) {
+		t.Fatalf("Reveal returned different bytes than the file holds")
+	}
+
+	if _, err := service.Reveal(ItemID("id_work.pub")); !errors.Is(err, ErrUnknownKey) {
+		t.Fatalf("revealing a public key = %v, want ErrUnknownKey", err)
+	}
+	if _, err := service.Reveal("not-an-identifier"); !errors.Is(err, ErrUnknownKey) {
+		t.Fatalf("revealing an unknown identifier = %v, want ErrUnknownKey", err)
+	}
+
+	history, err := storage.NewManager(workspace, time.Now, rand.Reader).History()
+	if err != nil {
+		t.Fatalf("History error = %v", err)
+	}
+	reveals := 0
+	for _, record := range history {
+		if record.Operation == "key.reveal" {
+			reveals++
+		}
+	}
+	if reveals != 1 {
+		t.Fatalf("key.reveal records = %d, want 1", reveals)
+	}
+
+	records, err := os.ReadDir(filepath.Join(workspace.StateDir(), "history"))
+	if err != nil {
+		t.Fatalf("read history directory: %v", err)
+	}
+	for _, entry := range records {
+		document, readErr := os.ReadFile(filepath.Join(workspace.StateDir(), "history", entry.Name()))
+		if readErr != nil {
+			t.Fatalf("read history record: %v", readErr)
+		}
+		if strings.Contains(string(document), "OPENSSH PRIVATE KEY") {
+			t.Fatalf("an audit record contains key material")
+		}
+	}
+}
+
 func TestAlgorithmsAreReadThroughTheCommandSeam(t *testing.T) {
 	runner := newQueryRunner()
 	service, _ := newTestService(t, runner)

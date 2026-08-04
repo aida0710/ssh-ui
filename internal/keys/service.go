@@ -294,6 +294,52 @@ func (service *Service) ChangePassphrase(change PassphraseChange) (PassphraseRes
 	}, nil
 }
 
+// RevealResult is the answer to a confirmed private-key reveal.
+type RevealResult struct {
+	ID            string
+	RelativePath  string
+	Contents      []byte
+	Encrypted     bool
+	Fingerprint   string
+	TransactionID string
+}
+
+// Reveal returns the bytes of one private key.
+//
+// The audit record is written before the bytes are returned, so a reveal that
+// could not be recorded does not happen. The record names the file and the time
+// and never contains key material. Reveal deliberately has no other caller: the
+// ordinary detail API never returns private key bytes.
+func (service *Service) Reveal(keyID string) (RevealResult, error) {
+	inventory, err := service.Inventory()
+	if err != nil {
+		return RevealResult{}, err
+	}
+	item, ok := inventory.Find(keyID)
+	if !ok || item.Kind != KindPrivateKey {
+		return RevealResult{}, ErrUnknownKey
+	}
+
+	absolute := service.absolutePath(item.RelativePath)
+	contents, err := service.workspace.FileSystem().ReadFile(absolute)
+	if err != nil {
+		return RevealResult{}, err
+	}
+	result, err := service.transactions.Note("key.reveal", []string{absolute})
+	if err != nil {
+		Wipe(contents)
+		return RevealResult{}, err
+	}
+	return RevealResult{
+		ID:            item.ID,
+		RelativePath:  item.RelativePath,
+		Contents:      contents,
+		Encrypted:     item.Encrypted,
+		Fingerprint:   item.Fingerprint,
+		TransactionID: result.ID,
+	}, nil
+}
+
 // commentForKey recovers a private key's comment from a public key file with
 // the same fingerprint.
 func commentForKey(inventory *Inventory, item *Item) (string, []string) {
