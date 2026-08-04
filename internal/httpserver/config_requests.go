@@ -247,6 +247,10 @@ func serviceProblem(c *echo.Context, err error) error {
 		return problemWith(c, http.StatusNotFound, problemPayload{Code: "not_found"})
 	case errors.Is(err, application.ErrExternalPath), errors.Is(err, storage.ErrOutsideWorkspace),
 		errors.Is(err, storage.ErrSymlinkPath), errors.Is(err, storage.ErrNotRegularFile),
+		// A path naming a directory that does not exist, or a component that is
+		// not a directory, is a fact about the request, not an internal fault.
+		// Without these two a caller-supplied path such as "~/x/y" answered 500.
+		errors.Is(err, storage.ErrMissingDirectory), errors.Is(err, storage.ErrNotDirectory),
 		errors.Is(err, application.ErrNotEditable):
 		return problemWith(c, http.StatusForbidden, problemPayload{Code: "path_not_editable"})
 	case errors.Is(err, application.ErrUnknownEditKind), errors.Is(err, application.ErrUnknownRecoveryAction),
