@@ -1402,6 +1402,7 @@ Render `<App />` with injected bootstrap and health functions. Assert the user s
 - disabled navigation labels for Connections, Groups, Config, Keys, Known Hosts, and History;
 - an actionable error screen when bootstrap fails;
 - no bootstrap or CSRF token text in the DOM.
+- wrapping the application in React `StrictMode` still invokes the one-time bootstrap exchange only once.
 
 - [ ] **Step 6: Implement the accessible shell and local Tailwind theme**
 
@@ -1426,11 +1427,12 @@ export function App({ bootstrap, health }: AppProps) {
     let active = true;
     void bootstrap()
       .then((sessionState) => {
+        if (!active) return null;
         apiClient.setCSRF(sessionState.csrfToken);
         return health();
       })
       .then((result) => {
-        if (!active) return;
+        if (!active || result === null) return;
         setVersion(result.version);
         setState("ready");
       })
@@ -1484,10 +1486,11 @@ import { bootstrapSession } from "./session/bootstrap";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("root element missing");
+const sessionPromise = bootstrapSession(window.location, window.history, window.fetch.bind(window));
 createRoot(root).render(
   <StrictMode>
     <App
-      bootstrap={() => bootstrapSession(window.location, window.history, window.fetch.bind(window))}
+      bootstrap={() => sessionPromise}
       health={() => apiClient.health()}
     />
   </StrictMode>,
