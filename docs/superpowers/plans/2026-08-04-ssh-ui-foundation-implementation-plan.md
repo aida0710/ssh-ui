@@ -245,6 +245,7 @@ Expected: `go.mod`, `go.sum`, and `internal/api/models.gen.go` are created; `go.
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "16.3.2",
     "@testing-library/user-event": "14.6.1",
+    "@types/node": "22.20.1",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.4",
@@ -281,7 +282,7 @@ Expected: `web/package-lock.json` records the exact dependency graph and npm rep
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
-    "types": ["vitest/globals", "@testing-library/jest-dom"]
+    "types": ["vitest/globals", "@testing-library/jest-dom/vitest"]
   },
   "include": ["src", "vite.config.ts", "vitest.setup.ts"]
 }
