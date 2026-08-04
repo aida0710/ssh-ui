@@ -15,7 +15,22 @@ Plans are executed in this order. A later plan may consume only interfaces commi
 
 - Subsystem 1 (Foundation): delivered on `main`; acceptance gate verified 2026-08-04.
 - Subsystem 2 (Lossless config engine): delivered on `feature/config-engine`; plan `2026-08-05-ssh-ui-config-engine-implementation-plan.md`; acceptance gate verified 2026-08-05, including a clean 60-second parser fuzz run and no new module dependency.
-- Subsystems 3 to 6: not started.
+- Subsystem 3 (Connections UI and groups): planned, not started. `2026-08-05-ssh-ui-connections-ui-implementation-plan.md`, 10 tasks.
+- Subsystem 4 (Key vault): planned, not started. `2026-08-05-ssh-ui-key-vault-implementation-plan.md`, 9 tasks.
+- Subsystem 5 (SSH integrations): planned, not started. `2026-08-05-ssh-ui-ssh-integrations-implementation-plan.md`, 9 tasks.
+- Subsystem 6 (Hardening and release): not planned.
+- Follow-up `ssh-ui-file-operations`: not planned. Owns `~/.ssh` file and folder move, rename and delete, which subsystem 3 defers.
+
+## Integration notes for plans 3, 4 and 5
+
+Plans 3, 4 and 5 were written concurrently against the tree as it stood after subsystem 2. They do not conflict in design, but each was authored without seeing the others' edits, so whoever executes them must expect drift in the shared wiring and reconcile it rather than pasting a plan's wiring step verbatim.
+
+- Execution order stays 3, then 4, then 5. A later plan may consume interfaces the earlier one committed.
+- All three add routes to `api/openapi.yaml`, handlers under `internal/httpserver`, and construction code in `internal/app/run.go` and `cmd/ssh-ui/main.go`. Each plan's wiring step describes the shape it expects; adapt it to what is actually in the tree at that point.
+- Home directory resolution: plans 3 and 5 agree that `os.UserHomeDir` may be called only from `cmd/ssh-ui`, and plan 5 makes `app.Run` fail with `ErrMissingHome` instead of degrading silently. This supersedes the subsystem 2 acceptance-gate grep, which assumed no package needed a home directory yet.
+- Storage primitives: plan 4 Task 4 adds `Move`, `Removal` and `Note` to `storage.Manager`, plus `PendingEntry.Action`/`Target` and `Pending.CanRollback`. Plan 3 is cross-referenced to them and the `ssh-ui-file-operations` follow-up must build on them.
+- Dependencies: plan 4 introduces `golang.org/x/crypto v0.54.0` and `golang.org/x/sys v0.47.0`, verified against those exact versions. Plans 3 and 5 add nothing. Read plan 5's "no new dependency" gate as "nothing beyond what plan 4 already committed", not as an unchanged `go.mod` since subsystem 2.
+- Confirmation gates: plan 5 splits design §8.3 into evaluation confirmation (`Match exec` only, since that is the sole directive OpenSSH runs while parsing) and connection confirmation (any executable directive). Plan 3's Host detail `Effective` and `Diagnostics` placeholders must hand over to those gates rather than inventing a third one.
 
 ## Toolchain decision
 
