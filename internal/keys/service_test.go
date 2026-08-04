@@ -679,3 +679,20 @@ func TestRegisterRecordsNothingWhenTheAgentRefuses(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateFileNameRefusesNamesTheApplicationDependsOn(t *testing.T) {
+	reserved := []string{"config", "known_hosts", "authorized_keys", "ssh-ui", "environment", "rc"}
+	for _, name := range reserved {
+		if err := ValidateFileName(name); !errors.Is(err, ErrInvalidFileName) {
+			t.Errorf("ValidateFileName(%q) = %v, want ErrInvalidFileName", name, err)
+		}
+		if err := ValidateFileName(strings.ToUpper(name)); !errors.Is(err, ErrInvalidFileName) {
+			t.Errorf("ValidateFileName(%q) = %v, want ErrInvalidFileName", strings.ToUpper(name), err)
+		}
+	}
+	for _, name := range []string{"id_ed25519", "work", "config_backup", "known_hosts_old"} {
+		if err := ValidateFileName(name); err != nil {
+			t.Errorf("ValidateFileName(%q) = %v, want nil", name, err)
+		}
+	}
+}

@@ -44,7 +44,32 @@ func ValidateFileName(name string) error {
 	if strings.HasSuffix(name, ".pub") || name == StateDirectoryName {
 		return ErrInvalidFileName
 	}
+	if reservedFileNames[strings.ToLower(name)] {
+		return ErrInvalidFileName
+	}
 	return nil
+}
+
+// reservedFileNames are the names OpenSSH and this application already give a
+// meaning inside ~/.ssh.
+//
+// Writing a key to one of them would not merely be confusing: generating a key
+// called "config" into an empty workspace would create the entry configuration
+// file and fill it with a private key. An existing file is protected by the
+// transaction precondition, so only a fresh workspace is exposed, but the name
+// policy should refuse a name the application itself depends on rather than
+// rely on something already occupying it. The comparison is case-insensitive
+// because macOS filesystems are case-insensitive by default, so "Config" and
+// "config" are the same file.
+var reservedFileNames = map[string]bool{
+	"config":           true,
+	"known_hosts":      true,
+	"known_hosts2":     true,
+	"authorized_keys":  true,
+	"authorized_keys2": true,
+	"environment":      true,
+	"rc":               true,
+	"ssh-ui":           true,
 }
 
 // ValidateComment rejects a comment this application would have to quote.
