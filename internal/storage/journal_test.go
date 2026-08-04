@@ -3,6 +3,7 @@ package storage
 import (
 	"bytes"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -187,6 +188,161 @@ func TestPendingAndHistoryAreEmptyForAFreshWorkspace(t *testing.T) {
 	}
 	if err := manager.Rollback("missing"); !errors.Is(err, ErrUnknownTransaction) {
 		t.Fatalf("Rollback(missing) error = %v", err)
+	}
+}
+
+func TestRollbackReversesAnInterruptedMove(t *testing.T) {
+	workspace := newTestWorkspace(t)
+	source := writeWorkspaceFile(t, workspace, "id_work", "PRIVATE KEY BYTES\n", 0o600)
+	other := writeWorkspaceFile(t, workspace, "id_spare", "SPARE KEY BYTES\n", 0o600)
+	destinationDirectory := filepath.Join(workspace.StateDir(), "trash", "entry-1")
+	if err := workspace.EnsureDirectory(destinationDirectory); err != nil {
+		t.Fatalf("EnsureDirectory error = %v", err)
+	}
+	failure := errors.New("injected rename failure")
+	workspace.fileSystem = faultyFileSystem{
+		FileSystem: OSFileSystem{},
+		failOn: func(operation, path string) error {
+			if operation == "rename" && path == filepath.Join(destinationDirectory, "id_spare") {
+				return failure
+			}
+			return nil
+		},
+	}
+	manager := NewManager(workspace, fixedClock(), bytes.NewReader(bytes.Repeat([]byte{0x5a}, 4096)))
+
+	_, err := manager.Commit(Request{
+		Operation: "key.trash",
+		Moves: []Move{
+			{From: source, To: filepath.Join(destinationDirectory, "id_work"), Precondition: Precondition{Exists: true, Digest: Digest([]byte("PRIVATE KEY BYTES\n"))}},
+			{From: other, To: filepath.Join(destinationDirectory, "id_spare"), Precondition: Precondition{Exists: true, Digest: Digest([]byte("SPARE KEY BYTES\n"))}},
+		},
+	})
+	if !errors.Is(err, failure) {
+		t.Fatalf("error = %v, want the injected failure", err)
+	}
+
+	workspace.fileSystem = OSFileSystem{}
+	pending, err := manager.Pending()
+	if err != nil {
+		t.Fatalf("Pending error = %v", err)
+	}
+	if len(pending) != 1 {
+		t.Fatalf("pending = %#v, want one", pending)
+	}
+	if !pending[0].CanRollback {
+		t.Fatalf("an interrupted move must be reversible")
+	}
+	if pending[0].Entries[0].Action != "move" {
+		t.Fatalf("Action = %q, want move", pending[0].Entries[0].Action)
+	}
+
+	if err := manager.Rollback(pending[0].ID); err != nil {
+		t.Fatalf("Rollback error = %v", err)
+	}
+	for path, want := range map[string]string{source: "PRIVATE KEY BYTES\n", other: "SPARE KEY BYTES\n"} {
+		contents, readErr := os.ReadFile(path)
+		if readErr != nil || string(contents) != want {
+			t.Fatalf("%s = %q, %v", path, contents, readErr)
+		}
+	}
+}
+
+func TestRollbackRefusesToPretendACommittedRemovalCanBeUndone(t *testing.T) {
+	workspace := newTestWorkspace(t)
+	first := writeWorkspaceFile(t, workspace, "ssh-ui/trash/entry-1/id_work", "FIRST\n", 0o600)
+	second := writeWorkspaceFile(t, workspace, "ssh-ui/trash/entry-1/id_work.pub", "SECOND\n", 0o600)
+	failure := errors.New("injected remove failure")
+	workspace.fileSystem = faultyFileSystem{
+		FileSystem: OSFileSystem{},
+		failOn: func(operation, path string) error {
+			if operation == "remove" && path == second {
+				return failure
+			}
+			return nil
+		},
+	}
+	manager := NewManager(workspace, fixedClock(), bytes.NewReader(bytes.Repeat([]byte{0x5a}, 4096)))
+
+	if _, err := manager.Commit(Request{
+		Operation: "key.purge",
+		Removals: []Removal{
+			{Path: first, Precondition: Precondition{Exists: true, Digest: Digest([]byte("FIRST\n"))}},
+			{Path: second, Precondition: Precondition{Exists: true, Digest: Digest([]byte("SECOND\n"))}},
+		},
+	}); !errors.Is(err, failure) {
+		t.Fatalf("error = %v, want the injected failure", err)
+	}
+
+	workspace.fileSystem = OSFileSystem{}
+	pending, err := manager.Pending()
+	if err != nil {
+		t.Fatalf("Pending error = %v", err)
+	}
+	if len(pending) != 1 || pending[0].CanRollback {
+		t.Fatalf("pending = %#v, want one entry that cannot be rolled back", pending)
+	}
+	if !pending[0].CanComplete {
+		t.Fatalf("an interrupted removal must still be completable")
+	}
+	if err := manager.Rollback(pending[0].ID); !errors.Is(err, ErrIrreversibleRemoval) {
+		t.Fatalf("Rollback error = %v, want ErrIrreversibleRemoval", err)
+	}
+	if err := manager.Complete(pending[0].ID); err != nil {
+		t.Fatalf("Complete error = %v", err)
+	}
+	for _, path := range []string{first, second} {
+		if _, statErr := os.Lstat(path); !errors.Is(statErr, fs.ErrNotExist) {
+			t.Fatalf("%s survived completion: %v", path, statErr)
+		}
+	}
+}
+
+func TestRollbackRefusesToUndoAChangeThatKeptNoBackup(t *testing.T) {
+	workspace := newTestWorkspace(t)
+	first := writeWorkspaceFile(t, workspace, "id_work", "FIRST\n", 0o600)
+	second := writeWorkspaceFile(t, workspace, "id_spare", "SPARE\n", 0o600)
+	failure := errors.New("injected rename failure")
+	workspace.fileSystem = faultyFileSystem{
+		FileSystem: OSFileSystem{},
+		failOn: func(operation, path string) error {
+			if operation == "rename" && path == second {
+				return failure
+			}
+			return nil
+		},
+	}
+	manager := NewManager(workspace, fixedClock(), bytes.NewReader(bytes.Repeat([]byte{0x5a}, 4096)))
+
+	if _, err := manager.Commit(Request{
+		Operation: "key.passphrase",
+		Changes: []Change{
+			{Path: first, Contents: []byte("NEW FIRST\n"), Precondition: Precondition{Exists: true, Digest: Digest([]byte("FIRST\n"))}, SkipBackup: true},
+			{Path: second, Contents: []byte("NEW SPARE\n"), Precondition: Precondition{Exists: true, Digest: Digest([]byte("SPARE\n"))}, SkipBackup: true},
+		},
+	}); !errors.Is(err, failure) {
+		t.Fatalf("error = %v, want the injected failure", err)
+	}
+
+	workspace.fileSystem = OSFileSystem{}
+	pending, err := manager.Pending()
+	if err != nil {
+		t.Fatalf("Pending error = %v", err)
+	}
+	if len(pending) != 1 {
+		t.Fatalf("pending = %#v, want one", pending)
+	}
+	if err := manager.Rollback(pending[0].ID); !errors.Is(err, ErrIrreversibleChange) {
+		t.Fatalf("Rollback error = %v, want ErrIrreversibleChange", err)
+	}
+	if err := manager.Complete(pending[0].ID); err != nil {
+		t.Fatalf("Complete error = %v", err)
+	}
+	for path, want := range map[string]string{first: "NEW FIRST\n", second: "NEW SPARE\n"} {
+		contents, readErr := os.ReadFile(path)
+		if readErr != nil || string(contents) != want {
+			t.Fatalf("%s = %q, %v", path, contents, readErr)
+		}
 	}
 }
 

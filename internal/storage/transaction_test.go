@@ -326,3 +326,187 @@ func (f faultyFileSystem) Remove(path string) error {
 	}
 	return f.FileSystem.Remove(path)
 }
+
+func TestCommitMovesAFileWithoutCopyingItsBytes(t *testing.T) {
+	manager, workspace := newTestManager(t)
+	source := writeWorkspaceFile(t, workspace, "id_work", "PRIVATE KEY BYTES\n", 0o400)
+	destinationDirectory := filepath.Join(workspace.StateDir(), "trash", "entry-1")
+	if err := workspace.EnsureDirectory(destinationDirectory); err != nil {
+		t.Fatalf("EnsureDirectory error = %v", err)
+	}
+	destination := filepath.Join(destinationDirectory, "id_work")
+
+	result, err := manager.Commit(Request{
+		Operation: "key.trash",
+		Moves: []Move{{
+			From:         source,
+			To:           destination,
+			Precondition: Precondition{Exists: true, Digest: Digest([]byte("PRIVATE KEY BYTES\n"))},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Commit error = %v", err)
+	}
+
+	if _, statErr := os.Lstat(source); !errors.Is(statErr, fs.ErrNotExist) {
+		t.Fatalf("source still exists: %v", statErr)
+	}
+	moved, err := os.Lstat(destination)
+	if err != nil {
+		t.Fatalf("destination missing: %v", err)
+	}
+	if moved.Mode().Perm() != 0o400 {
+		t.Errorf("destination permission = %04o, want 0400", moved.Mode().Perm())
+	}
+	contents, err := os.ReadFile(destination)
+	if err != nil || string(contents) != "PRIVATE KEY BYTES\n" {
+		t.Fatalf("destination contents = %q, %v", contents, err)
+	}
+
+	if entries, readErr := os.ReadDir(result.BackupDir); readErr == nil && len(entries) != 0 {
+		t.Fatalf("a move copied bytes into the backup directory: %#v", entries)
+	}
+
+	history, err := manager.History()
+	if err != nil {
+		t.Fatalf("History error = %v", err)
+	}
+	if len(history) != 1 || history[0].Operation != "key.trash" {
+		t.Fatalf("history = %#v", history)
+	}
+}
+
+func TestCommitRejectsAMoveOntoAnExistingFileOrAChangedSource(t *testing.T) {
+	manager, workspace := newTestManager(t)
+	source := writeWorkspaceFile(t, workspace, "id_work", "ORIGINAL\n", 0o600)
+	occupied := writeWorkspaceFile(t, workspace, "taken", "ALREADY HERE\n", 0o600)
+
+	if _, err := manager.Commit(Request{
+		Operation: "key.trash",
+		Moves: []Move{{
+			From:         source,
+			To:           occupied,
+			Precondition: Precondition{Exists: true, Digest: Digest([]byte("ORIGINAL\n"))},
+		}},
+	}); !errors.Is(err, ErrMoveTargetExists) {
+		t.Fatalf("error = %v, want ErrMoveTargetExists", err)
+	}
+
+	_, err := manager.Commit(Request{
+		Operation: "key.trash",
+		Moves: []Move{{
+			From:         source,
+			To:           filepath.Join(workspace.Root(), "moved"),
+			Precondition: Precondition{Exists: true, Digest: Digest([]byte("SOMETHING ELSE\n"))},
+		}},
+	})
+	var conflict *ConflictError
+	if !errors.As(err, &conflict) {
+		t.Fatalf("error = %v, want a ConflictError", err)
+	}
+	if conflict.Current != nil {
+		t.Fatalf("a conflict on a move carried file contents, which may be key material")
+	}
+	if contents, readErr := os.ReadFile(source); readErr != nil || string(contents) != "ORIGINAL\n" {
+		t.Fatalf("source changed after a rejected move: %q, %v", contents, readErr)
+	}
+}
+
+func TestCommitRemovesAFileWithoutWritingABackup(t *testing.T) {
+	manager, workspace := newTestManager(t)
+	target := writeWorkspaceFile(t, workspace, "ssh-ui/trash/entry-1/id_work", "PRIVATE KEY BYTES\n", 0o600)
+
+	result, err := manager.Commit(Request{
+		Operation: "key.purge",
+		Removals: []Removal{{
+			Path:         target,
+			Precondition: Precondition{Exists: true, Digest: Digest([]byte("PRIVATE KEY BYTES\n"))},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Commit error = %v", err)
+	}
+	if _, statErr := os.Lstat(target); !errors.Is(statErr, fs.ErrNotExist) {
+		t.Fatalf("removed file still exists: %v", statErr)
+	}
+	if entries, readErr := os.ReadDir(result.BackupDir); readErr == nil && len(entries) != 0 {
+		t.Fatalf("a permanent delete wrote a backup: %#v", entries)
+	}
+}
+
+func TestNoteRecordsAnAuditFactWithoutFileContents(t *testing.T) {
+	manager, workspace := newTestManager(t)
+	target := writeWorkspaceFile(t, workspace, "id_work", "PRIVATE KEY BYTES\n", 0o600)
+
+	if _, err := manager.Note("key.reveal", []string{target}); err != nil {
+		t.Fatalf("Note error = %v", err)
+	}
+
+	history, err := manager.History()
+	if err != nil {
+		t.Fatalf("History error = %v", err)
+	}
+	if len(history) != 1 || history[0].Operation != "key.reveal" {
+		t.Fatalf("history = %#v", history)
+	}
+	if len(history[0].Paths) != 1 || history[0].Paths[0] != target {
+		t.Fatalf("history paths = %#v", history[0].Paths)
+	}
+	if contents, readErr := os.ReadFile(target); readErr != nil || string(contents) != "PRIVATE KEY BYTES\n" {
+		t.Fatalf("Note changed the file it recorded: %q, %v", contents, readErr)
+	}
+	if journalEntries, readErr := os.ReadDir(filepath.Join(workspace.StateDir(), "journal")); readErr == nil && len(journalEntries) != 0 {
+		t.Fatalf("Note left a pending journal: %#v", journalEntries)
+	}
+
+	records, err := os.ReadDir(filepath.Join(workspace.StateDir(), "history"))
+	if err != nil {
+		t.Fatalf("read history directory: %v", err)
+	}
+	for _, entry := range records {
+		document, readErr := os.ReadFile(filepath.Join(workspace.StateDir(), "history", entry.Name()))
+		if readErr != nil {
+			t.Fatalf("read history record: %v", readErr)
+		}
+		if strings.Contains(string(document), "PRIVATE KEY BYTES") {
+			t.Fatalf("the audit record contains file contents")
+		}
+	}
+}
+
+// A private key must never be duplicated into the generational backup
+// directory, so a caller that replaces key material opts out of the backup and
+// accepts that the change cannot be rolled back afterwards.
+func TestCommitSkipsTheGenerationalBackupWhenTheCallerOptsOut(t *testing.T) {
+	manager, workspace := newTestManager(t)
+	secret := writeWorkspaceFile(t, workspace, "id_work", "PRIVATE KEY BYTES\n", 0o600)
+
+	result, err := manager.Commit(Request{
+		Operation: "key.passphrase",
+		Changes: []Change{{
+			Path:         secret,
+			Contents:     []byte("RE-ENCRYPTED KEY BYTES\n"),
+			Precondition: Precondition{Exists: true, Digest: Digest([]byte("PRIVATE KEY BYTES\n"))},
+			SkipBackup:   true,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Commit error = %v", err)
+	}
+
+	contents, err := os.ReadFile(secret)
+	if err != nil || string(contents) != "RE-ENCRYPTED KEY BYTES\n" {
+		t.Fatalf("contents = %q, %v", contents, err)
+	}
+	if entries, readErr := os.ReadDir(result.BackupDir); readErr == nil && len(entries) != 0 {
+		t.Fatalf("a change that opted out of the backup still wrote one: %#v", entries)
+	}
+
+	history, err := manager.History()
+	if err != nil {
+		t.Fatalf("History error = %v", err)
+	}
+	if len(history) != 1 || history[0].Operation != "key.passphrase" {
+		t.Fatalf("history = %#v", history)
+	}
+}

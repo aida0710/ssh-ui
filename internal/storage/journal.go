@@ -18,6 +18,8 @@ var (
 // PendingEntry is one file inside an interrupted transaction.
 type PendingEntry struct {
 	Path      string
+	Target    string
+	Action    string
 	Committed bool
 	HasBackup bool
 	HasStaged bool
@@ -33,6 +35,7 @@ type Pending struct {
 	Committed   int
 	Entries     []PendingEntry
 	CanComplete bool
+	CanRollback bool
 }
 
 func (m *Manager) journalDirectory() string {
@@ -58,14 +61,22 @@ func (m *Manager) Pending() ([]Pending, error) {
 			StartedAt:   record.StartedAt,
 			Committed:   record.Committed,
 			CanComplete: true,
+			CanRollback: true,
 		}
 		for index, entry := range record.Entries {
 			pendingEntry := PendingEntry{
 				Path:      entry.Path,
+				Target:    entry.Target,
+				Action:    entry.action(),
 				Committed: index < record.Committed,
 				HasBackup: entry.Backup != "",
 			}
-			if !pendingEntry.Committed {
+			switch {
+			case pendingEntry.Committed && pendingEntry.Action == actionRemove:
+				item.CanRollback = false
+			case pendingEntry.Committed && pendingEntry.Action == actionWrite && entry.HadPrevious && entry.NoBackup:
+				item.CanRollback = false
+			case !pendingEntry.Committed && pendingEntry.Action == actionWrite:
 				pendingEntry.HasStaged = m.stagedMatches(entry)
 				if !pendingEntry.HasStaged {
 					item.CanComplete = false
@@ -78,13 +89,18 @@ func (m *Manager) Pending() ([]Pending, error) {
 	return pending, nil
 }
 
-// Complete finishes an interrupted transaction using the staged contents.
+// Complete finishes an interrupted transaction. Only a replacement has staged
+// contents to verify; a move and a removal carry their whole intent in the
+// journal entry.
 func (m *Manager) Complete(identifier string) error {
 	record, journalPath, err := m.loadPending(identifier)
 	if err != nil {
 		return err
 	}
 	for index := record.Committed; index < len(record.Entries); index++ {
+		if record.Entries[index].action() != actionWrite {
+			continue
+		}
 		if !m.stagedMatches(record.Entries[index]) {
 			return ErrCannotComplete
 		}
@@ -95,16 +111,41 @@ func (m *Manager) Complete(identifier string) error {
 	return m.finish(record, journalPath, statusCompleted)
 }
 
-// Rollback restores every file the interrupted transaction had already
-// replaced and discards the staged contents.
+// Rollback restores every file the interrupted transaction had already changed
+// and discards the staged contents. A transaction that already removed a file,
+// or that already replaced one while deliberately keeping no backup, cannot be
+// rolled back; Rollback refuses rather than reporting a recovery it did not
+// perform.
 func (m *Manager) Rollback(identifier string) error {
 	record, journalPath, err := m.loadPending(identifier)
 	if err != nil {
 		return err
 	}
+	for index := 0; index < record.Committed; index++ {
+		entry := record.Entries[index]
+		if entry.action() == actionRemove {
+			return ErrIrreversibleRemoval
+		}
+		if entry.action() == actionWrite && entry.HadPrevious && entry.NoBackup {
+			return ErrIrreversibleChange
+		}
+	}
+
 	fileSystem := m.workspace.FileSystem()
 	for index := record.Committed - 1; index >= 0; index-- {
 		entry := record.Entries[index]
+		if entry.action() == actionMove {
+			if err := fileSystem.Rename(entry.Target, entry.Path); err != nil {
+				return err
+			}
+			if err := fileSystem.SyncDir(filepath.Dir(entry.Target)); err != nil {
+				return err
+			}
+			if err := fileSystem.SyncDir(filepath.Dir(entry.Path)); err != nil {
+				return err
+			}
+			continue
+		}
 		if entry.HadPrevious {
 			contents, readErr := fileSystem.ReadFile(entry.Backup)
 			if readErr != nil {
