@@ -33,6 +33,14 @@ func newQueryRunner() *fakeRunner {
 
 func newTestService(t *testing.T, runner platform.OutputRunner) (*Service, *storage.Workspace) {
 	t.Helper()
+	return newServiceWithAgent(t, runner, nil)
+}
+
+// newServiceWithAgent builds the service the way the application does, through
+// ServiceOptions, so the agent seam is proven to reach the Service rather than
+// being assigned to an unexported field by the test.
+func newServiceWithAgent(t *testing.T, runner platform.OutputRunner, agent platform.KeyAgent) (*Service, *storage.Workspace) {
+	t.Helper()
 	workspace := newTestWorkspace(t)
 	clock := steppingClock(time.Date(2026, 8, 5, 9, 0, 0, 0, time.UTC))
 	service := NewService(ServiceOptions{
@@ -40,6 +48,7 @@ func newTestService(t *testing.T, runner platform.OutputRunner) (*Service, *stor
 		Transactions: storage.NewManager(workspace, clock, rand.Reader),
 		Resolver:     storage.NewResolver(workspace),
 		Catalogue:    newFakeCatalogue(runner, fakeToolchain{}),
+		Agent:        agent,
 		Now:          clock,
 		Random:       rand.Reader,
 	})
@@ -382,6 +391,195 @@ func TestAlgorithmsAreReadThroughTheCommandSeam(t *testing.T) {
 	for _, argument := range runner.commands[0].Arguments {
 		if argument == "-G" {
 			t.Fatalf("the catalogue must never run an effective-configuration evaluation")
+		}
+	}
+}
+
+// fakeAgent records every registration request without touching a real agent.
+// The passphrase is copied on arrival because Register wipes the caller's
+// buffer before it returns.
+type fakeAgent struct {
+	available   bool
+	requests    []platform.AgentAddRequest
+	passphrases [][]byte
+	identities  []platform.AgentIdentity
+	addError    error
+}
+
+func (fake *fakeAgent) Available(context.Context) bool { return fake.available }
+
+func (fake *fakeAgent) List(context.Context) ([]platform.AgentIdentity, error) {
+	if !fake.available {
+		return nil, platform.ErrAgentUnavailable
+	}
+	return fake.identities, nil
+}
+
+func (fake *fakeAgent) Add(_ context.Context, request platform.AgentAddRequest) error {
+	if !fake.available {
+		return platform.ErrAgentUnavailable
+	}
+	fake.requests = append(fake.requests, request)
+	fake.passphrases = append(fake.passphrases, append([]byte(nil), request.Passphrase...))
+	return fake.addError
+}
+
+func (fake *fakeAgent) Remove(context.Context, string) error { return nil }
+
+func generateWorkKey(t *testing.T, service *Service) {
+	t.Helper()
+	if _, err := service.Generate(GenerateRequest{
+		Algorithm:  AlgorithmEd25519,
+		FileName:   "id_work",
+		Comment:    "aida@laptop",
+		Passphrase: []byte("correct horse"),
+	}); err != nil {
+		t.Fatalf("Generate error = %v", err)
+	}
+}
+
+func TestRegisterSendsTheKeyPathAndPassphraseToTheAgentOnly(t *testing.T) {
+	agent := &fakeAgent{
+		available:  true,
+		identities: []platform.AgentIdentity{{Bits: 256, Fingerprint: "SHA256:abcdef", Comment: "aida@laptop", Algorithm: "ED25519"}},
+	}
+	service, workspace := newServiceWithAgent(t, newQueryRunner(), agent)
+	generateWorkKey(t, service)
+
+	passphrase := []byte("correct horse")
+	result, err := service.Register(context.Background(), RegisterRequest{
+		KeyID:           ItemID("id_work"),
+		Passphrase:      passphrase,
+		LifetimeSeconds: 3600,
+		StoreInKeychain: true,
+	})
+	if err != nil {
+		t.Fatalf("Register error = %v", err)
+	}
+	if len(agent.requests) != 1 {
+		t.Fatalf("requests = %#v, want one", agent.requests)
+	}
+	request := agent.requests[0]
+	if request.PrivateKeyPath != filepath.Join(workspace.Root(), "id_work") {
+		t.Errorf("PrivateKeyPath = %q", request.PrivateKeyPath)
+	}
+	if request.LifetimeSeconds != 3600 || !request.StoreInKeychain {
+		t.Errorf("request = %#v", request)
+	}
+	if string(agent.passphrases[0]) != "correct horse" {
+		t.Errorf("the agent received %q, want the passphrase", agent.passphrases[0])
+	}
+	for index, value := range passphrase {
+		if value != 0 {
+			t.Fatalf("the caller's passphrase buffer was not wiped at byte %d", index)
+		}
+	}
+	if len(result.Identities) != 1 {
+		t.Errorf("Identities = %#v, want the agent listing", result.Identities)
+	}
+	if result.Fingerprint == "" || !result.StoredInKeychain || result.LifetimeSeconds != 3600 {
+		t.Errorf("result = %#v", result)
+	}
+
+	history, err := storage.NewManager(workspace, time.Now, rand.Reader).History()
+	if err != nil {
+		t.Fatalf("History error = %v", err)
+	}
+	registrations := 0
+	for _, record := range history {
+		if record.Operation == "key.agent_add" {
+			registrations++
+		}
+	}
+	if registrations != 1 {
+		t.Fatalf("key.agent_add records = %d, want 1", registrations)
+	}
+
+	records, err := os.ReadDir(filepath.Join(workspace.StateDir(), "history"))
+	if err != nil {
+		t.Fatalf("read history directory: %v", err)
+	}
+	for _, entry := range records {
+		document, readErr := os.ReadFile(filepath.Join(workspace.StateDir(), "history", entry.Name()))
+		if readErr != nil {
+			t.Fatalf("read history record: %v", readErr)
+		}
+		if strings.Contains(string(document), "correct horse") {
+			t.Fatalf("the registration record contains the passphrase")
+		}
+	}
+}
+
+func TestRegisterRefusesTrashedAndUnknownKeys(t *testing.T) {
+	agent := &fakeAgent{available: true}
+	service, _ := newServiceWithAgent(t, newQueryRunner(), agent)
+	generateWorkKey(t, service)
+	if _, err := service.Trash(ItemID("id_work")); err != nil {
+		t.Fatalf("Trash error = %v", err)
+	}
+
+	if _, err := service.Register(context.Background(), RegisterRequest{KeyID: ItemID("id_work")}); !errors.Is(err, ErrUnknownKey) {
+		t.Fatalf("registering a trashed key = %v, want ErrUnknownKey", err)
+	}
+	if _, err := service.Register(context.Background(), RegisterRequest{KeyID: "not-an-identifier"}); !errors.Is(err, ErrUnknownKey) {
+		t.Fatalf("registering an unknown identifier = %v, want ErrUnknownKey", err)
+	}
+	if len(agent.requests) != 0 {
+		t.Fatalf("a trashed or unknown key reached the agent: %#v", agent.requests)
+	}
+}
+
+func TestRegisterAndIdentitiesReportAnUnreachableAgentHonestly(t *testing.T) {
+	withoutAgent, _ := newTestService(t, newQueryRunner())
+	generateWorkKey(t, withoutAgent)
+	if _, err := withoutAgent.Register(context.Background(), RegisterRequest{KeyID: ItemID("id_work")}); !errors.Is(err, platform.ErrAgentUnavailable) {
+		t.Fatalf("Register without an agent = %v, want ErrAgentUnavailable", err)
+	}
+	if identities, reachable := withoutAgent.AgentIdentities(context.Background()); reachable || identities != nil {
+		t.Fatalf("AgentIdentities = %#v, %v, want no agent", identities, reachable)
+	}
+
+	stopped := &fakeAgent{available: false}
+	withStoppedAgent, _ := newServiceWithAgent(t, newQueryRunner(), stopped)
+	generateWorkKey(t, withStoppedAgent)
+	if _, err := withStoppedAgent.Register(context.Background(), RegisterRequest{KeyID: ItemID("id_work")}); !errors.Is(err, platform.ErrAgentUnavailable) {
+		t.Fatalf("Register with a stopped agent = %v, want ErrAgentUnavailable", err)
+	}
+	if _, reachable := withStoppedAgent.AgentIdentities(context.Background()); reachable {
+		t.Fatalf("AgentIdentities reported a stopped agent as reachable")
+	}
+
+	running := &fakeAgent{
+		available:  true,
+		identities: []platform.AgentIdentity{{Bits: 256, Fingerprint: "SHA256:abcdef", Algorithm: "ED25519"}},
+	}
+	withRunningAgent, _ := newServiceWithAgent(t, newQueryRunner(), running)
+	identities, reachable := withRunningAgent.AgentIdentities(context.Background())
+	if !reachable || len(identities) != 1 {
+		t.Fatalf("AgentIdentities = %#v, %v, want the one loaded identity", identities, reachable)
+	}
+}
+
+// A registration the agent refused must not be recorded as one that happened.
+func TestRegisterRecordsNothingWhenTheAgentRefuses(t *testing.T) {
+	agent := &fakeAgent{available: true, addError: platform.ErrAgentRejected}
+	service, workspace := newServiceWithAgent(t, newQueryRunner(), agent)
+	generateWorkKey(t, service)
+
+	if _, err := service.Register(context.Background(), RegisterRequest{
+		KeyID:      ItemID("id_work"),
+		Passphrase: []byte("wrong"),
+	}); !errors.Is(err, platform.ErrAgentRejected) {
+		t.Fatalf("Register error = %v, want ErrAgentRejected", err)
+	}
+
+	history, err := storage.NewManager(workspace, time.Now, rand.Reader).History()
+	if err != nil {
+		t.Fatalf("History error = %v", err)
+	}
+	for _, record := range history {
+		if record.Operation == "key.agent_add" {
+			t.Fatalf("a refused registration was recorded in history")
 		}
 	}
 }

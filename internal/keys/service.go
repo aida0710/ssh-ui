@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"ssh-ui/internal/config"
+	"ssh-ui/internal/platform"
 	"ssh-ui/internal/storage"
 )
 
@@ -60,6 +61,7 @@ type Service struct {
 	transactions *storage.Manager
 	resolver     config.Resolver
 	catalogue    CatalogueReader
+	agent        platform.KeyAgent
 	now          func() time.Time
 	random       io.Reader
 }
@@ -69,6 +71,7 @@ type ServiceOptions struct {
 	Transactions *storage.Manager
 	Resolver     config.Resolver
 	Catalogue    CatalogueReader
+	Agent        platform.KeyAgent
 	Now          func() time.Time
 	Random       io.Reader
 }
@@ -79,6 +82,7 @@ func NewService(options ServiceOptions) *Service {
 		transactions: options.Transactions,
 		resolver:     options.Resolver,
 		catalogue:    options.Catalogue,
+		agent:        options.Agent,
 		now:          options.Now,
 		random:       options.Random,
 	}
@@ -338,6 +342,88 @@ func (service *Service) Reveal(keyID string) (RevealResult, error) {
 		Fingerprint:   item.Fingerprint,
 		TransactionID: result.ID,
 	}, nil
+}
+
+// RegisterRequest asks the user's ssh-agent to load one key.
+type RegisterRequest struct {
+	KeyID           string
+	Passphrase      []byte
+	LifetimeSeconds int
+	StoreInKeychain bool
+}
+
+type RegisterResult struct {
+	ID               string
+	RelativePath     string
+	Fingerprint      string
+	LifetimeSeconds  int
+	StoredInKeychain bool
+	Identities       []platform.AgentIdentity
+}
+
+// Register loads a private key into the user's ssh-agent, optionally storing
+// its passphrase in the login Keychain.
+//
+// Only a key the inventory currently contains can be registered, so a trashed
+// key and anything under ~/.ssh/ssh-ui are unreachable by construction. The
+// passphrase is overwritten before Register returns, and the registration is
+// recorded in history without it. The audit note is written only after the
+// agent accepted the key, so a refused registration leaves no record claiming
+// it happened.
+func (service *Service) Register(ctx context.Context, request RegisterRequest) (RegisterResult, error) {
+	defer Wipe(request.Passphrase)
+
+	if service.agent == nil {
+		return RegisterResult{}, platform.ErrAgentUnavailable
+	}
+	inventory, err := service.Inventory()
+	if err != nil {
+		return RegisterResult{}, err
+	}
+	item, ok := inventory.Find(request.KeyID)
+	if !ok || item.Kind != KindPrivateKey {
+		return RegisterResult{}, ErrUnknownKey
+	}
+
+	absolute := service.absolutePath(item.RelativePath)
+	if err := service.agent.Add(ctx, platform.AgentAddRequest{
+		PrivateKeyPath:  absolute,
+		Passphrase:      request.Passphrase,
+		LifetimeSeconds: request.LifetimeSeconds,
+		StoreInKeychain: request.StoreInKeychain,
+	}); err != nil {
+		return RegisterResult{}, err
+	}
+	if _, err := service.transactions.Note("key.agent_add", []string{absolute}); err != nil {
+		return RegisterResult{}, err
+	}
+
+	identities, listErr := service.agent.List(ctx)
+	if listErr != nil {
+		identities = nil
+	}
+	return RegisterResult{
+		ID:               item.ID,
+		RelativePath:     item.RelativePath,
+		Fingerprint:      item.Fingerprint,
+		LifetimeSeconds:  request.LifetimeSeconds,
+		StoredInKeychain: request.StoreInKeychain,
+		Identities:       identities,
+	}, nil
+}
+
+// AgentIdentities reports what the agent currently holds. The second return
+// value is false when no agent is reachable, so the UI can say so instead of
+// showing an empty list that looks like a working agent.
+func (service *Service) AgentIdentities(ctx context.Context) ([]platform.AgentIdentity, bool) {
+	if service.agent == nil || !service.agent.Available(ctx) {
+		return nil, false
+	}
+	identities, err := service.agent.List(ctx)
+	if err != nil {
+		return nil, false
+	}
+	return identities, true
 }
 
 // commentForKey recovers a private key's comment from a public key file with
