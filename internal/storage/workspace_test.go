@@ -1,0 +1,133 @@
+package storage
+
+import (
+	"errors"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+// newTestWorkspace builds an isolated home directory. macOS temporary
+// directories are themselves reached through a symbolic link, so tests must
+// compare against workspace.Root() instead of the literal path they built.
+func newTestWorkspace(t *testing.T) *Workspace {
+	t.Helper()
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, ".ssh"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := NewWorkspace(OSFileSystem{}, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return workspace
+}
+
+func TestNewWorkspaceResolvesSymlinkedRootAndRejectsRelativeHome(t *testing.T) {
+	home := t.TempDir()
+	real := filepath.Join(home, "real-ssh")
+	if err := os.MkdirAll(real, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, filepath.Join(home, ".ssh")); err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := NewWorkspace(OSFileSystem{}, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := filepath.EvalSymlinks(real)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if workspace.Root() != resolved {
+		t.Fatalf("root = %q, want %q", workspace.Root(), resolved)
+	}
+	if _, err := NewWorkspace(OSFileSystem{}, "relative/home"); !errors.Is(err, ErrInvalidHome) {
+		t.Fatalf("relative home error = %v", err)
+	}
+}
+
+func TestResolveForWriteAcceptsOnlyRealFilesInsideTheRoot(t *testing.T) {
+	workspace := newTestWorkspace(t)
+	root := workspace.Root()
+	existing := filepath.Join(root, "config")
+	if err := os.WriteFile(existing, []byte("Host example\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "conf.d"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	if got, err := workspace.ResolveForWrite(existing); err != nil || got != existing {
+		t.Fatalf("existing file = %q, %v", got, err)
+	}
+	newFile := filepath.Join(root, "conf.d", "new.conf")
+	if got, err := workspace.ResolveForWrite(newFile); err != nil || got != newFile {
+		t.Fatalf("new file = %q, %v", got, err)
+	}
+
+	outside := filepath.Join(filepath.Dir(root), "outside.conf")
+	for name, candidate := range map[string]string{
+		"outside the root":  outside,
+		"parent traversal":  filepath.Join(root, "..", "outside.conf"),
+		"root itself":       root,
+		"missing directory": filepath.Join(root, "absent", "new.conf"),
+		"relative path":     "config",
+	} {
+		if _, err := workspace.ResolveForWrite(candidate); err == nil {
+			t.Errorf("%s was accepted", name)
+		}
+	}
+}
+
+func TestResolveForWriteRejectsSymlinkedFileAndParent(t *testing.T) {
+	workspace := newTestWorkspace(t)
+	root := workspace.Root()
+	outsideDirectory := t.TempDir()
+	outsideFile := filepath.Join(outsideDirectory, "target.conf")
+	if err := os.WriteFile(outsideFile, []byte("Host elsewhere\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outsideFile, filepath.Join(root, "linked.conf")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outsideDirectory, filepath.Join(root, "linked.d")); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := workspace.ResolveForWrite(filepath.Join(root, "linked.conf")); !errors.Is(err, ErrSymlinkPath) {
+		t.Errorf("symlinked file error = %v, want ErrSymlinkPath", err)
+	}
+	if _, err := workspace.ResolveForWrite(filepath.Join(root, "linked.d", "new.conf")); !errors.Is(err, ErrSymlinkPath) {
+		t.Errorf("symlinked parent error = %v, want ErrSymlinkPath", err)
+	}
+}
+
+func TestEnsureDirectoryCreatesPrivateDirectoriesAndRejectsSymlinks(t *testing.T) {
+	workspace := newTestWorkspace(t)
+	nested := filepath.Join(workspace.StateDir(), "journal")
+	if err := workspace.EnsureDirectory(nested); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(nested)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != DirectoryPermission {
+		t.Fatalf("permission = %v, want %v", info.Mode().Perm(), DirectoryPermission)
+	}
+	if err := workspace.EnsureDirectory(nested); err != nil {
+		t.Fatalf("second call = %v", err)
+	}
+
+	if err := os.Symlink(t.TempDir(), filepath.Join(workspace.Root(), "linked.d")); err != nil {
+		t.Fatal(err)
+	}
+	if err := workspace.EnsureDirectory(filepath.Join(workspace.Root(), "linked.d", "child")); !errors.Is(err, ErrSymlinkPath) {
+		t.Fatalf("symlinked component error = %v, want ErrSymlinkPath", err)
+	}
+	if err := workspace.EnsureDirectory(filepath.Join(filepath.Dir(workspace.Root()), "outside")); !errors.Is(err, ErrOutsideWorkspace) {
+		t.Fatalf("outside error = %v, want ErrOutsideWorkspace", err)
+	}
+}

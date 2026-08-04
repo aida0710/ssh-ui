@@ -29,6 +29,7 @@ Go module は `make generate`、`make test`、`make build` の初回実行時に
 ```sh
 make generate  # OpenAPI から Go/TypeScript 型を再生成
 make test      # Go、race detector、Vitest、TypeScript を検証
+make fuzz      # config パーサーのラウンドトリップを 60 秒 fuzz
 make build     # UI を生成し bin/ssh-ui へ単一バイナリを作成
 ```
 
@@ -41,3 +42,16 @@ make build     # UI を生成し bin/ssh-ui へ単一バイナリを作成
 - bootstrap、session、CSRF の値をログへ出してはいけません。bootstrap は URL fragment に置き、ブラウザが直ちに履歴から除去します。
 - 同一マシン上の悪意あるプロセス、侵害されたブラウザ、ブラウザ拡張から秘密を完全には保護できません。将来の秘密鍵 reveal/copy 機能でも、ブラウザ拡張やローカルのクリップボード監視・履歴ツールに対して秘密は脆弱です。
 - UI は埋め込みファイルシステムからのみ配信し、URL を OS ファイルパスへ変換しません。存在しない API は SPA へフォールバックしません。
+
+## SSH config エンジンの境界
+
+- `~/.ssh/config` と `Include` 先を正本として読み書きします。無変更の parse/render は byte-for-byte で一致し、コメント、空行、引用、`key=value`、未知のディレクティブを保持します。
+- 解釈できない行は `LineUnstructured` として原文のまま保持し、UI からは Raw 編集だけを許可します。推測による整形や削除は行いません。
+- 書き込みは解決済みの `~/.ssh` 配下だけに限定します。`..`、シンボリックリンク、外部パスで書き込み範囲は広がりません。読み取りは `O_NOFOLLOW` を使います。
+- `Include` が `~/.ssh` の外を指す場合は、グラフ表示と読み取りのみ許可します。
+- `%h` など接続先が決まるまで確定しないトークンは展開せず、`include_unsupported_expansion` として報告します。
+- 変更は `~/.ssh/ssh-ui/journal/` に予定を記録し、全ファイルを一時ファイルへ書き出して fsync した後に atomic rename します。中断した場合は `~/.ssh/ssh-ui/backups/<id>/` の世代バックアップから復旧するか、staged 内容で完了させるかを選べます。
+- 完了した変更は `~/.ssh/ssh-ui/history/` に記録します。バックアップは自動削除しません。
+- 複数ファイルの OS レベル完全 atomic commit は存在しないため、部分適用は隠さず pending として提示します。
+- ディレクトリ構成要素の入れ替えに対する time-of-check/time-of-use 競合は best-effort でしか防げません。`O_NOFOLLOW` と構成要素ごとの検査を行いますが、同一ユーザー権限で動作する悪意あるプロセスからは完全には保護できません。
+- 現在の `bin/ssh-ui` はこのエンジンをまだ HTTP へ公開していません。Connections UI と Config Explorer はロードマップのサブシステム3で追加します。
