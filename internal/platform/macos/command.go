@@ -37,6 +37,9 @@ func (OutputRunner) RunOutput(ctx context.Context, command platform.Command) (pl
 
 	process := exec.CommandContext(runContext, command.Path, command.Arguments...)
 	process.Stdin = bytes.NewReader(command.Stdin)
+	if command.Env != nil {
+		process.Env = command.Env
+	}
 	// WaitDelay bounds how long Wait blocks on inherited pipes after the
 	// process is killed, so a stuck child cannot hold a request open.
 	process.WaitDelay = 2 * time.Second

@@ -73,3 +73,47 @@ func TestValidatePortRejectsValuesOutsideTheTCPRange(t *testing.T) {
 		}
 	}
 }
+
+func TestMinimalEnvironmentKeepsTheAgentButDropsAskpass(t *testing.T) {
+	present := map[string]string{
+		"HOME":                "/Users/tester",
+		"PATH":                "/usr/bin:/bin",
+		"LANG":                "en_US.UTF-8",
+		"SSH_AUTH_SOCK":       "/tmp/agent.sock",
+		"SSH_ASKPASS":         "/usr/local/bin/askpass",
+		"SSH_ASKPASS_REQUIRE": "force",
+		"DISPLAY":             ":0",
+		"LD_PRELOAD":          "/tmp/evil.dylib",
+	}
+	environment := platform.MinimalEnvironment(func(name string) (string, bool) {
+		value, ok := present[name]
+		return value, ok
+	})
+
+	want := []string{
+		"HOME=/Users/tester",
+		"PATH=/usr/bin:/bin",
+		"LANG=en_US.UTF-8",
+		"SSH_AUTH_SOCK=/tmp/agent.sock",
+	}
+	if len(environment) != len(want) {
+		t.Fatalf("environment = %#v, want %#v", environment, want)
+	}
+	for index := range want {
+		if environment[index] != want[index] {
+			t.Fatalf("environment[%d] = %q, want %q", index, environment[index], want[index])
+		}
+	}
+}
+
+func TestMinimalEnvironmentOmitsVariablesThatAreNotSet(t *testing.T) {
+	environment := platform.MinimalEnvironment(func(name string) (string, bool) {
+		if name == "PATH" {
+			return "/usr/bin", true
+		}
+		return "", false
+	})
+	if len(environment) != 1 || environment[0] != "PATH=/usr/bin" {
+		t.Fatalf("environment = %#v, want only PATH", environment)
+	}
+}

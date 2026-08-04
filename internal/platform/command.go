@@ -37,6 +37,36 @@ type Command struct {
 	// stdout or stderr. It lets a long-lived command report a decisive result
 	// without waiting for its own timeout.
 	StopAfter []byte
+	// Env is the child's complete environment. A nil Env inherits this
+	// process's environment; a non-nil Env replaces it entirely, including
+	// when it is empty. Callers that run an OpenSSH program should pass
+	// MinimalEnvironment so the child cannot be redirected by a variable the
+	// user happens to have exported.
+	Env []string
+}
+
+// askpassVariables are deliberately withheld from every child.
+//
+// With SSH_ASKPASS and SSH_ASKPASS_REQUIRE set, ssh-add and ssh ask an
+// external program for a passphrase instead of reading the standard input this
+// application supplies, which would move a secret out of this process's
+// control and onto a program it did not choose. DISPLAY is withheld for the
+// same reason.
+var minimalEnvironmentVariables = []string{"HOME", "PATH", "LANG", "SSH_AUTH_SOCK"}
+
+// MinimalEnvironment returns the smallest environment an OpenSSH client
+// program needs, taking each value from lookup and omitting the ones that are
+// not set. SSH_AUTH_SOCK is kept because reaching a running agent is a
+// supported operation; SSH_ASKPASS, SSH_ASKPASS_REQUIRE and DISPLAY are not
+// included at all.
+func MinimalEnvironment(lookup func(name string) (string, bool)) []string {
+	environment := make([]string, 0, len(minimalEnvironmentVariables))
+	for _, name := range minimalEnvironmentVariables {
+		if value, ok := lookup(name); ok {
+			environment = append(environment, name+"="+value)
+		}
+	}
+	return environment
 }
 
 // Output is the bounded result of one external command. A non-zero exit status

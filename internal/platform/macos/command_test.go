@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -117,5 +118,32 @@ func TestRunOutputRefusesRelativeProgramsAndHonoursCancellation(t *testing.T) {
 	}()
 	if _, err := runner.RunOutput(ctx, platform.Command{Path: "/bin/sleep", Arguments: []string{"30"}}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled run = %v, want context.Canceled", err)
+	}
+}
+
+func TestRunOutputReplacesTheChildEnvironmentWhenAsked(t *testing.T) {
+	runner := macos.NewOutputRunner()
+
+	inherited, err := runner.RunOutput(context.Background(), platform.Command{
+		Path:      "/usr/bin/env",
+		Arguments: []string{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(inherited.Stdout, []byte("PATH=")) {
+		t.Fatalf("a nil Env did not inherit this process's environment: %q", inherited.Stdout)
+	}
+
+	replaced, err := runner.RunOutput(context.Background(), platform.Command{
+		Path:      "/usr/bin/env",
+		Arguments: []string{},
+		Env:       []string{"HOME=/tmp/ssh-ui-test"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(string(replaced.Stdout)); got != "HOME=/tmp/ssh-ui-test" {
+		t.Fatalf("child environment = %q, want exactly the supplied entry", got)
 	}
 }
