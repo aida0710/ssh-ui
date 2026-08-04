@@ -27,6 +27,7 @@ type Options struct {
 	Version  string
 	Logger   *slog.Logger
 	Config   *application.Service
+	Keys     KeyService
 }
 
 var ErrNonLoopbackListener = errors.New("listener must use 127.0.0.1")
@@ -62,6 +63,9 @@ func New(options Options) (*Server, error) {
 	e.GET("/api/v1/health", handlers.Health)
 	if options.Config != nil {
 		registerConfigRoutes(e, ConfigHandlers{Service: options.Config})
+	}
+	if options.Keys != nil {
+		registerKeyRoutes(e, KeyHandlers{Keys: options.Keys, Sessions: options.Sessions})
 	}
 	static := echo.WrapHandler(spaHandler(options.UI))
 	e.GET("/*", static)

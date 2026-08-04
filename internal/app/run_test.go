@@ -3,15 +3,22 @@ package app
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
 	"net"
+	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
+
+	"ssh-ui/internal/platform"
 )
 
 type browserFunc func(context.Context, string) error
@@ -121,6 +128,168 @@ func TestRunShutsServerDownWhenBrowserFails(t *testing.T) {
 	}
 	if !listener.closed {
 		t.Fatal("listener was not closed after browser failure")
+	}
+}
+
+type stubRunner struct{}
+
+func (stubRunner) RunOutput(context.Context, platform.Command) (platform.Output, error) {
+	return platform.Output{Stdout: []byte("ssh-ed25519\n")}, nil
+}
+
+type stubToolchain struct{}
+
+func (stubToolchain) SSH() (string, error)     { return "/usr/bin/ssh", nil }
+func (stubToolchain) KeyScan() (string, error) { return "/usr/bin/ssh-keyscan", nil }
+func (stubToolchain) KeyGen() (string, error)  { return "/usr/bin/ssh-keygen", nil }
+func (stubToolchain) KeyAdd() (string, error)  { return "/usr/bin/ssh-add", nil }
+
+type stubKeyAgent struct{}
+
+func (stubKeyAgent) Available(context.Context) bool { return false }
+func (stubKeyAgent) List(context.Context) ([]platform.AgentIdentity, error) {
+	return nil, platform.ErrAgentUnavailable
+}
+func (stubKeyAgent) Add(context.Context, platform.AgentAddRequest) error {
+	return platform.ErrAgentUnavailable
+}
+func (stubKeyAgent) Remove(context.Context, string) error { return platform.ErrAgentUnavailable }
+
+// keyVaultSession drives the wired process the way the browser does.
+type keyVaultSession struct {
+	base    string
+	client  *http.Client
+	cookie  *http.Cookie
+	csrf    string
+	testing *testing.T
+}
+
+func (call keyVaultSession) do(method, path string, body []byte, headers map[string]string) *http.Response {
+	call.testing.Helper()
+	request, err := http.NewRequest(method, call.base+path, bytes.NewReader(body))
+	if err != nil {
+		call.testing.Fatalf("build %s %s: %v", method, path, err)
+	}
+	request.AddCookie(call.cookie)
+	request.Header.Set("Content-Type", "application/json")
+	if method != http.MethodGet {
+		request.Header.Set("Origin", call.base)
+		request.Header.Set("Sec-Fetch-Site", "same-origin")
+		request.Header.Set("X-SSH-UI-CSRF", call.csrf)
+	}
+	for name, value := range headers {
+		request.Header.Set(name, value)
+	}
+	response, err := call.client.Do(request)
+	if err != nil {
+		call.testing.Fatalf("%s %s: %v", method, path, err)
+	}
+	return response
+}
+
+// The key vault must not share the transaction manager that application.Service
+// owns, because that manager carries a configuration validator which parses
+// every written file as ssh_config. A trash manifest is JSON, so sharing would
+// reject a soft delete as a configuration syntax error. Generating a key and
+// then trashing it through the wired process proves the separation holds.
+func TestRunExposesTheKeyVaultAndItsTrashThroughTheWiredProcess(t *testing.T) {
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, ".ssh"), 0o700); err != nil {
+		t.Fatalf("create ssh directory: %v", err)
+	}
+	opened := make(chan string, 1)
+	dependencies := Dependencies{
+		Random: rand.Reader,
+		Browser: browserFunc(func(_ context.Context, target string) error {
+			opened <- target
+			return nil
+		}),
+		Listen:    net.Listen,
+		UI:        fstest.MapFS{"index.html": {Data: []byte("ok")}},
+		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Home:      home,
+		Runner:    stubRunner{},
+		Toolchain: stubToolchain{},
+		KeyAgent:  stubKeyAgent{},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- Run(ctx, dependencies, "test") }()
+	defer func() {
+		cancel()
+		if err := <-done; err != nil {
+			t.Errorf("Run error = %v", err)
+		}
+	}()
+
+	target := <-opened
+	base, fragment, _ := strings.Cut(target, "/#")
+	bootstrapToken := strings.TrimPrefix(fragment, "bootstrap=")
+
+	client := &http.Client{}
+	bootstrapRequest, err := http.NewRequest(http.MethodPost, base+"/api/v1/session/bootstrap", nil)
+	if err != nil {
+		t.Fatalf("build bootstrap request: %v", err)
+	}
+	bootstrapRequest.Header.Set("Origin", base)
+	bootstrapRequest.Header.Set("Sec-Fetch-Site", "same-origin")
+	bootstrapRequest.Header.Set("X-SSH-UI-Bootstrap", bootstrapToken)
+	bootstrapResponse, err := client.Do(bootstrapRequest)
+	if err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	var bootstrapBody struct {
+		CsrfToken string `json:"csrfToken"`
+	}
+	if err := json.NewDecoder(bootstrapResponse.Body).Decode(&bootstrapBody); err != nil {
+		t.Fatalf("decode bootstrap: %v", err)
+	}
+	cookies := bootstrapResponse.Cookies()
+	bootstrapResponse.Body.Close()
+	if len(cookies) != 1 {
+		t.Fatalf("cookies = %#v", cookies)
+	}
+	call := keyVaultSession{base: base, client: client, cookie: cookies[0], csrf: bootstrapBody.CsrfToken, testing: t}
+
+	listing := call.do(http.MethodGet, "/api/v1/keys", nil, nil)
+	defer listing.Body.Close()
+	if listing.StatusCode != http.StatusOK {
+		t.Fatalf("list keys = %d, want 200", listing.StatusCode)
+	}
+	if got := listing.Header.Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("Cache-Control = %q, want no-store", got)
+	}
+
+	generateBody := []byte(`{"algorithm":"ed25519","fileName":"id_work","comment":"aida@laptop","passphrase":"correct horse","unencrypted":false}`)
+	generated := call.do(http.MethodPost, "/api/v1/keys", generateBody, nil)
+	var generateResult struct {
+		Id string `json:"id"`
+	}
+	if err := json.NewDecoder(generated.Body).Decode(&generateResult); err != nil {
+		t.Fatalf("decode generate: %v", err)
+	}
+	generated.Body.Close()
+	if generated.StatusCode != http.StatusCreated || generateResult.Id == "" {
+		t.Fatalf("generate = %d %#v", generated.StatusCode, generateResult)
+	}
+
+	trashed := call.do(http.MethodPost, "/api/v1/keys/"+generateResult.Id+"/trash", nil, nil)
+	body, _ := io.ReadAll(trashed.Body)
+	trashed.Body.Close()
+	if trashed.StatusCode != http.StatusOK {
+		t.Fatalf("trash = %d, want 200: %s", trashed.StatusCode, body)
+	}
+	if _, statErr := os.Lstat(filepath.Join(home, ".ssh", "id_work")); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("the key is still in the workspace: %v", statErr)
+	}
+
+	// The configuration surface must still work: the two subsystems share a
+	// workspace, so a broken separation would show up here as well.
+	overview := call.do(http.MethodGet, "/api/v1/config/overview", nil, nil)
+	overview.Body.Close()
+	if overview.StatusCode != http.StatusOK {
+		t.Fatalf("config overview = %d, want 200", overview.StatusCode)
 	}
 }
 

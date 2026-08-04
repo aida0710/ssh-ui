@@ -1,0 +1,476 @@
+package httpserver
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/labstack/echo/v5"
+
+	"ssh-ui/internal/api"
+	"ssh-ui/internal/keys"
+	"ssh-ui/internal/platform"
+	"ssh-ui/internal/session"
+)
+
+// stubKeyService answers without touching a filesystem, an agent or a process.
+//
+// evidence is mutable so a test can simulate the key changing on disk between
+// the moment the user confirmed and the moment the request arrives.
+type stubKeyService struct {
+	inventory   *keys.Inventory
+	reveal      keys.RevealResult
+	evidence    string
+	evidenceErr error
+	revealCalls int
+	purgeCalls  int
+	registerErr error
+}
+
+func (stub *stubKeyService) Inventory() (*keys.Inventory, error) { return stub.inventory, nil }
+
+func (stub *stubKeyService) ConfirmationEvidence(keys.ConfirmationSubject, string) (string, error) {
+	if stub.evidenceErr != nil {
+		return "", stub.evidenceErr
+	}
+	return stub.evidence, nil
+}
+
+func (stub *stubKeyService) AgentIdentities(context.Context) ([]platform.AgentIdentity, bool) {
+	return []platform.AgentIdentity{{Bits: 256, Fingerprint: "SHA256:abcdef", Comment: "aida@laptop", Algorithm: "ED25519"}}, true
+}
+
+func (stub *stubKeyService) Algorithms(context.Context) keys.Catalogue {
+	return keys.Catalogue{Source: "ssh -Q key", Variants: []keys.Variant{{Algorithm: keys.AlgorithmEd25519, Bits: 256, Label: "Ed25519", InProcess: true}}}
+}
+
+func (stub *stubKeyService) Generate(keys.GenerateRequest) (keys.GenerateResult, error) {
+	return keys.GenerateResult{ID: "key-one", RelativePath: "id_work", PublicRelativePath: "id_work.pub", Encrypted: true, TransactionID: "tx"}, nil
+}
+
+func (stub *stubKeyService) HardwareCommand(keys.Algorithm, string, string) ([]string, error) {
+	return []string{"ssh-keygen", "-t", "ed25519-sk", "-f", "/Users/example/.ssh/id_yubikey"}, nil
+}
+
+func (stub *stubKeyService) ChangePassphrase(keys.PassphraseChange) (keys.PassphraseResult, error) {
+	return keys.PassphraseResult{ID: "key-one", RelativePath: "id_work", Encrypted: true, TransactionID: "tx"}, nil
+}
+
+func (stub *stubKeyService) Reveal(keyID string) (keys.RevealResult, error) {
+	if keyID != "key-one" {
+		return keys.RevealResult{}, keys.ErrUnknownKey
+	}
+	stub.revealCalls++
+	return stub.reveal, nil
+}
+
+func (stub *stubKeyService) Register(context.Context, keys.RegisterRequest) (keys.RegisterResult, error) {
+	if stub.registerErr != nil {
+		return keys.RegisterResult{}, stub.registerErr
+	}
+	return keys.RegisterResult{ID: "key-one", RelativePath: "id_work"}, nil
+}
+
+func (stub *stubKeyService) Trash(string) (keys.TrashResult, error) {
+	return keys.TrashResult{EntryID: trashEntryID, TransactionID: "tx"}, nil
+}
+
+func (stub *stubKeyService) ListTrash() ([]keys.TrashEntry, error) {
+	return []keys.TrashEntry{{ID: trashEntryID, DeletedAt: time.Date(2026, 8, 5, 9, 0, 0, 0, time.UTC), AgeDays: 40, Stale: true}}, nil
+}
+
+func (stub *stubKeyService) Restore(string) (keys.RestoreResult, error) {
+	return keys.RestoreResult{EntryID: trashEntryID, Restored: []string{"id_work"}, TransactionID: "tx"}, nil
+}
+
+func (stub *stubKeyService) Purge(string) (keys.PurgeResult, error) {
+	stub.purgeCalls++
+	return keys.PurgeResult{EntryID: trashEntryID, Removed: []string{"id_work"}, TransactionID: "tx"}, nil
+}
+
+const (
+	keyTestHost  = "127.0.0.1:43123"
+	trashEntryID = "20260805T090000.000-aabbccdd"
+)
+
+func newKeyServer(t *testing.T, service KeyService) (*echo.Echo, *session.Manager, session.Credentials) {
+	t.Helper()
+	manager, bootstrap, err := session.NewManager(bytes.NewReader(bytes.Repeat([]byte{0x51}, 4096)))
+	if err != nil {
+		t.Fatalf("NewManager error = %v", err)
+	}
+	credentials, err := manager.Bootstrap(bootstrap)
+	if err != nil {
+		t.Fatalf("Bootstrap error = %v", err)
+	}
+	engine := echo.New()
+	engine.Use((Security{ExpectedHost: keyTestHost, ExpectedOrigin: "http://" + keyTestHost, Sessions: manager}).Middleware)
+	registerKeyRoutes(engine, KeyHandlers{Keys: service, Sessions: manager})
+	return engine, manager, credentials
+}
+
+func sendKeyRequest(t *testing.T, engine *echo.Echo, credentials session.Credentials, method, target string, body []byte, actionToken string) *httptest.ResponseRecorder {
+	t.Helper()
+	request := httptest.NewRequest(method, target, bytes.NewReader(body))
+	request.Host = keyTestHost
+	request.Header.Set(echo.HeaderContentType, "application/json")
+	request.AddCookie(&http.Cookie{Name: SessionCookie, Value: credentials.SessionID})
+	if method != http.MethodGet && method != http.MethodHead {
+		request.Header.Set(echo.HeaderOrigin, "http://"+keyTestHost)
+		request.Header.Set("Sec-Fetch-Site", "same-origin")
+		request.Header.Set(CSRFHeader, credentials.CSRFToken)
+	}
+	if actionToken != "" {
+		request.Header.Set(ActionHeader, actionToken)
+	}
+	response := httptest.NewRecorder()
+	engine.ServeHTTP(response, request)
+	return response
+}
+
+// issueToken asks the server for a confirmation exactly as the UI does, so the
+// evidence the token carries is the evidence the server derived.
+func issueToken(t *testing.T, engine *echo.Echo, credentials session.Credentials, kind, target string) string {
+	t.Helper()
+	body, err := json.Marshal(api.IssueActionRequest{Kind: kind, Target: target})
+	if err != nil {
+		t.Fatalf("marshal action request: %v", err)
+	}
+	response := sendKeyRequest(t, engine, credentials, http.MethodPost, "/api/v1/actions", body, "")
+	if response.Code != http.StatusCreated {
+		t.Fatalf("issue action = %d, want 201: %s", response.Code, response.Body.String())
+	}
+	var issued api.IssueActionResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &issued); err != nil {
+		t.Fatalf("decode action response: %v", err)
+	}
+	if issued.Token == "" || issued.ExpiresAt == "" {
+		t.Fatalf("issued = %#v", issued)
+	}
+	return issued.Token
+}
+
+func newRevealService() *stubKeyService {
+	return &stubKeyService{
+		inventory: &keys.Inventory{Items: []keys.Item{{ID: "key-one", RelativePath: "id_work", Kind: keys.KindPrivateKey}}},
+		reveal:    keys.RevealResult{ID: "key-one", RelativePath: "id_work", Contents: []byte("-----BEGIN OPENSSH PRIVATE KEY-----\n"), Encrypted: true, TransactionID: "tx"},
+		evidence:  "evidence-for-key-one",
+	}
+}
+
+func TestRevealRequiresAFreshActionTokenForThatExactKey(t *testing.T) {
+	service := newRevealService()
+	engine, _, credentials := newKeyServer(t, service)
+
+	if got := sendKeyRequest(t, engine, credentials, http.MethodPost, "/api/v1/keys/key-one/reveal", nil, "").Code; got != http.StatusForbidden {
+		t.Fatalf("reveal without a token = %d, want 403", got)
+	}
+	if service.revealCalls != 0 {
+		t.Fatalf("the service was called without an action token")
+	}
+
+	otherKeyToken := issueToken(t, engine, credentials, session.ActionRevealPrivateKey, "key-two")
+	if got := sendKeyRequest(t, engine, credentials, http.MethodPost, "/api/v1/keys/key-one/reveal", nil, otherKeyToken).Code; got != http.StatusForbidden {
+		t.Fatalf("reveal with another key's token = %d, want 403", got)
+	}
+
+	purgeToken := issueToken(t, engine, credentials, session.ActionPurgeTrashEntry, "key-one")
+	if got := sendKeyRequest(t, engine, credentials, http.MethodPost, "/api/v1/keys/key-one/reveal", nil, purgeToken).Code; got != http.StatusForbidden {
+		t.Fatalf("reveal with a purge token = %d, want 403", got)
+	}
+
+	revealToken := issueToken(t, engine, credentials, session.ActionRevealPrivateKey, "key-one")
+	response := sendKeyRequest(t, engine, credentials, http.MethodPost, "/api/v1/keys/key-one/reveal", nil, revealToken)
+	if response.Code != http.StatusOK {
+		t.Fatalf("reveal = %d, want 200: %s", response.Code, response.Body.String())
+	}
+	if got := response.Result().Header.Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("Cache-Control = %q, want no-store", got)
+	}
+	var payload api.RevealPrivateKeyResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode reveal: %v", err)
+	}
+	if payload.PrivateKey != "-----BEGIN OPENSSH PRIVATE KEY-----\n" {
+		t.Fatalf("PrivateKey = %q", payload.PrivateKey)
+	}
+
+	if got := sendKeyRequest(t, engine, credentials, http.MethodPost, "/api/v1/keys/key-one/reveal", nil, revealToken).Code; got != http.StatusForbidden {
+		t.Fatalf("replaying an action token = %d, want 403", got)
+	}
+	if service.revealCalls != 1 {
+		t.Fatalf("revealCalls = %d, want exactly one", service.revealCalls)
+	}
+}
+
+// The token is bound to a digest of what the confirmation dialog displayed. If
+// the key changed between the confirmation and the click, the user confirmed a
+// different key and the reveal must be refused.
+func TestRevealIsRefusedWhenTheKeyChangedAfterTheConfirmation(t *testing.T) {
+	service := newRevealService()
+	engine, _, credentials := newKeyServer(t, service)
+
+	token := issueToken(t, engine, credentials, session.ActionRevealPrivateKey, "key-one")
+	service.evidence = "evidence-after-the-key-was-replaced"
+
+	response := sendKeyRequest(t, engine, credentials, http.MethodPost, "/api/v1/keys/key-one/reveal", nil, token)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("reveal after the key changed = %d, want 403: %s", response.Code, response.Body.String())
+	}
+	if service.revealCalls != 0 {
+		t.Fatalf("the key was revealed against evidence the user never saw")
+	}
+}
+
+func TestRevealIsRefusedWhenTheConfirmationHasExpired(t *testing.T) {
+	service := newRevealService()
+	engine, manager, credentials := newKeyServer(t, service)
+
+	// The session manager's clock is the only thing moved forward; nothing
+	// sleeps, so the test stays fast and deterministic.
+	moment := time.Now()
+	manager.Now = func() time.Time { return moment }
+	token := issueToken(t, engine, credentials, session.ActionRevealPrivateKey, "key-one")
+	moment = moment.Add(session.ActionTokenTTL + time.Second)
+
+	response := sendKeyRequest(t, engine, credentials, http.MethodPost, "/api/v1/keys/key-one/reveal", nil, token)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("expired reveal = %d, want 403", response.Code)
+	}
+	var problemBody api.Problem
+	if err := json.Unmarshal(response.Body.Bytes(), &problemBody); err != nil {
+		t.Fatalf("decode problem: %v", err)
+	}
+	if problemBody.Code != "action_token_expired" {
+		t.Fatalf("code = %q, want action_token_expired", problemBody.Code)
+	}
+	if service.revealCalls != 0 {
+		t.Fatalf("an expired confirmation revealed the key")
+	}
+}
+
+// A reveal response must be readable exactly once, by this tab, and must never
+// be written to a shared log or an error body.
+func TestRevealResponseIsUncacheableAndNeverEchoedInAnError(t *testing.T) {
+	service := newRevealService()
+	engine, _, credentials := newKeyServer(t, service)
+
+	token := issueToken(t, engine, credentials, session.ActionRevealPrivateKey, "key-one")
+	ok := sendKeyRequest(t, engine, credentials, http.MethodPost, "/api/v1/keys/key-one/reveal", nil, token)
+	if ok.Code != http.StatusOK {
+		t.Fatalf("reveal = %d", ok.Code)
+	}
+	header := ok.Result().Header
+	if header.Get("Cache-Control") != "no-store" {
+		t.Fatalf("Cache-Control = %q", header.Get("Cache-Control"))
+	}
+
+	// An unknown key must not reach the reveal path at all, and its rejection
+	// must carry no key material.
+	missing := issueToken(t, engine, credentials, session.ActionRevealPrivateKey, "key-missing")
+	rejected := sendKeyRequest(t, engine, credentials, http.MethodPost, "/api/v1/keys/key-missing/reveal", nil, missing)
+	if rejected.Code != http.StatusNotFound {
+		t.Fatalf("unknown key = %d, want 404", rejected.Code)
+	}
+	if bytes.Contains(rejected.Body.Bytes(), []byte("OPENSSH PRIVATE KEY")) {
+		t.Fatalf("an error body carried key material")
+	}
+}
+
+// The security middleware marks every /api/ response no-store, so a test that
+// goes through it cannot tell whether the reveal handler does its own part. The
+// private key body is the one response where that must not depend on a header
+// set somewhere else, so it is checked with the middleware absent.
+func TestRevealHandlerSetsNoStoreWithoutRelyingOnTheMiddleware(t *testing.T) {
+	service := newRevealService()
+	manager, bootstrap, err := session.NewManager(bytes.NewReader(bytes.Repeat([]byte{0x62}, 4096)))
+	if err != nil {
+		t.Fatalf("NewManager error = %v", err)
+	}
+	credentials, err := manager.Bootstrap(bootstrap)
+	if err != nil {
+		t.Fatalf("Bootstrap error = %v", err)
+	}
+
+	engine := echo.New()
+	engine.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c *echo.Context) error {
+			c.Set(SessionContextKey, credentials.SessionID)
+			return next(c)
+		}
+	})
+	registerKeyRoutes(engine, KeyHandlers{Keys: service, Sessions: manager})
+
+	evidence, err := service.ConfirmationEvidence(keys.ConfirmRevealKey, "key-one")
+	if err != nil {
+		t.Fatalf("ConfirmationEvidence error = %v", err)
+	}
+	token, err := manager.IssueAction(credentials.SessionID, session.ActionRequest{
+		Kind: session.ActionRevealPrivateKey, Target: "key-one", Evidence: evidence,
+	})
+	if err != nil {
+		t.Fatalf("IssueAction error = %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/keys/key-one/reveal", bytes.NewReader(nil))
+	request.Header.Set(ActionHeader, token)
+	response := httptest.NewRecorder()
+	engine.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("reveal = %d, want 200: %s", response.Code, response.Body.String())
+	}
+	if got := response.Result().Header.Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("Cache-Control = %q, want no-store from the handler itself", got)
+	}
+}
+
+func TestPermanentDeleteNeedsItsOwnActionToken(t *testing.T) {
+	service := &stubKeyService{inventory: &keys.Inventory{}, evidence: "evidence-for-the-entry"}
+	engine, _, credentials := newKeyServer(t, service)
+
+	if got := sendKeyRequest(t, engine, credentials, http.MethodDelete, "/api/v1/trash/"+trashEntryID, nil, "").Code; got != http.StatusForbidden {
+		t.Fatalf("purge without a token = %d, want 403", got)
+	}
+	revealToken := issueToken(t, engine, credentials, session.ActionRevealPrivateKey, trashEntryID)
+	if got := sendKeyRequest(t, engine, credentials, http.MethodDelete, "/api/v1/trash/"+trashEntryID, nil, revealToken).Code; got != http.StatusForbidden {
+		t.Fatalf("purge with a reveal token = %d, want 403", got)
+	}
+	if service.purgeCalls != 0 {
+		t.Fatalf("the service purged without a valid token")
+	}
+
+	// A confirmation for a different entry must not authorise this one.
+	otherToken := issueToken(t, engine, credentials, session.ActionPurgeTrashEntry, "20260805T100000.000-ffffffff")
+	if got := sendKeyRequest(t, engine, credentials, http.MethodDelete, "/api/v1/trash/"+trashEntryID, nil, otherToken).Code; got != http.StatusForbidden {
+		t.Fatalf("purge with another entry's token = %d, want 403", got)
+	}
+	if service.purgeCalls != 0 {
+		t.Fatalf("the service purged against another entry's confirmation")
+	}
+
+	purgeToken := issueToken(t, engine, credentials, session.ActionPurgeTrashEntry, trashEntryID)
+	if got := sendKeyRequest(t, engine, credentials, http.MethodDelete, "/api/v1/trash/"+trashEntryID, nil, purgeToken).Code; got != http.StatusOK {
+		t.Fatalf("purge = %d, want 200", got)
+	}
+	if service.purgeCalls != 1 {
+		t.Fatalf("purgeCalls = %d, want 1", service.purgeCalls)
+	}
+
+	// The trash entry survives a rejected purge: nothing was consumed by the
+	// refusals above, so a second valid confirmation is still required.
+	if got := sendKeyRequest(t, engine, credentials, http.MethodDelete, "/api/v1/trash/"+trashEntryID, nil, purgeToken).Code; got != http.StatusForbidden {
+		t.Fatalf("replayed purge token = %d, want 403", got)
+	}
+	if service.purgeCalls != 1 {
+		t.Fatalf("purgeCalls = %d, want 1 after a replay", service.purgeCalls)
+	}
+}
+
+func TestIssueActionRejectsAnUnknownKindAndAnAbsentTarget(t *testing.T) {
+	service := newRevealService()
+	engine, _, credentials := newKeyServer(t, service)
+
+	for _, body := range []string{
+		`{"kind":"terminal.launch","target":"key-one"}`,
+		`{"kind":"reveal_private_key","target":"key-one"}`,
+		`{"kind":"private_key.reveal","target":""}`,
+	} {
+		response := sendKeyRequest(t, engine, credentials, http.MethodPost, "/api/v1/actions", []byte(body), "")
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("issue %s = %d, want 400", body, response.Code)
+		}
+	}
+
+	service.evidenceErr = keys.ErrUnknownKey
+	response := sendKeyRequest(t, engine, credentials, http.MethodPost, "/api/v1/actions",
+		[]byte(`{"kind":"private_key.reveal","target":"key-one"}`), "")
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("issue for a missing key = %d, want 404", response.Code)
+	}
+}
+
+func TestKeyRoutesRejectMissingCSRFAndUnknownFields(t *testing.T) {
+	service := &stubKeyService{inventory: &keys.Inventory{}}
+	engine, _, credentials := newKeyServer(t, service)
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/keys", bytes.NewReader([]byte(`{}`)))
+	request.Host = keyTestHost
+	request.Header.Set(echo.HeaderOrigin, "http://"+keyTestHost)
+	request.Header.Set("Sec-Fetch-Site", "same-origin")
+	request.AddCookie(&http.Cookie{Name: SessionCookie, Value: credentials.SessionID})
+	response := httptest.NewRecorder()
+	engine.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("generate without CSRF = %d, want 403", response.Code)
+	}
+
+	body := []byte(`{"algorithm":"ed25519","fileName":"id_work","comment":"aida@laptop","passphrase":"x","unencrypted":false,"surprise":1}`)
+	if got := sendKeyRequest(t, engine, credentials, http.MethodPost, "/api/v1/keys", body, "").Code; got != http.StatusBadRequest {
+		t.Fatalf("unknown field = %d, want 400", got)
+	}
+}
+
+func TestAgentRejectionIsReportedWithASanitisedDetail(t *testing.T) {
+	service := &stubKeyService{
+		inventory:   &keys.Inventory{},
+		registerErr: fmt.Errorf("%w: Bad passphrase for ~/.ssh/id_work", platform.ErrAgentRejected),
+	}
+	engine, _, credentials := newKeyServer(t, service)
+
+	body := []byte(`{"passphrase":"wrong","lifetimeSeconds":0,"storeInKeychain":false}`)
+	response := sendKeyRequest(t, engine, credentials, http.MethodPost, "/api/v1/keys/key-one/agent", body, "")
+	if response.Code != http.StatusBadGateway {
+		t.Fatalf("register = %d, want 502: %s", response.Code, response.Body.String())
+	}
+	var problemBody api.Problem
+	if err := json.Unmarshal(response.Body.Bytes(), &problemBody); err != nil {
+		t.Fatalf("decode problem: %v", err)
+	}
+	if problemBody.Code != "agent_rejected" || problemBody.Detail == nil {
+		t.Fatalf("problem = %#v", problemBody)
+	}
+	if bytes.Contains(response.Body.Bytes(), []byte("wrong")) {
+		t.Fatalf("the response echoed the passphrase")
+	}
+}
+
+func TestInventoryAndTrashListingsMatchTheGeneratedContract(t *testing.T) {
+	service := newRevealService()
+	engine, _, credentials := newKeyServer(t, service)
+
+	response := sendKeyRequest(t, engine, credentials, http.MethodGet, "/api/v1/keys", nil, "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("list keys = %d", response.Code)
+	}
+	var inventory api.KeyInventoryResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &inventory); err != nil {
+		t.Fatalf("decode inventory: %v", err)
+	}
+	if len(inventory.Items) != 1 || inventory.Items[0].Id != "key-one" || !inventory.AgentAvailable {
+		t.Fatalf("inventory = %#v", inventory)
+	}
+	if inventory.Items[0].References == nil || inventory.Items[0].Notes == nil {
+		t.Fatalf("empty arrays must serialise as arrays, not null: %#v", inventory.Items[0])
+	}
+
+	trashResponse := sendKeyRequest(t, engine, credentials, http.MethodGet, "/api/v1/trash", nil, "")
+	if trashResponse.Code != http.StatusOK {
+		t.Fatalf("list trash = %d", trashResponse.Code)
+	}
+	var trash api.TrashListResponse
+	if err := json.Unmarshal(trashResponse.Body.Bytes(), &trash); err != nil {
+		t.Fatalf("decode trash: %v", err)
+	}
+	if trash.RetentionDays != keys.TrashRetentionDays || len(trash.Entries) != 1 {
+		t.Fatalf("trash = %#v", trash)
+	}
+	if trash.Entries[0].DeletedAt != "2026-08-05T09:00:00Z" || !trash.Entries[0].Stale {
+		t.Fatalf("entry = %#v", trash.Entries[0])
+	}
+}
