@@ -11,6 +11,12 @@ The approved design spans six independently reviewable subsystems. Each subsyste
 
 Plans are executed in this order. A later plan may consume only interfaces committed by earlier plans. No plan may run against the user's real `~/.ssh` in automated tests.
 
+## Status
+
+- Subsystem 1 (Foundation): delivered on `main`; acceptance gate verified 2026-08-04.
+- Subsystem 2 (Lossless config engine): delivered on `feature/config-engine`; plan `2026-08-05-ssh-ui-config-engine-implementation-plan.md`; acceptance gate verified 2026-08-05, including a clean 60-second parser fuzz run and no new module dependency.
+- Subsystems 3 to 6: not started.
+
 ## Toolchain decision
 
 The local machine uses the Go 1.26.5 toolchain through Go's official toolchain switching, alongside Node 22.19.0, npm 11.7.0 and OpenSSH 10.2p1. The foundation therefore targets Echo v5.3.1 directly. Go, npm and project dependency installation were explicitly approved on 2026-08-04.
