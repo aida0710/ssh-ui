@@ -190,6 +190,54 @@ func TestPendingAndHistoryAreEmptyForAFreshWorkspace(t *testing.T) {
 	}
 }
 
+func TestRollbackRefusesToUndoAChangeThatKeptNoBackup(t *testing.T) {
+	workspace := newTestWorkspace(t)
+	first := writeWorkspaceFile(t, workspace, "id_work", "FIRST\n", 0o600)
+	second := writeWorkspaceFile(t, workspace, "id_spare", "SPARE\n", 0o600)
+	failure := errors.New("injected rename failure")
+	workspace.fileSystem = faultyFileSystem{
+		FileSystem: OSFileSystem{},
+		failOn: func(operation, path string) error {
+			if operation == "rename" && path == second {
+				return failure
+			}
+			return nil
+		},
+	}
+	manager := NewManager(workspace, fixedClock(), bytes.NewReader(bytes.Repeat([]byte{0x5a}, 4096)))
+
+	if _, err := manager.Commit(Request{
+		Operation: "key.passphrase",
+		Changes: []Change{
+			{Path: first, Contents: []byte("NEW FIRST\n"), Precondition: Precondition{Exists: true, Digest: Digest([]byte("FIRST\n"))}, SkipBackup: true},
+			{Path: second, Contents: []byte("NEW SPARE\n"), Precondition: Precondition{Exists: true, Digest: Digest([]byte("SPARE\n"))}, SkipBackup: true},
+		},
+	}); !errors.Is(err, failure) {
+		t.Fatalf("error = %v, want the injected failure", err)
+	}
+
+	workspace.fileSystem = OSFileSystem{}
+	pending, err := manager.Pending()
+	if err != nil {
+		t.Fatalf("Pending error = %v", err)
+	}
+	if len(pending) != 1 {
+		t.Fatalf("pending = %#v, want one", pending)
+	}
+	if err := manager.Rollback(pending[0].ID); !errors.Is(err, ErrIrreversibleChange) {
+		t.Fatalf("Rollback error = %v, want ErrIrreversibleChange", err)
+	}
+	if err := manager.Complete(pending[0].ID); err != nil {
+		t.Fatalf("Complete error = %v", err)
+	}
+	for path, want := range map[string]string{first: "NEW FIRST\n", second: "NEW SPARE\n"} {
+		contents, readErr := os.ReadFile(path)
+		if readErr != nil || string(contents) != want {
+			t.Fatalf("%s = %q, %v", path, contents, readErr)
+		}
+	}
+}
+
 func stagedPathFor(t *testing.T, manager *Manager, identifier string, index int) string {
 	t.Helper()
 	record, _, err := manager.loadPending(identifier)

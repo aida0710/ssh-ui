@@ -326,3 +326,40 @@ func (f faultyFileSystem) Remove(path string) error {
 	}
 	return f.FileSystem.Remove(path)
 }
+
+// A private key must never be duplicated into the generational backup
+// directory, so a caller that replaces key material opts out of the backup and
+// accepts that the change cannot be rolled back afterwards.
+func TestCommitSkipsTheGenerationalBackupWhenTheCallerOptsOut(t *testing.T) {
+	manager, workspace := newTestManager(t)
+	secret := writeWorkspaceFile(t, workspace, "id_work", "PRIVATE KEY BYTES\n", 0o600)
+
+	result, err := manager.Commit(Request{
+		Operation: "key.passphrase",
+		Changes: []Change{{
+			Path:         secret,
+			Contents:     []byte("RE-ENCRYPTED KEY BYTES\n"),
+			Precondition: Precondition{Exists: true, Digest: Digest([]byte("PRIVATE KEY BYTES\n"))},
+			SkipBackup:   true,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Commit error = %v", err)
+	}
+
+	contents, err := os.ReadFile(secret)
+	if err != nil || string(contents) != "RE-ENCRYPTED KEY BYTES\n" {
+		t.Fatalf("contents = %q, %v", contents, err)
+	}
+	if entries, readErr := os.ReadDir(result.BackupDir); readErr == nil && len(entries) != 0 {
+		t.Fatalf("a change that opted out of the backup still wrote one: %#v", entries)
+	}
+
+	history, err := manager.History()
+	if err != nil {
+		t.Fatalf("History error = %v", err)
+	}
+	if len(history) != 1 || history[0].Operation != "key.passphrase" {
+		t.Fatalf("history = %#v", history)
+	}
+}

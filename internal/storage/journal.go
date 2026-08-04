@@ -102,6 +102,15 @@ func (m *Manager) Rollback(identifier string) error {
 	if err != nil {
 		return err
 	}
+	// A change that deliberately kept no backup cannot be undone. Refusing is
+	// the only honest answer; restoring nothing and reporting success would be
+	// a lie about the state of the user's key.
+	for index := 0; index < record.Committed; index++ {
+		if record.Entries[index].HadPrevious && record.Entries[index].NoBackup {
+			return ErrIrreversibleChange
+		}
+	}
+
 	fileSystem := m.workspace.FileSystem()
 	for index := record.Committed - 1; index >= 0; index-- {
 		entry := record.Entries[index]

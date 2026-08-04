@@ -25,8 +25,9 @@ const (
 )
 
 var (
-	ErrNoChanges     = errors.New("transaction has no changes")
-	ErrDuplicatePath = errors.New("transaction contains the same path twice")
+	ErrNoChanges          = errors.New("transaction has no changes")
+	ErrDuplicatePath      = errors.New("transaction contains the same path twice")
+	ErrIrreversibleChange = errors.New("a committed change that kept no backup cannot be rolled back")
 )
 
 // Precondition records the state the caller based its new contents on.
@@ -36,10 +37,19 @@ type Precondition struct {
 }
 
 // Change is one file the transaction replaces or creates.
+//
+// SkipBackup suppresses the generational backup of the contents this change
+// replaces. It exists for one reason: the previous contents may be a private
+// key, and the design refuses to leave a second copy of key material in
+// ~/.ssh/ssh-ui/backups/. A change that opts out is still journalled and can
+// still be completed after an interruption, but it can no longer be rolled
+// back, and Rollback says so instead of pretending otherwise. The zero value
+// keeps the ordinary behaviour, so an existing caller is unaffected.
 type Change struct {
 	Path         string
 	Contents     []byte
 	Precondition Precondition
+	SkipBackup   bool
 }
 
 // Request is one logical edit spanning any number of files.
@@ -79,6 +89,7 @@ type journalEntry struct {
 	Path           string `json:"path"`
 	Temp           string `json:"temp,omitempty"`
 	Backup         string `json:"backup,omitempty"`
+	NoBackup       bool   `json:"noBackup,omitempty"`
 	HadPrevious    bool   `json:"hadPrevious"`
 	Mode           uint32 `json:"mode"`
 	Digest         string `json:"digest"`
@@ -159,6 +170,7 @@ func (m *Manager) Commit(request Request) (Result, error) {
 
 		entry := journalEntry{
 			Path:        target,
+			NoBackup:    change.SkipBackup,
 			HadPrevious: exists,
 			Mode:        uint32(mode),
 			Digest:      Digest(change.Contents),
@@ -207,7 +219,7 @@ func (m *Manager) Commit(request Request) (Result, error) {
 	// request.Changes stay index-aligned throughout Commit.
 	for index := range record.Entries {
 		entry := &record.Entries[index]
-		if !entry.HadPrevious {
+		if !entry.HadPrevious || entry.NoBackup {
 			continue
 		}
 		relative, err := filepath.Rel(m.workspace.Root(), entry.Path)
