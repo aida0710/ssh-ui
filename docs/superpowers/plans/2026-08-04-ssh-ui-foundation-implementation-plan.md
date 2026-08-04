@@ -4,9 +4,9 @@
 
 **Goal:** Build a runnable macOS `ssh-ui` command that starts a token-protected loopback server, opens an embedded React shell, bootstraps a same-origin session, and exposes an authenticated health endpoint.
 
-**Architecture:** A Go 1.24 CLI owns a `127.0.0.1:0` listener and Echo v4 server. It generates a one-time bootstrap secret, opens a fragment-bearing URL through a macOS adapter, exchanges the secret for an in-memory HttpOnly session and CSRF token, and serves a Vite-built React application from the same binary. OpenAPI is the API contract for generated Go models and TypeScript types.
+**Architecture:** A Go 1.26 CLI owns a `127.0.0.1:0` listener and Echo v5 server. It generates a one-time bootstrap secret, opens a fragment-bearing URL through a macOS adapter, exchanges the secret for an in-memory HttpOnly session and CSRF token, and serves a Vite-built React application from the same binary. OpenAPI is the API contract for generated Go models and TypeScript types.
 
-**Tech Stack:** Go 1.24.11, Echo v4.15.4, oapi-codegen v2.7.0, React 19.2.8, Vite 8.1.5, TypeScript 7.0.2, Tailwind CSS 4.3.3, Vitest 4.1.1, React Testing Library 16.3.2.
+**Tech Stack:** Go 1.26.5, Echo v5.3.1, oapi-codegen v2.7.0, React 19.2.8, Vite 8.1.5, TypeScript 7.0.2, Tailwind CSS 4.3.3, Vitest 4.1.1, React Testing Library 16.3.2, npm 11.7.0.
 
 ## Global Constraints
 
@@ -18,9 +18,9 @@
 - API and UI are same-origin; do not enable CORS.
 - Keep all secrets in process memory only. The bootstrap token is single-use and the session dies with the process.
 - Keep macOS-specific behavior behind a platform interface; do not claim Linux or Windows support.
-- Echo v4 is intentional because the installed Go 1.24.11 cannot build Echo v5, which requires Go 1.25 or newer.
+- Use Echo v5 APIs, including `*echo.Context` handler parameters; do not introduce Echo v4 compatibility code.
 - Pin direct dependencies exactly and commit `go.sum` and `web/package-lock.json`.
-- No package download or install may run until the user explicitly approves the dependency list.
+- Go, npm and project dependency installation are explicitly approved; keep installations project-scoped except for the approved Go toolchain switch.
 
 ---
 
@@ -210,10 +210,10 @@ output-options:
   skip-prune: false
 ```
 
-Run only after package approval:
+Install the approved Go dependencies:
 
 ```bash
-go get github.com/labstack/echo/v4@v4.15.4
+go get github.com/labstack/echo/v5@v5.3.1
 go get -tool github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.7.0
 go generate ./internal/api
 ```
@@ -258,7 +258,7 @@ Expected: `go.mod`, `go.sum`, and `internal/api/models.gen.go` are created; `go.
 }
 ```
 
-Run only after package approval: `npm install --prefix web`
+Install the approved frontend dependencies with npm: `npm install --prefix web`
 
 Expected: `web/package-lock.json` records the exact dependency graph and npm reports no install failure.
 
@@ -575,7 +575,7 @@ func TestSecurityRejectsCrossSiteAndWrongHost(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			e := echo.New()
 			e.Use(security.Middleware)
-			e.POST("/api/v1/session/bootstrap", func(c echo.Context) error {
+			e.POST("/api/v1/session/bootstrap", func(c *echo.Context) error {
 				return c.NoContent(http.StatusNoContent)
 			})
 			request := httptest.NewRequest(http.MethodPost, "/api/v1/session/bootstrap", nil)
@@ -604,9 +604,9 @@ func TestSecurityNavigationHeadersAndAPIAuthentication(t *testing.T) {
 		ExpectedOrigin: "http://127.0.0.1:43123",
 		Sessions: manager,
 	}).Middleware)
-	e.GET("/", func(c echo.Context) error { return c.NoContent(http.StatusNoContent) })
-	e.GET("/api/v1/test", func(c echo.Context) error { return c.NoContent(http.StatusNoContent) })
-	e.POST("/api/v1/test", func(c echo.Context) error { return c.NoContent(http.StatusNoContent) })
+	e.GET("/", func(c *echo.Context) error { return c.NoContent(http.StatusNoContent) })
+	e.GET("/api/v1/test", func(c *echo.Context) error { return c.NoContent(http.StatusNoContent) })
+	e.POST("/api/v1/test", func(c *echo.Context) error { return c.NoContent(http.StatusNoContent) })
 
 	run := func(method, path string, authenticated, csrf bool) *httptest.ResponseRecorder {
 		request := httptest.NewRequest(method, path, nil)
@@ -677,7 +677,7 @@ type Security struct {
 }
 
 func (s Security) Middleware(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
+	return func(c *echo.Context) error {
 		request := c.Request()
 		response := c.Response()
 		setSecurityHeaders(response.Header(), strings.HasPrefix(request.URL.Path, "/api/"))
@@ -727,7 +727,7 @@ func setSecurityHeaders(header http.Header, apiResponse bool) {
 	if apiResponse { header.Set("Cache-Control", "no-store") }
 }
 
-func problem(c echo.Context, status int, code string) error {
+func problem(c *echo.Context, status int, code string) error {
 	c.Response().Header().Set(echo.HeaderContentType, "application/problem+json")
 	return c.JSON(status, api.Problem{Code: code, Message: "request rejected"})
 }
@@ -887,7 +887,7 @@ type Handlers struct {
 	Version string
 }
 
-func (h Handlers) Bootstrap(c echo.Context) error {
+func (h Handlers) Bootstrap(c *echo.Context) error {
 	credentials, err := h.Sessions.Bootstrap(c.Request().Header.Get("X-SSH-UI-Bootstrap"))
 	switch {
 	case errors.Is(err, session.ErrInvalidBootstrap):
@@ -904,7 +904,7 @@ func (h Handlers) Bootstrap(c echo.Context) error {
 	return c.JSON(http.StatusOK, api.BootstrapResponse{CsrfToken: credentials.CSRFToken})
 }
 
-func (h Handlers) Health(c echo.Context) error {
+func (h Handlers) Health(c *echo.Context) error {
 	return c.JSON(http.StatusOK, api.HealthResponse{Status: "ok", Version: h.Version})
 }
 ```
@@ -1689,7 +1689,7 @@ build:
 - the binary binds only to `127.0.0.1` and is not safe to expose over a network;
 - the foundation does not read `~/.ssh` yet;
 - secrets remain vulnerable to browser extensions and local clipboard tooling in later reveal features;
-- Echo v4 is temporary until the Go toolchain is intentionally upgraded to 1.25+.
+- Echo v5 is intentionally pinned to v5.3.1 for a reproducible foundation build.
 
 - [ ] **Step 8: Run the full foundation verification**
 

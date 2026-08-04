@@ -13,6 +13,6 @@ Plans are executed in this order. A later plan may consume only interfaces commi
 
 ## Toolchain decision
 
-The local machine currently has Go 1.24.11, Node 22.19.0, npm 11.7.0 and OpenSSH 10.2p1. Echo v5 requires Go 1.25 or newer, so the foundation uses the maintained Echo v4.15.4 line instead of installing a new Go toolchain. The project can migrate to Echo v5 after Go is upgraded intentionally.
+The local machine uses the Go 1.26.5 toolchain through Go's official toolchain switching, alongside Node 22.19.0, npm 11.7.0 and OpenSSH 10.2p1. The foundation therefore targets Echo v5.3.1 directly. Go, npm and project dependency installation were explicitly approved on 2026-08-04.
 
 Frontend versions selected for the foundation are React 19.2.8, Vite 8.1.5, Tailwind CSS 4.3.3, TypeScript 7.0.2 and Vitest 4.1.1. Package-lock and go.sum are committed so all transitive versions remain reproducible.
