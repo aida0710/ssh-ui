@@ -395,6 +395,102 @@ func TestAlgorithmsAreReadThroughTheCommandSeam(t *testing.T) {
 	}
 }
 
+// A confirmation is bound to a digest of what the dialog displayed. The digest
+// must change when the key on disk changes, or a user who confirmed one key
+// would be authorising whatever replaced it.
+func TestConfirmationEvidenceTracksWhatTheUserWasShown(t *testing.T) {
+	service, workspace := newTestService(t, newQueryRunner())
+	generateWorkKey(t, service)
+
+	first, err := service.ConfirmationEvidence(ConfirmRevealKey, ItemID("id_work"))
+	if err != nil {
+		t.Fatalf("ConfirmationEvidence error = %v", err)
+	}
+	if first == "" {
+		t.Fatalf("evidence is empty, so a token would be bound to nothing")
+	}
+	again, err := service.ConfirmationEvidence(ConfirmRevealKey, ItemID("id_work"))
+	if err != nil {
+		t.Fatalf("ConfirmationEvidence error = %v", err)
+	}
+	if again != first {
+		t.Fatalf("evidence is not stable for an unchanged key: %q then %q", first, again)
+	}
+
+	// The same fingerprint at a different path is a different confirmation.
+	if _, err := service.Generate(GenerateRequest{
+		Algorithm:  AlgorithmEd25519,
+		FileName:   "id_other",
+		Comment:    "aida@laptop",
+		Passphrase: []byte("correct horse"),
+	}); err != nil {
+		t.Fatalf("Generate error = %v", err)
+	}
+	other, err := service.ConfirmationEvidence(ConfirmRevealKey, ItemID("id_other"))
+	if err != nil {
+		t.Fatalf("ConfirmationEvidence error = %v", err)
+	}
+	if other == first {
+		t.Fatalf("two different keys produced the same evidence")
+	}
+
+	// Replacing the file behind the same path must invalidate the evidence.
+	replacement, _, _ := newKeyPairFixture(t, "different passphrase")
+	if err := os.WriteFile(filepath.Join(workspace.Root(), "id_work"), replacement, 0o600); err != nil {
+		t.Fatalf("replace key: %v", err)
+	}
+	changed, err := service.ConfirmationEvidence(ConfirmRevealKey, ItemID("id_work"))
+	if err != nil {
+		t.Fatalf("ConfirmationEvidence error = %v", err)
+	}
+	if changed == first {
+		t.Fatalf("the key was replaced but the evidence did not change")
+	}
+
+	if _, err := service.ConfirmationEvidence(ConfirmRevealKey, "not-an-identifier"); !errors.Is(err, ErrUnknownKey) {
+		t.Fatalf("evidence for an unknown key = %v, want ErrUnknownKey", err)
+	}
+	if _, err := service.ConfirmationEvidence(ConfirmRevealKey, ItemID("id_work.pub")); !errors.Is(err, ErrUnknownKey) {
+		t.Fatalf("evidence for a public key = %v, want ErrUnknownKey", err)
+	}
+	if _, err := service.ConfirmationEvidence(ConfirmationSubject("nonsense"), ItemID("id_work")); err == nil {
+		t.Fatalf("an unknown confirmation subject was accepted")
+	}
+}
+
+func TestConfirmationEvidenceForATrashEntryTracksItsListing(t *testing.T) {
+	service, workspace := newTestService(t, newQueryRunner())
+	generateWorkKey(t, service)
+	trashed, err := service.Trash(ItemID("id_work"))
+	if err != nil {
+		t.Fatalf("Trash error = %v", err)
+	}
+
+	first, err := service.ConfirmationEvidence(ConfirmPurgeEntry, trashed.EntryID)
+	if err != nil {
+		t.Fatalf("ConfirmationEvidence error = %v", err)
+	}
+	if first == "" {
+		t.Fatalf("evidence is empty")
+	}
+
+	// Removing a file from the entry changes what the dialog would list.
+	if err := os.Remove(filepath.Join(workspace.Root(), StateDirectoryName, "trash", trashed.EntryID, "id_work.pub")); err != nil {
+		t.Fatalf("remove trashed public key: %v", err)
+	}
+	changed, err := service.ConfirmationEvidence(ConfirmPurgeEntry, trashed.EntryID)
+	if err != nil {
+		t.Fatalf("ConfirmationEvidence error = %v", err)
+	}
+	if changed == first {
+		t.Fatalf("the entry changed but the evidence did not")
+	}
+
+	if _, err := service.ConfirmationEvidence(ConfirmPurgeEntry, "../escape"); !errors.Is(err, ErrUnknownTrashEntry) {
+		t.Fatalf("evidence for a traversal identifier = %v, want ErrUnknownTrashEntry", err)
+	}
+}
+
 // fakeAgent records every registration request without touching a real agent.
 // The passphrase is copied on arrival because Register wipes the caller's
 // buffer before it returns.

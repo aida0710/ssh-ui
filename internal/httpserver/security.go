@@ -83,3 +83,17 @@ func problem(c *echo.Context, status int, code string) error {
 	c.Response().Header().Set(echo.HeaderContentType, "application/problem+json")
 	return c.JSON(status, api.Problem{Code: code, Message: "request rejected"})
 }
+
+// problemDetail returns a rejection with a bounded explanation.
+//
+// Callers must pass either a fixed string or a message the platform layer has
+// already sanitised. A detail must never carry key material, a passphrase, a
+// session or action token, or an absolute path.
+func problemDetail(c *echo.Context, status int, code, detail string) error {
+	const detailLimit = 512
+	if len(detail) > detailLimit {
+		detail = detail[:detailLimit]
+	}
+	c.Response().Header().Set(echo.HeaderContentType, "application/problem+json")
+	return c.JSON(status, api.Problem{Code: code, Message: "request rejected", Detail: &detail})
+}

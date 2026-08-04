@@ -11,6 +11,7 @@ import (
 
 	"ssh-ui/internal/application"
 	"ssh-ui/internal/httpserver"
+	"ssh-ui/internal/keys"
 	"ssh-ui/internal/platform"
 	"ssh-ui/internal/session"
 	"ssh-ui/internal/storage"
@@ -27,6 +28,41 @@ type Dependencies struct {
 	// Home is the user's home directory. Only cmd/ssh-ui may read it from the
 	// operating system; every test injects a temporary directory.
 	Home string
+	// Runner, Toolchain and KeyAgent are the key vault's boundary with the
+	// operating system. A nil Runner or Toolchain leaves the algorithm
+	// catalogue on its Ed25519 fallback; a nil KeyAgent makes agent
+	// registration report that no agent is reachable. Neither is fatal, so the
+	// process still serves every other surface.
+	Runner    platform.OutputRunner
+	Toolchain platform.Toolchain
+	KeyAgent  platform.KeyAgent
+}
+
+// buildKeyService prepares the key vault over the same workspace the
+// configuration engine uses.
+//
+// It deliberately takes its own storage.Manager. application.NewService
+// installs a configuration validator on the manager it is given, and that
+// validator parses every file a transaction writes as ssh_config. The key vault
+// writes private keys, public keys and a JSON trash manifest, none of which is
+// configuration, and a manifest would be rejected outright as a syntax error.
+// Two managers over one workspace is safe: a Manager holds no mutable state
+// between calls, and every transaction is identified by its own timestamp and
+// random suffix, so the journal and the history remain one consistent stream.
+func buildKeyService(workspace *storage.Workspace, dependencies Dependencies) httpserver.KeyService {
+	transactions := storage.NewManager(workspace, time.Now, dependencies.Random)
+	return keys.NewService(keys.ServiceOptions{
+		Workspace:    workspace,
+		Transactions: transactions,
+		Resolver:     storage.NewResolver(workspace),
+		Catalogue: keys.CatalogueReader{
+			Runner:    dependencies.Runner,
+			Toolchain: dependencies.Toolchain,
+		},
+		Agent:  dependencies.KeyAgent,
+		Now:    time.Now,
+		Random: dependencies.Random,
+	})
 }
 
 func Run(ctx context.Context, dependencies Dependencies, version string) error {
@@ -46,10 +82,11 @@ func Run(ctx context.Context, dependencies Dependencies, version string) error {
 		listener.Close()
 		return fmt.Errorf("workspace: %w", err)
 	}
-	// Random must be safe for concurrent use: the session manager and the
-	// transaction manager both read from it. Production passes crypto/rand.
+	// Random must be safe for concurrent use: the session manager and both
+	// transaction managers read from it. Production passes crypto/rand.
 	transactions := storage.NewManager(workspace, time.Now, dependencies.Random)
 	configService := application.NewService(workspace, transactions)
+	keyService := buildKeyService(workspace, dependencies)
 
 	server, err := httpserver.New(httpserver.Options{
 		Listener: listener,
@@ -58,6 +95,7 @@ func Run(ctx context.Context, dependencies Dependencies, version string) error {
 		Version:  version,
 		Logger:   dependencies.Logger,
 		Config:   configService,
+		Keys:     keyService,
 	})
 	if err != nil {
 		listener.Close()

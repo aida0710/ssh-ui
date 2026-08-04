@@ -68,3 +68,17 @@ make build     # UI を生成し bin/ssh-ui へ単一バイナリを作成
 - ワイルドカード、否定パターン、`Match`、alias 重複によって単純な継承へ投影できない場合は、結果を捏造せず「complex external rule」として出所を表示します。
 - Effective タブと Diagnostics タブは値の出所説明のみです。`ssh -G` による実効設定判定、到達性診断、Terminal 起動、鍵管理、Known Hosts は後続サブシステムで実装します。
 - API は同一オリジンのみです。CORS は有効化せず、状態変更 API は `X-SSH-UI-CSRF` header を要求し、`/api/` 応答は `Cache-Control: no-store` を返します。エラー応答は安定コードと位置情報のみを含み、設定本文は返しません（利用者が解決すべき競合差分を除く）。
+
+## 鍵管理の境界
+
+- `~/.ssh` 配下のファイルは内容と権限で分類します。ファイル名だけで秘密鍵と断定しません。`~/.ssh/ssh-ui/`（backups、trash、journal、history）は走査対象、agent 登録対象、config 候補のいずれからも除外します。
+- 通常のソフトウェア鍵（Ed25519、RSA、ECDSA）は Go プロセス内で生成・暗号化します。パスフレーズは argv にも環境変数にも載せません。
+- FIDO の `ed25519-sk` と `ecdsa-sk` はハードウェアの操作が必要なため生成しません。実行すべき `ssh-keygen` コマンドだけを表示します。Terminal の起動はロードマップのサブシステム5が担当します。
+- 対応アルゴリズムの一覧は `ssh -F /dev/null -Q key` で取得します。これは設定ファイルを読まず `Match exec` も評価しないため、サブシステム5が担当する `ssh -G` の実効設定判定とは別物です。取得できない場合は Ed25519 のみの fallback を提示し、その旨を明示します。
+- パスフレーズ変更は既存の秘密鍵を置き換えるため、世代バックアップを意図的に作りません。鍵本文の複製を `~/.ssh/ssh-ui/backups/` に残さないためです。中断した場合は完了のみ可能で、`Rollback` は「復旧できない」と正直に拒否します。
+- 削除は `~/.ssh/ssh-ui/trash/<entry>/` への `rename` です。バイト列を複製せず、元の権限をそのまま保ちます。復元先が埋まっている、または同一 fingerprint の鍵が既に存在する場合は推測せず blocker を提示して拒否します。完全削除はバックアップを取らないため取り消せません。
+- 秘密鍵の表示と完全削除は、session cookie と `X-SSH-UI-CSRF` に加えて一度限りの確認 token（`X-SSH-UI-Action`）を要求します。token は「確認ダイアログが表示していた内容」の digest に束縛されます。digest はサーバ側で発行時と使用時の両方で計算するため、確認から実行までの間に鍵が差し替わった場合、その token は無効になります。
+- 秘密鍵の表示応答は `Cache-Control: no-store` で返し、鍵本文はログ行にも history にもエラー応答にも出しません。history には「表示した」という事実と対象パスのみを記録します。
+- 画面は表示した鍵本文をコンポーネント状態にのみ保持し、ダイアログを閉じた時点で破棄します。`localStorage`、`sessionStorage`、グローバルオブジェクトのいずれにも書きません。再表示には新しい確認 token が必要です。
+- ssh-agent と login Keychain への登録は `ssh-add` 経由です。パスフレーズは標準入力のみで渡します。`SSH_ASKPASS` と `SSH_ASKPASS_REQUIRE` が設定されていると `ssh-add` は外部プログラムにパスフレーズを尋ねてしまうため、子プロセスの環境は `HOME`、`PATH`、`LANG`、`SSH_AUTH_SOCK` のみに置き換えます。
+- パスフレーズはアプリケーションでは一切保存しません。保持は利用者の明示的な操作による macOS Keychain または ssh-agent への委譲のみです。

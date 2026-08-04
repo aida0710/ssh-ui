@@ -32,6 +32,227 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/HealthResponse" }
         "401": { $ref: "#/components/responses/Problem" }
+  /api/v1/actions:
+    post:
+      operationId: issueActionToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IssueActionRequest" }
+      responses:
+        "201":
+          description: One-time action token issued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IssueActionResponse" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /api/v1/keys:
+    get:
+      operationId: listKeys
+      responses:
+        "200":
+          description: Classified contents of the ssh workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KeyInventoryResponse" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "500": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: generateKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GenerateKeyRequest" }
+      responses:
+        "201":
+          description: Key pair generated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenerateKeyResponse" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/keys/algorithms:
+    get:
+      operationId: listKeyAlgorithms
+      responses:
+        "200":
+          description: Variants the installed OpenSSH supports
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KeyAlgorithmsResponse" }
+        "401": { $ref: "#/components/responses/Problem" }
+  /api/v1/keys/hardware-command:
+    post:
+      operationId: buildHardwareKeyCommand
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HardwareCommandRequest" }
+      responses:
+        "200":
+          description: Command the user runs in Terminal
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HardwareCommandResponse" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/keys/{keyId}/passphrase:
+    post:
+      operationId: changeKeyPassphrase
+      parameters:
+        - name: keyId
+          in: path
+          required: true
+          schema: { type: string, minLength: 32, maxLength: 32 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChangePassphraseRequest" }
+      responses:
+        "200":
+          description: Passphrase changed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChangePassphraseResponse" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/keys/{keyId}/reveal:
+    post:
+      operationId: revealPrivateKey
+      parameters:
+        - name: keyId
+          in: path
+          required: true
+          schema: { type: string, minLength: 32, maxLength: 32 }
+        - name: X-SSH-UI-Action
+          in: header
+          required: true
+          schema: { type: string, minLength: 43, maxLength: 43 }
+      responses:
+        "200":
+          description: Private key material, never cached and never logged
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RevealPrivateKeyResponse" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/keys/{keyId}/agent:
+    post:
+      operationId: registerKeyWithAgent
+      parameters:
+        - name: keyId
+          in: path
+          required: true
+          schema: { type: string, minLength: 32, maxLength: 32 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterKeyRequest" }
+      responses:
+        "200":
+          description: Key registered with the ssh-agent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegisterKeyResponse" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "502": { $ref: "#/components/responses/Problem" }
+  /api/v1/keys/{keyId}/trash:
+    post:
+      operationId: trashKey
+      parameters:
+        - name: keyId
+          in: path
+          required: true
+          schema: { type: string, minLength: 32, maxLength: 32 }
+      responses:
+        "200":
+          description: Key moved to the trash
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TrashKeyResponse" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/trash:
+    get:
+      operationId: listTrash
+      responses:
+        "200":
+          description: Soft-deleted keys, newest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TrashListResponse" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "500": { $ref: "#/components/responses/Problem" }
+  /api/v1/trash/{entryId}/restore:
+    post:
+      operationId: restoreTrashEntry
+      parameters:
+        - name: entryId
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 64 }
+      responses:
+        "200":
+          description: Trash entry restored
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RestoreTrashResponse" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409":
+          description: Restore refused because it would have to guess
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RestoreTrashResponse" }
+  /api/v1/trash/{entryId}:
+    delete:
+      operationId: purgeTrashEntry
+      parameters:
+        - name: entryId
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 64 }
+        - name: X-SSH-UI-Action
+          in: header
+          required: true
+          schema: { type: string, minLength: 43, maxLength: 43 }
+      responses:
+        "200":
+          description: Trash entry permanently deleted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PurgeTrashResponse" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
   /api/v1/config/overview:
     get:
       operationId: getConfigOverview
@@ -205,6 +426,263 @@ components:
         column: { type: integer }
         diagnostics: { type: array, items: { $ref: "#/components/schemas/Diagnostic" } }
         conflict: { $ref: "#/components/schemas/ConflictReport" }
+    KeyReference:
+      type: object
+      additionalProperties: false
+      required: [directive, configPath, line, condition, hostPatterns, value]
+      properties:
+        directive: { type: string }
+        configPath: { type: string }
+        line: { type: integer }
+        condition: { type: string }
+        hostPatterns: { type: array, items: { type: string } }
+        value: { type: string }
+    UnresolvedReference:
+      type: object
+      additionalProperties: false
+      required: [directive, value, configPath, line, reason]
+      properties:
+        directive: { type: string }
+        value: { type: string }
+        configPath: { type: string }
+        line: { type: integer }
+        reason: { type: string }
+    KeyCertificate:
+      type: object
+      additionalProperties: false
+      required: [keyId, principals, validBefore, neverExpires, signedKeyType, signedKeyFingerprint]
+      properties:
+        keyId: { type: string }
+        principals: { type: array, items: { type: string } }
+        validBefore: { type: integer }
+        neverExpires: { type: boolean }
+        signedKeyType: { type: string }
+        signedKeyFingerprint: { type: string }
+    UnreadableFile:
+      type: object
+      additionalProperties: false
+      required: [relativePath, reason]
+      properties:
+        relativePath: { type: string }
+        reason: { type: string }
+    KeyItem:
+      type: object
+      additionalProperties: false
+      required:
+        [id, relativePath, kind, container, algorithm, keyType, bits, encrypted,
+         fingerprint, comment, permission, permissionRisk, sizeBytes, references, notes]
+      properties:
+        id: { type: string }
+        relativePath: { type: string }
+        kind: { type: string }
+        container: { type: string }
+        algorithm: { type: string }
+        keyType: { type: string }
+        bits: { type: integer }
+        encrypted: { type: boolean }
+        fingerprint: { type: string }
+        comment: { type: string }
+        permission: { type: string }
+        permissionRisk: { type: boolean }
+        sizeBytes: { type: integer }
+        certificate: { $ref: "#/components/schemas/KeyCertificate" }
+        references: { type: array, items: { $ref: "#/components/schemas/KeyReference" } }
+        notes: { type: array, items: { type: string } }
+    AgentIdentity:
+      type: object
+      additionalProperties: false
+      required: [bits, fingerprint, comment, algorithm]
+      properties:
+        bits: { type: integer }
+        fingerprint: { type: string }
+        comment: { type: string }
+        algorithm: { type: string }
+    KeyInventoryResponse:
+      type: object
+      additionalProperties: false
+      required: [items, unreadable, agentDelegations, unresolvedReferences, agentAvailable, agentIdentities]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/KeyItem" } }
+        unreadable: { type: array, items: { $ref: "#/components/schemas/UnreadableFile" } }
+        agentDelegations: { type: array, items: { $ref: "#/components/schemas/KeyReference" } }
+        unresolvedReferences: { type: array, items: { $ref: "#/components/schemas/UnresolvedReference" } }
+        agentAvailable: { type: boolean }
+        agentIdentities: { type: array, items: { $ref: "#/components/schemas/AgentIdentity" } }
+    KeyVariant:
+      type: object
+      additionalProperties: false
+      required: [algorithm, bits, label, inProcess, reason]
+      properties:
+        algorithm: { type: string }
+        bits: { type: integer }
+        label: { type: string }
+        inProcess: { type: boolean }
+        reason: { type: string }
+    KeyAlgorithmsResponse:
+      type: object
+      additionalProperties: false
+      required: [variants, source, diagnostic]
+      properties:
+        variants: { type: array, items: { $ref: "#/components/schemas/KeyVariant" } }
+        source: { type: string }
+        diagnostic: { type: string }
+    GenerateKeyRequest:
+      type: object
+      additionalProperties: false
+      required: [algorithm, fileName, comment, passphrase, unencrypted]
+      properties:
+        algorithm: { type: string, minLength: 1, maxLength: 16 }
+        bits: { type: integer }
+        fileName: { type: string, minLength: 1, maxLength: 64 }
+        comment: { type: string, maxLength: 127 }
+        passphrase: { type: string, maxLength: 1024 }
+        unencrypted: { type: boolean }
+    GenerateKeyResponse:
+      type: object
+      additionalProperties: false
+      required: [id, relativePath, publicRelativePath, fingerprint, keyType, bits, encrypted, transactionId]
+      properties:
+        id: { type: string }
+        relativePath: { type: string }
+        publicRelativePath: { type: string }
+        fingerprint: { type: string }
+        keyType: { type: string }
+        bits: { type: integer }
+        encrypted: { type: boolean }
+        transactionId: { type: string }
+    HardwareCommandRequest:
+      type: object
+      additionalProperties: false
+      required: [algorithm, fileName, comment]
+      properties:
+        algorithm: { type: string, minLength: 1, maxLength: 16 }
+        fileName: { type: string, minLength: 1, maxLength: 64 }
+        comment: { type: string, maxLength: 127 }
+    HardwareCommandResponse:
+      type: object
+      additionalProperties: false
+      required: [algorithm, command, note]
+      properties:
+        algorithm: { type: string }
+        command: { type: array, items: { type: string } }
+        note: { type: string }
+    ChangePassphraseRequest:
+      type: object
+      additionalProperties: false
+      required: [currentPassphrase, newPassphrase, unencrypted]
+      properties:
+        currentPassphrase: { type: string, maxLength: 1024 }
+        newPassphrase: { type: string, maxLength: 1024 }
+        unencrypted: { type: boolean }
+    ChangePassphraseResponse:
+      type: object
+      additionalProperties: false
+      required: [id, relativePath, encrypted, notes, transactionId]
+      properties:
+        id: { type: string }
+        relativePath: { type: string }
+        encrypted: { type: boolean }
+        notes: { type: array, items: { type: string } }
+        transactionId: { type: string }
+    RevealPrivateKeyResponse:
+      type: object
+      additionalProperties: false
+      required: [id, relativePath, privateKey, encrypted, fingerprint, transactionId]
+      properties:
+        id: { type: string }
+        relativePath: { type: string }
+        privateKey: { type: string }
+        encrypted: { type: boolean }
+        fingerprint: { type: string }
+        transactionId: { type: string }
+    IssueActionRequest:
+      type: object
+      additionalProperties: false
+      required: [kind, target]
+      properties:
+        kind: { type: string, minLength: 1, maxLength: 64 }
+        target: { type: string, minLength: 1, maxLength: 128 }
+    IssueActionResponse:
+      type: object
+      additionalProperties: false
+      required: [token, expiresAt]
+      properties:
+        token: { type: string, minLength: 43, maxLength: 43 }
+        expiresAt: { type: string, minLength: 1 }
+    RegisterKeyRequest:
+      type: object
+      additionalProperties: false
+      required: [passphrase, lifetimeSeconds, storeInKeychain]
+      properties:
+        passphrase: { type: string, maxLength: 1024 }
+        lifetimeSeconds: { type: integer }
+        storeInKeychain: { type: boolean }
+    RegisterKeyResponse:
+      type: object
+      additionalProperties: false
+      required: [id, relativePath, fingerprint, lifetimeSeconds, storedInKeychain, identities]
+      properties:
+        id: { type: string }
+        relativePath: { type: string }
+        fingerprint: { type: string }
+        lifetimeSeconds: { type: integer }
+        storedInKeychain: { type: boolean }
+        identities: { type: array, items: { $ref: "#/components/schemas/AgentIdentity" } }
+    TrashFileSummary:
+      type: object
+      additionalProperties: false
+      required: [originalRelativePath, trashRelativePath, kind, fingerprint, permission]
+      properties:
+        originalRelativePath: { type: string }
+        trashRelativePath: { type: string }
+        kind: { type: string }
+        fingerprint: { type: string }
+        permission: { type: string }
+    TrashEntrySummary:
+      type: object
+      additionalProperties: false
+      required: [id, deletedAt, ageDays, stale, files, restorable, blockers]
+      properties:
+        id: { type: string }
+        deletedAt: { type: string }
+        ageDays: { type: integer }
+        stale: { type: boolean }
+        files: { type: array, items: { $ref: "#/components/schemas/TrashFileSummary" } }
+        restorable: { type: boolean }
+        blockers: { type: array, items: { type: string } }
+    TrashListResponse:
+      type: object
+      additionalProperties: false
+      required: [entries, retentionDays]
+      properties:
+        entries: { type: array, items: { $ref: "#/components/schemas/TrashEntrySummary" } }
+        retentionDays: { type: integer }
+    TrashKeyResponse:
+      type: object
+      additionalProperties: false
+      required: [entryId, files, skipped, transactionId]
+      properties:
+        entryId: { type: string }
+        files: { type: array, items: { $ref: "#/components/schemas/TrashFileSummary" } }
+        skipped: { type: array, items: { type: string } }
+        transactionId: { type: string }
+    RestoreTrashResponse:
+      type: object
+      additionalProperties: false
+      required: [entryId, restored, blockers, transactionId]
+      properties:
+        entryId: { type: string }
+        restored: { type: array, items: { type: string } }
+        blockers: { type: array, items: { type: string } }
+        transactionId: { type: string }
+    PurgeTrashResponse:
+      type: object
+      additionalProperties: false
+      required: [entryId, removed, transactionId]
+      properties:
+        entryId: { type: string }
+        removed: { type: array, items: { type: string } }
+        transactionId: { type: string }
     FileRef:
       type: object
       additionalProperties: false

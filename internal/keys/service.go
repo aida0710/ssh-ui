@@ -2,6 +2,8 @@ package keys
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"path/filepath"
@@ -342,6 +344,91 @@ func (service *Service) Reveal(keyID string) (RevealResult, error) {
 		Fingerprint:   item.Fingerprint,
 		TransactionID: result.ID,
 	}, nil
+}
+
+// ConfirmationSubject names the kind of operation a one-time confirmation
+// covers. It is this package's own vocabulary; the HTTP layer maps the session
+// package's action kinds onto it, so the use-case layer needs no dependency on
+// how a session is authenticated.
+type ConfirmationSubject string
+
+const (
+	ConfirmRevealKey  ConfirmationSubject = "reveal_key"
+	ConfirmPurgeEntry ConfirmationSubject = "purge_entry"
+)
+
+// ErrUnknownConfirmation reports a confirmation subject this application does
+// not issue tokens for.
+var ErrUnknownConfirmation = errors.New("unknown confirmation subject")
+
+// ConfirmationEvidence digests exactly what a confirmation dialog would show
+// for one operation, so a token can be bound to it.
+//
+// The digest is recomputed when the token is spent. If the key or the trash
+// entry changed in between, the digests differ and the confirmation is refused,
+// because the user agreed to the thing they were shown and not to whatever
+// replaced it. Only a digest is produced: no key material, and no path, ever
+// leaves this function.
+func (service *Service) ConfirmationEvidence(subject ConfirmationSubject, target string) (string, error) {
+	switch subject {
+	case ConfirmRevealKey:
+		return service.revealEvidence(target)
+	case ConfirmPurgeEntry:
+		return service.purgeEvidence(target)
+	default:
+		return "", ErrUnknownConfirmation
+	}
+}
+
+func (service *Service) revealEvidence(keyID string) (string, error) {
+	inventory, err := service.Inventory()
+	if err != nil {
+		return "", err
+	}
+	item, ok := inventory.Find(keyID)
+	if !ok || item.Kind != KindPrivateKey {
+		return "", ErrUnknownKey
+	}
+	contents, err := service.workspace.FileSystem().ReadFile(service.absolutePath(item.RelativePath))
+	if err != nil {
+		return "", err
+	}
+	// The file's digest is taken and the buffer is erased immediately; the
+	// evidence never holds the bytes themselves.
+	contentsDigest := storage.Digest(contents)
+	Wipe(contents)
+
+	return digestFields(string(ConfirmRevealKey), item.RelativePath, item.Fingerprint, item.Permission, contentsDigest), nil
+}
+
+func (service *Service) purgeEvidence(entryID string) (string, error) {
+	manifest, err := service.readManifest(entryID)
+	if err != nil {
+		return "", err
+	}
+	fields := []string{string(ConfirmPurgeEntry), manifest.EntryID, manifest.DeletedAt}
+	for _, file := range manifest.Files {
+		fields = append(fields, file.OriginalPath, file.TrashPath, file.Kind, file.Fingerprint, file.Permission)
+		// A file that has since disappeared changes what the dialog lists, so
+		// its presence is part of what the user is confirming.
+		if _, statErr := service.workspace.FileSystem().Lstat(filepath.Join(service.workspace.Root(), file.TrashPath)); statErr == nil {
+			fields = append(fields, "present")
+			continue
+		}
+		fields = append(fields, "missing")
+	}
+	return digestFields(fields...), nil
+}
+
+// digestFields hashes a field list with an unambiguous separator, so two
+// different field lists can never produce the same digest by concatenation.
+func digestFields(fields ...string) string {
+	hash := sha256.New()
+	for _, field := range fields {
+		hash.Write([]byte(field))
+		hash.Write([]byte("\x00"))
+	}
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 // RegisterRequest asks the user's ssh-agent to load one key.
