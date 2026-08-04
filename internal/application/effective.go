@@ -197,14 +197,26 @@ func equalStrings(first, second []string) bool {
 	return true
 }
 
+// equalSources compares where two explanations got their values from, ignoring
+// the line number. A value that kept its file and its governing block has not
+// changed just because an edit elsewhere in that file pushed it down a line;
+// reporting that as a change would fill the group preview with edits the user
+// did not make. A value that genuinely moved to another file or another Host
+// or Match block differs in Path, Absolute or Condition and is still reported.
 func equalSources(first, second []Source) bool {
 	if len(first) != len(second) {
 		return false
 	}
 	for index := range first {
-		if first[index] != second[index] {
+		if !equivalentSource(first[index], second[index]) {
 			return false
 		}
 	}
 	return true
+}
+
+func equivalentSource(first, second Source) bool {
+	return first.Path == second.Path &&
+		first.Absolute == second.Absolute &&
+		first.Condition == second.Condition
 }

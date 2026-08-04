@@ -93,3 +93,34 @@ func TestDiffEffectiveReportsAddedChangedAndRemovedValues(t *testing.T) {
 		t.Fatalf("added change = %#v", diff.Changes[1])
 	}
 }
+
+// TestDiffEffectiveIgnoresALineShiftButNotARealMove pins what counts as a
+// change of source. Inserting a line into a file pushes every value below it
+// down, and an unchanged value that merely moved is not something the user
+// edited; a value that moved to another file or another block is.
+func TestDiffEffectiveIgnoresALineShiftButNotARealMove(t *testing.T) {
+	before := Effective{Alias: "nas", Entries: []EffectiveEntry{
+		{Keyword: "ServerAliveInterval", Values: []string{"30"}, Source: Source{Path: "config", Absolute: "/root/config", Line: 10, Condition: "Host *"}},
+	}}
+
+	shifted := Effective{Alias: "nas", Entries: []EffectiveEntry{
+		{Keyword: "ServerAliveInterval", Values: []string{"30"}, Source: Source{Path: "config", Absolute: "/root/config", Line: 11, Condition: "Host *"}},
+	}}
+	if diff := DiffEffective(before, shifted); len(diff.Changes) != 0 {
+		t.Fatalf("a pure line shift was reported as a change: %#v", diff.Changes)
+	}
+
+	movedFile := Effective{Alias: "nas", Entries: []EffectiveEntry{
+		{Keyword: "ServerAliveInterval", Values: []string{"30"}, Source: Source{Path: "groups.ssh-ui.conf", Absolute: "/root/groups.ssh-ui.conf", Line: 7, Condition: "Host nas"}},
+	}}
+	if diff := DiffEffective(before, movedFile); len(diff.Changes) != 1 {
+		t.Fatalf("a move to another file was not reported: %#v", diff.Changes)
+	}
+
+	movedBlock := Effective{Alias: "nas", Entries: []EffectiveEntry{
+		{Keyword: "ServerAliveInterval", Values: []string{"30"}, Source: Source{Path: "config", Absolute: "/root/config", Line: 10, Condition: "Host nas"}},
+	}}
+	if diff := DiffEffective(before, movedBlock); len(diff.Changes) != 1 {
+		t.Fatalf("a move to another block was not reported: %#v", diff.Changes)
+	}
+}
