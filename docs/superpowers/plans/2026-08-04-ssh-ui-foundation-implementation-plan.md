@@ -96,7 +96,7 @@
 // go.mod
 module ssh-ui
 
-go 1.24.0
+go 1.26.0
 ```
 
 ```go
@@ -218,7 +218,7 @@ go get -tool github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.7.0
 go generate ./internal/api
 ```
 
-Expected: `go.mod`, `go.sum`, and `internal/api/models.gen.go` are created; `go.mod` declares `go 1.24` and exact direct versions.
+Expected: `go.mod`, `go.sum`, and `internal/api/models.gen.go` are created; `go.mod` declares `go 1.26` and exact direct versions.
 
 - [ ] **Step 5: Create the pinned frontend manifest**
 
