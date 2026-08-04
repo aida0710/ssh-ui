@@ -5,6 +5,7 @@ import { ConnectionsPage } from "./connections/ConnectionsPage";
 import { ConfigExplorer } from "./explorer/ConfigExplorer";
 import { GroupsPanel } from "./groups/GroupsPanel";
 import { HistoryPanel } from "./history/HistoryPanel";
+import { KeysScreen } from "./keys/KeysScreen";
 
 type AppProps = {
   bootstrap: () => Promise<SessionState>;
@@ -13,7 +14,7 @@ type AppProps = {
 
 const sections = ["Connections", "Config", "Groups", "Keys", "Known Hosts", "History"] as const;
 type Section = (typeof sections)[number];
-const enabledSections: Section[] = ["Connections", "Config", "Groups", "History"];
+const enabledSections: Section[] = ["Connections", "Config", "Groups", "Keys", "History"];
 
 export function App({ bootstrap, health }: AppProps) {
   const [state, setState] = useState<"starting" | "ready" | "error">("starting");
@@ -99,7 +100,10 @@ function SectionView({ section }: { section: Section }) {
   if (section === "History") {
     return <HistoryPanel />;
   }
-  if (section === "Keys" || section === "Known Hosts") {
+  if (section === "Keys") {
+    return <KeysScreen />;
+  }
+  if (section === "Known Hosts") {
     return (
       <p className="text-sm text-zinc-400">{`${section} arrives with a later subsystem.`}</p>
     );

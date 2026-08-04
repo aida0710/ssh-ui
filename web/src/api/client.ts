@@ -65,7 +65,10 @@ export const apiClient = {
     if (!response.ok) throw await failure(response);
     return response.json() as Promise<unknown>;
   },
-  async mutate<T>(path: string, init: RequestInit): Promise<T> {
+  // send performs a mutation and returns the raw response, so a caller can read
+  // a body that accompanies a rejection — such as the blockers the server
+  // returns with a refused restore, which are an answer rather than a failure.
+  async send(path: string, init: RequestInit): Promise<Response> {
     const target = new URL(path, window.location.origin);
     if (target.origin !== window.location.origin) {
       throw new Error("cross_origin_api_mutation");
@@ -74,11 +77,10 @@ export const apiClient = {
 
     const headers = new Headers(init.headers);
     headers.set("X-SSH-UI-CSRF", csrfToken);
-    const response = await fetch(path, {
-      ...init,
-      credentials: "same-origin",
-      headers,
-    });
+    return fetch(path, { ...init, credentials: "same-origin", headers });
+  },
+  async mutate<T>(path: string, init: RequestInit): Promise<T> {
+    const response = await this.send(path, init);
     if (!response.ok) throw await failure(response);
     return response.json() as Promise<T>;
   },
