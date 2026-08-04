@@ -22,7 +22,10 @@ describe("App", () => {
 
     expect(await screen.findByRole("heading", { name: "SSH UI" })).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("Local session active · 0.1.0");
-    for (const label of ["Connections", "Groups", "Config", "Keys", "Known Hosts", "History"]) {
+    for (const label of ["Connections", "Config", "Groups", "History"]) {
+      expect(screen.getByRole("button", { name: label })).toBeEnabled();
+    }
+    for (const label of ["Keys", "Known Hosts"]) {
       expect(screen.getByRole("button", { name: label })).toBeDisabled();
     }
     expect(document.body).not.toHaveTextContent(csrfToken);
