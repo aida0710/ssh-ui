@@ -4,3 +4,4 @@
 /web/tsconfig.tsbuildinfo
 .DS_Store
 .worktrees/
+/.claude/worktrees/
