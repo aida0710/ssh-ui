@@ -187,6 +187,35 @@ func (s *Service) Reach(ctx context.Context, alias string) (ReachabilityResult, 
 	return s.Reachability.Check(ctx, hostname, port), nil
 }
 
+// ErrTerminalNotConfigured reports that no terminal launcher was wired in.
+var ErrTerminalNotConfigured = errors.New("terminal launcher is not configured")
+
+// UnsafeAliasWarning explains why an alias is copy-only.
+const UnsafeAliasWarning = "This alias contains characters that could change the meaning of a command line. Copy the command and check it before running it yourself."
+
+// LaunchTerminal opens an interactive session for alias.
+func (s *Service) LaunchTerminal(ctx context.Context, alias string) error {
+	if err := platform.ValidateAlias(alias); err != nil {
+		return err
+	}
+	if s.Terminal == nil {
+		return ErrTerminalNotConfigured
+	}
+	return s.Terminal.Launch(ctx, alias)
+}
+
+// TerminalCommand returns the command a user would run by hand.
+//
+// An alias outside the safe character set is never launched; the command is
+// still returned as text so the user can inspect and quote it themselves.
+func (s *Service) TerminalCommand(alias string) (string, bool, string) {
+	command := "ssh -- " + alias
+	if err := platform.ValidateAlias(alias); err != nil {
+		return command, false, UnsafeAliasWarning
+	}
+	return command, true, ""
+}
+
 // Authenticate runs the authentication test for alias.
 func (s *Service) Authenticate(ctx context.Context, alias string, acknowledged bool) (AuthenticationResult, error) {
 	report, err := s.Safety()

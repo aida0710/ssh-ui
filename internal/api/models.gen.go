@@ -611,6 +611,18 @@ type Source struct {
 	Path      *string `json:"path,omitempty"`
 }
 
+// TerminalCommandResponse defines model for TerminalCommandResponse.
+type TerminalCommandResponse struct {
+	Command    string `json:"command"`
+	Launchable bool   `json:"launchable"`
+	Warning    string `json:"warning"`
+}
+
+// TerminalLaunchResponse defines model for TerminalLaunchResponse.
+type TerminalLaunchResponse struct {
+	Launched bool `json:"launched"`
+}
+
 // TrashEntrySummary defines model for TrashEntrySummary.
 type TrashEntrySummary struct {
 	AgeDays    int                `json:"ageDays"`
@@ -732,3 +744,9 @@ type RegisterKeyWithAgentJSONRequestBody = RegisterKeyRequest
 
 // ChangeKeyPassphraseJSONRequestBody defines body for ChangeKeyPassphrase for application/json ContentType.
 type ChangeKeyPassphraseJSONRequestBody = ChangePassphraseRequest
+
+// GetTerminalCommandJSONRequestBody defines body for GetTerminalCommand for application/json ContentType.
+type GetTerminalCommandJSONRequestBody = AliasRequest
+
+// LaunchTerminalJSONRequestBody defines body for LaunchTerminal for application/json ContentType.
+type LaunchTerminalJSONRequestBody = AliasRequest

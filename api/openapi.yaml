@@ -114,6 +114,39 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/terminal/command:
+    post:
+      operationId: getTerminalCommand
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AliasRequest" }
+      responses:
+        "200":
+          description: Command text and whether it may be launched
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TerminalCommandResponse" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+  /api/v1/terminal/launch:
+    post:
+      operationId: launchTerminal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AliasRequest" }
+      responses:
+        "200":
+          description: Terminal opened
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TerminalLaunchResponse" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
   /api/v1/keys:
     get:
       operationId: listKeys
@@ -815,6 +848,20 @@ components:
         stderr: { type: string }
         truncated: { type: boolean }
         elapsedMs: { type: integer }
+    TerminalCommandResponse:
+      type: object
+      additionalProperties: false
+      required: [command, launchable, warning]
+      properties:
+        command: { type: string }
+        launchable: { type: boolean }
+        warning: { type: string }
+    TerminalLaunchResponse:
+      type: object
+      additionalProperties: false
+      required: [launched]
+      properties:
+        launched: { type: boolean }
     IssueActionRequest:
       type: object
       additionalProperties: false

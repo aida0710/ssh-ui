@@ -25,6 +25,8 @@ func registerDiagnosticsRoutes(engine *echo.Echo, handlers DiagnosticsHandlers) 
 	engine.POST("/api/v1/diagnostics/effective", handlers.Effective)
 	engine.POST("/api/v1/diagnostics/reachability", handlers.Reachability)
 	engine.POST("/api/v1/diagnostics/authentication", handlers.Authentication)
+	engine.POST("/api/v1/terminal/command", handlers.TerminalCommand)
+	engine.POST("/api/v1/terminal/launch", handlers.TerminalLaunch)
 }
 
 // addDiagnosticsActions registers the confirmations this subsystem owns.
@@ -222,6 +224,49 @@ func (h DiagnosticsHandlers) Authentication(c *echo.Context) error {
 		Truncated:     result.Truncated,
 		ElapsedMs:     int(result.Elapsed.Milliseconds()),
 	})
+}
+
+// TerminalCommand returns the command text for an alias and whether this
+// application is willing to launch it.
+//
+// It deliberately describes an alias it would refuse to launch, because a user
+// whose alias falls outside the safe set still needs to see the command in
+// order to run it themselves after checking it.
+func (h DiagnosticsHandlers) TerminalCommand(c *echo.Context) error {
+	var request api.AliasRequest
+	if err := decodeJSON(c, &request); err != nil {
+		return problem(c, http.StatusBadRequest, "invalid_request")
+	}
+	if request.Alias == "" || len(request.Alias) > maxAliasLength {
+		return problem(c, http.StatusBadRequest, "invalid_request")
+	}
+	command, launchable, warning := h.Service.TerminalCommand(request.Alias)
+	return c.JSON(http.StatusOK, api.TerminalCommandResponse{
+		Command:    command,
+		Launchable: launchable,
+		Warning:    warning,
+	})
+}
+
+// TerminalLaunch opens Terminal for a confirmed, safe alias.
+//
+// The alias is checked before the confirmation is spent, so an alias this
+// application will not launch cannot consume a token either.
+func (h DiagnosticsHandlers) TerminalLaunch(c *echo.Context) error {
+	var request api.AliasRequest
+	if err := decodeJSON(c, &request); err != nil {
+		return problem(c, http.StatusBadRequest, "invalid_request")
+	}
+	if err := platform.ValidateAlias(request.Alias); err != nil {
+		return problem(c, http.StatusBadRequest, "alias_not_launchable")
+	}
+	if allowed, response := h.Actions.consume(c, session.ActionTerminalLaunch, request.Alias); !allowed {
+		return response
+	}
+	if err := h.Service.LaunchTerminal(c.Request().Context(), request.Alias); err != nil {
+		return problem(c, http.StatusInternalServerError, "terminal_launch_failed")
+	}
+	return c.JSON(http.StatusOK, api.TerminalLaunchResponse{Launched: true})
 }
 
 func describeDirectives(directives []effective.Executable) []api.ExecutableDirective {

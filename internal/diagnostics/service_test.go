@@ -2,6 +2,7 @@ package diagnostics_test
 
 import (
 	"context"
+	"errors"
 	"net"
 	"os"
 	"path/filepath"
@@ -134,6 +135,52 @@ func TestServiceConfigCheckSummarisesTheIncludeGraph(t *testing.T) {
 		if diagnostic.Severity > 0 {
 			t.Errorf("unexpected diagnostic: %#v", diagnostic)
 		}
+	}
+}
+
+type recordingTerminal struct{ aliases []string }
+
+func (terminal *recordingTerminal) Launch(_ context.Context, alias string) error {
+	terminal.aliases = append(terminal.aliases, alias)
+	return nil
+}
+
+func TestServiceLaunchesOnlySafeAliases(t *testing.T) {
+	terminal := &recordingTerminal{}
+	service := newTestService(t, &scriptedRunner{})
+	service.Terminal = terminal
+
+	if err := service.LaunchTerminal(context.Background(), "bastion"); err != nil {
+		t.Fatalf("LaunchTerminal = %v", err)
+	}
+	if len(terminal.aliases) != 1 || terminal.aliases[0] != "bastion" {
+		t.Fatalf("aliases = %#v", terminal.aliases)
+	}
+
+	// An alias carrying AppleScript quoting is refused before it reaches the
+	// launcher, never escaped into the automation payload.
+	for _, unsafe := range []string{"a b", `bastion" & (do shell script "id") & "`, "a;id"} {
+		if err := service.LaunchTerminal(context.Background(), unsafe); err == nil {
+			t.Errorf("LaunchTerminal(%q) was accepted", unsafe)
+		}
+	}
+	if len(terminal.aliases) != 1 {
+		t.Fatalf("an unsafe alias reached the launcher: %#v", terminal.aliases)
+	}
+
+	command, launchable, warning := service.TerminalCommand("a b")
+	if launchable || warning == "" || command != "ssh -- a b" {
+		t.Fatalf("TerminalCommand = %q, %v, %q", command, launchable, warning)
+	}
+	if command, launchable, warning := service.TerminalCommand("bastion"); !launchable || warning != "" || command != "ssh -- bastion" {
+		t.Fatalf("TerminalCommand = %q, %v, %q", command, launchable, warning)
+	}
+}
+
+func TestServiceReportsAMissingTerminalLauncher(t *testing.T) {
+	service := newTestService(t, &scriptedRunner{})
+	if err := service.LaunchTerminal(context.Background(), "bastion"); !errors.Is(err, diagnostics.ErrTerminalNotConfigured) {
+		t.Fatalf("LaunchTerminal = %v, want ErrTerminalNotConfigured", err)
 	}
 }
 

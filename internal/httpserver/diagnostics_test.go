@@ -111,6 +111,17 @@ func diagnosticsToken(t *testing.T, engine *echo.Echo, credentials session.Crede
 	return issued.Token
 }
 
+// problemCode reads the stable code out of a problem+json body, so a test can
+// assert which check rejected a request rather than only that one did.
+func problemCode(t *testing.T, body []byte) string {
+	t.Helper()
+	var payload api.Problem
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("decode problem: %v (%s)", err, body)
+	}
+	return payload.Code
+}
+
 func mustMarshal(t *testing.T, value any) []byte {
 	t.Helper()
 	encoded, err := json.Marshal(value)
@@ -258,6 +269,74 @@ func TestConfigCheckNeedsNoActionTokenAndStartsNoProcess(t *testing.T) {
 	}
 	if got := response.Result().Header.Get("Cache-Control"); got != "no-store" {
 		t.Errorf("Cache-Control = %q", got)
+	}
+}
+
+type recordingLauncher struct{ aliases []string }
+
+func (launcher *recordingLauncher) Launch(_ context.Context, alias string) error {
+	launcher.aliases = append(launcher.aliases, alias)
+	return nil
+}
+
+// TestTerminalEndpointsSeparateCopyableCommandsFromLaunches proves the alias
+// gate holds at the HTTP boundary: an alias carrying AppleScript quoting and a
+// `do shell script` payload is described as copyable text and refused for
+// launch, and never reaches the launcher in any escaped form.
+func TestTerminalEndpointsSeparateCopyableCommandsFromLaunches(t *testing.T) {
+	engine, credentials, _, service := newDiagnosticsServer(t)
+	terminal := &recordingLauncher{}
+	service.Terminal = terminal
+
+	hostile := `bastion" & (do shell script "id") & "`
+	described := sendKeyRequest(t, engine, credentials, http.MethodPost, "/api/v1/terminal/command",
+		mustMarshal(t, api.AliasRequest{Alias: hostile}), "")
+	if described.Code != http.StatusOK {
+		t.Fatalf("terminal command = %d: %s", described.Code, described.Body.String())
+	}
+	var payload api.TerminalCommandResponse
+	if err := json.Unmarshal(described.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Launchable || payload.Warning == "" {
+		t.Fatalf("response = %#v", payload)
+	}
+	if payload.Command != "ssh -- "+hostile {
+		t.Errorf("command = %q, want the alias verbatim for copying", payload.Command)
+	}
+
+	refused := sendKeyRequest(t, engine, credentials, http.MethodPost, "/api/v1/terminal/launch",
+		mustMarshal(t, api.AliasRequest{Alias: hostile}), strings.Repeat("a", 43))
+	if refused.Code != http.StatusBadRequest {
+		t.Fatalf("launching an unsafe alias = %d, want 400", refused.Code)
+	}
+	// The code is asserted, not just the status, so this proves the launch
+	// handler's own gate rejected the alias rather than some later layer
+	// happening to answer 400 as well.
+	if code := problemCode(t, refused.Body.Bytes()); code != "alias_not_launchable" {
+		t.Fatalf("problem code = %q, want alias_not_launchable from the launch gate", code)
+	}
+	if len(terminal.aliases) != 0 {
+		t.Fatalf("an unsafe alias reached the launcher: %#v", terminal.aliases)
+	}
+
+	noToken := sendKeyRequest(t, engine, credentials, http.MethodPost, "/api/v1/terminal/launch",
+		mustMarshal(t, api.AliasRequest{Alias: "bastion"}), "")
+	if noToken.Code != http.StatusForbidden {
+		t.Fatalf("launch without a confirmation = %d, want 403", noToken.Code)
+	}
+	if len(terminal.aliases) != 0 {
+		t.Fatalf("an unconfirmed launch reached the launcher: %#v", terminal.aliases)
+	}
+
+	token := diagnosticsToken(t, engine, credentials, session.ActionTerminalLaunch, "bastion")
+	launched := sendKeyRequest(t, engine, credentials, http.MethodPost, "/api/v1/terminal/launch",
+		mustMarshal(t, api.AliasRequest{Alias: "bastion"}), token)
+	if launched.Code != http.StatusOK {
+		t.Fatalf("launch = %d: %s", launched.Code, launched.Body.String())
+	}
+	if len(terminal.aliases) != 1 || terminal.aliases[0] != "bastion" {
+		t.Fatalf("aliases = %#v", terminal.aliases)
 	}
 }
 
