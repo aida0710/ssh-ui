@@ -51,6 +51,9 @@ func addDiagnosticsActions(registry actionRegistry, service *diagnostics.Service
 		session.ActionReachability,
 		session.ActionAuthentication,
 		session.ActionTerminalLaunch,
+		// Registering a key opens a connection, so its confirmation shows the
+		// same executable directives that connecting would run.
+		session.ActionRemoteKeyRegister,
 	} {
 		registry[kind] = actionKind{evidence: evidence, fail: diagnosticsProblem}
 	}

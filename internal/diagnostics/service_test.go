@@ -138,6 +138,25 @@ func TestServiceConfigCheckSummarisesTheIncludeGraph(t *testing.T) {
 	}
 }
 
+func TestServiceProjectedValueReadsTheEngineWithoutRunningSSH(t *testing.T) {
+	runner := &scriptedRunner{}
+	service := newTestService(t, runner)
+
+	user, ok := service.ProjectedValue("bastion", "user")
+	if !ok || user != "ops" {
+		t.Fatalf("ProjectedValue = %q, %v", user, ok)
+	}
+	if _, ok := service.ProjectedValue("bastion", "identityfile"); ok {
+		t.Error("a keyword the configuration does not set must report false")
+	}
+	if _, ok := service.ProjectedValue("bad alias", "user"); ok {
+		t.Error("an unsafe alias must not be projected")
+	}
+	if len(runner.commands) != 0 {
+		t.Fatal("projecting a value started a process")
+	}
+}
+
 type recordingTerminal struct{ aliases []string }
 
 func (terminal *recordingTerminal) Launch(_ context.Context, alias string) error {

@@ -175,6 +175,27 @@ func (s *Service) Destination(alias string) (string, string, error) {
 	return hostname, port, nil
 }
 
+// ProjectedValue returns the engine's own reading of one keyword for alias.
+//
+// Like Destination it starts no process, so a caller can describe a
+// destination while evaluation is blocked by an executable directive. The
+// value is the engine's projection, not OpenSSH's answer, and callers that
+// display it must say so.
+func (s *Service) ProjectedValue(alias, keyword string) (string, bool) {
+	if err := platform.ValidateAlias(alias); err != nil {
+		return "", false
+	}
+	graph, err := s.graph()
+	if err != nil {
+		return "", false
+	}
+	source, ok := effective.Project(graph, alias).Value(keyword)
+	if !ok {
+		return "", false
+	}
+	return source.Value, true
+}
+
 // Reach dials the destination directly, ignoring ProxyJump.
 func (s *Service) Reach(ctx context.Context, alias string) (ReachabilityResult, error) {
 	hostname, port, err := s.Destination(alias)

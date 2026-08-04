@@ -625,6 +625,46 @@ type RegisterKeyResponse struct {
 	StoredInKeychain bool            `json:"storedInKeychain"`
 }
 
+// RemoteKeyPlan defines model for RemoteKeyPlan.
+type RemoteKeyPlan struct {
+	Alias                string                `json:"alias"`
+	ExecutableDirectives []ExecutableDirective `json:"executableDirectives"`
+	Fingerprint          string                `json:"fingerprint"`
+	Hostname             string                `json:"hostname"`
+	KeyLine              string                `json:"keyLine"`
+	KeyPath              string                `json:"keyPath"`
+	Manual               []string              `json:"manual"`
+	Port                 string                `json:"port"`
+	RemotePath           string                `json:"remotePath"`
+	Routine              string                `json:"routine"`
+	Supported            bool                  `json:"supported"`
+	User                 string                `json:"user"`
+	ValuesFrom           string                `json:"valuesFrom"`
+}
+
+// RemoteKeyPlanRequest defines model for RemoteKeyPlanRequest.
+type RemoteKeyPlanRequest struct {
+	Alias     string `json:"alias"`
+	KeyPath   string `json:"keyPath"`
+	PublicKey string `json:"publicKey"`
+}
+
+// RemoteKeyRegisterRequest defines model for RemoteKeyRegisterRequest.
+type RemoteKeyRegisterRequest struct {
+	AcknowledgeExecutable bool   `json:"acknowledgeExecutable"`
+	Alias                 string `json:"alias"`
+	KeyPath               string `json:"keyPath"`
+	PublicKey             string `json:"publicKey"`
+}
+
+// RemoteKeyRegisterResponse defines model for RemoteKeyRegisterResponse.
+type RemoteKeyRegisterResponse struct {
+	ExitCode  int    `json:"exitCode"`
+	Outcome   string `json:"outcome"`
+	Stderr    string `json:"stderr"`
+	Truncated bool   `json:"truncated"`
+}
+
 // RestoreRequest defines model for RestoreRequest.
 type RestoreRequest struct {
 	Path          string `json:"path"`
@@ -825,6 +865,12 @@ type DeleteKnownHostsJSONRequestBody = KnownHostsDeleteRequest
 
 // ScanKnownHostsJSONRequestBody defines body for ScanKnownHosts for application/json ContentType.
 type ScanKnownHostsJSONRequestBody = KnownHostsScanRequest
+
+// PlanRemoteKeyRegistrationJSONRequestBody defines body for PlanRemoteKeyRegistration for application/json ContentType.
+type PlanRemoteKeyRegistrationJSONRequestBody = RemoteKeyPlanRequest
+
+// RegisterRemoteKeyJSONRequestBody defines body for RegisterRemoteKey for application/json ContentType.
+type RegisterRemoteKeyJSONRequestBody = RemoteKeyRegisterRequest
 
 // GetTerminalCommandJSONRequestBody defines body for GetTerminalCommand for application/json ContentType.
 type GetTerminalCommandJSONRequestBody = AliasRequest

@@ -114,6 +114,41 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/remote-keys/plan:
+    post:
+      operationId: planRemoteKeyRegistration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RemoteKeyPlanRequest" }
+      responses:
+        "200":
+          description: What the registration would do
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RemoteKeyPlan" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+  /api/v1/remote-keys/register:
+    post:
+      operationId: registerRemoteKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RemoteKeyRegisterRequest" }
+      responses:
+        "200":
+          description: Completed registration
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RemoteKeyRegisterResponse" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/known-hosts:
     get:
       operationId: listKnownHosts
@@ -916,6 +951,54 @@ components:
         stderr: { type: string }
         truncated: { type: boolean }
         elapsedMs: { type: integer }
+    RemoteKeyPlanRequest:
+      type: object
+      additionalProperties: false
+      required: [alias, keyPath, publicKey]
+      properties:
+        alias: { type: string, minLength: 1, maxLength: 64 }
+        keyPath: { type: string, maxLength: 4096 }
+        publicKey: { type: string, minLength: 1, maxLength: 4096 }
+    RemoteKeyPlan:
+      type: object
+      additionalProperties: false
+      required: [alias, user, hostname, port, valuesFrom, fingerprint, keyPath, keyLine, remotePath, routine, supported, manual, executableDirectives]
+      properties:
+        alias: { type: string }
+        user: { type: string }
+        hostname: { type: string }
+        port: { type: string }
+        valuesFrom: { type: string }
+        fingerprint: { type: string }
+        keyPath: { type: string }
+        keyLine: { type: string }
+        remotePath: { type: string }
+        routine: { type: string }
+        supported: { type: boolean }
+        manual:
+          type: array
+          items: { type: string }
+        executableDirectives:
+          type: array
+          items: { $ref: "#/components/schemas/ExecutableDirective" }
+    RemoteKeyRegisterRequest:
+      type: object
+      additionalProperties: false
+      required: [alias, keyPath, publicKey, acknowledgeExecutable]
+      properties:
+        alias: { type: string, minLength: 1, maxLength: 64 }
+        keyPath: { type: string, maxLength: 4096 }
+        publicKey: { type: string, minLength: 1, maxLength: 4096 }
+        acknowledgeExecutable: { type: boolean }
+    RemoteKeyRegisterResponse:
+      type: object
+      additionalProperties: false
+      required: [outcome, exitCode, stderr, truncated]
+      properties:
+        outcome: { type: string }
+        exitCode: { type: integer }
+        stderr: { type: string }
+        truncated: { type: boolean }
     KnownHostsResponse:
       type: object
       additionalProperties: false

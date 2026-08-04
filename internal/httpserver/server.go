@@ -19,6 +19,7 @@ import (
 	"ssh-ui/internal/application"
 	"ssh-ui/internal/diagnostics"
 	"ssh-ui/internal/knownhosts"
+	"ssh-ui/internal/remotekey"
 	"ssh-ui/internal/session"
 )
 
@@ -32,6 +33,7 @@ type Options struct {
 	Keys        KeyService
 	Diagnostics *diagnostics.Service
 	KnownHosts  *knownhosts.Service
+	RemoteKeys  *remotekey.Service
 }
 
 var ErrNonLoopbackListener = errors.New("listener must use 127.0.0.1")
@@ -92,6 +94,11 @@ func New(options Options) (*Server, error) {
 	}
 	if options.KnownHosts != nil {
 		registerKnownHostsRoutes(e, KnownHostsHandlers{Service: options.KnownHosts, Actions: actions})
+	}
+	if options.RemoteKeys != nil && options.Diagnostics != nil {
+		registerRemoteKeyRoutes(e, RemoteKeyHandlers{
+			Service: options.RemoteKeys, Diagnostics: options.Diagnostics, Actions: actions,
+		})
 	}
 	if len(registry) > 0 {
 		registerActionRoutes(e, actions)

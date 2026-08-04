@@ -15,6 +15,7 @@ import (
 	"ssh-ui/internal/keys"
 	"ssh-ui/internal/knownhosts"
 	"ssh-ui/internal/platform"
+	"ssh-ui/internal/remotekey"
 	"ssh-ui/internal/session"
 	"ssh-ui/internal/storage"
 )
@@ -110,6 +111,12 @@ func Run(ctx context.Context, dependencies Dependencies, version string) error {
 		Toolchain:   dependencies.Toolchain,
 		Environment: scanEnvironment,
 	})
+	remoteKeyService := &remotekey.Service{
+		Runner:      dependencies.Runner,
+		Toolchain:   dependencies.Toolchain,
+		ConfigPath:  diagnosticsService.ConfigPath(),
+		Environment: scanEnvironment,
+	}
 
 	server, err := httpserver.New(httpserver.Options{
 		Listener:    listener,
@@ -121,6 +128,7 @@ func Run(ctx context.Context, dependencies Dependencies, version string) error {
 		Keys:        keyService,
 		Diagnostics: diagnosticsService,
 		KnownHosts:  knownHostsService,
+		RemoteKeys:  remoteKeyService,
 	})
 	if err != nil {
 		listener.Close()

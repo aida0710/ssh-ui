@@ -116,6 +116,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/remote-keys/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["planRemoteKeyRegistration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/remote-keys/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["registerRemoteKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/known-hosts": {
         parameters: {
             query?: never;
@@ -756,6 +788,38 @@ export interface components {
             truncated: boolean;
             elapsedMs: number;
         };
+        RemoteKeyPlanRequest: {
+            alias: string;
+            keyPath: string;
+            publicKey: string;
+        };
+        RemoteKeyPlan: {
+            alias: string;
+            user: string;
+            hostname: string;
+            port: string;
+            valuesFrom: string;
+            fingerprint: string;
+            keyPath: string;
+            keyLine: string;
+            remotePath: string;
+            routine: string;
+            supported: boolean;
+            manual: string[];
+            executableDirectives: components["schemas"]["ExecutableDirective"][];
+        };
+        RemoteKeyRegisterRequest: {
+            alias: string;
+            keyPath: string;
+            publicKey: string;
+            acknowledgeExecutable: boolean;
+        };
+        RemoteKeyRegisterResponse: {
+            outcome: string;
+            exitCode: number;
+            stderr: string;
+            truncated: boolean;
+        };
         KnownHostsResponse: {
             path: string;
             entries: components["schemas"]["KnownHostEntry"][];
@@ -1289,6 +1353,61 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+        };
+    };
+    planRemoteKeyRegistration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoteKeyPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description What the registration would do */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemoteKeyPlan"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+        };
+    };
+    registerRemoteKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoteKeyRegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description Completed registration */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemoteKeyRegisterResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
     listKnownHosts: {
