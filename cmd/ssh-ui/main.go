@@ -28,12 +28,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	home, err := os.UserHomeDir()
+	if err != nil {
+		logger.Error("resolve home directory", "error", err)
+		os.Exit(1)
+	}
+
 	dependencies := app.Dependencies{
 		Random:  rand.Reader,
 		Browser: macos.NewBrowser(macos.NewExecRunner()),
 		Listen:  net.Listen,
 		UI:      assets,
 		Logger:  logger,
+		Home:    home,
 	}
 	if err := app.Run(ctx, dependencies, version); err != nil && !errors.Is(err, context.Canceled) {
 		logger.Error("ssh-ui stopped", "error", err)

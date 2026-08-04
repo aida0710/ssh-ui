@@ -38,6 +38,7 @@ func TestRunUsesRandomIPv4LoopbackAndReturnsOnCancel(t *testing.T) {
 		},
 		UI:     fstest.MapFS{"index.html": {Data: []byte("ok")}},
 		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Home:   t.TempDir(),
 	}
 
 	done := make(chan error, 1)
@@ -86,6 +87,7 @@ func TestRunReturnsServerFailureWithoutWaitingForCancellation(t *testing.T) {
 		Listen:  func(string, string) (net.Listener, error) { return failingListener{}, nil },
 		UI:      fstest.MapFS{"index.html": {Data: []byte("ok")}},
 		Logger:  slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Home:    t.TempDir(),
 	}
 
 	done := make(chan error, 1)
@@ -110,6 +112,7 @@ func TestRunShutsServerDownWhenBrowserFails(t *testing.T) {
 		Listen:  func(string, string) (net.Listener, error) { return listener, nil },
 		UI:      fstest.MapFS{"index.html": {Data: []byte("ok")}},
 		Logger:  slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Home:    t.TempDir(),
 	}
 
 	err := Run(context.Background(), dependencies, "test")

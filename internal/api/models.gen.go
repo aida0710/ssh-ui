@@ -8,19 +8,337 @@ type BootstrapResponse struct {
 	CsrfToken string `json:"csrfToken"`
 }
 
+// ConflictReport defines model for ConflictReport.
+type ConflictReport struct {
+	BaseDigest     *string    `json:"baseDigest,omitempty"`
+	DiskDigest     *string    `json:"diskDigest,omitempty"`
+	ExternalChange []DiffLine `json:"externalChange"`
+	LocalChange    []DiffLine `json:"localChange"`
+	Path           string     `json:"path"`
+}
+
+// Diagnostic defines model for Diagnostic.
+type Diagnostic struct {
+	Absolute *string `json:"absolute,omitempty"`
+	Code     string  `json:"code"`
+	Detail   *string `json:"detail,omitempty"`
+	External *bool   `json:"external,omitempty"`
+	Line     *int    `json:"line,omitempty"`
+	Path     *string `json:"path,omitempty"`
+	Severity string  `json:"severity"`
+}
+
+// DiffLine defines model for DiffLine.
+type DiffLine struct {
+	NewLine *int   `json:"newLine,omitempty"`
+	OldLine *int   `json:"oldLine,omitempty"`
+	Op      string `json:"op"`
+	Text    string `json:"text"`
+}
+
+// EditRequest defines model for EditRequest.
+type EditRequest struct {
+	Alias    *string      `json:"alias,omitempty"`
+	Base     *string      `json:"base,omitempty"`
+	Fields   *[]FieldEdit `json:"fields,omitempty"`
+	Kind     string       `json:"kind"`
+	Metadata *Metadata    `json:"metadata,omitempty"`
+	NewAlias *string      `json:"newAlias,omitempty"`
+	Path     *string      `json:"path,omitempty"`
+	Raw      *string      `json:"raw,omitempty"`
+}
+
+// Effective defines model for Effective.
+type Effective struct {
+	Alias       string           `json:"alias"`
+	Approximate bool             `json:"approximate"`
+	Entries     []EffectiveEntry `json:"entries"`
+	Notices     *[]Notice        `json:"notices,omitempty"`
+}
+
+// EffectiveChange defines model for EffectiveChange.
+type EffectiveChange struct {
+	After         []string  `json:"after"`
+	AfterSources  *[]Source `json:"afterSources,omitempty"`
+	Before        []string  `json:"before"`
+	BeforeSources *[]Source `json:"beforeSources,omitempty"`
+	Keyword       string    `json:"keyword"`
+}
+
+// EffectiveDiff defines model for EffectiveDiff.
+type EffectiveDiff struct {
+	Alias   string            `json:"alias"`
+	Changes []EffectiveChange `json:"changes"`
+}
+
+// EffectiveEntry defines model for EffectiveEntry.
+type EffectiveEntry struct {
+	Keyword string   `json:"keyword"`
+	Source  Source   `json:"source"`
+	Values  []string `json:"values"`
+}
+
+// FieldEdit defines model for FieldEdit.
+type FieldEdit struct {
+	Action  string    `json:"action"`
+	Keyword *string   `json:"keyword,omitempty"`
+	Line    *int      `json:"line,omitempty"`
+	Values  *[]string `json:"values,omitempty"`
+}
+
+// FileContents defines model for FileContents.
+type FileContents struct {
+	Contents string  `json:"contents"`
+	Digest   string  `json:"digest"`
+	Editable bool    `json:"editable"`
+	Exists   bool    `json:"exists"`
+	File     FileRef `json:"file"`
+}
+
+// FileDiff defines model for FileDiff.
+type FileDiff struct {
+	Created   *bool      `json:"created,omitempty"`
+	Lines     []DiffLine `json:"lines"`
+	NewDigest *string    `json:"newDigest,omitempty"`
+	OldDigest *string    `json:"oldDigest,omitempty"`
+	Path      string     `json:"path"`
+	Removed   *bool      `json:"removed,omitempty"`
+	Truncated *bool      `json:"truncated,omitempty"`
+}
+
+// FileNode defines model for FileNode.
+type FileNode struct {
+	Editable bool                `json:"editable"`
+	File     FileRef             `json:"file"`
+	Includes *[]IncludeReference `json:"includes,omitempty"`
+	Loads    int                 `json:"loads"`
+	Missing  *bool               `json:"missing,omitempty"`
+}
+
+// FileRef defines model for FileRef.
+type FileRef struct {
+	Absolute string  `json:"absolute"`
+	External *bool   `json:"external,omitempty"`
+	Path     *string `json:"path,omitempty"`
+}
+
+// FormField defines model for FormField.
+type FormField struct {
+	Category  string   `json:"category"`
+	Dangerous *bool    `json:"dangerous,omitempty"`
+	Duplicate *bool    `json:"duplicate,omitempty"`
+	Editable  bool     `json:"editable"`
+	Keyword   string   `json:"keyword"`
+	Line      int      `json:"line"`
+	Values    []string `json:"values"`
+}
+
+// GroupMetadata defines model for GroupMetadata.
+type GroupMetadata struct {
+	Colour   *string    `json:"colour,omitempty"`
+	Name     string     `json:"name"`
+	Note     *string    `json:"note,omitempty"`
+	Order    *int       `json:"order,omitempty"`
+	Parent   *string    `json:"parent,omitempty"`
+	Settings *[]Setting `json:"settings,omitempty"`
+}
+
 // HealthResponse defines model for HealthResponse.
 type HealthResponse struct {
 	Status  string `json:"status"`
 	Version string `json:"version"`
 }
 
+// HistoryEntry defines model for HistoryEntry.
+type HistoryEntry struct {
+	FinishedAt *string   `json:"finishedAt,omitempty"`
+	Id         string    `json:"id"`
+	Operation  string    `json:"operation"`
+	Paths      []string  `json:"paths"`
+	Restorable *[]string `json:"restorable,omitempty"`
+	StartedAt  string    `json:"startedAt"`
+	Status     string    `json:"status"`
+}
+
+// HistoryList defines model for HistoryList.
+type HistoryList struct {
+	Entries []HistoryEntry `json:"entries"`
+}
+
+// HostDetail defines model for HostDetail.
+type HostDetail struct {
+	Effective Effective    `json:"effective"`
+	File      FileContents `json:"file"`
+	Form      HostForm     `json:"form"`
+	Metadata  HostMetadata `json:"metadata"`
+}
+
+// HostEntry defines model for HostEntry.
+type HostEntry struct {
+	Duplicate *bool        `json:"duplicate,omitempty"`
+	Editable  bool         `json:"editable"`
+	File      FileRef      `json:"file"`
+	Identity  HostIdentity `json:"identity"`
+	Line      int          `json:"line"`
+	Negated   *bool        `json:"negated,omitempty"`
+	Patterns  []string     `json:"patterns"`
+	Wildcard  *bool        `json:"wildcard,omitempty"`
+}
+
+// HostForm defines model for HostForm.
+type HostForm struct {
+	Entry   HostEntry   `json:"entry"`
+	Fields  []FormField `json:"fields"`
+	Notices *[]Notice   `json:"notices,omitempty"`
+	Raw     string      `json:"raw"`
+}
+
+// HostIdentity defines model for HostIdentity.
+type HostIdentity struct {
+	Alias string `json:"alias"`
+	Path  string `json:"path"`
+}
+
+// HostMetadata defines model for HostMetadata.
+type HostMetadata struct {
+	Colour    *string      `json:"colour,omitempty"`
+	Favourite *bool        `json:"favourite,omitempty"`
+	Group     *string      `json:"group,omitempty"`
+	Identity  HostIdentity `json:"identity"`
+	Note      *string      `json:"note,omitempty"`
+	Order     *int         `json:"order,omitempty"`
+	Orphan    *bool        `json:"orphan,omitempty"`
+	Tags      *[]string    `json:"tags,omitempty"`
+}
+
+// IncludeReference defines model for IncludeReference.
+type IncludeReference struct {
+	Condition *string    `json:"condition,omitempty"`
+	Line      int        `json:"line"`
+	Matches   *[]FileRef `json:"matches,omitempty"`
+	Pattern   string     `json:"pattern"`
+}
+
+// Metadata defines model for Metadata.
+type Metadata struct {
+	Groups        *[]GroupMetadata `json:"groups,omitempty"`
+	GroupsFile    *string          `json:"groupsFile,omitempty"`
+	Hosts         *[]HostMetadata  `json:"hosts,omitempty"`
+	SchemaVersion int              `json:"schemaVersion"`
+}
+
+// Notice defines model for Notice.
+type Notice struct {
+	Code   string  `json:"code"`
+	Detail *string `json:"detail,omitempty"`
+	Line   *int    `json:"line,omitempty"`
+	Path   *string `json:"path,omitempty"`
+}
+
+// Overview defines model for Overview.
+type Overview struct {
+	Diagnostics []Diagnostic          `json:"diagnostics"`
+	Entry       FileRef               `json:"entry"`
+	Files       []FileNode            `json:"files"`
+	Hosts       []HostEntry           `json:"hosts"`
+	Metadata    Metadata              `json:"metadata"`
+	Notices     []Notice              `json:"notices"`
+	Pending     *[]PendingTransaction `json:"pending,omitempty"`
+}
+
+// PendingTransaction defines model for PendingTransaction.
+type PendingTransaction struct {
+	CanComplete bool     `json:"canComplete"`
+	Committed   int      `json:"committed"`
+	Id          string   `json:"id"`
+	Operation   string   `json:"operation"`
+	Paths       []string `json:"paths"`
+	StartedAt   string   `json:"startedAt"`
+	Status      string   `json:"status"`
+}
+
 // Problem defines model for Problem.
 type Problem struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code        string          `json:"code"`
+	Column      *int            `json:"column,omitempty"`
+	Conflict    *ConflictReport `json:"conflict,omitempty"`
+	Detail      *string         `json:"detail,omitempty"`
+	Diagnostics *[]Diagnostic   `json:"diagnostics,omitempty"`
+	Line        *int            `json:"line,omitempty"`
+	Message     string          `json:"message"`
+	Path        *string         `json:"path,omitempty"`
+}
+
+// RecoverRequest defines model for RecoverRequest.
+type RecoverRequest struct {
+	Action        string `json:"action"`
+	TransactionId string `json:"transactionId"`
+}
+
+// RecoverResponse defines model for RecoverResponse.
+type RecoverResponse struct {
+	Status string `json:"status"`
+}
+
+// RestoreRequest defines model for RestoreRequest.
+type RestoreRequest struct {
+	Path          string `json:"path"`
+	TransactionId string `json:"transactionId"`
+}
+
+// SavePreview defines model for SavePreview.
+type SavePreview struct {
+	Diffs     []FileDiff       `json:"diffs"`
+	Effective *[]EffectiveDiff `json:"effective,omitempty"`
+	Notices   *[]Notice        `json:"notices,omitempty"`
+	Operation string           `json:"operation"`
+}
+
+// SaveResult defines model for SaveResult.
+type SaveResult struct {
+	Preview       SavePreview `json:"preview"`
+	TransactionId string      `json:"transactionId"`
+	Written       []string    `json:"written"`
+}
+
+// Setting defines model for Setting.
+type Setting struct {
+	Keyword string   `json:"keyword"`
+	Values  []string `json:"values"`
+}
+
+// Source defines model for Source.
+type Source struct {
+	Absolute  *string `json:"absolute,omitempty"`
+	Condition *string `json:"condition,omitempty"`
+	Line      *int    `json:"line,omitempty"`
+	Path      *string `json:"path,omitempty"`
+}
+
+// GetConfigFileParams defines parameters for GetConfigFile.
+type GetConfigFileParams struct {
+	Path string `form:"path" json:"path"`
+}
+
+// GetConfigHostParams defines parameters for GetConfigHost.
+type GetConfigHostParams struct {
+	Path  string `form:"path" json:"path"`
+	Alias string `form:"alias" json:"alias"`
 }
 
 // BootstrapSessionParams defines parameters for BootstrapSession.
 type BootstrapSessionParams struct {
 	XSSHUIBootstrap string `json:"X-SSH-UI-Bootstrap"`
 }
+
+// PreviewConfigEditJSONRequestBody defines body for PreviewConfigEdit for application/json ContentType.
+type PreviewConfigEditJSONRequestBody = EditRequest
+
+// SaveConfigEditJSONRequestBody defines body for SaveConfigEdit for application/json ContentType.
+type SaveConfigEditJSONRequestBody = EditRequest
+
+// RecoverTransactionJSONRequestBody defines body for RecoverTransaction for application/json ContentType.
+type RecoverTransactionJSONRequestBody = RecoverRequest
+
+// RestoreHistoryEntryJSONRequestBody defines body for RestoreHistoryEntry for application/json ContentType.
+type RestoreHistoryEntryJSONRequestBody = RestoreRequest

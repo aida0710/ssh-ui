@@ -1,0 +1,101 @@
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ConfigExplorer } from "./ConfigExplorer";
+import { configApi } from "../api/config";
+
+vi.mock("../api/config", async () => {
+  const actual = await vi.importActual<typeof import("../api/config")>("../api/config");
+  return { ...actual, configApi: { overview: vi.fn(), file: vi.fn(), preview: vi.fn(), save: vi.fn() } };
+});
+
+const overview = {
+  entry: { path: "config", absolute: "/home/tester/.ssh/config" },
+  files: [
+    {
+      file: { path: "config", absolute: "/home/tester/.ssh/config" },
+      editable: true,
+      loads: 1,
+      includes: [{
+        line: 2,
+        pattern: "conf.d/*.conf",
+        matches: [{ path: "conf.d/10-home.conf", absolute: "/home/tester/.ssh/conf.d/10-home.conf" }],
+      }],
+    },
+    { file: { path: "conf.d/10-home.conf", absolute: "/home/tester/.ssh/conf.d/10-home.conf" }, editable: true, loads: 1 },
+    { file: { absolute: "/etc/ssh/ssh_config", external: true }, editable: false, loads: 1 },
+  ],
+  hosts: [],
+  metadata: { schemaVersion: 1 },
+  diagnostics: [{ severity: "warning", code: "include_no_match", path: "config", line: 2, detail: "conf.d/*.conf" }],
+  notices: [],
+};
+
+beforeEach(() => {
+  vi.mocked(configApi.overview).mockResolvedValue(overview as never);
+  vi.mocked(configApi.file).mockResolvedValue({
+    file: { path: "conf.d/10-home.conf", absolute: "/home/tester/.ssh/conf.d/10-home.conf" },
+    contents: "Host nas\n\tUser aida\n",
+    digest: "digest",
+    editable: true,
+    exists: true,
+  } as never);
+});
+
+describe("ConfigExplorer", () => {
+  it("shows the include hierarchy, the reference graph and the diagnostics", async () => {
+    render(<ConfigExplorer />);
+
+    expect(await screen.findByRole("button", { name: "config" })).toBeInTheDocument();
+    expect(screen.getByText("conf.d/*.conf")).toBeInTheDocument();
+    expect(screen.getByText(/include_no_match/)).toBeInTheDocument();
+  });
+
+  it("marks a file outside ~/.ssh as read only", async () => {
+    render(<ConfigExplorer />);
+
+    expect(await screen.findByText("/etc/ssh/ssh_config")).toBeInTheDocument();
+    expect(screen.getByText(/outside ~\/\.ssh/i)).toBeInTheDocument();
+  });
+
+  it("edits a whole file and saves it with the loaded base", async () => {
+    const user = userEvent.setup();
+    vi.mocked(configApi.save).mockResolvedValue({
+      transactionId: "t1", written: ["conf.d/10-home.conf"], preview: { operation: "config.file_raw", diffs: [] },
+    } as never);
+
+    render(<ConfigExplorer />);
+
+    await user.click(await screen.findByRole("button", { name: "conf.d/10-home.conf" }));
+    const editor = await screen.findByLabelText(/File text/);
+    await user.clear(editor);
+    await user.type(editor, "Host nas\n\tUser root\n");
+    await user.click(screen.getByRole("button", { name: "Save file" }));
+
+    await waitFor(() => expect(configApi.save).toHaveBeenCalledWith({
+      kind: "file_raw",
+      path: "conf.d/10-home.conf",
+      base: "Host nas\n\tUser aida\n",
+      raw: "Host nas\n\tUser root\n",
+    }));
+  });
+
+  it("creates a new configuration file inside ~/.ssh", async () => {
+    const user = userEvent.setup();
+    vi.mocked(configApi.save).mockResolvedValue({
+      transactionId: "t2", written: ["conf.d/30-lab.conf"], preview: { operation: "config.file_raw", diffs: [] },
+    } as never);
+
+    render(<ConfigExplorer />);
+
+    await user.type(await screen.findByLabelText("New file path"), "conf.d/30-lab.conf");
+    await user.click(screen.getByRole("button", { name: "Create file" }));
+
+    await waitFor(() => expect(configApi.save).toHaveBeenCalledWith({
+      kind: "file_raw",
+      path: "conf.d/30-lab.conf",
+      base: "",
+      raw: "# created by ssh-ui\n",
+    }));
+  });
+});

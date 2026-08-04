@@ -1,17 +1,24 @@
 import { useEffect, useState } from "react";
 import { apiClient, type HealthResponse } from "./api/client";
 import type { SessionState } from "./session/bootstrap";
+import { ConnectionsPage } from "./connections/ConnectionsPage";
+import { ConfigExplorer } from "./explorer/ConfigExplorer";
+import { GroupsPanel } from "./groups/GroupsPanel";
+import { HistoryPanel } from "./history/HistoryPanel";
 
 type AppProps = {
   bootstrap: () => Promise<SessionState>;
   health: () => Promise<HealthResponse>;
 };
 
-const sections = ["Connections", "Groups", "Config", "Keys", "Known Hosts", "History"];
+const sections = ["Connections", "Config", "Groups", "Keys", "Known Hosts", "History"] as const;
+type Section = (typeof sections)[number];
+const enabledSections: Section[] = ["Connections", "Config", "Groups", "History"];
 
 export function App({ bootstrap, health }: AppProps) {
   const [state, setState] = useState<"starting" | "ready" | "error">("starting");
   const [version, setVersion] = useState("");
+  const [section, setSection] = useState<Section>("Connections");
 
   useEffect(() => {
     let active = true;
@@ -47,28 +54,59 @@ export function App({ bootstrap, health }: AppProps) {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <header className="border-b border-zinc-800 px-6 py-4">
+      <header className="flex items-baseline gap-3 border-b border-zinc-800 px-6 py-4">
         <h1 className="text-xl font-semibold">SSH UI</h1>
+        <p role="status" className="text-sm text-zinc-300">
+          {state === "ready" ? `Local session active · ${version}` : "Starting secure local session…"}
+        </p>
       </header>
       <div className="grid grid-cols-[15rem_1fr]">
         <nav aria-label="Primary" className="border-r border-zinc-800 p-4">
           <ul>
-            {sections.map((section) => (
-              <li key={section}>
-                <button disabled className="w-full px-3 py-2 text-left text-zinc-500">{section}</button>
+            {sections.map((name) => (
+              <li key={name}>
+                <button
+                  type="button"
+                  disabled={!enabledSections.includes(name)}
+                  aria-current={section === name ? "page" : undefined}
+                  onClick={() => setSection(name)}
+                  className={`w-full px-3 py-2 text-left ${
+                    enabledSections.includes(name) ? "text-zinc-200 hover:bg-zinc-900" : "text-zinc-500"
+                  }`}
+                >
+                  {name}
+                </button>
               </li>
             ))}
           </ul>
         </nav>
-        <main className="p-8">
-          <section aria-labelledby="status-heading" className="max-w-xl rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-            <h2 id="status-heading" className="font-medium">Local process</h2>
-            <p role="status" className="mt-2 text-sm text-zinc-300">
-              {state === "ready" ? `Local session active · ${version}` : "Starting secure local session…"}
-            </p>
-          </section>
-        </main>
+        <main className="p-6">{state === "ready" ? <SectionView section={section} /> : null}</main>
       </div>
     </div>
+  );
+}
+
+function SectionView({ section }: { section: Section }) {
+  if (section === "Connections") {
+    return <ConnectionsPage />;
+  }
+  if (section === "Config") {
+    return <ConfigExplorer />;
+  }
+  if (section === "Groups") {
+    return <GroupsPanel />;
+  }
+  if (section === "History") {
+    return <HistoryPanel />;
+  }
+  if (section === "Keys" || section === "Known Hosts") {
+    return (
+      <p className="text-sm text-zinc-400">{`${section} arrives with a later subsystem.`}</p>
+    );
+  }
+  return (
+    <section aria-labelledby="section-heading" className="flex flex-col gap-4">
+      <h2 id="section-heading" className="font-medium">{section}</h2>
+    </section>
   );
 }

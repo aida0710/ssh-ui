@@ -1,6 +1,38 @@
 import type { components } from "./schema";
 
 export type HealthResponse = components["schemas"]["HealthResponse"];
+export type Problem = components["schemas"]["Problem"];
+
+export class ApiError extends Error {
+  readonly code: string;
+  readonly status: number;
+  readonly problem: Problem | null;
+
+  constructor(code: string, status: number, problem: Problem | null) {
+    super(code);
+    this.name = "ApiError";
+    this.code = code;
+    this.status = status;
+    this.problem = problem;
+  }
+}
+
+async function readProblem(response: Response): Promise<Problem | null> {
+  try {
+    const payload: unknown = await response.json();
+    if (typeof payload !== "object" || payload === null) return null;
+    const record = payload as Record<string, unknown>;
+    if (typeof record.code !== "string" || typeof record.message !== "string") return null;
+    return record as Problem;
+  } catch {
+    return null;
+  }
+}
+
+async function failure(response: Response): Promise<ApiError> {
+  const problem = await readProblem(response);
+  return new ApiError(problem?.code ?? "request_failed", response.status, problem);
+}
 
 function validateHealth(value: unknown): HealthResponse {
   if (typeof value !== "object" || value === null) {
@@ -28,6 +60,11 @@ export const apiClient = {
     if (!response.ok) throw new Error("health_failed");
     return validateHealth(await response.json());
   },
+  async read(path: string): Promise<unknown> {
+    const response = await fetch(path, { credentials: "same-origin" });
+    if (!response.ok) throw await failure(response);
+    return response.json() as Promise<unknown>;
+  },
   async mutate<T>(path: string, init: RequestInit): Promise<T> {
     const target = new URL(path, window.location.origin);
     if (target.origin !== window.location.origin) {
@@ -42,7 +79,7 @@ export const apiClient = {
       credentials: "same-origin",
       headers,
     });
-    if (!response.ok) throw new Error("api_mutation_failed");
+    if (!response.ok) throw await failure(response);
     return response.json() as Promise<T>;
   },
 };

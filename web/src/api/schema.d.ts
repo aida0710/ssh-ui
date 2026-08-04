@@ -36,6 +36,150 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/config/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getConfigOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/host": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getConfigHost"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getConfigFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["previewConfigEdit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/save": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["saveConfigEdit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/metadata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getMetadata"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/history/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["restoreHistoryEntry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/history/recover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["recoverTransaction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -51,6 +195,234 @@ export interface components {
         Problem: {
             code: string;
             message: string;
+            detail?: string;
+            path?: string;
+            line?: number;
+            column?: number;
+            diagnostics?: components["schemas"]["Diagnostic"][];
+            conflict?: components["schemas"]["ConflictReport"];
+        };
+        FileRef: {
+            path?: string;
+            absolute: string;
+            external?: boolean;
+        };
+        Notice: {
+            code: string;
+            path?: string;
+            line?: number;
+            detail?: string;
+        };
+        Diagnostic: {
+            severity: string;
+            code: string;
+            path?: string;
+            absolute?: string;
+            external?: boolean;
+            line?: number;
+            detail?: string;
+        };
+        HostIdentity: {
+            path: string;
+            alias: string;
+        };
+        HostEntry: {
+            identity: components["schemas"]["HostIdentity"];
+            file: components["schemas"]["FileRef"];
+            line: number;
+            patterns: string[];
+            wildcard?: boolean;
+            negated?: boolean;
+            duplicate?: boolean;
+            editable: boolean;
+        };
+        IncludeReference: {
+            line: number;
+            pattern: string;
+            condition?: string;
+            matches?: components["schemas"]["FileRef"][];
+        };
+        FileNode: {
+            file: components["schemas"]["FileRef"];
+            missing?: boolean;
+            editable: boolean;
+            loads: number;
+            includes?: components["schemas"]["IncludeReference"][];
+        };
+        Setting: {
+            keyword: string;
+            values: string[];
+        };
+        HostMetadata: {
+            identity: components["schemas"]["HostIdentity"];
+            group?: string;
+            tags?: string[];
+            colour?: string;
+            note?: string;
+            favourite?: boolean;
+            order?: number;
+            orphan?: boolean;
+        };
+        GroupMetadata: {
+            name: string;
+            parent?: string;
+            colour?: string;
+            note?: string;
+            order?: number;
+            settings?: components["schemas"]["Setting"][];
+        };
+        Metadata: {
+            schemaVersion: number;
+            groupsFile?: string;
+            groups?: components["schemas"]["GroupMetadata"][];
+            hosts?: components["schemas"]["HostMetadata"][];
+        };
+        PendingTransaction: {
+            id: string;
+            operation: string;
+            status: string;
+            startedAt: string;
+            committed: number;
+            paths: string[];
+            canComplete: boolean;
+        };
+        Overview: {
+            entry: components["schemas"]["FileRef"];
+            files: components["schemas"]["FileNode"][];
+            hosts: components["schemas"]["HostEntry"][];
+            metadata: components["schemas"]["Metadata"];
+            diagnostics: components["schemas"]["Diagnostic"][];
+            notices: components["schemas"]["Notice"][];
+            pending?: components["schemas"]["PendingTransaction"][];
+        };
+        FormField: {
+            line: number;
+            keyword: string;
+            values: string[];
+            category: string;
+            dangerous?: boolean;
+            duplicate?: boolean;
+            editable: boolean;
+        };
+        HostForm: {
+            entry: components["schemas"]["HostEntry"];
+            fields: components["schemas"]["FormField"][];
+            raw: string;
+            notices?: components["schemas"]["Notice"][];
+        };
+        Source: {
+            path?: string;
+            absolute?: string;
+            line?: number;
+            condition?: string;
+        };
+        EffectiveEntry: {
+            keyword: string;
+            values: string[];
+            source: components["schemas"]["Source"];
+        };
+        Effective: {
+            alias: string;
+            approximate: boolean;
+            entries: components["schemas"]["EffectiveEntry"][];
+            notices?: components["schemas"]["Notice"][];
+        };
+        FileContents: {
+            file: components["schemas"]["FileRef"];
+            contents: string;
+            digest: string;
+            editable: boolean;
+            exists: boolean;
+        };
+        HostDetail: {
+            form: components["schemas"]["HostForm"];
+            metadata: components["schemas"]["HostMetadata"];
+            effective: components["schemas"]["Effective"];
+            file: components["schemas"]["FileContents"];
+        };
+        FieldEdit: {
+            action: string;
+            line?: number;
+            keyword?: string;
+            values?: string[];
+        };
+        EditRequest: {
+            kind: string;
+            path?: string;
+            base?: string;
+            alias?: string;
+            newAlias?: string;
+            fields?: components["schemas"]["FieldEdit"][];
+            raw?: string;
+            metadata?: components["schemas"]["Metadata"];
+        };
+        DiffLine: {
+            op: string;
+            text: string;
+            oldLine?: number;
+            newLine?: number;
+        };
+        FileDiff: {
+            path: string;
+            created?: boolean;
+            removed?: boolean;
+            oldDigest?: string;
+            newDigest?: string;
+            lines: components["schemas"]["DiffLine"][];
+            truncated?: boolean;
+        };
+        EffectiveChange: {
+            keyword: string;
+            before: string[];
+            after: string[];
+            beforeSources?: components["schemas"]["Source"][];
+            afterSources?: components["schemas"]["Source"][];
+        };
+        EffectiveDiff: {
+            alias: string;
+            changes: components["schemas"]["EffectiveChange"][];
+        };
+        SavePreview: {
+            operation: string;
+            diffs: components["schemas"]["FileDiff"][];
+            effective?: components["schemas"]["EffectiveDiff"][];
+            notices?: components["schemas"]["Notice"][];
+        };
+        SaveResult: {
+            transactionId: string;
+            written: string[];
+            preview: components["schemas"]["SavePreview"];
+        };
+        ConflictReport: {
+            path: string;
+            baseDigest?: string;
+            diskDigest?: string;
+            externalChange: components["schemas"]["DiffLine"][];
+            localChange: components["schemas"]["DiffLine"][];
+        };
+        HistoryEntry: {
+            id: string;
+            operation: string;
+            status: string;
+            startedAt: string;
+            finishedAt?: string;
+            paths: string[];
+            restorable?: string[];
+        };
+        HistoryList: {
+            entries: components["schemas"]["HistoryEntry"][];
+        };
+        RestoreRequest: {
+            transactionId: string;
+            path: string;
+        };
+        RecoverRequest: {
+            transactionId: string;
+            action: string;
+        };
+        RecoverResponse: {
+            /** @constant */
+            status: "ok";
         };
     };
     responses: {
@@ -115,6 +487,237 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+        };
+    };
+    getConfigOverview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Include tree, hosts, groups and diagnostics */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Overview"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getConfigHost: {
+        parameters: {
+            query: {
+                path: string;
+                alias: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One host block with its explained values */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getConfigFile: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One configuration file for the raw editor */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileContents"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    previewConfigEdit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditRequest"];
+            };
+        };
+        responses: {
+            /** @description Exactly what a save would write */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavePreview"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    saveConfigEdit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditRequest"];
+            };
+        };
+        responses: {
+            /** @description Committed transaction */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getMetadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description UI-only organisation data */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Metadata"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    getHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Completed transactions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    restoreHistoryEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RestoreRequest"];
+            };
+        };
+        responses: {
+            /** @description Restored file committed as a new transaction */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    recoverTransaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecoverRequest"];
+            };
+        };
+        responses: {
+            /** @description Interrupted transaction completed or rolled back */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecoverResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
 }

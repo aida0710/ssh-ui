@@ -16,6 +16,7 @@ import (
 
 	"github.com/labstack/echo/v5"
 
+	"ssh-ui/internal/application"
 	"ssh-ui/internal/session"
 )
 
@@ -25,6 +26,7 @@ type Options struct {
 	UI       fs.FS
 	Version  string
 	Logger   *slog.Logger
+	Config   *application.Service
 }
 
 var ErrNonLoopbackListener = errors.New("listener must use 127.0.0.1")
@@ -58,6 +60,9 @@ func New(options Options) (*Server, error) {
 	handlers := Handlers{Sessions: options.Sessions, Version: options.Version}
 	e.POST("/api/v1/session/bootstrap", handlers.Bootstrap)
 	e.GET("/api/v1/health", handlers.Health)
+	if options.Config != nil {
+		registerConfigRoutes(e, ConfigHandlers{Service: options.Config})
+	}
 	static := echo.WrapHandler(spaHandler(options.UI))
 	e.GET("/*", static)
 	e.HEAD("/*", static)
