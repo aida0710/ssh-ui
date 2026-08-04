@@ -1,2 +1,6 @@
+/bin/
+/coverage/
+/web/node_modules/
+/web/tsconfig.tsbuildinfo
+.DS_Store
 .worktrees/
-
