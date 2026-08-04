@@ -56,6 +56,61 @@ func TestSecurityRejectsCrossSiteAndWrongHost(t *testing.T) {
 	}
 }
 
+// TestSecurityRefusesEveryAPIRequestFromAnotherSite drives the middleware
+// alone, with a handler that would answer 204 for anything that reaches it, so
+// the refusal can only come from the Fetch Metadata check under test rather
+// than from a handler-level guard behind it.
+func TestSecurityRefusesEveryAPIRequestFromAnotherSite(t *testing.T) {
+	manager, bootstrap, err := session.NewManager(bytes.NewReader(bytes.Repeat([]byte{0x37}, 96)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	credentials, err := manager.Bootstrap(bootstrap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := echo.New()
+	e.Use((Security{
+		ExpectedHost:   "127.0.0.1:43123",
+		ExpectedOrigin: "http://127.0.0.1:43123",
+		Sessions:       manager,
+	}).Middleware)
+	e.GET("/api/v1/test", func(c *echo.Context) error { return c.NoContent(http.StatusNoContent) })
+
+	tests := []struct {
+		name      string
+		fetchSite string
+		want      int
+		wantCode  string
+	}{
+		{"same origin", "same-origin", http.StatusNoContent, ""},
+		{"cross site", "cross-site", http.StatusForbidden, "cross_site_request"},
+		{"same site", "same-site", http.StatusForbidden, "cross_site_request"},
+		{"user initiated", "none", http.StatusForbidden, "cross_site_request"},
+		{"header absent", "", http.StatusForbidden, "cross_site_request"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "/api/v1/test", nil)
+			request.Host = "127.0.0.1:43123"
+			if test.fetchSite != "" {
+				request.Header.Set("Sec-Fetch-Site", test.fetchSite)
+			}
+			request.AddCookie(&http.Cookie{Name: SessionCookie, Value: credentials.SessionID})
+			response := httptest.NewRecorder()
+			e.ServeHTTP(response, request)
+			if response.Code != test.want {
+				t.Fatalf("status = %d, want %d", response.Code, test.want)
+			}
+			// The problem code is asserted, not merely the status: a 403 from
+			// the host check or from CSRF would otherwise look like a pass.
+			if test.wantCode != "" && !strings.Contains(response.Body.String(), test.wantCode) {
+				t.Fatalf("body = %q, want the %q problem code", response.Body.String(), test.wantCode)
+			}
+		})
+	}
+}
+
 func TestSecurityNavigationHeadersAndAPIAuthentication(t *testing.T) {
 	manager, bootstrap, err := session.NewManager(bytes.NewReader(bytes.Repeat([]byte{0x52}, 96)))
 	if err != nil {
@@ -78,9 +133,11 @@ func TestSecurityNavigationHeadersAndAPIAuthentication(t *testing.T) {
 	run := func(method, path string, authenticated, csrf bool) *httptest.ResponseRecorder {
 		request := httptest.NewRequest(method, path, nil)
 		request.Host = "127.0.0.1:43123"
+		// Every API request the frontend makes carries Fetch Metadata, a read
+		// as much as a write; only Origin is specific to a state change.
+		request.Header.Set("Sec-Fetch-Site", "same-origin")
 		if method != http.MethodGet {
 			request.Header.Set(echo.HeaderOrigin, "http://127.0.0.1:43123")
-			request.Header.Set("Sec-Fetch-Site", "same-origin")
 		}
 		if authenticated {
 			request.AddCookie(&http.Cookie{Name: SessionCookie, Value: credentials.SessionID})

@@ -86,9 +86,11 @@ func (h *testHarness) call(t *testing.T, method, target string, body any, authen
 	request := httptest.NewRequest(method, target, reader)
 	request.Host = "127.0.0.1:43123"
 	request.Header.Set(echo.HeaderContentType, "application/json")
+	// Fetch Metadata is verified on every API request, so the frontend sends
+	// this header on a read as well as on a write.
+	request.Header.Set("Sec-Fetch-Site", "same-origin")
 	if method != http.MethodGet {
 		request.Header.Set(echo.HeaderOrigin, "http://127.0.0.1:43123")
-		request.Header.Set("Sec-Fetch-Site", "same-origin")
 	}
 	if authenticated {
 		request.AddCookie(h.cookie)

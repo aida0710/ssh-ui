@@ -172,9 +172,10 @@ func (call keyVaultSession) do(method, path string, body []byte, headers map[str
 	}
 	request.AddCookie(call.cookie)
 	request.Header.Set("Content-Type", "application/json")
+	// Fetch Metadata accompanies every API request, a read as much as a write.
+	request.Header.Set("Sec-Fetch-Site", "same-origin")
 	if method != http.MethodGet {
 		request.Header.Set("Origin", call.base)
-		request.Header.Set("Sec-Fetch-Site", "same-origin")
 		request.Header.Set("X-SSH-UI-CSRF", call.csrf)
 	}
 	for name, value := range headers {
@@ -291,6 +292,44 @@ func TestRunExposesTheKeyVaultAndItsTrashThroughTheWiredProcess(t *testing.T) {
 	if overview.StatusCode != http.StatusOK {
 		t.Fatalf("config overview = %d, want 200", overview.StatusCode)
 	}
+}
+
+func TestBuildReturnsAServerAndAOneTimeBootstrapToken(t *testing.T) {
+	home := t.TempDir()
+	server, bootstrap, err := Build(Dependencies{
+		Home:    home,
+		Random:  bytes.NewReader(bytes.Repeat([]byte{0x24}, 512)),
+		Browser: refusingBrowser{},
+		Listen:  net.Listen,
+		UI:      fstest.MapFS{"index.html": {Data: []byte("<!doctype html>")}},
+		Logger:  slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}, "build-test")
+	if err != nil {
+		t.Fatalf("Build() = %v", err)
+	}
+	if len(bootstrap) != 43 {
+		t.Fatalf("bootstrap length = %d, want 43", len(bootstrap))
+	}
+	if !strings.HasPrefix(server.URL(), "http://127.0.0.1:") {
+		t.Fatalf("URL() = %q", server.URL())
+	}
+	if len(server.Routes()) == 0 {
+		t.Fatal("Build() produced a server with no routes")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	served := make(chan error, 1)
+	go func() { served <- server.Serve(ctx) }()
+	cancel()
+	if err := <-served; err != nil {
+		t.Fatalf("Serve() = %v", err)
+	}
+}
+
+type refusingBrowser struct{}
+
+func (refusingBrowser) Open(context.Context, string) error {
+	return errors.New("a test must never open a browser")
 }
 
 func mustListen(t *testing.T) net.Listener {

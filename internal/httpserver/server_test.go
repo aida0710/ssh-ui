@@ -155,6 +155,11 @@ func TestServerSPAFallbackRequiresHTMLNavigation(t *testing.T) {
 			request := httptest.NewRequest(test.method, test.path, nil)
 			request.Host = "127.0.0.1:43123"
 			request.Header.Set("Accept", test.accept)
+			// A same-origin navigation carries this header. The "raw API
+			// namespace" case needs it because its unnormalised path begins
+			// with /api/, so the API rules apply to it; the assertion it makes
+			// is still that such a path never yields the SPA document.
+			request.Header.Set("Sec-Fetch-Site", "same-origin")
 			if test.auth {
 				request.AddCookie(&http.Cookie{Name: SessionCookie, Value: credentials.SessionID})
 			}
@@ -168,6 +173,47 @@ func TestServerSPAFallbackRequiresHTMLNavigation(t *testing.T) {
 				t.Fatalf("body = %q, want %q", got, test.wantBody)
 			}
 		})
+	}
+}
+
+func TestServerReportsEveryRegisteredRoute(t *testing.T) {
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { listener.Close() })
+
+	manager, _, err := session.NewManager(bytes.NewReader(bytes.Repeat([]byte{0x11}, 96)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	server, err := New(Options{
+		Listener: listener,
+		Sessions: manager,
+		UI:       fstest.MapFS{"index.html": {Data: []byte("<!doctype html>")}},
+		Version:  "route-inventory",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := map[string]bool{
+		"POST /api/v1/session/bootstrap": false,
+		"GET /api/v1/health":             false,
+	}
+	for _, route := range server.Routes() {
+		key := route.Method + " " + route.Path
+		if _, expected := want[key]; expected {
+			want[key] = true
+		}
+	}
+	for key, seen := range want {
+		if !seen {
+			t.Errorf("Routes() did not report %q", key)
+		}
+	}
+	if len(server.Routes()) < len(want) {
+		t.Fatalf("Routes() = %d entries, want at least %d", len(server.Routes()), len(want))
 	}
 }
 
