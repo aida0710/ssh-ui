@@ -1543,6 +1543,7 @@ Start the server on a real `127.0.0.1:0` listener with deterministic random inpu
 6. Health with the cookie returns 200.
 7. A POST with the cookie but no CSRF returns 403.
 8. A request using `localhost:<port>` instead of `127.0.0.1:<port>` returns 403.
+9. A bootstrap request with a cross-origin `Origin` value returns 403.
 
 - [ ] **Step 2: Run the integration test and verify embedding is missing**
 
@@ -1586,19 +1587,19 @@ func spaHandler(assets fs.FS) http.Handler {
 			http.Error(response, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
 		}
-		if strings.HasPrefix(request.URL.Path, "/api/") {
-			http.NotFound(response, request)
-			return
-		}
 		name := strings.TrimPrefix(path.Clean(request.URL.Path), "/")
 		if name == "." || name == "" { name = "index.html" }
 		if !fs.ValidPath(name) {
 			http.NotFound(response, request)
 			return
 		}
+		if name == "api" || strings.HasPrefix(name, "api/") || request.URL.Path == "/api" || strings.HasPrefix(request.URL.Path, "/api/") {
+			http.NotFound(response, request)
+			return
+		}
 		contents, err := fs.ReadFile(assets, name)
 		if err != nil {
-			if !strings.Contains(request.Header.Get("Accept"), "text/html") {
+			if !acceptsHTML(request.Header.Get("Accept")) {
 				http.NotFound(response, request)
 				return
 			}
@@ -1611,6 +1612,20 @@ func spaHandler(assets fs.FS) http.Handler {
 		}
 		http.ServeContent(response, request, name, time.Time{}, bytes.NewReader(contents))
 	})
+}
+
+func acceptsHTML(header string) bool {
+	for _, value := range strings.Split(header, ",") {
+		mediaType, parameters, err := mime.ParseMediaType(strings.TrimSpace(value))
+		if err != nil || mediaType != "text/html" { continue }
+		quality := 1.0
+		if raw, ok := parameters["q"]; ok {
+			quality, err = strconv.ParseFloat(raw, 64)
+			if err != nil { continue }
+		}
+		if quality > 0 && quality <= 1 { return true }
+	}
+	return false
 }
 ```
 
