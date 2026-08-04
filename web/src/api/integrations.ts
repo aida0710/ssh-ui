@@ -22,6 +22,12 @@ export const AUTHENTICATION_ACTION_KIND = "diagnostics.authentication";
 export const TERMINAL_LAUNCH_ACTION_KIND = "terminal.launch";
 export const KNOWN_HOSTS_DELETE_ACTION_KIND = "known_hosts.delete";
 export const KNOWN_HOSTS_SCAN_ACTION_KIND = "known_hosts.scan";
+export const KNOWN_HOSTS_ADD_ACTION_KIND = "known_hosts.add";
+
+// KnownHostAddition is the part of a scan candidate that identifies the key
+// being written. The fingerprint is not sent as part of it: the server derives
+// the fingerprint from the key itself and compares it with what the user typed.
+export type KnownHostAddition = Pick<KnownHostCandidate, "host" | "port" | "keyType" | "key">;
 
 export type IntegrationsApi = {
   configCheck(): Promise<ConfigCheckResponse>;
@@ -33,6 +39,11 @@ export type IntegrationsApi = {
   knownHosts(query: string): Promise<KnownHostsResponse>;
   deleteKnownHosts(entries: { line: number; digest: string }[], path: string): Promise<KnownHostsChangeResponse>;
   scanKnownHosts(host: string, port: number): Promise<KnownHostsScanResponse>;
+  addKnownHost(
+    candidate: KnownHostAddition,
+    expectedFingerprint: string,
+    acknowledged: boolean,
+  ): Promise<KnownHostsChangeResponse>;
 };
 
 // The generated types describe the contract; these guards check the payload the
@@ -247,5 +258,25 @@ export const integrationsApi: IntegrationsApi = {
   async scanKnownHosts(host, port) {
     const token = await issueAction(KNOWN_HOSTS_SCAN_ACTION_KIND, host);
     return validateScan(await postJSON<unknown>("/api/v1/known-hosts/scan", { host, port }, token));
+  },
+  // A scanned key becomes trusted only here, and only with the proof or the
+  // acknowledgement the user gave. The confirmation is bound to the host, which
+  // is what the server spends the token against.
+  async addKnownHost(candidate, expectedFingerprint, acknowledged) {
+    const token = await issueAction(KNOWN_HOSTS_ADD_ACTION_KIND, candidate.host);
+    return validateChange(
+      await postJSON<unknown>(
+        "/api/v1/known-hosts/add",
+        {
+          host: candidate.host,
+          port: candidate.port,
+          keyType: candidate.keyType,
+          key: candidate.key,
+          expectedFingerprint,
+          acknowledged,
+        },
+        token,
+      ),
+    );
   },
 };

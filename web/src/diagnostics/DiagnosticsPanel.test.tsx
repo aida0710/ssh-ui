@@ -49,6 +49,7 @@ function buildApi(overrides: Partial<IntegrationsApi> = {}): IntegrationsApi {
     knownHosts: vi.fn().mockResolvedValue({ path: "~/.ssh/known_hosts", entries: [] }),
     deleteKnownHosts: vi.fn().mockResolvedValue({ changed: true, transactionId: "tx" }),
     scanKnownHosts: vi.fn().mockResolvedValue({ notice: "unverified", candidates: [] }),
+    addKnownHost: vi.fn().mockResolvedValue({ changed: true, transactionId: "tx" }),
     ...overrides,
   };
 }

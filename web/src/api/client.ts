@@ -17,6 +17,13 @@ export class ApiError extends Error {
   }
 }
 
+// failureCode is the code the server used to refuse an operation, so an
+// interface can quote it instead of paraphrasing it. A failure that never
+// reached the server has no code.
+export function failureCode(error: unknown): string {
+  return error instanceof ApiError ? error.code : "";
+}
+
 async function readProblem(response: Response): Promise<Problem | null> {
   try {
     const payload: unknown = await response.json();
