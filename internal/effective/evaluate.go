@@ -80,6 +80,10 @@ type Evaluator struct {
 	Toolchain  platform.Toolchain
 	ConfigPath string
 	Timeout    time.Duration
+	// Environment is the child's complete environment, normally
+	// platform.MinimalEnvironment. A nil value inherits this process's
+	// environment, which is the right default only in a test.
+	Environment []string
 }
 
 // Evaluate asks the installed OpenSSH for the effective configuration of alias.
@@ -107,6 +111,7 @@ func (e Evaluator) Evaluate(ctx context.Context, report Report, alias string, co
 		Path:      program,
 		Arguments: []string{"-G", "-F", e.ConfigPath, "--", alias},
 		Timeout:   timeout,
+		Env:       e.Environment,
 	})
 	if err != nil {
 		return Values{}, err

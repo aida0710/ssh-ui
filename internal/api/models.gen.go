@@ -11,6 +11,27 @@ type AgentIdentity struct {
 	Fingerprint string `json:"fingerprint"`
 }
 
+// AliasRequest defines model for AliasRequest.
+type AliasRequest struct {
+	Alias string `json:"alias"`
+}
+
+// AuthenticationRequest defines model for AuthenticationRequest.
+type AuthenticationRequest struct {
+	AcknowledgeExecutable bool   `json:"acknowledgeExecutable"`
+	Alias                 string `json:"alias"`
+}
+
+// AuthenticationResponse defines model for AuthenticationResponse.
+type AuthenticationResponse struct {
+	Authenticated bool   `json:"authenticated"`
+	ElapsedMs     int    `json:"elapsedMs"`
+	ExitCode      int    `json:"exitCode"`
+	Outcome       string `json:"outcome"`
+	Stderr        string `json:"stderr"`
+	Truncated     bool   `json:"truncated"`
+}
+
 // BootstrapResponse defines model for BootstrapResponse.
 type BootstrapResponse struct {
 	CsrfToken string `json:"csrfToken"`
@@ -30,6 +51,40 @@ type ChangePassphraseResponse struct {
 	Notes         []string `json:"notes"`
 	RelativePath  string   `json:"relativePath"`
 	TransactionId string   `json:"transactionId"`
+}
+
+// ComplexityNote defines model for ComplexityNote.
+type ComplexityNote struct {
+	Code      string `json:"code"`
+	Condition string `json:"condition"`
+	Detail    string `json:"detail"`
+	Line      int    `json:"line"`
+	Path      string `json:"path"`
+}
+
+// ConfigCheckResponse defines model for ConfigCheckResponse.
+type ConfigCheckResponse struct {
+	Diagnostics []ConfigDiagnostic  `json:"diagnostics"`
+	Files       []ConfigFileSummary `json:"files"`
+	Root        string              `json:"root"`
+}
+
+// ConfigDiagnostic defines model for ConfigDiagnostic.
+type ConfigDiagnostic struct {
+	Code     string `json:"code"`
+	Detail   string `json:"detail"`
+	Line     int    `json:"line"`
+	Path     string `json:"path"`
+	Severity string `json:"severity"`
+}
+
+// ConfigFileSummary defines model for ConfigFileSummary.
+type ConfigFileSummary struct {
+	Editable bool   `json:"editable"`
+	Includes int    `json:"includes"`
+	Loads    int    `json:"loads"`
+	Missing  bool   `json:"missing"`
+	Path     string `json:"path"`
 }
 
 // ConflictReport defines model for ConflictReport.
@@ -100,6 +155,38 @@ type EffectiveEntry struct {
 	Keyword string   `json:"keyword"`
 	Source  Source   `json:"source"`
 	Values  []string `json:"values"`
+}
+
+// EffectiveResponse defines model for EffectiveResponse.
+type EffectiveResponse struct {
+	Alias                string                `json:"alias"`
+	Complexities         []ComplexityNote      `json:"complexities"`
+	Evaluated            bool                  `json:"evaluated"`
+	ExecutableDirectives []ExecutableDirective `json:"executableDirectives"`
+	Failure              OpenSSHFailure        `json:"failure"`
+	RequiresConfirmation bool                  `json:"requiresConfirmation"`
+	Route                []JumpStage           `json:"route"`
+	Sources              []ValueSource         `json:"sources"`
+	TokenWarning         string                `json:"tokenWarning"`
+	Values               []EffectiveValue      `json:"values"`
+}
+
+// EffectiveValue defines model for EffectiveValue.
+type EffectiveValue struct {
+	Keyword string   `json:"keyword"`
+	Values  []string `json:"values"`
+}
+
+// ExecutableDirective defines model for ExecutableDirective.
+type ExecutableDirective struct {
+	Command     string `json:"command"`
+	Condition   string `json:"condition"`
+	Keyword     string `json:"keyword"`
+	Line        int    `json:"line"`
+	OnConnect   bool   `json:"onConnect"`
+	OnEvaluate  bool   `json:"onEvaluate"`
+	Overridable bool   `json:"overridable"`
+	Path        string `json:"path"`
 }
 
 // FieldEdit defines model for FieldEdit.
@@ -291,6 +378,18 @@ type IssueActionResponse struct {
 	Token     string `json:"token"`
 }
 
+// JumpStage defines model for JumpStage.
+type JumpStage struct {
+	Complex  bool   `json:"complex"`
+	Depth    int    `json:"depth"`
+	Hop      string `json:"hop"`
+	Hostname string `json:"hostname"`
+	Order    int    `json:"order"`
+	Parent   string `json:"parent"`
+	Port     string `json:"port"`
+	User     string `json:"user"`
+}
+
 // KeyAlgorithmsResponse defines model for KeyAlgorithmsResponse.
 type KeyAlgorithmsResponse struct {
 	Diagnostic string       `json:"diagnostic"`
@@ -373,6 +472,14 @@ type Notice struct {
 	Path   *string `json:"path,omitempty"`
 }
 
+// OpenSSHFailure defines model for OpenSSHFailure.
+type OpenSSHFailure struct {
+	ExitCode  int    `json:"exitCode"`
+	Failed    bool   `json:"failed"`
+	Stderr    string `json:"stderr"`
+	Truncated bool   `json:"truncated"`
+}
+
 // Overview defines model for Overview.
 type Overview struct {
 	Diagnostics []Diagnostic          `json:"diagnostics"`
@@ -412,6 +519,15 @@ type PurgeTrashResponse struct {
 	EntryId       string   `json:"entryId"`
 	Removed       []string `json:"removed"`
 	TransactionId string   `json:"transactionId"`
+}
+
+// ReachabilityResponse defines model for ReachabilityResponse.
+type ReachabilityResponse struct {
+	Address   string `json:"address"`
+	Detail    string `json:"detail"`
+	ElapsedMs int    `json:"elapsedMs"`
+	Notice    string `json:"notice"`
+	Outcome   string `json:"outcome"`
 }
 
 // RecoverRequest defines model for RecoverRequest.
@@ -544,6 +660,17 @@ type UnresolvedReference struct {
 	Value      string `json:"value"`
 }
 
+// ValueSource defines model for ValueSource.
+type ValueSource struct {
+	Condition string `json:"condition"`
+	Keyword   string `json:"keyword"`
+	Kind      string `json:"kind"`
+	Line      int    `json:"line"`
+	Path      string `json:"path"`
+	Value     string `json:"value"`
+	Winner    bool   `json:"winner"`
+}
+
 // GetConfigFileParams defines parameters for GetConfigFile.
 type GetConfigFileParams struct {
 	Path string `form:"path" json:"path"`
@@ -578,6 +705,15 @@ type PreviewConfigEditJSONRequestBody = EditRequest
 
 // SaveConfigEditJSONRequestBody defines body for SaveConfigEdit for application/json ContentType.
 type SaveConfigEditJSONRequestBody = EditRequest
+
+// TestAuthenticationJSONRequestBody defines body for TestAuthentication for application/json ContentType.
+type TestAuthenticationJSONRequestBody = AuthenticationRequest
+
+// InspectEffectiveConfigurationJSONRequestBody defines body for InspectEffectiveConfiguration for application/json ContentType.
+type InspectEffectiveConfigurationJSONRequestBody = AliasRequest
+
+// CheckReachabilityJSONRequestBody defines body for CheckReachability for application/json ContentType.
+type CheckReachabilityJSONRequestBody = AliasRequest
 
 // RecoverTransactionJSONRequestBody defines body for RecoverTransaction for application/json ContentType.
 type RecoverTransactionJSONRequestBody = RecoverRequest

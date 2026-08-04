@@ -52,6 +52,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/diagnostics/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["checkConfiguration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/diagnostics/effective": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["inspectEffectiveConfiguration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/diagnostics/reachability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["checkReachability"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/diagnostics/authentication": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["testAuthentication"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/keys": {
         parameters: {
             query?: never;
@@ -497,6 +561,105 @@ export interface components {
             fingerprint: string;
             transactionId: string;
         };
+        AliasRequest: {
+            alias: string;
+        };
+        ExecutableDirective: {
+            keyword: string;
+            command: string;
+            path: string;
+            line: number;
+            condition: string;
+            onEvaluate: boolean;
+            onConnect: boolean;
+            overridable: boolean;
+        };
+        ConfigCheckResponse: {
+            root: string;
+            files: components["schemas"]["ConfigFileSummary"][];
+            diagnostics: components["schemas"]["ConfigDiagnostic"][];
+        };
+        ConfigFileSummary: {
+            path: string;
+            editable: boolean;
+            missing: boolean;
+            loads: number;
+            includes: number;
+        };
+        ConfigDiagnostic: {
+            severity: string;
+            code: string;
+            path: string;
+            line: number;
+            detail: string;
+        };
+        EffectiveResponse: {
+            alias: string;
+            evaluated: boolean;
+            requiresConfirmation: boolean;
+            tokenWarning: string;
+            executableDirectives: components["schemas"]["ExecutableDirective"][];
+            values: components["schemas"]["EffectiveValue"][];
+            sources: components["schemas"]["ValueSource"][];
+            complexities: components["schemas"]["ComplexityNote"][];
+            route: components["schemas"]["JumpStage"][];
+            failure: components["schemas"]["OpenSSHFailure"];
+        };
+        EffectiveValue: {
+            keyword: string;
+            values: string[];
+        };
+        ValueSource: {
+            keyword: string;
+            value: string;
+            path: string;
+            line: number;
+            condition: string;
+            kind: string;
+            winner: boolean;
+        };
+        ComplexityNote: {
+            code: string;
+            path: string;
+            line: number;
+            condition: string;
+            detail: string;
+        };
+        JumpStage: {
+            order: number;
+            depth: number;
+            parent: string;
+            hop: string;
+            hostname: string;
+            user: string;
+            port: string;
+            complex: boolean;
+        };
+        OpenSSHFailure: {
+            failed: boolean;
+            exitCode: number;
+            stderr: string;
+            truncated: boolean;
+        };
+        ReachabilityResponse: {
+            address: string;
+            outcome: string;
+            elapsedMs: number;
+            detail: string;
+            notice: string;
+        };
+        AuthenticationRequest: {
+            alias: string;
+            acknowledgeExecutable: boolean;
+        };
+        AuthenticationResponse: {
+            outcome: string;
+            authenticated: boolean;
+            exitCode: number;
+            stderr: string;
+            truncated: boolean;
+            elapsedMs: number;
+        };
         IssueActionRequest: {
             kind: string;
             target: string;
@@ -869,6 +1032,110 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             429: components["responses"]["Problem"];
+        };
+    };
+    checkConfiguration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Syntax and Include graph check */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigCheckResponse"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    inspectEffectiveConfiguration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AliasRequest"];
+            };
+        };
+        responses: {
+            /** @description Effective configuration, provenance and jump route */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectiveResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    checkReachability: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AliasRequest"];
+            };
+        };
+        responses: {
+            /** @description Direct TCP reachability, ignoring ProxyJump */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReachabilityResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    testAuthentication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthenticationRequest"];
+            };
+        };
+        responses: {
+            /** @description Completed authentication test */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticationResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     listKeys: {

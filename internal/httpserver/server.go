@@ -17,17 +17,19 @@ import (
 	"github.com/labstack/echo/v5"
 
 	"ssh-ui/internal/application"
+	"ssh-ui/internal/diagnostics"
 	"ssh-ui/internal/session"
 )
 
 type Options struct {
-	Listener net.Listener
-	Sessions *session.Manager
-	UI       fs.FS
-	Version  string
-	Logger   *slog.Logger
-	Config   *application.Service
-	Keys     KeyService
+	Listener    net.Listener
+	Sessions    *session.Manager
+	UI          fs.FS
+	Version     string
+	Logger      *slog.Logger
+	Config      *application.Service
+	Keys        KeyService
+	Diagnostics *diagnostics.Service
 }
 
 var ErrNonLoopbackListener = errors.New("listener must use 127.0.0.1")
@@ -64,8 +66,27 @@ func New(options Options) (*Server, error) {
 	if options.Config != nil {
 		registerConfigRoutes(e, ConfigHandlers{Service: options.Config})
 	}
+
+	// Every subsystem that confirms an operation contributes its evidence
+	// resolver to one registry, so the single POST /api/v1/actions endpoint can
+	// mint a token for any of them without reaching into their services.
+	registry := actionRegistry{}
 	if options.Keys != nil {
-		registerKeyRoutes(e, KeyHandlers{Keys: options.Keys, Sessions: options.Sessions})
+		addKeyActions(registry, options.Keys)
+	}
+	if options.Diagnostics != nil {
+		addDiagnosticsActions(registry, options.Diagnostics)
+	}
+	actions := ActionHandlers{Sessions: options.Sessions, Kinds: registry}
+
+	if options.Keys != nil {
+		registerKeyRoutes(e, KeyHandlers{Keys: options.Keys, Sessions: options.Sessions, Actions: actions})
+	}
+	if options.Diagnostics != nil {
+		registerDiagnosticsRoutes(e, DiagnosticsHandlers{Service: options.Diagnostics, Actions: actions})
+	}
+	if len(registry) > 0 {
+		registerActionRoutes(e, actions)
 	}
 	static := echo.WrapHandler(spaHandler(options.UI))
 	e.GET("/*", static)

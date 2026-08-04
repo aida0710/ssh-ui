@@ -51,6 +51,69 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "429": { $ref: "#/components/responses/Problem" }
+  /api/v1/diagnostics/config:
+    post:
+      operationId: checkConfiguration
+      responses:
+        "200":
+          description: Syntax and Include graph check
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConfigCheckResponse" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+  /api/v1/diagnostics/effective:
+    post:
+      operationId: inspectEffectiveConfiguration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AliasRequest" }
+      responses:
+        "200":
+          description: Effective configuration, provenance and jump route
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EffectiveResponse" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+  /api/v1/diagnostics/reachability:
+    post:
+      operationId: checkReachability
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AliasRequest" }
+      responses:
+        "200":
+          description: Direct TCP reachability, ignoring ProxyJump
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReachabilityResponse" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+  /api/v1/diagnostics/authentication:
+    post:
+      operationId: testAuthentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AuthenticationRequest" }
+      responses:
+        "200":
+          description: Completed authentication test
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthenticationResponse" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
   /api/v1/keys:
     get:
       operationId: listKeys
@@ -595,6 +658,163 @@ components:
         encrypted: { type: boolean }
         fingerprint: { type: string }
         transactionId: { type: string }
+    AliasRequest:
+      type: object
+      additionalProperties: false
+      required: [alias]
+      properties:
+        alias: { type: string, minLength: 1, maxLength: 255 }
+    ExecutableDirective:
+      type: object
+      additionalProperties: false
+      required: [keyword, command, path, line, condition, onEvaluate, onConnect, overridable]
+      properties:
+        keyword: { type: string }
+        command: { type: string }
+        path: { type: string }
+        line: { type: integer }
+        condition: { type: string }
+        onEvaluate: { type: boolean }
+        onConnect: { type: boolean }
+        overridable: { type: boolean }
+    ConfigCheckResponse:
+      type: object
+      additionalProperties: false
+      required: [root, files, diagnostics]
+      properties:
+        root: { type: string }
+        files:
+          type: array
+          items: { $ref: "#/components/schemas/ConfigFileSummary" }
+        diagnostics:
+          type: array
+          items: { $ref: "#/components/schemas/ConfigDiagnostic" }
+    ConfigFileSummary:
+      type: object
+      additionalProperties: false
+      required: [path, editable, missing, loads, includes]
+      properties:
+        path: { type: string }
+        editable: { type: boolean }
+        missing: { type: boolean }
+        loads: { type: integer }
+        includes: { type: integer }
+    ConfigDiagnostic:
+      type: object
+      additionalProperties: false
+      required: [severity, code, path, line, detail]
+      properties:
+        severity: { type: string }
+        code: { type: string }
+        path: { type: string }
+        line: { type: integer }
+        detail: { type: string }
+    EffectiveResponse:
+      type: object
+      additionalProperties: false
+      required: [alias, evaluated, requiresConfirmation, tokenWarning, executableDirectives, values, sources, complexities, route, failure]
+      properties:
+        alias: { type: string }
+        evaluated: { type: boolean }
+        requiresConfirmation: { type: boolean }
+        tokenWarning: { type: string }
+        executableDirectives:
+          type: array
+          items: { $ref: "#/components/schemas/ExecutableDirective" }
+        values:
+          type: array
+          items: { $ref: "#/components/schemas/EffectiveValue" }
+        sources:
+          type: array
+          items: { $ref: "#/components/schemas/ValueSource" }
+        complexities:
+          type: array
+          items: { $ref: "#/components/schemas/ComplexityNote" }
+        route:
+          type: array
+          items: { $ref: "#/components/schemas/JumpStage" }
+        failure: { $ref: "#/components/schemas/OpenSSHFailure" }
+    EffectiveValue:
+      type: object
+      additionalProperties: false
+      required: [keyword, values]
+      properties:
+        keyword: { type: string }
+        values:
+          type: array
+          items: { type: string }
+    ValueSource:
+      type: object
+      additionalProperties: false
+      required: [keyword, value, path, line, condition, kind, winner]
+      properties:
+        keyword: { type: string }
+        value: { type: string }
+        path: { type: string }
+        line: { type: integer }
+        condition: { type: string }
+        kind: { type: string }
+        winner: { type: boolean }
+    ComplexityNote:
+      type: object
+      additionalProperties: false
+      required: [code, path, line, condition, detail]
+      properties:
+        code: { type: string }
+        path: { type: string }
+        line: { type: integer }
+        condition: { type: string }
+        detail: { type: string }
+    JumpStage:
+      type: object
+      additionalProperties: false
+      required: [order, depth, parent, hop, hostname, user, port, complex]
+      properties:
+        order: { type: integer }
+        depth: { type: integer }
+        parent: { type: string }
+        hop: { type: string }
+        hostname: { type: string }
+        user: { type: string }
+        port: { type: string }
+        complex: { type: boolean }
+    OpenSSHFailure:
+      type: object
+      additionalProperties: false
+      required: [failed, exitCode, stderr, truncated]
+      properties:
+        failed: { type: boolean }
+        exitCode: { type: integer }
+        stderr: { type: string }
+        truncated: { type: boolean }
+    ReachabilityResponse:
+      type: object
+      additionalProperties: false
+      required: [address, outcome, elapsedMs, detail, notice]
+      properties:
+        address: { type: string }
+        outcome: { type: string }
+        elapsedMs: { type: integer }
+        detail: { type: string }
+        notice: { type: string }
+    AuthenticationRequest:
+      type: object
+      additionalProperties: false
+      required: [alias, acknowledgeExecutable]
+      properties:
+        alias: { type: string, minLength: 1, maxLength: 64 }
+        acknowledgeExecutable: { type: boolean }
+    AuthenticationResponse:
+      type: object
+      additionalProperties: false
+      required: [outcome, authenticated, exitCode, stderr, truncated, elapsedMs]
+      properties:
+        outcome: { type: string }
+        authenticated: { type: boolean }
+        exitCode: { type: integer }
+        stderr: { type: string }
+        truncated: { type: boolean }
+        elapsedMs: { type: integer }
     IssueActionRequest:
       type: object
       additionalProperties: false

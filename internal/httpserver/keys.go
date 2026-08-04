@@ -58,10 +58,12 @@ type KeyService interface {
 type KeyHandlers struct {
 	Keys     KeyService
 	Sessions *session.Manager
+	// Actions issues and spends confirmations. The endpoint that mints them is
+	// shared with every other subsystem, so it is registered once elsewhere.
+	Actions ActionHandlers
 }
 
 func registerKeyRoutes(engine *echo.Echo, handlers KeyHandlers) {
-	engine.POST("/api/v1/actions", handlers.IssueAction)
 	engine.GET("/api/v1/keys", handlers.List)
 	engine.POST("/api/v1/keys", handlers.Generate)
 	engine.GET("/api/v1/keys/algorithms", handlers.Algorithms)
@@ -117,85 +119,12 @@ func (h KeyHandlers) sessionID(c *echo.Context) string {
 
 // consumeAction spends the one-time token this operation requires.
 //
-// The evidence is recomputed here rather than taken from the request, so a
+// The evidence is recomputed rather than taken from the request, so a
 // confirmation only authorises the state the dialog actually displayed. The
 // boolean reports whether the caller may continue; when it is false the
 // response has already been written.
 func (h KeyHandlers) consumeAction(c *echo.Context, kind, target string) (bool, error) {
-	if h.Sessions == nil {
-		return false, problem(c, http.StatusForbidden, "action_token_required")
-	}
-	sessionID := h.sessionID(c)
-	if sessionID == "" {
-		return false, problem(c, http.StatusUnauthorized, "session_required")
-	}
-	presented := c.Request().Header.Get(ActionHeader)
-	if presented == "" {
-		return false, problem(c, http.StatusForbidden, "action_token_required")
-	}
-	subject, known := confirmationSubjects[kind]
-	if !known {
-		return false, problem(c, http.StatusForbidden, "action_token_invalid")
-	}
-	evidence, err := h.Keys.ConfirmationEvidence(subject, target)
-	if err != nil {
-		return false, keyProblem(c, err)
-	}
-
-	err = h.Sessions.ConsumeAction(sessionID, presented, session.ActionRequest{
-		Kind: kind, Target: target, Evidence: evidence,
-	})
-	switch {
-	case err == nil:
-		return true, nil
-	case errors.Is(err, session.ErrActionExpired):
-		return false, problem(c, http.StatusForbidden, "action_token_expired")
-	case errors.Is(err, session.ErrUnknownSession):
-		return false, problem(c, http.StatusUnauthorized, "session_required")
-	default:
-		return false, problem(c, http.StatusForbidden, "action_token_invalid")
-	}
-}
-
-// IssueAction mints the confirmation a reveal or a permanent delete requires.
-//
-// The caller names only the operation and its target. What the token is bound
-// to is derived here from the current state, because a caller able to supply
-// its own evidence could bind a token to something the user never saw.
-func (h KeyHandlers) IssueAction(c *echo.Context) error {
-	var body api.IssueActionRequest
-	if err := decodeBody(c, &body); err != nil {
-		return problem(c, http.StatusBadRequest, "invalid_request")
-	}
-	subject, known := confirmationSubjects[body.Kind]
-	if !known || body.Target == "" {
-		return problem(c, http.StatusBadRequest, "unknown_action_kind")
-	}
-	sessionID := h.sessionID(c)
-	if sessionID == "" {
-		return problem(c, http.StatusUnauthorized, "session_required")
-	}
-	evidence, err := h.Keys.ConfirmationEvidence(subject, body.Target)
-	if err != nil {
-		return keyProblem(c, err)
-	}
-
-	value, err := h.Sessions.IssueAction(sessionID, session.ActionRequest{
-		Kind: body.Kind, Target: body.Target, Evidence: evidence,
-	})
-	switch {
-	case err == nil:
-	case errors.Is(err, session.ErrTooManyActions):
-		return problem(c, http.StatusTooManyRequests, "too_many_confirmations")
-	case errors.Is(err, session.ErrUnknownSession):
-		return problem(c, http.StatusUnauthorized, "session_required")
-	default:
-		return problem(c, http.StatusForbidden, "action_token_refused")
-	}
-	return c.JSON(http.StatusCreated, api.IssueActionResponse{
-		Token:     value,
-		ExpiresAt: time.Now().UTC().Add(session.ActionTokenTTL).Format(time.RFC3339),
-	})
+	return h.Actions.consume(c, kind, target)
 }
 
 func (h KeyHandlers) List(c *echo.Context) error {

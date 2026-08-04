@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"ssh-ui/internal/application"
+	"ssh-ui/internal/diagnostics"
 	"ssh-ui/internal/httpserver"
 	"ssh-ui/internal/keys"
 	"ssh-ui/internal/platform"
@@ -36,6 +37,14 @@ type Dependencies struct {
 	Runner    platform.OutputRunner
 	Toolchain platform.Toolchain
 	KeyAgent  platform.KeyAgent
+	// Terminal opens an interactive session. A nil launcher is valid: the
+	// diagnostics service then reports that no terminal is configured rather
+	// than panicking, which is what the tests here rely on.
+	Terminal platform.TerminalLauncher
+	// Lookup reads the parent environment so the OpenSSH programs this process
+	// starts receive platform.MinimalEnvironment. Only cmd/ssh-ui may supply
+	// os.LookupEnv; a nil value lets children inherit, which suits a test.
+	Lookup func(string) (string, bool)
 }
 
 // buildKeyService prepares the key vault over the same workspace the
@@ -87,15 +96,18 @@ func Run(ctx context.Context, dependencies Dependencies, version string) error {
 	transactions := storage.NewManager(workspace, time.Now, dependencies.Random)
 	configService := application.NewService(workspace, transactions)
 	keyService := buildKeyService(workspace, dependencies)
+	diagnosticsService := diagnostics.NewService(
+		workspace, dependencies.Runner, dependencies.Toolchain, dependencies.Terminal, dependencies.Lookup)
 
 	server, err := httpserver.New(httpserver.Options{
-		Listener: listener,
-		Sessions: sessions,
-		UI:       dependencies.UI,
-		Version:  version,
-		Logger:   dependencies.Logger,
-		Config:   configService,
-		Keys:     keyService,
+		Listener:    listener,
+		Sessions:    sessions,
+		UI:          dependencies.UI,
+		Version:     version,
+		Logger:      dependencies.Logger,
+		Config:      configService,
+		Keys:        keyService,
+		Diagnostics: diagnosticsService,
 	})
 	if err != nil {
 		listener.Close()

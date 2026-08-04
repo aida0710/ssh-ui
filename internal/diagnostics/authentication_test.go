@@ -111,6 +111,27 @@ func TestAuthenticationTestBuildsASafeCommandAndReadsTheMarker(t *testing.T) {
 	}
 }
 
+// TestAuthenticationTestHandsOpenSSHTheEnvironmentItWasGiven guards the child
+// environment. An exported SSH_ASKPASS would let ssh ask an external program
+// for a passphrase, which would defeat BatchMode and make this bounded,
+// non-interactive test wait on a dialog.
+func TestAuthenticationTestHandsOpenSSHTheEnvironmentItWasGiven(t *testing.T) {
+	runner := &scriptedRunner{output: platform.Output{Stopped: true, Stderr: []byte(diagnostics.AuthenticatedMarker + "host\n")}}
+	authentication := diagnostics.Authentication{
+		Runner:      runner,
+		Toolchain:   fixedToolchain{ssh: "/usr/bin/ssh"},
+		ConfigPath:  "/Users/tester/.ssh/config",
+		Environment: []string{"HOME=/Users/tester", "PATH=/usr/bin"},
+	}
+
+	if _, err := authentication.Test(context.Background(), effective.Report{}, "bastion", false); err != nil {
+		t.Fatalf("Test = %v", err)
+	}
+	if got := runner.commands[0].Env; !slices.Equal(got, []string{"HOME=/Users/tester", "PATH=/usr/bin"}) {
+		t.Errorf("env = %#v, want the configured environment", got)
+	}
+}
+
 func TestAuthenticationTestRefusesUntilUnavoidableCommandsAreAcknowledged(t *testing.T) {
 	runner := &scriptedRunner{output: platform.Output{Stopped: true, Stderr: []byte(diagnostics.AuthenticatedMarker + "host\n")}}
 	authentication := diagnostics.Authentication{
