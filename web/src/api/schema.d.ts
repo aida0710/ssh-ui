@@ -36,6 +36,182 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["issueActionToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listKeys"];
+        put?: never;
+        post: operations["generateKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/keys/algorithms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listKeyAlgorithms"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/keys/hardware-command": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["buildHardwareKeyCommand"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/keys/{keyId}/passphrase": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["changeKeyPassphrase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/keys/{keyId}/reveal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["revealPrivateKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/keys/{keyId}/agent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["registerKeyWithAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/keys/{keyId}/trash": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["trashKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trash": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listTrash"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trash/{entryId}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["restoreTrashEntry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trash/{entryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["purgeTrashEntry"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/config/overview": {
         parameters: {
             query?: never;
@@ -201,6 +377,183 @@ export interface components {
             column?: number;
             diagnostics?: components["schemas"]["Diagnostic"][];
             conflict?: components["schemas"]["ConflictReport"];
+        };
+        KeyReference: {
+            directive: string;
+            configPath: string;
+            line: number;
+            condition: string;
+            hostPatterns: string[];
+            value: string;
+        };
+        UnresolvedReference: {
+            directive: string;
+            value: string;
+            configPath: string;
+            line: number;
+            reason: string;
+        };
+        KeyCertificate: {
+            keyId: string;
+            principals: string[];
+            validBefore: number;
+            neverExpires: boolean;
+            signedKeyType: string;
+            signedKeyFingerprint: string;
+        };
+        UnreadableFile: {
+            relativePath: string;
+            reason: string;
+        };
+        KeyItem: {
+            id: string;
+            relativePath: string;
+            kind: string;
+            container: string;
+            algorithm: string;
+            keyType: string;
+            bits: number;
+            encrypted: boolean;
+            fingerprint: string;
+            comment: string;
+            permission: string;
+            permissionRisk: boolean;
+            sizeBytes: number;
+            certificate?: components["schemas"]["KeyCertificate"];
+            references: components["schemas"]["KeyReference"][];
+            notes: string[];
+        };
+        AgentIdentity: {
+            bits: number;
+            fingerprint: string;
+            comment: string;
+            algorithm: string;
+        };
+        KeyInventoryResponse: {
+            items: components["schemas"]["KeyItem"][];
+            unreadable: components["schemas"]["UnreadableFile"][];
+            agentDelegations: components["schemas"]["KeyReference"][];
+            unresolvedReferences: components["schemas"]["UnresolvedReference"][];
+            agentAvailable: boolean;
+            agentIdentities: components["schemas"]["AgentIdentity"][];
+        };
+        KeyVariant: {
+            algorithm: string;
+            bits: number;
+            label: string;
+            inProcess: boolean;
+            reason: string;
+        };
+        KeyAlgorithmsResponse: {
+            variants: components["schemas"]["KeyVariant"][];
+            source: string;
+            diagnostic: string;
+        };
+        GenerateKeyRequest: {
+            algorithm: string;
+            bits?: number;
+            fileName: string;
+            comment: string;
+            passphrase: string;
+            unencrypted: boolean;
+        };
+        GenerateKeyResponse: {
+            id: string;
+            relativePath: string;
+            publicRelativePath: string;
+            fingerprint: string;
+            keyType: string;
+            bits: number;
+            encrypted: boolean;
+            transactionId: string;
+        };
+        HardwareCommandRequest: {
+            algorithm: string;
+            fileName: string;
+            comment: string;
+        };
+        HardwareCommandResponse: {
+            algorithm: string;
+            command: string[];
+            note: string;
+        };
+        ChangePassphraseRequest: {
+            currentPassphrase: string;
+            newPassphrase: string;
+            unencrypted: boolean;
+        };
+        ChangePassphraseResponse: {
+            id: string;
+            relativePath: string;
+            encrypted: boolean;
+            notes: string[];
+            transactionId: string;
+        };
+        RevealPrivateKeyResponse: {
+            id: string;
+            relativePath: string;
+            privateKey: string;
+            encrypted: boolean;
+            fingerprint: string;
+            transactionId: string;
+        };
+        IssueActionRequest: {
+            kind: string;
+            target: string;
+        };
+        IssueActionResponse: {
+            token: string;
+            expiresAt: string;
+        };
+        RegisterKeyRequest: {
+            passphrase: string;
+            lifetimeSeconds: number;
+            storeInKeychain: boolean;
+        };
+        RegisterKeyResponse: {
+            id: string;
+            relativePath: string;
+            fingerprint: string;
+            lifetimeSeconds: number;
+            storedInKeychain: boolean;
+            identities: components["schemas"]["AgentIdentity"][];
+        };
+        TrashFileSummary: {
+            originalRelativePath: string;
+            trashRelativePath: string;
+            kind: string;
+            fingerprint: string;
+            permission: string;
+        };
+        TrashEntrySummary: {
+            id: string;
+            deletedAt: string;
+            ageDays: number;
+            stale: boolean;
+            files: components["schemas"]["TrashFileSummary"][];
+            restorable: boolean;
+            blockers: string[];
+        };
+        TrashListResponse: {
+            entries: components["schemas"]["TrashEntrySummary"][];
+            retentionDays: number;
+        };
+        TrashKeyResponse: {
+            entryId: string;
+            files: components["schemas"]["TrashFileSummary"][];
+            skipped: string[];
+            transactionId: string;
+        };
+        RestoreTrashResponse: {
+            entryId: string;
+            restored: string[];
+            blockers: string[];
+            transactionId: string;
+        };
+        PurgeTrashResponse: {
+            entryId: string;
+            removed: string[];
+            transactionId: string;
         };
         FileRef: {
             path?: string;
@@ -487,6 +840,335 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+        };
+    };
+    issueActionToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueActionRequest"];
+            };
+        };
+        responses: {
+            /** @description One-time action token issued */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueActionResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+        };
+    };
+    listKeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Classified contents of the ssh workspace */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeyInventoryResponse"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    generateKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerateKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description Key pair generated */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerateKeyResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listKeyAlgorithms: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Variants the installed OpenSSH supports */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeyAlgorithmsResponse"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    buildHardwareKeyCommand: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HardwareCommandRequest"];
+            };
+        };
+        responses: {
+            /** @description Command the user runs in Terminal */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HardwareCommandResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    changeKeyPassphrase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                keyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePassphraseRequest"];
+            };
+        };
+        responses: {
+            /** @description Passphrase changed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangePassphraseResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    revealPrivateKey: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-SSH-UI-Action": string;
+            };
+            path: {
+                keyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private key material, never cached and never logged */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevealPrivateKeyResponse"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    registerKeyWithAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                keyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description Key registered with the ssh-agent */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegisterKeyResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+        };
+    };
+    trashKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                keyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Key moved to the trash */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashKeyResponse"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    listTrash: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Soft-deleted keys, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashListResponse"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    restoreTrashEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Trash entry restored */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestoreTrashResponse"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description Restore refused because it would have to guess */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestoreTrashResponse"];
+                };
+            };
+        };
+    };
+    purgeTrashEntry: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-SSH-UI-Action": string;
+            };
+            path: {
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Trash entry permanently deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PurgeTrashResponse"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     getConfigOverview: {
