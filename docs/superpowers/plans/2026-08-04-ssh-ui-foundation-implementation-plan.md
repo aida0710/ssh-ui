@@ -935,7 +935,7 @@ type Server struct {
 
 func New(options Options) (*Server, error) {
 	tcpAddress, ok := options.Listener.Addr().(*net.TCPAddr)
-	if !ok || !tcpAddress.IP.Equal(net.IPv4(127, 0, 0, 1)) {
+	if !ok || len(tcpAddress.IP) != net.IPv4len || tcpAddress.IP[0] != 127 || tcpAddress.IP[1] != 0 || tcpAddress.IP[2] != 0 || tcpAddress.IP[3] != 1 {
 		return nil, ErrNonLoopbackListener
 	}
 	host := net.JoinHostPort("127.0.0.1", strconv.Itoa(tcpAddress.Port))
@@ -1178,7 +1178,7 @@ type failingListener struct{}
 func (failingListener) Accept() (net.Conn, error) { return nil, errAccept }
 func (failingListener) Close() error { return nil }
 func (failingListener) Addr() net.Addr {
-	return &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 43123}
+	return &net.TCPAddr{IP: net.IP{127, 0, 0, 1}, Port: 43123}
 }
 
 func TestRunReturnsServerFailureWithoutWaitingForCancellation(t *testing.T) {
