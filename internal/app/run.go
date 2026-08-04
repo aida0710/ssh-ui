@@ -13,6 +13,7 @@ import (
 	"ssh-ui/internal/diagnostics"
 	"ssh-ui/internal/httpserver"
 	"ssh-ui/internal/keys"
+	"ssh-ui/internal/knownhosts"
 	"ssh-ui/internal/platform"
 	"ssh-ui/internal/session"
 	"ssh-ui/internal/storage"
@@ -98,6 +99,17 @@ func Run(ctx context.Context, dependencies Dependencies, version string) error {
 	keyService := buildKeyService(workspace, dependencies)
 	diagnosticsService := diagnostics.NewService(
 		workspace, dependencies.Runner, dependencies.Toolchain, dependencies.Terminal, dependencies.Lookup)
+	// known_hosts shares the config transaction manager: both write ordinary
+	// managed files under ~/.ssh, so one journal covers them.
+	var scanEnvironment []string
+	if dependencies.Lookup != nil {
+		scanEnvironment = platform.MinimalEnvironment(dependencies.Lookup)
+	}
+	knownHostsService := knownhosts.NewService(workspace, transactions, knownhosts.Scanner{
+		Runner:      dependencies.Runner,
+		Toolchain:   dependencies.Toolchain,
+		Environment: scanEnvironment,
+	})
 
 	server, err := httpserver.New(httpserver.Options{
 		Listener:    listener,
@@ -108,6 +120,7 @@ func Run(ctx context.Context, dependencies Dependencies, version string) error {
 		Config:      configService,
 		Keys:        keyService,
 		Diagnostics: diagnosticsService,
+		KnownHosts:  knownHostsService,
 	})
 	if err != nil {
 		listener.Close()

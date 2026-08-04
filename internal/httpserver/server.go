@@ -18,6 +18,7 @@ import (
 
 	"ssh-ui/internal/application"
 	"ssh-ui/internal/diagnostics"
+	"ssh-ui/internal/knownhosts"
 	"ssh-ui/internal/session"
 )
 
@@ -30,6 +31,7 @@ type Options struct {
 	Config      *application.Service
 	Keys        KeyService
 	Diagnostics *diagnostics.Service
+	KnownHosts  *knownhosts.Service
 }
 
 var ErrNonLoopbackListener = errors.New("listener must use 127.0.0.1")
@@ -77,6 +79,9 @@ func New(options Options) (*Server, error) {
 	if options.Diagnostics != nil {
 		addDiagnosticsActions(registry, options.Diagnostics)
 	}
+	if options.KnownHosts != nil {
+		addKnownHostsActions(registry, options.KnownHosts)
+	}
 	actions := ActionHandlers{Sessions: options.Sessions, Kinds: registry}
 
 	if options.Keys != nil {
@@ -84,6 +89,9 @@ func New(options Options) (*Server, error) {
 	}
 	if options.Diagnostics != nil {
 		registerDiagnosticsRoutes(e, DiagnosticsHandlers{Service: options.Diagnostics, Actions: actions})
+	}
+	if options.KnownHosts != nil {
+		registerKnownHostsRoutes(e, KnownHostsHandlers{Service: options.KnownHosts, Actions: actions})
 	}
 	if len(registry) > 0 {
 		registerActionRoutes(e, actions)

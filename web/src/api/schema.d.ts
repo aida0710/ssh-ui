@@ -116,6 +116,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/known-hosts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listKnownHosts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/known-hosts/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["deleteKnownHosts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/known-hosts/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["scanKnownHosts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/known-hosts/add": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["addKnownHost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/terminal/command": {
         parameters: {
             query?: never;
@@ -692,6 +756,55 @@ export interface components {
             truncated: boolean;
             elapsedMs: number;
         };
+        KnownHostsResponse: {
+            path: string;
+            entries: components["schemas"]["KnownHostEntry"][];
+        };
+        KnownHostEntry: {
+            line: number;
+            digest: string;
+            marker: string;
+            hosts: string[];
+            hashed: boolean;
+            keyType: string;
+            fingerprint: string;
+            comment: string;
+        };
+        KnownHostTarget: {
+            line: number;
+            digest: string;
+        };
+        KnownHostsDeleteRequest: {
+            entries: components["schemas"]["KnownHostTarget"][];
+        };
+        KnownHostsChangeResponse: {
+            changed: boolean;
+            transactionId: string;
+        };
+        KnownHostsScanRequest: {
+            host: string;
+            port: number;
+        };
+        KnownHostsScanResponse: {
+            notice: string;
+            candidates: components["schemas"]["KnownHostCandidate"][];
+        };
+        KnownHostCandidate: {
+            host: string;
+            port: number;
+            keyType: string;
+            key: string;
+            fingerprint: string;
+            verified: boolean;
+        };
+        KnownHostsAddRequest: {
+            host: string;
+            port: number;
+            keyType: string;
+            key: string;
+            expectedFingerprint: string;
+            acknowledged: boolean;
+        };
         TerminalCommandResponse: {
             command: string;
             launchable: boolean;
@@ -1170,6 +1283,112 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthenticationResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    listKnownHosts: {
+        parameters: {
+            query?: {
+                query?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matching known_hosts entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnownHostsResponse"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    deleteKnownHosts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KnownHostsDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Entries removed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnownHostsChangeResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    scanKnownHosts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KnownHostsScanRequest"];
+            };
+        };
+        responses: {
+            /** @description Unverified candidates */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnownHostsScanResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    addKnownHost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KnownHostsAddRequest"];
+            };
+        };
+        responses: {
+            /** @description Entry added */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnownHostsChangeResponse"];
                 };
             };
             400: components["responses"]["Problem"];

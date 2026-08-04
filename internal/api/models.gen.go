@@ -456,6 +456,73 @@ type KeyVariant struct {
 	Reason    string `json:"reason"`
 }
 
+// KnownHostCandidate defines model for KnownHostCandidate.
+type KnownHostCandidate struct {
+	Fingerprint string `json:"fingerprint"`
+	Host        string `json:"host"`
+	Key         string `json:"key"`
+	KeyType     string `json:"keyType"`
+	Port        int    `json:"port"`
+	Verified    bool   `json:"verified"`
+}
+
+// KnownHostEntry defines model for KnownHostEntry.
+type KnownHostEntry struct {
+	Comment     string   `json:"comment"`
+	Digest      string   `json:"digest"`
+	Fingerprint string   `json:"fingerprint"`
+	Hashed      bool     `json:"hashed"`
+	Hosts       []string `json:"hosts"`
+	KeyType     string   `json:"keyType"`
+	Line        int      `json:"line"`
+	Marker      string   `json:"marker"`
+}
+
+// KnownHostTarget defines model for KnownHostTarget.
+type KnownHostTarget struct {
+	Digest string `json:"digest"`
+	Line   int    `json:"line"`
+}
+
+// KnownHostsAddRequest defines model for KnownHostsAddRequest.
+type KnownHostsAddRequest struct {
+	Acknowledged        bool   `json:"acknowledged"`
+	ExpectedFingerprint string `json:"expectedFingerprint"`
+	Host                string `json:"host"`
+	Key                 string `json:"key"`
+	KeyType             string `json:"keyType"`
+	Port                int    `json:"port"`
+}
+
+// KnownHostsChangeResponse defines model for KnownHostsChangeResponse.
+type KnownHostsChangeResponse struct {
+	Changed       bool   `json:"changed"`
+	TransactionId string `json:"transactionId"`
+}
+
+// KnownHostsDeleteRequest defines model for KnownHostsDeleteRequest.
+type KnownHostsDeleteRequest struct {
+	Entries []KnownHostTarget `json:"entries"`
+}
+
+// KnownHostsResponse defines model for KnownHostsResponse.
+type KnownHostsResponse struct {
+	Entries []KnownHostEntry `json:"entries"`
+	Path    string           `json:"path"`
+}
+
+// KnownHostsScanRequest defines model for KnownHostsScanRequest.
+type KnownHostsScanRequest struct {
+	Host string `json:"host"`
+	Port int    `json:"port"`
+}
+
+// KnownHostsScanResponse defines model for KnownHostsScanResponse.
+type KnownHostsScanResponse struct {
+	Candidates []KnownHostCandidate `json:"candidates"`
+	Notice     string               `json:"notice"`
+}
+
 // Metadata defines model for Metadata.
 type Metadata struct {
 	Groups        *[]GroupMetadata `json:"groups,omitempty"`
@@ -699,6 +766,11 @@ type RevealPrivateKeyParams struct {
 	XSSHUIAction string `json:"X-SSH-UI-Action"`
 }
 
+// ListKnownHostsParams defines parameters for ListKnownHosts.
+type ListKnownHostsParams struct {
+	Query *string `form:"query,omitempty" json:"query,omitempty"`
+}
+
 // BootstrapSessionParams defines parameters for BootstrapSession.
 type BootstrapSessionParams struct {
 	XSSHUIBootstrap string `json:"X-SSH-UI-Bootstrap"`
@@ -744,6 +816,15 @@ type RegisterKeyWithAgentJSONRequestBody = RegisterKeyRequest
 
 // ChangeKeyPassphraseJSONRequestBody defines body for ChangeKeyPassphrase for application/json ContentType.
 type ChangeKeyPassphraseJSONRequestBody = ChangePassphraseRequest
+
+// AddKnownHostJSONRequestBody defines body for AddKnownHost for application/json ContentType.
+type AddKnownHostJSONRequestBody = KnownHostsAddRequest
+
+// DeleteKnownHostsJSONRequestBody defines body for DeleteKnownHosts for application/json ContentType.
+type DeleteKnownHostsJSONRequestBody = KnownHostsDeleteRequest
+
+// ScanKnownHostsJSONRequestBody defines body for ScanKnownHosts for application/json ContentType.
+type ScanKnownHostsJSONRequestBody = KnownHostsScanRequest
 
 // GetTerminalCommandJSONRequestBody defines body for GetTerminalCommand for application/json ContentType.
 type GetTerminalCommandJSONRequestBody = AliasRequest

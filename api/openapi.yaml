@@ -114,6 +114,74 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/known-hosts:
+    get:
+      operationId: listKnownHosts
+      parameters:
+        - name: query
+          in: query
+          required: false
+          schema: { type: string, maxLength: 255 }
+      responses:
+        "200":
+          description: Matching known_hosts entries
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KnownHostsResponse" }
+        "401": { $ref: "#/components/responses/Problem" }
+  /api/v1/known-hosts/delete:
+    post:
+      operationId: deleteKnownHosts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KnownHostsDeleteRequest" }
+      responses:
+        "200":
+          description: Entries removed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KnownHostsChangeResponse" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/known-hosts/scan:
+    post:
+      operationId: scanKnownHosts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KnownHostsScanRequest" }
+      responses:
+        "200":
+          description: Unverified candidates
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KnownHostsScanResponse" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+  /api/v1/known-hosts/add:
+    post:
+      operationId: addKnownHost
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KnownHostsAddRequest" }
+      responses:
+        "200":
+          description: Entry added
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KnownHostsChangeResponse" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
   /api/v1/terminal/command:
     post:
       operationId: getTerminalCommand
@@ -848,6 +916,90 @@ components:
         stderr: { type: string }
         truncated: { type: boolean }
         elapsedMs: { type: integer }
+    KnownHostsResponse:
+      type: object
+      additionalProperties: false
+      required: [path, entries]
+      properties:
+        path: { type: string }
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/KnownHostEntry" }
+    KnownHostEntry:
+      type: object
+      additionalProperties: false
+      required: [line, digest, marker, hosts, hashed, keyType, fingerprint, comment]
+      properties:
+        line: { type: integer }
+        digest: { type: string }
+        marker: { type: string }
+        hosts:
+          type: array
+          items: { type: string }
+        hashed: { type: boolean }
+        keyType: { type: string }
+        fingerprint: { type: string }
+        comment: { type: string }
+    KnownHostTarget:
+      type: object
+      additionalProperties: false
+      required: [line, digest]
+      properties:
+        line: { type: integer }
+        digest: { type: string, minLength: 64, maxLength: 64 }
+    KnownHostsDeleteRequest:
+      type: object
+      additionalProperties: false
+      required: [entries]
+      properties:
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/KnownHostTarget" }
+    KnownHostsChangeResponse:
+      type: object
+      additionalProperties: false
+      required: [changed, transactionId]
+      properties:
+        changed: { type: boolean }
+        transactionId: { type: string }
+    KnownHostsScanRequest:
+      type: object
+      additionalProperties: false
+      required: [host, port]
+      properties:
+        host: { type: string, minLength: 1, maxLength: 255 }
+        port: { type: integer }
+    KnownHostsScanResponse:
+      type: object
+      additionalProperties: false
+      required: [notice, candidates]
+      properties:
+        notice: { type: string }
+        candidates:
+          type: array
+          items: { $ref: "#/components/schemas/KnownHostCandidate" }
+    KnownHostCandidate:
+      type: object
+      additionalProperties: false
+      required: [host, port, keyType, key, fingerprint, verified]
+      properties:
+        host: { type: string }
+        port: { type: integer }
+        keyType: { type: string }
+        key: { type: string }
+        fingerprint: { type: string }
+        verified: { type: boolean }
+    KnownHostsAddRequest:
+      type: object
+      additionalProperties: false
+      required: [host, port, keyType, key, expectedFingerprint, acknowledged]
+      properties:
+        host: { type: string, minLength: 1, maxLength: 255 }
+        port: { type: integer }
+        keyType: { type: string, minLength: 1, maxLength: 64 }
+        key: { type: string, minLength: 1, maxLength: 4096 }
+        expectedFingerprint: { type: string, maxLength: 128 }
+        acknowledged: { type: boolean }
     TerminalCommandResponse:
       type: object
       additionalProperties: false
