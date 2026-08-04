@@ -6,7 +6,7 @@
 
 **Architecture:** A Go 1.26 CLI owns a `127.0.0.1:0` listener and Echo v5 server. It generates a one-time bootstrap secret, opens a fragment-bearing URL through a macOS adapter, exchanges the secret for an in-memory HttpOnly session and CSRF token, and serves a Vite-built React application from the same binary. OpenAPI is the API contract for generated Go models and TypeScript types.
 
-**Tech Stack:** Go 1.26.5, Echo v5.3.1, oapi-codegen v2.7.0, React 19.2.8, Vite 8.1.5, TypeScript 7.0.2, Tailwind CSS 4.3.3, Vitest 4.1.1, React Testing Library 16.3.2, npm 11.7.0.
+**Tech Stack:** Go 1.26.5, Echo v5.3.1, oapi-codegen v2.7.0, React 19.2.8, Vite 8.1.5, TypeScript 5.9.3, Tailwind CSS 4.3.3, Vitest 4.1.1, React Testing Library 16.3.2, npm 11.7.0.
 
 ## Global Constraints
 
@@ -251,7 +251,7 @@ Expected: `go.mod`, `go.sum`, and `internal/api/models.gen.go` are created; `go.
     "jsdom": "29.1.1",
     "openapi-typescript": "7.13.0",
     "tailwindcss": "4.3.3",
-    "typescript": "7.0.2",
+    "typescript": "5.9.3",
     "vite": "8.1.5",
     "vitest": "4.1.1"
   }

@@ -15,4 +15,4 @@ Plans are executed in this order. A later plan may consume only interfaces commi
 
 The local machine uses the Go 1.26.5 toolchain through Go's official toolchain switching, alongside Node 22.19.0, npm 11.7.0 and OpenSSH 10.2p1. The foundation therefore targets Echo v5.3.1 directly. Go, npm and project dependency installation were explicitly approved on 2026-08-04.
 
-Frontend versions selected for the foundation are React 19.2.8, Vite 8.1.5, Tailwind CSS 4.3.3, TypeScript 7.0.2 and Vitest 4.1.1. Package-lock and go.sum are committed so all transitive versions remain reproducible.
+Frontend versions selected for the foundation are React 19.2.8, Vite 8.1.5, Tailwind CSS 4.3.3, TypeScript 5.9.3 and Vitest 4.1.1. TypeScript stays on the latest 5.x release because openapi-typescript 7.13.0 declares a `^5.x` peer dependency. Package-lock and go.sum are committed so all transitive versions remain reproducible.
