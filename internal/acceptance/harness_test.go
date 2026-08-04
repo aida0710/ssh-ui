@@ -21,6 +21,7 @@ import (
 	"net/http/cookiejar"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -201,8 +202,9 @@ type fixture struct {
 	clock     *testClock
 	logs      *syncBuffer
 	canaries  fixtureCanaries
-	sessionID string
-	cachedKey string
+	sessionID    string
+	cachedKey    string
+	trashCounter atomic.Int64
 }
 
 // newFixture writes an isolated ~/.ssh, starts the production server against
@@ -509,6 +511,62 @@ func (f *fixture) keyID() string {
 	}
 	f.t.Fatal("the fixture private key is not in the inventory")
 	return ""
+}
+
+// knownHostsPath returns the path the server itself reports for known_hosts.
+//
+// It is not filepath.Join(f.root, "known_hosts"): a token for a known_hosts
+// change is bound to the workspace's own spelling of that path, and on macOS
+// t.TempDir() hands back a /var symlink whose resolved form is /private/var.
+func (f *fixture) knownHostsPath() string {
+	f.t.Helper()
+	body := readBody(f.t, f.do(http.MethodGet, "/api/v1/known-hosts", nil))
+	var payload struct {
+		Path string `json:"path"`
+	}
+	if err := json.Unmarshal([]byte(body), &payload); err != nil || payload.Path == "" {
+		f.t.Fatalf("the known_hosts listing did not report a path: %s", body)
+	}
+	return payload.Path
+}
+
+// newTrashEntry generates a throwaway key and trashes it, returning the trash
+// entry identifier.
+//
+// A confirmation for a permanent delete is bound to evidence derived from the
+// entry, so no token can be minted for an entry that does not exist. Each
+// caller gets its own entry, which keeps the refusal cases independent of the
+// positive control that spends one.
+func (f *fixture) newTrashEntry(t testing.TB) string {
+	t.Helper()
+	name := "acceptance-" + strconv.Itoa(int(f.trashCounter.Add(1)))
+	generated := f.do(http.MethodPost, "/api/v1/keys", mustJSON(t, map[string]any{
+		"algorithm": "ed25519", "fileName": name, "comment": "acceptance",
+		"passphrase": "", "unencrypted": true,
+	}))
+	generatedBody := readBody(t, generated)
+	if generated.StatusCode != http.StatusCreated {
+		t.Fatalf("generate %s = %d: %s", name, generated.StatusCode, generatedBody)
+	}
+	var key struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal([]byte(generatedBody), &key); err != nil || key.ID == "" {
+		t.Fatalf("generate did not report an id: %s", generatedBody)
+	}
+
+	trashed := f.do(http.MethodPost, "/api/v1/keys/"+key.ID+"/trash", nil)
+	trashedBody := readBody(t, trashed)
+	if trashed.StatusCode != http.StatusOK {
+		t.Fatalf("trash %s = %d: %s", name, trashed.StatusCode, trashedBody)
+	}
+	var entry struct {
+		EntryID string `json:"entryId"`
+	}
+	if err := json.Unmarshal([]byte(trashedBody), &entry); err != nil || entry.EntryID == "" {
+		t.Fatalf("trash did not report an entry: %s", trashedBody)
+	}
+	return entry.EntryID
 }
 
 func (f *fixture) logText() string { return f.logs.String() }
