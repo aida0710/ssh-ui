@@ -1,11 +1,13 @@
 import { StrictMode } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
-vi.mock("./connections/ConnectionsPage", () => ({
-  ConnectionsPage: () => <div>connections panel</div>,
-}));
+vi.mock("./connections/ConnectionsPage", () => ({ ConnectionsPage: () => <div>connections panel</div> }));
+vi.mock("./explorer/ConfigExplorer", () => ({ ConfigExplorer: () => <div>config panel</div> }));
+vi.mock("./groups/GroupsPanel", () => ({ GroupsPanel: () => <div>groups panel</div> }));
+vi.mock("./history/HistoryPanel", () => ({ HistoryPanel: () => <div>history panel</div> }));
 
 const csrfToken = "c".repeat(43);
 
@@ -33,6 +35,20 @@ describe("App", () => {
       expect(screen.getByRole("button", { name: label })).toBeDisabled();
     }
     expect(document.body).not.toHaveTextContent(csrfToken);
+  });
+
+  it("switches to the history panel", async () => {
+    const user = userEvent.setup();
+    render(
+      <App
+        bootstrap={vi.fn().mockResolvedValue({ csrfToken })}
+        health={vi.fn().mockResolvedValue({ status: "ok", version: "0.1.0" })}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "History" }));
+
+    expect(screen.getByText("history panel")).toBeInTheDocument();
   });
 
   it("shows a recovery action when bootstrap fails", async () => {

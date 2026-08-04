@@ -54,4 +54,17 @@ make build     # UI を生成し bin/ssh-ui へ単一バイナリを作成
 - 完了した変更は `~/.ssh/ssh-ui/history/` に記録します。バックアップは自動削除しません。
 - 複数ファイルの OS レベル完全 atomic commit は存在しないため、部分適用は隠さず pending として提示します。
 - ディレクトリ構成要素の入れ替えに対する time-of-check/time-of-use 競合は best-effort でしか防げません。`O_NOFOLLOW` と構成要素ごとの検査を行いますが、同一ユーザー権限で動作する悪意あるプロセスからは完全には保護できません。
-- 現在の `bin/ssh-ui` はこのエンジンをまだ HTTP へ公開していません。Connections UI と Config Explorer はロードマップのサブシステム3で追加します。
+- このエンジンは `/api/v1/config/*` として同一オリジンの HTTP API に公開済みです。境界は次節を参照してください。
+
+## Connections UI とグループの境界
+
+- `~/.ssh/config` と `Include` 先を正本として編集します。フォーム編集、任意キー・値編集、ブロック Raw 編集、ファイル全体 Raw 編集はすべて同じ lossless 構文木を更新し、変更していない行は 1 バイトも書き換えません。
+- 保存は必ず「読み込んだ内容」を base として送り、その SHA-256 を precondition にします。外部変更があった場合は書き込まず、三者差分を表示します。
+- 保存前に再パースと Include グラフ再解決を行い、新たに壊れた行や新たな Include エラーが生じる変更は拒否します。既に存在していた問題は保存の障害にしません。
+- UI 専用情報は `~/.ssh/ssh-ui/metadata.json` に保存します。スキーマバージョン、グループ、タグ、色、メモ、お気に入り、表示順のみで、鍵本文やパスフレーズは保存しません。
+- Host の識別は「正規化した相対パス + 具体的な主 alias」です。改名は config と metadata を同一トランザクションで更新し、対応先が消えた metadata は推測で付け替えず orphan として再関連付けを求めます。
+- ファイルとフォルダの移動・改名・削除はまだ提供していません。`storage` に journal 付きの削除・改名プリミティブが必要で、後続の `ssh-ui-file-operations` 計画で対応します。Host ブロックの別ファイルへの移動も同様に後続タスクです。
+- グループは `groups.ssh-ui.conf` に通常の `Host` ブロックとして生成し、子グループを親より先に配置します。`Include` は具体的な Host ブロックの後、最初の catch-all ブロックの前に挿入します。
+- ワイルドカード、否定パターン、`Match`、alias 重複によって単純な継承へ投影できない場合は、結果を捏造せず「complex external rule」として出所を表示します。
+- Effective タブと Diagnostics タブは値の出所説明のみです。`ssh -G` による実効設定判定、到達性診断、Terminal 起動、鍵管理、Known Hosts は後続サブシステムで実装します。
+- API は同一オリジンのみです。CORS は有効化せず、状態変更 API は `X-SSH-UI-CSRF` header を要求し、`/api/` 応答は `Cache-Control: no-store` を返します。エラー応答は安定コードと位置情報のみを含み、設定本文は返しません（利用者が解決すべき競合差分を除く）。

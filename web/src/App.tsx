@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { apiClient, type HealthResponse } from "./api/client";
 import type { SessionState } from "./session/bootstrap";
 import { ConnectionsPage } from "./connections/ConnectionsPage";
+import { ConfigExplorer } from "./explorer/ConfigExplorer";
+import { GroupsPanel } from "./groups/GroupsPanel";
+import { HistoryPanel } from "./history/HistoryPanel";
 
 type AppProps = {
   bootstrap: () => Promise<SessionState>;
@@ -86,6 +89,15 @@ export function App({ bootstrap, health }: AppProps) {
 function SectionView({ section }: { section: Section }) {
   if (section === "Connections") {
     return <ConnectionsPage />;
+  }
+  if (section === "Config") {
+    return <ConfigExplorer />;
+  }
+  if (section === "Groups") {
+    return <GroupsPanel />;
+  }
+  if (section === "History") {
+    return <HistoryPanel />;
   }
   if (section === "Keys" || section === "Known Hosts") {
     return (

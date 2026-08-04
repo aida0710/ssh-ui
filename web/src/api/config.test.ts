@@ -63,6 +63,36 @@ describe("configApi", () => {
     expect(fetcher.mock.calls[0]?.[0]).toBe("/api/v1/config/host?path=conf.d%2F10+home.conf&alias=a+b");
   });
 
+  it("never persists the CSRF token or configuration text to storage or a global", async () => {
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+    const token = "c".repeat(43);
+    const secret = "Host bastion\n\tHostName 203.0.113.10\n";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({
+        transactionId: "t1",
+        written: ["config"],
+        preview: { operation: "config.file_raw", diffs: [] },
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    )));
+    apiClient.setCSRF(token);
+
+    await configApi.save({ kind: "file_raw", path: "config", base: secret, raw: secret });
+
+    expect(setItem).not.toHaveBeenCalled();
+    expect(window.localStorage).toHaveLength(0);
+    expect(window.sessionStorage).toHaveLength(0);
+
+    const holder = window as unknown as Record<string, unknown>;
+    for (const key of Object.keys(holder)) {
+      const value = holder[key];
+      if (typeof value !== "string") continue;
+      expect(value).not.toContain(token);
+      expect(value).not.toContain("203.0.113.10");
+    }
+    setItem.mockRestore();
+  });
+
   it("surfaces the problem code and conflict report of a rejected save", async () => {
     const conflict = {
       path: "config",
