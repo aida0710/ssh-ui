@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"sync"
+	"time"
 )
 
 var (
@@ -21,6 +22,11 @@ type Credentials struct {
 
 type Session struct {
 	csrfHash [sha256.Size]byte
+	// actions holds this session's outstanding confirmations, keyed by the
+	// digest of the token that was handed out, exactly as sessions themselves
+	// are keyed. The map is shared with every copy of the Session value, which
+	// is what lets the action helpers reach it without another lookup.
+	actions map[[sha256.Size]byte]actionRecord
 }
 
 type Manager struct {
@@ -29,6 +35,10 @@ type Manager struct {
 	bootstrapHash [sha256.Size]byte
 	bootstrapUsed bool
 	sessions      map[[sha256.Size]byte]Session
+
+	// Now is the clock used for action token expiry. It is nil in production,
+	// where time.Now is used; tests set it once before the manager is shared.
+	Now func() time.Time
 }
 
 func token(random io.Reader) (string, error) {
@@ -77,6 +87,7 @@ func (m *Manager) Bootstrap(presented string) (Credentials, error) {
 	m.bootstrapUsed = true
 	m.sessions[sha256.Sum256([]byte(sessionID))] = Session{
 		csrfHash: sha256.Sum256([]byte(csrf)),
+		actions:  make(map[[sha256.Size]byte]actionRecord),
 	}
 	return Credentials{SessionID: sessionID, CSRFToken: csrf}, nil
 }
