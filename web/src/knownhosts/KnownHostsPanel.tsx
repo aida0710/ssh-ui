@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { failureCode } from "../api/client";
 import {
   integrationsApi,
   type IntegrationsApi,
@@ -12,6 +13,10 @@ type KnownHostsPanelProps = { api?: IntegrationsApi };
 // Deleting a host key is destructive and scanning one contacts a host, so both
 // are started deliberately: a deletion asks a second time before it is sent,
 // and a scanned key is presented as a candidate rather than as a fact.
+//
+// Adding a candidate is the only way a scanned key becomes trusted, and it
+// costs either a fingerprint the user obtained somewhere else or an explicit
+// acknowledgement that they are trusting a key nobody verified.
 export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps) {
   const [query, setQuery] = useState("");
   const [listing, setListing] = useState<KnownHostsResponse | null>(null);
@@ -19,6 +24,9 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
   const [scanHost, setScanHost] = useState("");
   const [notice, setNotice] = useState("");
   const [candidates, setCandidates] = useState<KnownHostCandidate[]>([]);
+  const [adding, setAdding] = useState<KnownHostCandidate | null>(null);
+  const [expectedFingerprint, setExpectedFingerprint] = useState("");
+  const [acknowledged, setAcknowledged] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
 
@@ -73,6 +81,60 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
       setError("The host could not be scanned.");
     }
   }
+
+  // The confirmation never inherits a proof or an acknowledgement. Both are
+  // dropped when it closes and again when it opens, so what the user gave for
+  // one key can never be spent on another.
+  function resetAdd() {
+    setExpectedFingerprint("");
+    setAcknowledged(false);
+  }
+
+  function openAdd(candidate: KnownHostCandidate) {
+    resetAdd();
+    setAdding(candidate);
+  }
+
+  function closeAdd() {
+    resetAdd();
+    setAdding(null);
+  }
+
+  async function confirmAdd() {
+    if (!adding) return;
+    const typed = expectedFingerprint.trim();
+    // A typed fingerprint is a claim about this key. If it disagrees with the
+    // key that was scanned the user is looking at a different key than the one
+    // they were told about, which is shown rather than sent to the server.
+    if (typed !== "" && typed !== adding.fingerprint) {
+      setError(
+        `The fingerprint you typed does not match this key. You typed ${typed}; ` +
+          `the scan returned ${adding.fingerprint}. Nothing was added.`,
+      );
+      return;
+    }
+    setError("");
+    try {
+      const result = await api.addKnownHost(
+        { host: adding.host, port: adding.port, keyType: adding.keyType, key: adding.key },
+        typed,
+        acknowledged,
+      );
+      setStatus(`Added ${adding.host} in transaction ${result.transactionId}.`);
+      closeAdd();
+      await search(query);
+    } catch (failure) {
+      const code = failureCode(failure);
+      setError(
+        code === ""
+          ? "The key could not be added. Nothing was changed."
+          : `The key could not be added (${code}). Nothing was changed.`,
+      );
+      closeAdd();
+    }
+  }
+
+  const provenOrAcknowledged = expectedFingerprint.trim() !== "" || acknowledged;
 
   return (
     <section aria-labelledby="known-hosts-heading" className="flex flex-col gap-4">
@@ -173,11 +235,66 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
                 <td className="pr-3">{candidate.host}</td>
                 <td className="pr-3 text-zinc-400">{candidate.keyType}</td>
                 <td className="pr-3 text-zinc-400">{candidate.fingerprint}</td>
-                <td className="text-amber-300">{candidate.verified ? "verified" : "unverified"}</td>
+                {/* A scan cannot establish identity, so the label describes how
+                    the key was obtained and never repeats a claim of the
+                    response. */}
+                <td className="pr-3 text-amber-300">unverified</td>
+                <td>
+                  <button
+                    type="button"
+                    onClick={() => openAdd(candidate)}
+                    className="rounded border border-zinc-700 px-2 py-1"
+                  >
+                    Add
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
+      ) : null}
+
+      {adding ? (
+        <div className="rounded border border-amber-700 p-3 text-sm">
+          <h3 className="font-medium text-amber-300">Add an unverified host key</h3>
+          <p className="text-zinc-300">
+            ssh-keyscan returned this key from {adding.host}. Anything answering at that address could have
+            sent it, so ssh-ui will not treat it as this host&apos;s key on its own. Type the fingerprint you
+            obtained through another channel, or acknowledge that you are trusting a key nobody verified.
+          </p>
+          <p className="text-zinc-400">
+            {adding.keyType} · {adding.fingerprint}
+          </p>
+          <label className="mt-2 flex flex-col gap-1">
+            <span>Fingerprint you obtained through another channel</span>
+            <input
+              value={expectedFingerprint}
+              onChange={(event) => setExpectedFingerprint(event.target.value)}
+              className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1"
+            />
+          </label>
+          <label className="mt-2 flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={acknowledged}
+              onChange={(event) => setAcknowledged(event.target.checked)}
+            />
+            <span>I could not verify this key and I accept the risk of trusting it</span>
+          </label>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              disabled={!provenOrAcknowledged}
+              onClick={() => void confirmAdd()}
+              className="rounded border border-amber-600 px-3 py-1 disabled:border-zinc-800 disabled:text-zinc-600"
+            >
+              Add to known_hosts
+            </button>
+            <button type="button" onClick={closeAdd} className="rounded border border-zinc-700 px-3 py-1">
+              Cancel
+            </button>
+          </div>
+        </div>
       ) : null}
     </section>
   );
