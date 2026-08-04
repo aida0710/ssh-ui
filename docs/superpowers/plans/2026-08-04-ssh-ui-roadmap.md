@@ -21,6 +21,16 @@ Plans are executed in this order. A later plan may consume only interfaces commi
 - Subsystem 6 (Hardening and release): not planned.
 - Follow-up `ssh-ui-file-operations`: not planned. Owns `~/.ssh` file and folder move, rename and delete, which subsystem 3 defers.
 
+## Known open defects in merged code
+
+Found while planning subsystem 6, confirmed against the tree, and owned by that plan. They are recorded here so they cannot be lost between plans.
+
+- **Fetch Metadata is checked only on state-changing requests.** `internal/httpserver/security.go` verifies `Origin` and `Sec-Fetch-Site` only when the method is not GET or HEAD, so an authenticated API GET skips both. Design §8.1 requires `Host`, `Origin` and Fetch Metadata to be verified without qualification. The `SameSite=Strict` session cookie is what actually stops a cross-site read today, which means one mechanism is carrying a guarantee the design assigns to three. Subsystem 6 Task 1 closes it and repairs the existing tests that will start returning 403.
+- **No request body ceiling.** Nothing bounds a request body before a handler decodes it, though design §8.1 requires limits on both request bodies and command output. Command output is already bounded by `platform.MaxCapturedOutput`. Subsystem 6 Task 2 adds the middleware ceiling.
+- **`make fuzz` runs one target.** `go test -fuzz` accepts a single target per invocation, so the current recipe silently covers only the parser round trip no matter how many fuzz functions exist. Subsystem 6 Task 5 replaces it with a loop and a test that fails when a `Fuzz` function is not in it.
+- **`keys.ValidateFileName` permits reserved names.** Generating a key named `config` into an empty `~/.ssh` would create the entry configuration file and fill it with a private key. An existing file is protected by the transaction precondition, so this only bites on a fresh workspace, but the name policy should refuse the names the application itself depends on. Found and reported rather than silently patched by the key vault subsystem, since filename policy is not its to decide.
+- **No test reads the log stream.** Several plans state that secrets must never be logged, and none assert it. Subsystem 6 Task 3 adds the sweep.
+
 ## Integration notes for plans 3, 4 and 5
 
 Plans 3, 4 and 5 were written concurrently against the tree as it stood after subsystem 2. They do not conflict in design, but each was authored without seeing the others' edits, so whoever executes them must expect drift in the shared wiring and reconcile it rather than pasting a plan's wiring step verbatim.
