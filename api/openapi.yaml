@@ -32,6 +32,151 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/HealthResponse" }
         "401": { $ref: "#/components/responses/Problem" }
+  /api/v1/config/overview:
+    get:
+      operationId: getConfigOverview
+      responses:
+        "200":
+          description: Include tree, hosts, groups and diagnostics
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Overview" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "500": { $ref: "#/components/responses/Problem" }
+  /api/v1/config/host:
+    get:
+      operationId: getConfigHost
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 512 }
+        - name: alias
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 255 }
+      responses:
+        "200":
+          description: One host block with its explained values
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HostDetail" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/config/file:
+    get:
+      operationId: getConfigFile
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 512 }
+      responses:
+        "200":
+          description: One configuration file for the raw editor
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FileContents" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+  /api/v1/config/preview:
+    post:
+      operationId: previewConfigEdit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EditRequest" }
+      responses:
+        "200":
+          description: Exactly what a save would write
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SavePreview" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/config/save:
+    post:
+      operationId: saveConfigEdit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EditRequest" }
+      responses:
+        "200":
+          description: Committed transaction
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SaveResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/metadata:
+    get:
+      operationId: getMetadata
+      responses:
+        "200":
+          description: UI-only organisation data
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Metadata" }
+        "401": { $ref: "#/components/responses/Problem" }
+  /api/v1/history:
+    get:
+      operationId: getHistory
+      responses:
+        "200":
+          description: Completed transactions
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HistoryList" }
+        "401": { $ref: "#/components/responses/Problem" }
+  /api/v1/history/restore:
+    post:
+      operationId: restoreHistoryEntry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RestoreRequest" }
+      responses:
+        "200":
+          description: Restored file committed as a new transaction
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SaveResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/history/recover:
+    post:
+      operationId: recoverTransaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RecoverRequest" }
+      responses:
+        "200":
+          description: Interrupted transaction completed or rolled back
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecoverResponse" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
 components:
   schemas:
     BootstrapResponse:
@@ -54,6 +199,334 @@ components:
       properties:
         code: { type: string }
         message: { type: string }
+        detail: { type: string }
+        path: { type: string }
+        line: { type: integer }
+        column: { type: integer }
+        diagnostics: { type: array, items: { $ref: "#/components/schemas/Diagnostic" } }
+        conflict: { $ref: "#/components/schemas/ConflictReport" }
+    FileRef:
+      type: object
+      additionalProperties: false
+      required: [absolute]
+      properties:
+        path: { type: string }
+        absolute: { type: string }
+        external: { type: boolean }
+    Notice:
+      type: object
+      additionalProperties: false
+      required: [code]
+      properties:
+        code: { type: string }
+        path: { type: string }
+        line: { type: integer }
+        detail: { type: string }
+    Diagnostic:
+      type: object
+      additionalProperties: false
+      required: [severity, code]
+      properties:
+        severity: { type: string }
+        code: { type: string }
+        path: { type: string }
+        absolute: { type: string }
+        external: { type: boolean }
+        line: { type: integer }
+        detail: { type: string }
+    HostIdentity:
+      type: object
+      additionalProperties: false
+      required: [path, alias]
+      properties:
+        path: { type: string }
+        alias: { type: string }
+    HostEntry:
+      type: object
+      additionalProperties: false
+      required: [identity, file, line, patterns, editable]
+      properties:
+        identity: { $ref: "#/components/schemas/HostIdentity" }
+        file: { $ref: "#/components/schemas/FileRef" }
+        line: { type: integer }
+        patterns: { type: array, items: { type: string } }
+        wildcard: { type: boolean }
+        negated: { type: boolean }
+        duplicate: { type: boolean }
+        editable: { type: boolean }
+    IncludeReference:
+      type: object
+      additionalProperties: false
+      required: [line, pattern]
+      properties:
+        line: { type: integer }
+        pattern: { type: string }
+        condition: { type: string }
+        matches: { type: array, items: { $ref: "#/components/schemas/FileRef" } }
+    FileNode:
+      type: object
+      additionalProperties: false
+      required: [file, editable, loads]
+      properties:
+        file: { $ref: "#/components/schemas/FileRef" }
+        missing: { type: boolean }
+        editable: { type: boolean }
+        loads: { type: integer }
+        includes: { type: array, items: { $ref: "#/components/schemas/IncludeReference" } }
+    Setting:
+      type: object
+      additionalProperties: false
+      required: [keyword, values]
+      properties:
+        keyword: { type: string }
+        values: { type: array, items: { type: string } }
+    HostMetadata:
+      type: object
+      additionalProperties: false
+      required: [identity]
+      properties:
+        identity: { $ref: "#/components/schemas/HostIdentity" }
+        group: { type: string }
+        tags: { type: array, items: { type: string } }
+        colour: { type: string }
+        note: { type: string }
+        favourite: { type: boolean }
+        order: { type: integer }
+        orphan: { type: boolean }
+    GroupMetadata:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string }
+        parent: { type: string }
+        colour: { type: string }
+        note: { type: string }
+        order: { type: integer }
+        settings: { type: array, items: { $ref: "#/components/schemas/Setting" } }
+    Metadata:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion]
+      properties:
+        schemaVersion: { type: integer }
+        groupsFile: { type: string }
+        groups: { type: array, items: { $ref: "#/components/schemas/GroupMetadata" } }
+        hosts: { type: array, items: { $ref: "#/components/schemas/HostMetadata" } }
+    PendingTransaction:
+      type: object
+      additionalProperties: false
+      required: [id, operation, status, startedAt, committed, paths, canComplete]
+      properties:
+        id: { type: string }
+        operation: { type: string }
+        status: { type: string }
+        startedAt: { type: string }
+        committed: { type: integer }
+        paths: { type: array, items: { type: string } }
+        canComplete: { type: boolean }
+    Overview:
+      type: object
+      additionalProperties: false
+      required: [entry, files, hosts, metadata, diagnostics, notices]
+      properties:
+        entry: { $ref: "#/components/schemas/FileRef" }
+        files: { type: array, items: { $ref: "#/components/schemas/FileNode" } }
+        hosts: { type: array, items: { $ref: "#/components/schemas/HostEntry" } }
+        metadata: { $ref: "#/components/schemas/Metadata" }
+        diagnostics: { type: array, items: { $ref: "#/components/schemas/Diagnostic" } }
+        notices: { type: array, items: { $ref: "#/components/schemas/Notice" } }
+        pending: { type: array, items: { $ref: "#/components/schemas/PendingTransaction" } }
+    FormField:
+      type: object
+      additionalProperties: false
+      required: [line, keyword, values, category, editable]
+      properties:
+        line: { type: integer }
+        keyword: { type: string }
+        values: { type: array, items: { type: string } }
+        category: { type: string }
+        dangerous: { type: boolean }
+        duplicate: { type: boolean }
+        editable: { type: boolean }
+    HostForm:
+      type: object
+      additionalProperties: false
+      required: [entry, fields, raw]
+      properties:
+        entry: { $ref: "#/components/schemas/HostEntry" }
+        fields: { type: array, items: { $ref: "#/components/schemas/FormField" } }
+        raw: { type: string }
+        notices: { type: array, items: { $ref: "#/components/schemas/Notice" } }
+    Source:
+      type: object
+      additionalProperties: false
+      properties:
+        path: { type: string }
+        absolute: { type: string }
+        line: { type: integer }
+        condition: { type: string }
+    EffectiveEntry:
+      type: object
+      additionalProperties: false
+      required: [keyword, values, source]
+      properties:
+        keyword: { type: string }
+        values: { type: array, items: { type: string } }
+        source: { $ref: "#/components/schemas/Source" }
+    Effective:
+      type: object
+      additionalProperties: false
+      required: [alias, approximate, entries]
+      properties:
+        alias: { type: string }
+        approximate: { type: boolean }
+        entries: { type: array, items: { $ref: "#/components/schemas/EffectiveEntry" } }
+        notices: { type: array, items: { $ref: "#/components/schemas/Notice" } }
+    FileContents:
+      type: object
+      additionalProperties: false
+      required: [file, contents, digest, editable, exists]
+      properties:
+        file: { $ref: "#/components/schemas/FileRef" }
+        contents: { type: string }
+        digest: { type: string }
+        editable: { type: boolean }
+        exists: { type: boolean }
+    HostDetail:
+      type: object
+      additionalProperties: false
+      required: [form, metadata, effective, file]
+      properties:
+        form: { $ref: "#/components/schemas/HostForm" }
+        metadata: { $ref: "#/components/schemas/HostMetadata" }
+        effective: { $ref: "#/components/schemas/Effective" }
+        file: { $ref: "#/components/schemas/FileContents" }
+    FieldEdit:
+      type: object
+      additionalProperties: false
+      required: [action]
+      properties:
+        action: { type: string }
+        line: { type: integer }
+        keyword: { type: string }
+        values: { type: array, items: { type: string } }
+    EditRequest:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind: { type: string }
+        path: { type: string }
+        base: { type: string }
+        alias: { type: string }
+        newAlias: { type: string }
+        fields: { type: array, items: { $ref: "#/components/schemas/FieldEdit" } }
+        raw: { type: string }
+        metadata: { $ref: "#/components/schemas/Metadata" }
+    DiffLine:
+      type: object
+      additionalProperties: false
+      required: [op, text]
+      properties:
+        op: { type: string }
+        text: { type: string }
+        oldLine: { type: integer }
+        newLine: { type: integer }
+    FileDiff:
+      type: object
+      additionalProperties: false
+      required: [path, lines]
+      properties:
+        path: { type: string }
+        created: { type: boolean }
+        removed: { type: boolean }
+        oldDigest: { type: string }
+        newDigest: { type: string }
+        lines: { type: array, items: { $ref: "#/components/schemas/DiffLine" } }
+        truncated: { type: boolean }
+    EffectiveChange:
+      type: object
+      additionalProperties: false
+      required: [keyword, before, after]
+      properties:
+        keyword: { type: string }
+        before: { type: array, items: { type: string } }
+        after: { type: array, items: { type: string } }
+        beforeSources: { type: array, items: { $ref: "#/components/schemas/Source" } }
+        afterSources: { type: array, items: { $ref: "#/components/schemas/Source" } }
+    EffectiveDiff:
+      type: object
+      additionalProperties: false
+      required: [alias, changes]
+      properties:
+        alias: { type: string }
+        changes: { type: array, items: { $ref: "#/components/schemas/EffectiveChange" } }
+    SavePreview:
+      type: object
+      additionalProperties: false
+      required: [operation, diffs]
+      properties:
+        operation: { type: string }
+        diffs: { type: array, items: { $ref: "#/components/schemas/FileDiff" } }
+        effective: { type: array, items: { $ref: "#/components/schemas/EffectiveDiff" } }
+        notices: { type: array, items: { $ref: "#/components/schemas/Notice" } }
+    SaveResult:
+      type: object
+      additionalProperties: false
+      required: [transactionId, written, preview]
+      properties:
+        transactionId: { type: string }
+        written: { type: array, items: { type: string } }
+        preview: { $ref: "#/components/schemas/SavePreview" }
+    ConflictReport:
+      type: object
+      additionalProperties: false
+      required: [path, externalChange, localChange]
+      properties:
+        path: { type: string }
+        baseDigest: { type: string }
+        diskDigest: { type: string }
+        externalChange: { type: array, items: { $ref: "#/components/schemas/DiffLine" } }
+        localChange: { type: array, items: { $ref: "#/components/schemas/DiffLine" } }
+    HistoryEntry:
+      type: object
+      additionalProperties: false
+      required: [id, operation, status, startedAt, paths]
+      properties:
+        id: { type: string }
+        operation: { type: string }
+        status: { type: string }
+        startedAt: { type: string }
+        finishedAt: { type: string }
+        paths: { type: array, items: { type: string } }
+        restorable: { type: array, items: { type: string } }
+    HistoryList:
+      type: object
+      additionalProperties: false
+      required: [entries]
+      properties:
+        entries: { type: array, items: { $ref: "#/components/schemas/HistoryEntry" } }
+    RestoreRequest:
+      type: object
+      additionalProperties: false
+      required: [transactionId, path]
+      properties:
+        transactionId: { type: string, minLength: 1, maxLength: 128 }
+        path: { type: string, minLength: 1, maxLength: 512 }
+    RecoverRequest:
+      type: object
+      additionalProperties: false
+      required: [transactionId, action]
+      properties:
+        transactionId: { type: string, minLength: 1, maxLength: 128 }
+        action: { type: string, minLength: 1, maxLength: 16 }
+    RecoverResponse:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string, const: ok }
   responses:
     Problem:
       description: Request rejected

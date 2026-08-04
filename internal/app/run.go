@@ -7,10 +7,13 @@ import (
 	"io/fs"
 	"log/slog"
 	"net"
+	"time"
 
+	"ssh-ui/internal/application"
 	"ssh-ui/internal/httpserver"
 	"ssh-ui/internal/platform"
 	"ssh-ui/internal/session"
+	"ssh-ui/internal/storage"
 )
 
 type ListenFunc func(network, address string) (net.Listener, error)
@@ -21,6 +24,9 @@ type Dependencies struct {
 	Listen  ListenFunc
 	UI      fs.FS
 	Logger  *slog.Logger
+	// Home is the user's home directory. Only cmd/ssh-ui may read it from the
+	// operating system; every test injects a temporary directory.
+	Home string
 }
 
 func Run(ctx context.Context, dependencies Dependencies, version string) error {
@@ -35,12 +41,23 @@ func Run(ctx context.Context, dependencies Dependencies, version string) error {
 		return fmt.Errorf("session: %w", err)
 	}
 
+	workspace, err := storage.NewWorkspace(storage.OSFileSystem{}, dependencies.Home)
+	if err != nil {
+		listener.Close()
+		return fmt.Errorf("workspace: %w", err)
+	}
+	// Random must be safe for concurrent use: the session manager and the
+	// transaction manager both read from it. Production passes crypto/rand.
+	transactions := storage.NewManager(workspace, time.Now, dependencies.Random)
+	configService := application.NewService(workspace, transactions)
+
 	server, err := httpserver.New(httpserver.Options{
 		Listener: listener,
 		Sessions: sessions,
 		UI:       dependencies.UI,
 		Version:  version,
 		Logger:   dependencies.Logger,
+		Config:   configService,
 	})
 	if err != nil {
 		listener.Close()
