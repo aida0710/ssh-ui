@@ -1,0 +1,62 @@
+openapi: 3.1.0
+info:
+  title: SSH UI Local API
+  version: 0.1.0
+paths:
+  /api/v1/session/bootstrap:
+    post:
+      operationId: bootstrapSession
+      parameters:
+        - name: X-SSH-UI-Bootstrap
+          in: header
+          required: true
+          schema: { type: string, minLength: 43, maxLength: 43 }
+      responses:
+        "200":
+          description: Session established
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BootstrapResponse" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/health:
+    get:
+      operationId: getHealth
+      responses:
+        "200":
+          description: Authenticated process health
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthResponse" }
+        "401": { $ref: "#/components/responses/Problem" }
+components:
+  schemas:
+    BootstrapResponse:
+      type: object
+      additionalProperties: false
+      required: [csrfToken]
+      properties:
+        csrfToken: { type: string, minLength: 43, maxLength: 43 }
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required: [status, version]
+      properties:
+        status: { type: string, const: ok }
+        version: { type: string, minLength: 1 }
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+  responses:
+    Problem:
+      description: Request rejected
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
