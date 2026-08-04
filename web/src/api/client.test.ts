@@ -44,4 +44,17 @@ describe("apiClient", () => {
   it("rejects mutations before a CSRF token is set", async () => {
     await expect(apiClient.mutate("/api/v1/example", { method: "POST" })).rejects.toThrow("csrf_unavailable");
   });
+
+  it.each(["https://evil.example/api/v1/example", "//evil.example/api/v1/example"])(
+    "rejects a cross-origin mutation without calling fetch: %s",
+    async (path) => {
+      const fetcher = vi.fn();
+      vi.stubGlobal("fetch", fetcher);
+      apiClient.setCSRF("c".repeat(43));
+
+      await expect(apiClient.mutate(path, { method: "POST" })).rejects.toThrow("cross_origin_api_mutation");
+
+      expect(fetcher).not.toHaveBeenCalled();
+    },
+  );
 });

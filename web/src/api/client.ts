@@ -29,6 +29,10 @@ export const apiClient = {
     return validateHealth(await response.json());
   },
   async mutate<T>(path: string, init: RequestInit): Promise<T> {
+    const target = new URL(path, window.location.origin);
+    if (target.origin !== window.location.origin) {
+      throw new Error("cross_origin_api_mutation");
+    }
     if (!csrfToken) throw new Error("csrf_unavailable");
 
     const headers = new Headers(init.headers);
