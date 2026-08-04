@@ -1658,10 +1658,10 @@ func TestOSFileSystemSyncDirAndGlobAreLexical(t *testing.T) {
 	if len(matches) != 2 || filepath.Base(matches[0]) != "10-a.conf" {
 		t.Fatalf("matches = %#v", matches)
 	}
-	if err := OSFileSystem{}.SyncDir(directory); err != nil {
+	if err := (OSFileSystem{}).SyncDir(directory); err != nil {
 		t.Fatalf("SyncDir = %v", err)
 	}
-	if _, err := OSFileSystem{}.Lstat(filepath.Join(directory, "missing")); !errors.Is(err, fs.ErrNotExist) {
+	if _, err := (OSFileSystem{}).Lstat(filepath.Join(directory, "missing")); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("Lstat(missing) error = %v", err)
 	}
 }
