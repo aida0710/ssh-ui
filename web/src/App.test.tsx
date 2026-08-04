@@ -3,6 +3,10 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
+vi.mock("./connections/ConnectionsPage", () => ({
+  ConnectionsPage: () => <div>connections panel</div>,
+}));
+
 const csrfToken = "c".repeat(43);
 
 describe("App", () => {

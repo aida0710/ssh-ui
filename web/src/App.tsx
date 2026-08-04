@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiClient, type HealthResponse } from "./api/client";
 import type { SessionState } from "./session/bootstrap";
+import { ConnectionsPage } from "./connections/ConnectionsPage";
 
 type AppProps = {
   bootstrap: () => Promise<SessionState>;
@@ -83,6 +84,9 @@ export function App({ bootstrap, health }: AppProps) {
 }
 
 function SectionView({ section }: { section: Section }) {
+  if (section === "Connections") {
+    return <ConnectionsPage />;
+  }
   if (section === "Keys" || section === "Known Hosts") {
     return (
       <p className="text-sm text-zinc-400">{`${section} arrives with a later subsystem.`}</p>
