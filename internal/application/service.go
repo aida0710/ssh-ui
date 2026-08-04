@@ -37,6 +37,7 @@ const (
 	EditRename     EditKind = "rename"
 	EditGroups     EditKind = "groups"
 	EditMetadata   EditKind = "metadata"
+	EditMove       EditKind = "move"
 )
 
 // EditRequest is one requested change.
@@ -58,6 +59,11 @@ type EditRequest struct {
 	Fields   []FieldEdit `json:"fields,omitempty"`
 	Raw      string      `json:"raw,omitempty"`
 	Metadata *Metadata   `json:"metadata,omitempty"`
+	// DestinationPath and DestinationBase describe the second file of a move.
+	// DestinationBase carries the exact bytes the client loaded for it, so the
+	// destination has the same precondition guarantee as the source.
+	DestinationPath string `json:"destinationPath,omitempty"`
+	DestinationBase string `json:"destinationBase,omitempty"`
 }
 
 // SavePreview is exactly what a save would write.
@@ -410,6 +416,8 @@ func (s *Service) plan(request EditRequest) (planned, error) {
 		return s.planFileEdit(graph, request)
 	case EditGroups, EditMetadata:
 		return s.planMetadataEdit(graph, request)
+	case EditMove:
+		return s.planMoveHost(graph, request)
 	default:
 		return planned{}, ErrUnknownEditKind
 	}
@@ -511,6 +519,138 @@ func (s *Service) planFileEdit(graph *config.Graph, request EditRequest) (planne
 			ComputeEffective(graph, s.workspace.Root(), request.Alias),
 			ComputeEffective(after, s.workspace.Root(), alias),
 		)}
+	}
+	return prepared, nil
+}
+
+// planMoveHost moves one host block into another file. Both configuration
+// files and the metadata document are one storage.Request, so the move is a
+// single journalled transaction: every precondition is checked before anything
+// is staged, and a mismatch on either file writes nothing.
+func (s *Service) planMoveHost(graph *config.Graph, request EditRequest) (planned, error) {
+	root := s.workspace.Root()
+	sourceAbsolute, err := AbsolutePath(root, request.Path)
+	if err != nil {
+		return planned{}, err
+	}
+	destinationAbsolute, err := AbsolutePath(root, request.DestinationPath)
+	if err != nil {
+		return planned{}, err
+	}
+	if sourceAbsolute == destinationAbsolute {
+		return planned{}, ErrSameFileMove
+	}
+	if _, err := s.workspace.ResolveForWrite(sourceAbsolute); err != nil {
+		return planned{}, err
+	}
+	if _, err := s.workspace.ResolveForWrite(destinationAbsolute); err != nil {
+		return planned{}, err
+	}
+
+	sourceBase := []byte(request.Base)
+	destinationBase := []byte(request.DestinationBase)
+	sourceFile := config.Parse(sourceBase)
+	destinationFile := config.Parse(destinationBase)
+	moved, err := MoveHostBlock(sourceFile, destinationFile, request.Alias)
+	if err != nil {
+		return planned{}, err
+	}
+	sourceUpdated := sourceFile.Render()
+	destinationUpdated := destinationFile.Render()
+
+	sourceDisk, sourceExists, err := s.readFile(sourceAbsolute)
+	if err != nil {
+		return planned{}, err
+	}
+	if !bytes.Equal(sourceBase, sourceDisk) {
+		return planned{}, &ConflictError{Report: BuildConflictReport(request.Path, sourceBase, sourceDisk, sourceUpdated)}
+	}
+	destinationDisk, destinationExists, err := s.readFile(destinationAbsolute)
+	if err != nil {
+		return planned{}, err
+	}
+	if !bytes.Equal(destinationBase, destinationDisk) {
+		return planned{}, &ConflictError{
+			Report: BuildConflictReport(request.DestinationPath, destinationBase, destinationDisk, destinationUpdated),
+		}
+	}
+
+	sourcePrecondition := storage.Precondition{}
+	if sourceExists {
+		sourcePrecondition = storage.Precondition{Exists: true, Digest: storage.Digest(sourceBase)}
+	}
+	destinationPrecondition := storage.Precondition{}
+	if destinationExists {
+		destinationPrecondition = storage.Precondition{Exists: true, Digest: storage.Digest(destinationBase)}
+	}
+
+	stored, metadataPrecondition, err := s.metadata.Load()
+	if err != nil {
+		return planned{}, err
+	}
+	relocated := RenameHostIdentity(stored,
+		HostIdentity{Path: request.Path, Alias: request.Alias},
+		HostIdentity{Path: request.DestinationPath, Alias: request.Alias},
+	)
+	metadataChange, err := s.metadata.Change(relocated, metadataPrecondition)
+	if err != nil {
+		return planned{}, err
+	}
+	previousMetadata, _, err := s.readFile(metadataChange.Path)
+	if err != nil {
+		return planned{}, err
+	}
+
+	prepared := planned{
+		operation: "config.move",
+		changes: []storage.Change{
+			{Path: sourceAbsolute, Contents: sourceUpdated, Precondition: sourcePrecondition},
+			{Path: destinationAbsolute, Contents: destinationUpdated, Precondition: destinationPrecondition},
+			metadataChange,
+		},
+		base: map[string][]byte{
+			filepath.Clean(sourceAbsolute):      sourceBase,
+			filepath.Clean(destinationAbsolute): destinationBase,
+			filepath.Clean(metadataChange.Path): previousMetadata,
+		},
+		baseline: diagnosticBaseline(graph),
+		preview: SavePreview{
+			Operation: "config.move",
+			Diffs: []FileDiff{
+				BuildFileDiff(request.Path, diskOrNil(sourceDisk, sourceExists), sourceUpdated),
+				BuildFileDiff(request.DestinationPath, diskOrNil(destinationDisk, destinationExists), destinationUpdated),
+				BuildFileDiff(s.displayPath(metadataChange.Path), previousMetadata, metadataChange.Contents),
+			},
+		},
+	}
+
+	if _, included := graph.Nodes[destinationAbsolute]; !included {
+		prepared.preview.Notices = appendNotice(prepared.preview.Notices, Notice{
+			Code:   NoticeDestinationNotIncluded,
+			Path:   request.DestinationPath,
+			Detail: request.Alias,
+		})
+	}
+
+	// Moving a block changes where OpenSSH reads it, and OpenSSH keeps the
+	// first value it finds. Show the before and after explanation for every
+	// concrete alias the block declares instead of assuming nothing changed.
+	pending := map[string][]byte{
+		filepath.Clean(sourceAbsolute):      sourceUpdated,
+		filepath.Clean(destinationAbsolute): destinationUpdated,
+	}
+	after, err := s.resolveWith(pending)
+	if err != nil {
+		return planned{}, err
+	}
+	for _, alias := range movedAliases(moved) {
+		if len(prepared.preview.Effective) >= maxEffectivePreviews {
+			break
+		}
+		prepared.preview.Effective = append(prepared.preview.Effective, DiffEffective(
+			ComputeEffective(graph, root, alias),
+			ComputeEffective(after, root, alias),
+		))
 	}
 	return prepared, nil
 }

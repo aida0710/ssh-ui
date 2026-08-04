@@ -3,6 +3,7 @@ package application
 import (
 	"bytes"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -414,5 +415,305 @@ func TestHistoryListsCommitsAndRestoreRevertsOneFile(t *testing.T) {
 	}
 	if _, err := service.Restore("no-such-transaction", "config"); !errors.Is(err, storage.ErrUnknownTransaction) {
 		t.Fatalf("unknown restore error = %v", err)
+	}
+}
+
+// snapshotConfigFiles reads every configuration file in the workspace, skipping
+// the ssh-ui state directory whose journal, history and backups are expected to
+// change on every commit. It exists to prove a move touches nothing else.
+func snapshotConfigFiles(t *testing.T, workspace *storage.Workspace) map[string]string {
+	t.Helper()
+	files := map[string]string{}
+	root := workspace.Root()
+	stateDir := workspace.StateDir()
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			if path == stateDir {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		contents, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		relative, relErr := filepath.Rel(root, path)
+		if relErr != nil {
+			return relErr
+		}
+		files[filepath.ToSlash(relative)] = string(contents)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return files
+}
+
+func TestSaveMoveCommitsBothFilesAndMetadataInOneTransaction(t *testing.T) {
+	service, workspace := newTestService(t)
+	const untouched = "Host work\n\tUser ops\n"
+	if err := os.WriteFile(filepath.Join(workspace.Root(), "conf.d", "20-work.conf"), []byte(untouched), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	metadata := NewMetadata()
+	metadata.Hosts = []HostMetadata{{Identity: HostIdentity{Path: "config", Alias: "bastion"}, Note: "keep me"}}
+	if _, err := service.Save(EditRequest{Kind: EditMetadata, Metadata: &metadata}); err != nil {
+		t.Fatal(err)
+	}
+
+	before := snapshotConfigFiles(t, workspace)
+
+	const homeConfig = "Host nas\n\tUser aida\t# personal\n"
+	request := EditRequest{
+		Kind:            EditMove,
+		Path:            "config",
+		Base:            serviceMainConfig,
+		Alias:           "bastion",
+		DestinationPath: "conf.d/10-home.conf",
+		DestinationBase: homeConfig,
+	}
+
+	preview, err := service.Preview(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(preview.Diffs) != 3 {
+		t.Fatalf("move preview diffs = %#v", preview.Diffs)
+	}
+	if len(preview.Effective) != 1 || preview.Effective[0].Alias != "bastion" {
+		t.Fatalf("move preview effective = %#v", preview.Effective)
+	}
+	// Every directive the block carries keeps its value and reports a new source
+	// file, which is the reordering the user needs to see. ServerAliveInterval
+	// still comes from the entry file's Host * block with the same value and the
+	// same governing condition; only its line number shifted because the block
+	// above it left, and a pure line shift is not a change.
+	wantSourceFile := map[string]string{
+		"HostName": "conf.d/10-home.conf",
+		"Port":     "conf.d/10-home.conf",
+		"User":     "conf.d/10-home.conf",
+	}
+	if len(preview.Effective[0].Changes) != len(wantSourceFile) {
+		t.Fatalf("effective changes = %#v", preview.Effective[0].Changes)
+	}
+	for _, change := range preview.Effective[0].Changes {
+		if !equalStrings(change.Before, change.After) {
+			t.Fatalf("moving a block must not change a value: %#v", change)
+		}
+		want, known := wantSourceFile[change.Keyword]
+		if !known {
+			t.Fatalf("unexpected changed keyword: %#v", change)
+		}
+		if change.BeforeSources[0].Path != "config" || change.AfterSources[0].Path != want {
+			t.Fatalf("%s source = %#v -> %#v, want it to end in %q", change.Keyword, change.BeforeSources[0], change.AfterSources[0], want)
+		}
+	}
+
+	result, err := service.Save(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Written) != 3 {
+		t.Fatalf("written = %#v", result.Written)
+	}
+
+	const wantSourceContents = "# personal configuration\nInclude conf.d/*.conf\n\nHost *\n\tServerAliveInterval 30\n"
+	if got := readFile(t, workspace, "config"); got != wantSourceContents {
+		t.Fatalf("source = %q", got)
+	}
+	wantDestination := homeConfig + "\nHost bastion\n\tHostName 203.0.113.10\n\tUser ops\n\tPort 22\n\n"
+	if got := readFile(t, workspace, "conf.d/10-home.conf"); got != wantDestination {
+		t.Fatalf("destination = %q", got)
+	}
+
+	// Nothing else in the configuration tree may have moved a byte.
+	after := snapshotConfigFiles(t, workspace)
+	if len(after) != len(before) {
+		t.Fatalf("the move added or removed a file: before %v, after %v", before, after)
+	}
+	touched := map[string]bool{"config": true, "conf.d/10-home.conf": true}
+	for path, contents := range after {
+		if touched[path] {
+			continue
+		}
+		if contents != before[path] {
+			t.Fatalf("%s changed during the move: %q -> %q", path, before[path], contents)
+		}
+	}
+	if after["conf.d/20-work.conf"] != untouched {
+		t.Fatalf("an untouched file changed: %q", after["conf.d/20-work.conf"])
+	}
+
+	stored, _, err := service.metadata.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stored.Hosts) != 1 {
+		t.Fatalf("stored hosts = %#v", stored.Hosts)
+	}
+	if stored.Hosts[0].Identity.Path != "conf.d/10-home.conf" || stored.Hosts[0].Note != "keep me" || stored.Hosts[0].Orphan {
+		t.Fatalf("metadata after the move = %#v", stored.Hosts[0])
+	}
+
+	if _, err := service.HostDetail("conf.d/10-home.conf", "bastion"); err != nil {
+		t.Fatalf("the moved host is not readable at its new path: %v", err)
+	}
+}
+
+func TestSaveMoveRefusesADuplicateAliasAndANonEditableDestination(t *testing.T) {
+	service, workspace := newTestService(t)
+	const homeConfig = "Host nas\n\tUser aida\t# personal\n"
+
+	duplicate := EditRequest{
+		Kind:            EditMove,
+		Path:            "config",
+		Base:            serviceMainConfig,
+		Alias:           "bastion",
+		DestinationPath: "conf.d/10-home.conf",
+		DestinationBase: homeConfig + "Host bastion\n\tUser other\n",
+	}
+	if _, err := service.Save(duplicate); !errors.Is(err, ErrDuplicateDestinationAlias) {
+		t.Fatalf("duplicate alias error = %v", err)
+	}
+
+	outside := EditRequest{
+		Kind:            EditMove,
+		Path:            "config",
+		Base:            serviceMainConfig,
+		Alias:           "bastion",
+		DestinationPath: "../.bashrc",
+		DestinationBase: "",
+	}
+	if _, err := service.Save(outside); !errors.Is(err, ErrExternalPath) {
+		t.Fatalf("outside destination error = %v", err)
+	}
+
+	same := EditRequest{
+		Kind:            EditMove,
+		Path:            "config",
+		Base:            serviceMainConfig,
+		Alias:           "bastion",
+		DestinationPath: "config",
+		DestinationBase: serviceMainConfig,
+	}
+	if _, err := service.Save(same); !errors.Is(err, ErrSameFileMove) {
+		t.Fatalf("same file error = %v", err)
+	}
+
+	if got := readFile(t, workspace, "config"); got != serviceMainConfig {
+		t.Fatal("a refused move must write nothing")
+	}
+	if got := readFile(t, workspace, "conf.d/10-home.conf"); got != homeConfig {
+		t.Fatal("a refused move must write nothing")
+	}
+}
+
+func TestSaveMoveReportsAStaleDestinationBase(t *testing.T) {
+	service, workspace := newTestService(t)
+	if err := os.WriteFile(filepath.Join(workspace.Root(), "conf.d", "10-home.conf"), []byte("Host nas\n\tUser changed\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	stale := EditRequest{
+		Kind:            EditMove,
+		Path:            "config",
+		Base:            serviceMainConfig,
+		Alias:           "bastion",
+		DestinationPath: "conf.d/10-home.conf",
+		DestinationBase: "Host nas\n\tUser aida\t# personal\n",
+	}
+
+	// Preview never reaches Commit, so only the planner's own precondition check
+	// can catch a stale destination here. Asserting on Save alone would pass on
+	// the storage layer's check and prove nothing about the planner.
+	_, previewErr := service.Preview(stale)
+	var previewConflict *ConflictError
+	if !errors.As(previewErr, &previewConflict) {
+		t.Fatalf("preview error = %v, want *ConflictError", previewErr)
+	}
+	if previewConflict.Report.Path != "conf.d/10-home.conf" {
+		t.Fatalf("preview conflict report = %#v", previewConflict.Report)
+	}
+
+	_, err := service.Save(stale)
+	var conflict *ConflictError
+	if !errors.As(err, &conflict) {
+		t.Fatalf("error = %v, want *ConflictError", err)
+	}
+	if conflict.Report.Path != "conf.d/10-home.conf" {
+		t.Fatalf("conflict report = %#v", conflict.Report)
+	}
+	if got := readFile(t, workspace, "config"); got != serviceMainConfig {
+		t.Fatal("a conflicting move must write nothing")
+	}
+}
+
+func TestSaveMoveReportsAStaleSourceBase(t *testing.T) {
+	service, workspace := newTestService(t)
+	if err := os.WriteFile(filepath.Join(workspace.Root(), "config"), []byte(serviceMainConfig+"\nHost later\n\tUser other\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	stale := EditRequest{
+		Kind:            EditMove,
+		Path:            "config",
+		Base:            serviceMainConfig,
+		Alias:           "bastion",
+		DestinationPath: "conf.d/10-home.conf",
+		DestinationBase: "Host nas\n\tUser aida\t# personal\n",
+	}
+
+	_, previewErr := service.Preview(stale)
+	var previewConflict *ConflictError
+	if !errors.As(previewErr, &previewConflict) {
+		t.Fatalf("preview error = %v, want *ConflictError", previewErr)
+	}
+	if previewConflict.Report.Path != "config" {
+		t.Fatalf("a stale source must name the source file in preview: %#v", previewConflict.Report)
+	}
+
+	_, err := service.Save(stale)
+	var conflict *ConflictError
+	if !errors.As(err, &conflict) {
+		t.Fatalf("error = %v, want *ConflictError", err)
+	}
+	if conflict.Report.Path != "config" {
+		t.Fatalf("a stale source must name the source file: %#v", conflict.Report)
+	}
+	if got := readFile(t, workspace, "conf.d/10-home.conf"); got != "Host nas\n\tUser aida\t# personal\n" {
+		t.Fatal("a conflicting move must write nothing")
+	}
+}
+
+func TestSaveMoveWarnsWhenNoIncludeReachesTheDestination(t *testing.T) {
+	service, workspace := newTestService(t)
+	const orphanFile = "# not reached by any Include\n"
+	if err := os.WriteFile(filepath.Join(workspace.Root(), "detached.conf"), []byte(orphanFile), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	preview, err := service.Preview(EditRequest{
+		Kind:            EditMove,
+		Path:            "config",
+		Base:            serviceMainConfig,
+		Alias:           "bastion",
+		DestinationPath: "detached.conf",
+		DestinationBase: orphanFile,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, notice := range preview.Notices {
+		if notice.Code == NoticeDestinationNotIncluded && notice.Path == "detached.conf" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("notices = %#v, want a destination_not_included notice", preview.Notices)
 	}
 }

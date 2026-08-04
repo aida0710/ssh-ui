@@ -57,6 +57,25 @@ func TestValidateEditRequestEnforcesEveryKindsRequirements(t *testing.T) {
 		{"emptying a file is allowed", application.EditRequest{
 			Kind: application.EditFileRaw, Path: "config", Base: "Host a\n", Raw: "",
 		}, false},
+		{"valid move", application.EditRequest{
+			Kind: application.EditMove, Path: "config", Base: "Host a\n", Alias: "a",
+			DestinationPath: "conf.d/10-home.conf", DestinationBase: "",
+		}, false},
+		{"move without a destination", application.EditRequest{
+			Kind: application.EditMove, Path: "config", Base: "Host a\n", Alias: "a",
+		}, true},
+		{"move to a traversal destination", application.EditRequest{
+			Kind: application.EditMove, Path: "config", Base: "Host a\n", Alias: "a",
+			DestinationPath: "../.bashrc",
+		}, true},
+		{"move without an alias", application.EditRequest{
+			Kind: application.EditMove, Path: "config", Base: "Host a\n",
+			DestinationPath: "conf.d/10-home.conf",
+		}, true},
+		{"move with an oversized destination base", application.EditRequest{
+			Kind: application.EditMove, Path: "config", Base: "Host a\n", Alias: "a",
+			DestinationPath: "conf.d/10-home.conf", DestinationBase: strings.Repeat("a", maxRawLength+1),
+		}, true},
 		{"groups without metadata", application.EditRequest{Kind: application.EditGroups}, true},
 		{"metadata with key material", application.EditRequest{
 			Kind: application.EditMetadata,
