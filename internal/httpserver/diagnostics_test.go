@@ -240,10 +240,17 @@ func TestDiagnosticsRejectUnsafeAliasesAndOversizedBodies(t *testing.T) {
 		t.Fatal("an unsafe alias started a process")
 	}
 
+	// A body over the ceiling is now refused by Security.Middleware before the
+	// handler decodes anything, so it answers 413 rather than the handler's
+	// 400. The property this case guards is unchanged: the request is refused
+	// and no process starts.
 	oversized := sendKeyRequest(t, engine, credentials, http.MethodPost, "/api/v1/diagnostics/effective",
 		mustMarshal(t, api.AliasRequest{Alias: strings.Repeat("a", maxRequestBody)}), "")
-	if oversized.Code != http.StatusBadRequest {
-		t.Fatalf("oversized body = %d, want 400", oversized.Code)
+	if oversized.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("oversized body = %d, want %d", oversized.Code, http.StatusRequestEntityTooLarge)
+	}
+	if !strings.Contains(oversized.Body.String(), "request_body_too_large") {
+		t.Fatalf("oversized body = %q, want the request_body_too_large problem code", oversized.Body.String())
 	}
 	if len(runner.commands) != 0 {
 		t.Fatal("an oversized body started a process")

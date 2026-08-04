@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"bytes"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -108,6 +109,68 @@ func TestSecurityRefusesEveryAPIRequestFromAnotherSite(t *testing.T) {
 				t.Fatalf("body = %q, want the %q problem code", response.Body.String(), test.wantCode)
 			}
 		})
+	}
+}
+
+// TestSecurityBoundsABodyAHandlerReadsWithoutItsOwnLimit covers the half of the
+// ceiling that no registered route can reach today.
+//
+// Every handler in the tree applies its own limit at or below
+// MaxRequestBodyCeiling, and a request that declares an oversized length is
+// refused before any handler runs, so the MaxBytesReader wrapper only matters
+// for a route added later that reads its body without a limit of its own, over
+// a chunked request that declares no length at all. That is exactly the route
+// this test registers.
+func TestSecurityBoundsABodyAHandlerReadsWithoutItsOwnLimit(t *testing.T) {
+	manager, bootstrap, err := session.NewManager(bytes.NewReader(bytes.Repeat([]byte{0x44}, 96)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	credentials, err := manager.Bootstrap(bootstrap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := echo.New()
+	e.Use((Security{
+		ExpectedHost:   "127.0.0.1:43123",
+		ExpectedOrigin: "http://127.0.0.1:43123",
+		Sessions:       manager,
+	}).Middleware)
+
+	var read int
+	var readErr error
+	e.POST("/api/v1/unbounded", func(c *echo.Context) error {
+		contents, err := io.ReadAll(c.Request().Body)
+		read, readErr = len(contents), err
+		if err != nil {
+			return problem(c, http.StatusRequestEntityTooLarge, "request_body_too_large")
+		}
+		return c.NoContent(http.StatusNoContent)
+	})
+
+	oversized := bytes.Repeat([]byte("a"), MaxRequestBodyCeiling+(1<<10))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/unbounded", bytes.NewReader(oversized))
+	request.Host = "127.0.0.1:43123"
+	request.Header.Set(echo.HeaderOrigin, "http://127.0.0.1:43123")
+	request.Header.Set("Sec-Fetch-Site", "same-origin")
+	request.Header.Set(CSRFHeader, credentials.CSRFToken)
+	request.AddCookie(&http.Cookie{Name: SessionCookie, Value: credentials.SessionID})
+	// A chunked request declares no length, so the Content-Length refusal
+	// cannot fire and the reader is the only thing bounding this body.
+	request.ContentLength = -1
+	request.TransferEncoding = []string{"chunked"}
+
+	response := httptest.NewRecorder()
+	e.ServeHTTP(response, request)
+
+	if readErr == nil {
+		t.Fatalf("the handler read %d bytes without error; the body was not bounded", read)
+	}
+	if read > MaxRequestBodyCeiling {
+		t.Fatalf("the handler read %d bytes, past the %d ceiling", read, MaxRequestBodyCeiling)
+	}
+	if response.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusRequestEntityTooLarge)
 	}
 }
 

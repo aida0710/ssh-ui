@@ -51,6 +51,16 @@ func (s Security) Middleware(next echo.HandlerFunc) echo.HandlerFunc {
 		if request.Header.Get("Sec-Fetch-Site") != "same-origin" {
 			return problem(c, http.StatusForbidden, "cross_site_request")
 		}
+		// The ceiling is a limit on the request, not merely on what a handler
+		// happens to read. A declared length over the ceiling is refused before
+		// the handler runs, so a route that ignores its body — /diagnostics/config
+		// and /keys/:keyId/trash today, and any route added later that takes its
+		// input from the path alone — cannot be handed an unbounded one either.
+		if request.ContentLength > MaxRequestBodyCeiling {
+			return problem(c, http.StatusRequestEntityTooLarge, "request_body_too_large")
+		}
+		// A chunked request declares no length, so the reader still has to be
+		// bounded for the handlers that do read.
 		if request.Body != nil {
 			request.Body = http.MaxBytesReader(c.Response(), request.Body, MaxRequestBodyCeiling)
 		}

@@ -522,6 +522,52 @@ func (f *fixture) read(relative string) []byte {
 	return contents
 }
 
+// actionToken asks the running server for one confirmation token, exactly as
+// the frontend does, and fails the test when none is issued.
+//
+// The merged tree settled on a single POST /api/v1/actions endpoint that takes
+// {kind, target} and answers 201, and on one delivery spelling for every
+// guarded route: the X-SSH-UI-Action header. The plan was drafted while two
+// endpoint spellings and a body-carried token were still in play; neither
+// survived into the tree.
+func (f *fixture) actionToken(t testing.TB, kind, target string) string {
+	t.Helper()
+	token := f.tryActionToken(kind, target)
+	if token == "" {
+		t.Fatalf("POST /api/v1/actions issued no %q token for %q", kind, target)
+	}
+	return token
+}
+
+// tryActionToken issues a token when the target is acceptable and returns an
+// empty string otherwise, so a hostile target does not abort the test.
+func (f *fixture) tryActionToken(kind, target string) string {
+	response := f.do(http.MethodPost, "/api/v1/actions", mustJSON(f.t, map[string]any{
+		"kind": kind, "target": target,
+	}))
+	status := response.StatusCode
+	body := readBody(f.t, response)
+	if status != http.StatusOK && status != http.StatusCreated {
+		return ""
+	}
+	var payload struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal([]byte(body), &payload); err != nil {
+		return ""
+	}
+	return payload.Token
+}
+
+// withAction delivers a confirmation the way every guarded route expects it.
+func withAction(token string) func(*http.Request) {
+	return func(request *http.Request) {
+		if token != "" {
+			request.Header.Set("X-SSH-UI-Action", token)
+		}
+	}
+}
+
 func mustJSON(t testing.TB, value any) []byte {
 	t.Helper()
 	encoded, err := json.Marshal(value)
