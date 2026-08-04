@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -102,6 +103,56 @@ func TestServerServesStaticFilesAndShutsDownAfterCancellation(t *testing.T) {
 	if err == nil {
 		connection.Close()
 		t.Fatal("listener still accepts connections after Serve returns")
+	}
+}
+
+func TestServerSPAFallbackRequiresHTMLNavigation(t *testing.T) {
+	manager, _, err := session.NewManager(bytes.NewReader(bytes.Repeat([]byte{0x83}, 96)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	server, err := New(Options{
+		Listener: fakeListener{address: &net.TCPAddr{IP: net.IP{127, 0, 0, 1}, Port: 43123}},
+		Sessions: manager,
+		UI: fstest.MapFS{
+			"index.html": {Data: []byte("<!doctype html><title>SPA fixture</title>")},
+			"app.js":     {Data: []byte("export const ready = true;")},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name       string
+		method     string
+		path       string
+		accept     string
+		wantStatus int
+		wantBody   string
+		checkBody  bool
+	}{
+		{name: "existing asset", method: http.MethodGet, path: "/app.js", accept: "*/*", wantStatus: http.StatusOK, wantBody: "export const ready = true;", checkBody: true},
+		{name: "GET HTML navigation", method: http.MethodGet, path: "/connections/primary", accept: "text/html,application/xhtml+xml", wantStatus: http.StatusOK, wantBody: "<!doctype html><title>SPA fixture</title>", checkBody: true},
+		{name: "HEAD HTML navigation", method: http.MethodHead, path: "/connections/primary", accept: "text/html", wantStatus: http.StatusOK, checkBody: true},
+		{name: "non HTML missing asset", method: http.MethodGet, path: "/missing.json", accept: "application/json", wantStatus: http.StatusNotFound, wantBody: "404 page not found\n", checkBody: true},
+		{name: "POST navigation", method: http.MethodPost, path: "/connections/primary", accept: "text/html", wantStatus: http.StatusMethodNotAllowed},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(test.method, test.path, nil)
+			request.Host = "127.0.0.1:43123"
+			request.Header.Set("Accept", test.accept)
+			response := httptest.NewRecorder()
+			server.http.Handler.ServeHTTP(response, request)
+
+			if response.Code != test.wantStatus {
+				t.Fatalf("status = %d, want %d", response.Code, test.wantStatus)
+			}
+			if got := response.Body.String(); test.checkBody && got != test.wantBody {
+				t.Fatalf("body = %q, want %q", got, test.wantBody)
+			}
+		})
 	}
 }
 

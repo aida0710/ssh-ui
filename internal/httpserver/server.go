@@ -1,13 +1,17 @@
 package httpserver
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io/fs"
 	"log/slog"
+	"mime"
 	"net"
 	"net/http"
+	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v5"
@@ -54,7 +58,9 @@ func New(options Options) (*Server, error) {
 	handlers := Handlers{Sessions: options.Sessions, Version: options.Version}
 	e.POST("/api/v1/session/bootstrap", handlers.Bootstrap)
 	e.GET("/api/v1/health", handlers.Health)
-	e.GET("/*", echo.WrapHandler(http.FileServer(http.FS(options.UI))))
+	static := echo.WrapHandler(spaHandler(options.UI))
+	e.GET("/*", static)
+	e.HEAD("/*", static)
 
 	return &Server{
 		listener: options.Listener,
@@ -64,6 +70,47 @@ func New(options Options) (*Server, error) {
 		},
 		url: "http://" + host,
 	}, nil
+}
+
+func spaHandler(assets fs.FS) http.Handler {
+	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodGet && request.Method != http.MethodHead {
+			http.Error(response, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			return
+		}
+		if strings.HasPrefix(request.URL.Path, "/api/") {
+			http.NotFound(response, request)
+			return
+		}
+
+		name := strings.TrimPrefix(path.Clean(request.URL.Path), "/")
+		if name == "." || name == "" {
+			name = "index.html"
+		}
+		if !fs.ValidPath(name) {
+			http.NotFound(response, request)
+			return
+		}
+
+		contents, err := fs.ReadFile(assets, name)
+		if err != nil {
+			if !strings.Contains(request.Header.Get("Accept"), "text/html") {
+				http.NotFound(response, request)
+				return
+			}
+			name = "index.html"
+			contents, err = fs.ReadFile(assets, name)
+			if err != nil {
+				http.NotFound(response, request)
+				return
+			}
+		}
+
+		if contentType := mime.TypeByExtension(path.Ext(name)); contentType != "" {
+			response.Header().Set("Content-Type", contentType)
+		}
+		http.ServeContent(response, request, name, time.Time{}, bytes.NewReader(contents))
+	})
 }
 
 func (s *Server) URL() string {
