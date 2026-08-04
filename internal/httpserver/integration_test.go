@@ -115,6 +115,20 @@ func TestIntegratedBootstrapFlow(t *testing.T) {
 		t.Fatalf("SPA fallback = %d, want fixture", deepLink.StatusCode)
 	}
 
+	const crossOriginSecret = "cross-origin-request-secret"
+	crossOriginBootstrap := do(http.MethodPost, server.URL()+"/api/v1/session/bootstrap", host, map[string]string{
+		"Origin":             "https://evil.example/" + crossOriginSecret,
+		"Sec-Fetch-Site":     "same-origin",
+		"X-SSH-UI-Bootstrap": bootstrap,
+	}, nil)
+	if crossOriginBootstrap.StatusCode != http.StatusForbidden {
+		t.Fatalf("cross-origin bootstrap = %d, want %d", crossOriginBootstrap.StatusCode, http.StatusForbidden)
+	}
+	if cookies := crossOriginBootstrap.Cookies(); len(cookies) != 0 {
+		t.Fatalf("cross-origin bootstrap cookies = %#v, want none", cookies)
+	}
+	readBody(crossOriginBootstrap)
+
 	bootstrapHeaders := map[string]string{
 		"Origin":             server.URL(),
 		"Sec-Fetch-Site":     "same-origin",
@@ -185,9 +199,10 @@ func TestIntegratedBootstrapFlow(t *testing.T) {
 		}
 	}
 	for name, secret := range map[string]string{
-		"bootstrap": bootstrap,
-		"session":   cookies[0].Value,
-		"csrf":      payload.CsrfToken,
+		"bootstrap":           bootstrap,
+		"session":             cookies[0].Value,
+		"csrf":                payload.CsrfToken,
+		"cross-origin header": crossOriginSecret,
 	} {
 		if strings.Contains(logs.String(), secret) {
 			t.Errorf("captured logs contain %s secret", name)

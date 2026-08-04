@@ -78,10 +78,6 @@ func spaHandler(assets fs.FS) http.Handler {
 			http.Error(response, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
 		}
-		if strings.HasPrefix(request.URL.Path, "/api/") {
-			http.NotFound(response, request)
-			return
-		}
 
 		name := strings.TrimPrefix(path.Clean(request.URL.Path), "/")
 		if name == "." || name == "" {
@@ -91,10 +87,14 @@ func spaHandler(assets fs.FS) http.Handler {
 			http.NotFound(response, request)
 			return
 		}
+		if name == "api" || strings.HasPrefix(name, "api/") || request.URL.Path == "/api" || strings.HasPrefix(request.URL.Path, "/api/") {
+			http.NotFound(response, request)
+			return
+		}
 
 		contents, err := fs.ReadFile(assets, name)
 		if err != nil {
-			if !strings.Contains(request.Header.Get("Accept"), "text/html") {
+			if !acceptsHTML(request.Header.Get("Accept")) {
 				http.NotFound(response, request)
 				return
 			}
@@ -111,6 +111,27 @@ func spaHandler(assets fs.FS) http.Handler {
 		}
 		http.ServeContent(response, request, name, time.Time{}, bytes.NewReader(contents))
 	})
+}
+
+func acceptsHTML(header string) bool {
+	for _, value := range strings.Split(header, ",") {
+		mediaType, parameters, err := mime.ParseMediaType(strings.TrimSpace(value))
+		if err != nil || mediaType != "text/html" {
+			continue
+		}
+
+		quality := 1.0
+		if raw, ok := parameters["q"]; ok {
+			quality, err = strconv.ParseFloat(raw, 64)
+			if err != nil {
+				continue
+			}
+		}
+		if quality > 0 && quality <= 1 {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) URL() string {

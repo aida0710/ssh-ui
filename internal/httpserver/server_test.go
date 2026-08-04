@@ -107,7 +107,11 @@ func TestServerServesStaticFilesAndShutsDownAfterCancellation(t *testing.T) {
 }
 
 func TestServerSPAFallbackRequiresHTMLNavigation(t *testing.T) {
-	manager, _, err := session.NewManager(bytes.NewReader(bytes.Repeat([]byte{0x83}, 96)))
+	manager, bootstrap, err := session.NewManager(bytes.NewReader(bytes.Repeat([]byte{0x83}, 96)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	credentials, err := manager.Bootstrap(bootstrap)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,11 +135,19 @@ func TestServerSPAFallbackRequiresHTMLNavigation(t *testing.T) {
 		wantStatus int
 		wantBody   string
 		checkBody  bool
+		auth       bool
 	}{
 		{name: "existing asset", method: http.MethodGet, path: "/app.js", accept: "*/*", wantStatus: http.StatusOK, wantBody: "export const ready = true;", checkBody: true},
 		{name: "GET HTML navigation", method: http.MethodGet, path: "/connections/primary", accept: "text/html,application/xhtml+xml", wantStatus: http.StatusOK, wantBody: "<!doctype html><title>SPA fixture</title>", checkBody: true},
 		{name: "HEAD HTML navigation", method: http.MethodHead, path: "/connections/primary", accept: "text/html", wantStatus: http.StatusOK, checkBody: true},
+		{name: "weighted HTML navigation", method: http.MethodGet, path: "/connections/weighted", accept: "application/json;q=0.9, text/html; q=0.4", wantStatus: http.StatusOK, wantBody: "<!doctype html><title>SPA fixture</title>", checkBody: true},
+		{name: "zero quality HTML", method: http.MethodGet, path: "/connections/disabled", accept: "text/html;q=0", wantStatus: http.StatusNotFound, wantBody: "404 page not found\n", checkBody: true},
+		{name: "HTML lookalike", method: http.MethodGet, path: "/connections/lookalike", accept: "application/x-text/html-data", wantStatus: http.StatusNotFound, wantBody: "404 page not found\n", checkBody: true},
 		{name: "non HTML missing asset", method: http.MethodGet, path: "/missing.json", accept: "application/json", wantStatus: http.StatusNotFound, wantBody: "404 page not found\n", checkBody: true},
+		{name: "exact API namespace", method: http.MethodGet, path: "/api", accept: "text/html", wantStatus: http.StatusNotFound, wantBody: "404 page not found\n", checkBody: true},
+		{name: "normalized API namespace", method: http.MethodGet, path: "/public/../api/v1/missing", accept: "text/html", wantStatus: http.StatusNotFound, wantBody: "404 page not found\n", checkBody: true},
+		{name: "raw API namespace", method: http.MethodGet, path: "/api/../connections", accept: "text/html", wantStatus: http.StatusNotFound, wantBody: "404 page not found\n", checkBody: true, auth: true},
+		{name: "API lookalike navigation", method: http.MethodGet, path: "/apiary", accept: "text/html", wantStatus: http.StatusOK, wantBody: "<!doctype html><title>SPA fixture</title>", checkBody: true},
 		{name: "POST navigation", method: http.MethodPost, path: "/connections/primary", accept: "text/html", wantStatus: http.StatusMethodNotAllowed},
 	}
 	for _, test := range tests {
@@ -143,6 +155,9 @@ func TestServerSPAFallbackRequiresHTMLNavigation(t *testing.T) {
 			request := httptest.NewRequest(test.method, test.path, nil)
 			request.Host = "127.0.0.1:43123"
 			request.Header.Set("Accept", test.accept)
+			if test.auth {
+				request.AddCookie(&http.Cookie{Name: SessionCookie, Value: credentials.SessionID})
+			}
 			response := httptest.NewRecorder()
 			server.http.Handler.ServeHTTP(response, request)
 
