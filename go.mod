@@ -2,6 +2,8 @@ module ssh-ui
 
 go 1.26.0
 
+toolchain go1.26.5
+
 require (
 	github.com/dprotaso/go-yit v0.0.0-20220510233725-9ba8df137936 // indirect
 	github.com/getkin/kin-openapi v0.135.0 // indirect
