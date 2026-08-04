@@ -8,15 +8,25 @@ import { HistoryPanel } from "./history/HistoryPanel";
 import { KeysScreen } from "./keys/KeysScreen";
 import { DiagnosticsPanel } from "./diagnostics/DiagnosticsPanel";
 import { KnownHostsPanel } from "./knownhosts/KnownHostsPanel";
+import { RemoteKeyPanel } from "./remotekeys/RemoteKeyPanel";
 
 type AppProps = {
   bootstrap: () => Promise<SessionState>;
   health: () => Promise<HealthResponse>;
 };
 
-const sections = ["Connections", "Config", "Groups", "Keys", "Known Hosts", "Diagnostics", "History"] as const;
+const sections = [
+  "Connections",
+  "Config",
+  "Groups",
+  "Keys",
+  "Known Hosts",
+  "Remote Keys",
+  "Diagnostics",
+  "History",
+] as const;
 type Section = (typeof sections)[number];
-const enabledSections: Section[] = ["Connections", "Config", "Groups", "Keys", "Known Hosts", "Diagnostics", "History"];
+const enabledSections: Section[] = [...sections];
 
 export function App({ bootstrap, health }: AppProps) {
   const [state, setState] = useState<"starting" | "ready" | "error">("starting");
@@ -107,6 +117,9 @@ function SectionView({ section }: { section: Section }) {
   }
   if (section === "Known Hosts") {
     return <KnownHostsPanel />;
+  }
+  if (section === "Remote Keys") {
+    return <RemoteKeyPanel />;
   }
   if (section === "Diagnostics") {
     return <DiagnosticsPanel />;
