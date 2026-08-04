@@ -62,14 +62,16 @@ type DiffLine struct {
 
 // EditRequest defines model for EditRequest.
 type EditRequest struct {
-	Alias    *string      `json:"alias,omitempty"`
-	Base     *string      `json:"base,omitempty"`
-	Fields   *[]FieldEdit `json:"fields,omitempty"`
-	Kind     string       `json:"kind"`
-	Metadata *Metadata    `json:"metadata,omitempty"`
-	NewAlias *string      `json:"newAlias,omitempty"`
-	Path     *string      `json:"path,omitempty"`
-	Raw      *string      `json:"raw,omitempty"`
+	Alias           *string      `json:"alias,omitempty"`
+	Base            *string      `json:"base,omitempty"`
+	DestinationBase *string      `json:"destinationBase,omitempty"`
+	DestinationPath *string      `json:"destinationPath,omitempty"`
+	Fields          *[]FieldEdit `json:"fields,omitempty"`
+	Kind            string       `json:"kind"`
+	Metadata        *Metadata    `json:"metadata,omitempty"`
+	NewAlias        *string      `json:"newAlias,omitempty"`
+	Path            *string      `json:"path,omitempty"`
+	Raw             *string      `json:"raw,omitempty"`
 }
 
 // Effective defines model for Effective.

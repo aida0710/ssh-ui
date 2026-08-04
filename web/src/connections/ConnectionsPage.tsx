@@ -32,6 +32,7 @@ export function ConnectionsPage() {
   const [targetFile, setTargetFile] = useState("config");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [localError, setLocalError] = useState("");
+  const [moveTarget, setMoveTarget] = useState("");
 
   const reload = useCallback(async () => {
     try {
@@ -160,6 +161,31 @@ export function ConnectionsPage() {
     }
   }
 
+  // The move carries both loaded bases so the server can hold each file to its
+  // own precondition. Reselection is done here rather than by submit, because
+  // the host lives at a new path once the move commits.
+  async function moveHost() {
+    if (detail === null || selection === null || moveTarget === "") return;
+    try {
+      const destination = await configApi.file(moveTarget);
+      const source = selection;
+      await submit({
+        kind: "move",
+        path: source.path,
+        base: detail.file.contents,
+        alias: source.alias,
+        destinationPath: moveTarget,
+        destinationBase: destination.contents,
+      }, false);
+      setSelection({ path: moveTarget, alias: source.alias });
+      setDetail(await configApi.host(moveTarget, source.alias));
+      setMoveTarget("");
+      setLocalError("");
+    } catch (error) {
+      setProblem(toProblem(error));
+    }
+  }
+
   async function deleteHost() {
     if (detail === null || selection === null) return;
     let raw: string;
@@ -220,6 +246,23 @@ export function ConnectionsPage() {
             <div className="flex gap-2">
               <button type="button" onClick={duplicateHost} className="rounded border border-zinc-700 px-2 py-1 text-xs">
                 Duplicate connection
+              </button>
+              <label htmlFor="move-target" className="sr-only">Move to file</label>
+              <select
+                id="move-target"
+                value={moveTarget}
+                onChange={(event) => setMoveTarget(event.target.value)}
+                className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs"
+              >
+                <option value="">Move to file…</option>
+                {overview.files
+                  .filter((node) => node.editable && node.file.path !== undefined && node.file.path !== selection?.path)
+                  .map((node) => (
+                    <option key={node.file.absolute} value={node.file.path}>{node.file.path}</option>
+                  ))}
+              </select>
+              <button type="button" onClick={() => void moveHost()} className="rounded border border-zinc-700 px-2 py-1 text-xs">
+                Move connection
               </button>
               {confirmingDelete ? (
                 <button type="button" onClick={() => void deleteHost()} className="rounded bg-rose-700 px-2 py-1 text-xs text-zinc-100">

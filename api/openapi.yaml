@@ -902,6 +902,8 @@ components:
         fields: { type: array, items: { $ref: "#/components/schemas/FieldEdit" } }
         raw: { type: string }
         metadata: { $ref: "#/components/schemas/Metadata" }
+        destinationPath: { type: string }
+        destinationBase: { type: string }
     DiffLine:
       type: object
       additionalProperties: false

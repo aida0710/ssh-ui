@@ -115,6 +115,41 @@ describe("ConnectionsPage", () => {
     }));
   });
 
+  it("moves a host to another file with both loaded bases", async () => {
+    const user = userEvent.setup();
+    vi.mocked(configApi.overview).mockResolvedValue({
+      ...overview,
+      files: [
+        { file: { path: "config", absolute: "/home/tester/.ssh/config" }, editable: true, loads: 1 },
+        { file: { path: "conf.d/10-home.conf", absolute: "/home/tester/.ssh/conf.d/10-home.conf" }, editable: true, loads: 1 },
+      ],
+    } as never);
+    vi.mocked(configApi.file).mockResolvedValue({
+      file: { path: "conf.d/10-home.conf", absolute: "/home/tester/.ssh/conf.d/10-home.conf" },
+      contents: "Host nas\n\tUser aida\n", digest: "digest", editable: true, exists: true,
+    } as never);
+    vi.mocked(configApi.save).mockResolvedValue({
+      transactionId: "t1",
+      written: ["config", "conf.d/10-home.conf"],
+      preview: { operation: "config.move", diffs: [] },
+    } as never);
+
+    render(<ConnectionsPage />);
+
+    await user.click(await screen.findByRole("button", { name: /bastion/ }));
+    await user.selectOptions(await screen.findByLabelText("Move to file"), "conf.d/10-home.conf");
+    await user.click(screen.getByRole("button", { name: "Move connection" }));
+
+    await waitFor(() => expect(configApi.save).toHaveBeenCalledWith({
+      kind: "move",
+      path: "config",
+      base: "Host bastion\n\tPort 22\n",
+      alias: "bastion",
+      destinationPath: "conf.d/10-home.conf",
+      destinationBase: "Host nas\n\tUser aida\n",
+    }));
+  });
+
   it("deletes the selected host block without touching the rest of the file", async () => {
     const user = userEvent.setup();
     vi.mocked(configApi.save).mockResolvedValue({

@@ -15,6 +15,7 @@ const noticeCopy: Record<string, string> = {
   group_cycle: "This group's parents form a cycle, so it was skipped.",
   group_member_missing: "This group member has no host block in the configuration.",
   explained_values_only: "These values explain what this engine reads. The authoritative ssh -G check arrives with the diagnostics subsystem.",
+  destination_not_included: "No Include reaches this file yet, so OpenSSH will not read the moved connection until you add one.",
 };
 
 function DiffView({ lines }: { lines: DiffLine[] }) {

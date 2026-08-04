@@ -708,6 +708,8 @@ export interface components {
             fields?: components["schemas"]["FieldEdit"][];
             raw?: string;
             metadata?: components["schemas"]["Metadata"];
+            destinationPath?: string;
+            destinationBase?: string;
         };
         DiffLine: {
             op: string;

@@ -124,11 +124,13 @@ func validateIdentifier(value string) error {
 // validateEditRequest enforces per-kind requirements before the request reaches
 // the application layer.
 func validateEditRequest(request application.EditRequest) error {
-	if len(request.Raw) > maxRawLength || len(request.Base) > maxRawLength {
+	if len(request.Raw) > maxRawLength || len(request.Base) > maxRawLength ||
+		len(request.DestinationBase) > maxRawLength {
 		return errInvalidEdit
 	}
 	switch request.Kind {
-	case application.EditHostFields, application.EditBlockRaw, application.EditFileRaw, application.EditRename:
+	case application.EditHostFields, application.EditBlockRaw, application.EditFileRaw,
+		application.EditRename, application.EditMove:
 		if err := validatePathParameter(request.Path); err != nil {
 			return err
 		}
@@ -167,6 +169,13 @@ func validateEditRequest(request application.EditRequest) error {
 		}
 		if err := application.ValidateAlias(request.NewAlias); err != nil {
 			return errInvalidAlias
+		}
+	case application.EditMove:
+		if err := validateAliasParameter(request.Alias); err != nil {
+			return err
+		}
+		if err := validatePathParameter(request.DestinationPath); err != nil {
+			return err
 		}
 	case application.EditGroups, application.EditMetadata:
 		if request.Metadata == nil {
@@ -243,6 +252,7 @@ func serviceProblem(c *echo.Context, err error) error {
 	case errors.Is(err, application.ErrUnknownEditKind), errors.Is(err, application.ErrUnknownRecoveryAction),
 		errors.Is(err, application.ErrMetadataSecret), errors.Is(err, application.ErrMetadataPath),
 		errors.Is(err, application.ErrMetadataGroup), errors.Is(err, application.ErrMetadataVersion),
+		errors.Is(err, application.ErrSameFileMove),
 		errors.Is(err, errInvalidBody), errors.Is(err, errInvalidPath),
 		errors.Is(err, errInvalidAlias), errors.Is(err, errInvalidEdit):
 		return problemWith(c, http.StatusBadRequest, problemPayload{Code: "invalid_request"})
@@ -251,7 +261,8 @@ func serviceProblem(c *echo.Context, err error) error {
 		errors.Is(err, application.ErrInvalidAlias), errors.Is(err, application.ErrRawBlockHeader),
 		errors.Is(err, application.ErrRawBlockStructure), errors.Is(err, application.ErrEditLineOutsideBlock),
 		errors.Is(err, application.ErrEditLineNotDirective), errors.Is(err, application.ErrDuplicateEditLine),
-		errors.Is(err, application.ErrUnknownEditAction):
+		errors.Is(err, application.ErrUnknownEditAction),
+		errors.Is(err, application.ErrDuplicateDestinationAlias):
 		return problemWith(c, http.StatusUnprocessableEntity, problemPayload{Code: "invalid_edit"})
 	default:
 		return problemWith(c, http.StatusInternalServerError, problemPayload{Code: "internal_error"})

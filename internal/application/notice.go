@@ -27,6 +27,9 @@ const (
 	NoticeGroupCycle          = "group_cycle"
 	NoticeGroupMemberMissing  = "group_member_missing"
 	NoticeExplainedValuesOnly = "explained_values_only"
+	// NoticeDestinationNotIncluded marks a destination file that no Include
+	// reaches, so a block moved into it would stop being read by OpenSSH.
+	NoticeDestinationNotIncluded = "destination_not_included"
 )
 
 // appendNotice adds a notice unless the identical notice is already present.
