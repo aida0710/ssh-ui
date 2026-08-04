@@ -10,9 +10,12 @@ import (
 	"time"
 
 	"ssh-ui/internal/application"
+	"ssh-ui/internal/diagnostics"
 	"ssh-ui/internal/httpserver"
 	"ssh-ui/internal/keys"
+	"ssh-ui/internal/knownhosts"
 	"ssh-ui/internal/platform"
+	"ssh-ui/internal/remotekey"
 	"ssh-ui/internal/session"
 	"ssh-ui/internal/storage"
 )
@@ -36,6 +39,14 @@ type Dependencies struct {
 	Runner    platform.OutputRunner
 	Toolchain platform.Toolchain
 	KeyAgent  platform.KeyAgent
+	// Terminal opens an interactive session. A nil launcher is valid: the
+	// diagnostics service then reports that no terminal is configured rather
+	// than panicking, which is what the tests here rely on.
+	Terminal platform.TerminalLauncher
+	// Lookup reads the parent environment so the OpenSSH programs this process
+	// starts receive platform.MinimalEnvironment. Only cmd/ssh-ui may supply
+	// os.LookupEnv; a nil value lets children inherit, which suits a test.
+	Lookup func(string) (string, bool)
 }
 
 // buildKeyService prepares the key vault over the same workspace the
@@ -87,15 +98,37 @@ func Run(ctx context.Context, dependencies Dependencies, version string) error {
 	transactions := storage.NewManager(workspace, time.Now, dependencies.Random)
 	configService := application.NewService(workspace, transactions)
 	keyService := buildKeyService(workspace, dependencies)
+	diagnosticsService := diagnostics.NewService(
+		workspace, dependencies.Runner, dependencies.Toolchain, dependencies.Terminal, dependencies.Lookup)
+	// known_hosts shares the config transaction manager: both write ordinary
+	// managed files under ~/.ssh, so one journal covers them.
+	var scanEnvironment []string
+	if dependencies.Lookup != nil {
+		scanEnvironment = platform.MinimalEnvironment(dependencies.Lookup)
+	}
+	knownHostsService := knownhosts.NewService(workspace, transactions, knownhosts.Scanner{
+		Runner:      dependencies.Runner,
+		Toolchain:   dependencies.Toolchain,
+		Environment: scanEnvironment,
+	})
+	remoteKeyService := &remotekey.Service{
+		Runner:      dependencies.Runner,
+		Toolchain:   dependencies.Toolchain,
+		ConfigPath:  diagnosticsService.ConfigPath(),
+		Environment: scanEnvironment,
+	}
 
 	server, err := httpserver.New(httpserver.Options{
-		Listener: listener,
-		Sessions: sessions,
-		UI:       dependencies.UI,
-		Version:  version,
-		Logger:   dependencies.Logger,
-		Config:   configService,
-		Keys:     keyService,
+		Listener:    listener,
+		Sessions:    sessions,
+		UI:          dependencies.UI,
+		Version:     version,
+		Logger:      dependencies.Logger,
+		Config:      configService,
+		Keys:        keyService,
+		Diagnostics: diagnosticsService,
+		KnownHosts:  knownHostsService,
+		RemoteKeys:  remoteKeyService,
 	})
 	if err != nil {
 		listener.Close()

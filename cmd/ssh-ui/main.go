@@ -50,6 +50,8 @@ func main() {
 		Runner:    runner,
 		Toolchain: toolchain,
 		KeyAgent:  macos.NewKeyAgent(runner, toolchain, os.LookupEnv),
+		Terminal:  macos.NewTerminal(runner),
+		Lookup:    os.LookupEnv,
 	}
 	if err := app.Run(ctx, dependencies, version); err != nil && !errors.Is(err, context.Canceled) {
 		logger.Error("ssh-ui stopped", "error", err)

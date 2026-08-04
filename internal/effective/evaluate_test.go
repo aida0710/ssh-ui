@@ -91,6 +91,27 @@ func TestEvaluateBuildsArgvWithoutAShellAndParsesOutput(t *testing.T) {
 	}
 }
 
+// TestEvaluateHandsOpenSSHTheEnvironmentItWasGiven guards the child
+// environment. With SSH_ASKPASS exported, ssh asks an external program for a
+// passphrase instead of reading the standard input this application supplies,
+// which would move a prompt out of this process's control.
+func TestEvaluateHandsOpenSSHTheEnvironmentItWasGiven(t *testing.T) {
+	runner := &recordingRunner{output: platform.Output{Stdout: []byte(sampleOutput)}}
+	evaluator := effective.Evaluator{
+		Runner:      runner,
+		Toolchain:   fixedToolchain{ssh: "/usr/bin/ssh"},
+		ConfigPath:  testConfig,
+		Environment: []string{"HOME=/Users/tester", "PATH=/usr/bin"},
+	}
+
+	if _, err := evaluator.Evaluate(context.Background(), effective.Report{}, "bastion", false); err != nil {
+		t.Fatalf("Evaluate = %v", err)
+	}
+	if got := runner.commands[0].Env; !slices.Equal(got, []string{"HOME=/Users/tester", "PATH=/usr/bin"}) {
+		t.Errorf("env = %#v, want the configured environment", got)
+	}
+}
+
 func TestEvaluateRefusesToRunWhenEvaluationCanExecuteACommand(t *testing.T) {
 	runner := &recordingRunner{output: platform.Output{Stdout: []byte(sampleOutput)}}
 	evaluator := effective.Evaluator{Runner: runner, Toolchain: fixedToolchain{ssh: "/usr/bin/ssh"}, ConfigPath: testConfig}

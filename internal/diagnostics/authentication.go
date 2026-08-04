@@ -65,6 +65,11 @@ type Authentication struct {
 	ConfigPath     string
 	Timeout        time.Duration
 	ConnectTimeout time.Duration
+	// Environment is the child's complete environment, normally
+	// platform.MinimalEnvironment. It withholds SSH_ASKPASS, without which an
+	// exported askpass program could turn this bounded, non-interactive test
+	// into a wait on a passphrase dialog.
+	Environment []string
 }
 
 // HardeningOptions returns the command-line options that neutralise everything
@@ -136,6 +141,7 @@ func (a Authentication) Test(ctx context.Context, report effective.Report, alias
 		Arguments: arguments,
 		Timeout:   timeout,
 		StopAfter: []byte(AuthenticatedMarker),
+		Env:       a.Environment,
 	})
 	if runErr != nil && !errors.Is(runErr, platform.ErrTimedOut) {
 		return AuthenticationResult{}, runErr

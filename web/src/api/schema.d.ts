@@ -52,6 +52,198 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/diagnostics/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["checkConfiguration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/diagnostics/effective": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["inspectEffectiveConfiguration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/diagnostics/reachability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["checkReachability"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/diagnostics/authentication": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["testAuthentication"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/remote-keys/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["planRemoteKeyRegistration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/remote-keys/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["registerRemoteKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/known-hosts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listKnownHosts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/known-hosts/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["deleteKnownHosts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/known-hosts/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["scanKnownHosts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/known-hosts/add": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["addKnownHost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/terminal/command": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["getTerminalCommand"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/terminal/launch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["launchTerminal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/keys": {
         parameters: {
             query?: never;
@@ -497,6 +689,194 @@ export interface components {
             fingerprint: string;
             transactionId: string;
         };
+        AliasRequest: {
+            alias: string;
+        };
+        ExecutableDirective: {
+            keyword: string;
+            command: string;
+            path: string;
+            line: number;
+            condition: string;
+            onEvaluate: boolean;
+            onConnect: boolean;
+            overridable: boolean;
+        };
+        ConfigCheckResponse: {
+            root: string;
+            files: components["schemas"]["ConfigFileSummary"][];
+            diagnostics: components["schemas"]["ConfigDiagnostic"][];
+        };
+        ConfigFileSummary: {
+            path: string;
+            editable: boolean;
+            missing: boolean;
+            loads: number;
+            includes: number;
+        };
+        ConfigDiagnostic: {
+            severity: string;
+            code: string;
+            path: string;
+            line: number;
+            detail: string;
+        };
+        EffectiveResponse: {
+            alias: string;
+            evaluated: boolean;
+            requiresConfirmation: boolean;
+            tokenWarning: string;
+            executableDirectives: components["schemas"]["ExecutableDirective"][];
+            values: components["schemas"]["EffectiveValue"][];
+            sources: components["schemas"]["ValueSource"][];
+            complexities: components["schemas"]["ComplexityNote"][];
+            route: components["schemas"]["JumpStage"][];
+            failure: components["schemas"]["OpenSSHFailure"];
+        };
+        EffectiveValue: {
+            keyword: string;
+            values: string[];
+        };
+        ValueSource: {
+            keyword: string;
+            value: string;
+            path: string;
+            line: number;
+            condition: string;
+            kind: string;
+            winner: boolean;
+        };
+        ComplexityNote: {
+            code: string;
+            path: string;
+            line: number;
+            condition: string;
+            detail: string;
+        };
+        JumpStage: {
+            order: number;
+            depth: number;
+            parent: string;
+            hop: string;
+            hostname: string;
+            user: string;
+            port: string;
+            complex: boolean;
+        };
+        OpenSSHFailure: {
+            failed: boolean;
+            exitCode: number;
+            stderr: string;
+            truncated: boolean;
+        };
+        ReachabilityResponse: {
+            address: string;
+            outcome: string;
+            elapsedMs: number;
+            detail: string;
+            notice: string;
+        };
+        AuthenticationRequest: {
+            alias: string;
+            acknowledgeExecutable: boolean;
+        };
+        AuthenticationResponse: {
+            outcome: string;
+            authenticated: boolean;
+            exitCode: number;
+            stderr: string;
+            truncated: boolean;
+            elapsedMs: number;
+        };
+        RemoteKeyPlanRequest: {
+            alias: string;
+            keyPath: string;
+            publicKey: string;
+        };
+        RemoteKeyPlan: {
+            alias: string;
+            user: string;
+            hostname: string;
+            port: string;
+            valuesFrom: string;
+            fingerprint: string;
+            keyPath: string;
+            keyLine: string;
+            remotePath: string;
+            routine: string;
+            supported: boolean;
+            manual: string[];
+            executableDirectives: components["schemas"]["ExecutableDirective"][];
+        };
+        RemoteKeyRegisterRequest: {
+            alias: string;
+            keyPath: string;
+            publicKey: string;
+            acknowledgeExecutable: boolean;
+        };
+        RemoteKeyRegisterResponse: {
+            outcome: string;
+            exitCode: number;
+            stderr: string;
+            truncated: boolean;
+        };
+        KnownHostsResponse: {
+            path: string;
+            entries: components["schemas"]["KnownHostEntry"][];
+        };
+        KnownHostEntry: {
+            line: number;
+            digest: string;
+            marker: string;
+            hosts: string[];
+            hashed: boolean;
+            keyType: string;
+            fingerprint: string;
+            comment: string;
+        };
+        KnownHostTarget: {
+            line: number;
+            digest: string;
+        };
+        KnownHostsDeleteRequest: {
+            entries: components["schemas"]["KnownHostTarget"][];
+        };
+        KnownHostsChangeResponse: {
+            changed: boolean;
+            transactionId: string;
+        };
+        KnownHostsScanRequest: {
+            host: string;
+            port: number;
+        };
+        KnownHostsScanResponse: {
+            notice: string;
+            candidates: components["schemas"]["KnownHostCandidate"][];
+        };
+        KnownHostCandidate: {
+            host: string;
+            port: number;
+            keyType: string;
+            key: string;
+            fingerprint: string;
+            verified: boolean;
+        };
+        KnownHostsAddRequest: {
+            host: string;
+            port: number;
+            keyType: string;
+            key: string;
+            expectedFingerprint: string;
+            acknowledged: boolean;
+        };
+        TerminalCommandResponse: {
+            command: string;
+            launchable: boolean;
+            warning: string;
+        };
+        TerminalLaunchResponse: {
+            launched: boolean;
+        };
         IssueActionRequest: {
             kind: string;
             target: string;
@@ -871,6 +1251,324 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             429: components["responses"]["Problem"];
+        };
+    };
+    checkConfiguration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Syntax and Include graph check */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigCheckResponse"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    inspectEffectiveConfiguration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AliasRequest"];
+            };
+        };
+        responses: {
+            /** @description Effective configuration, provenance and jump route */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectiveResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    checkReachability: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AliasRequest"];
+            };
+        };
+        responses: {
+            /** @description Direct TCP reachability, ignoring ProxyJump */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReachabilityResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    testAuthentication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthenticationRequest"];
+            };
+        };
+        responses: {
+            /** @description Completed authentication test */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticationResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    planRemoteKeyRegistration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoteKeyPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description What the registration would do */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemoteKeyPlan"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+        };
+    };
+    registerRemoteKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoteKeyRegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description Completed registration */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemoteKeyRegisterResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listKnownHosts: {
+        parameters: {
+            query?: {
+                query?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matching known_hosts entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnownHostsResponse"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    deleteKnownHosts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KnownHostsDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Entries removed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnownHostsChangeResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    scanKnownHosts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KnownHostsScanRequest"];
+            };
+        };
+        responses: {
+            /** @description Unverified candidates */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnownHostsScanResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    addKnownHost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KnownHostsAddRequest"];
+            };
+        };
+        responses: {
+            /** @description Entry added */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnownHostsChangeResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    getTerminalCommand: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AliasRequest"];
+            };
+        };
+        responses: {
+            /** @description Command text and whether it may be launched */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalCommandResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+        };
+    };
+    launchTerminal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AliasRequest"];
+            };
+        };
+        responses: {
+            /** @description Terminal opened */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalLaunchResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     listKeys: {

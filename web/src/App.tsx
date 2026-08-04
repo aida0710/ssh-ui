@@ -6,15 +6,17 @@ import { ConfigExplorer } from "./explorer/ConfigExplorer";
 import { GroupsPanel } from "./groups/GroupsPanel";
 import { HistoryPanel } from "./history/HistoryPanel";
 import { KeysScreen } from "./keys/KeysScreen";
+import { DiagnosticsPanel } from "./diagnostics/DiagnosticsPanel";
+import { KnownHostsPanel } from "./knownhosts/KnownHostsPanel";
 
 type AppProps = {
   bootstrap: () => Promise<SessionState>;
   health: () => Promise<HealthResponse>;
 };
 
-const sections = ["Connections", "Config", "Groups", "Keys", "Known Hosts", "History"] as const;
+const sections = ["Connections", "Config", "Groups", "Keys", "Known Hosts", "Diagnostics", "History"] as const;
 type Section = (typeof sections)[number];
-const enabledSections: Section[] = ["Connections", "Config", "Groups", "Keys", "History"];
+const enabledSections: Section[] = ["Connections", "Config", "Groups", "Keys", "Known Hosts", "Diagnostics", "History"];
 
 export function App({ bootstrap, health }: AppProps) {
   const [state, setState] = useState<"starting" | "ready" | "error">("starting");
@@ -104,9 +106,10 @@ function SectionView({ section }: { section: Section }) {
     return <KeysScreen />;
   }
   if (section === "Known Hosts") {
-    return (
-      <p className="text-sm text-zinc-400">{`${section} arrives with a later subsystem.`}</p>
-    );
+    return <KnownHostsPanel />;
+  }
+  if (section === "Diagnostics") {
+    return <DiagnosticsPanel />;
   }
   return (
     <section aria-labelledby="section-heading" className="flex flex-col gap-4">

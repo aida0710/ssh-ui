@@ -110,7 +110,14 @@ func newKeyServer(t *testing.T, service KeyService) (*echo.Echo, *session.Manage
 	}
 	engine := echo.New()
 	engine.Use((Security{ExpectedHost: keyTestHost, ExpectedOrigin: "http://" + keyTestHost, Sessions: manager}).Middleware)
-	registerKeyRoutes(engine, KeyHandlers{Keys: service, Sessions: manager})
+	// The confirmation endpoint is shared with every other subsystem, so this
+	// harness assembles it exactly as New does: a registry holding only the key
+	// vault's kinds, which is why a diagnostics kind is still unknown here.
+	registry := actionRegistry{}
+	addKeyActions(registry, service)
+	actions := ActionHandlers{Sessions: manager, Kinds: registry}
+	registerActionRoutes(engine, actions)
+	registerKeyRoutes(engine, KeyHandlers{Keys: service, Sessions: manager, Actions: actions})
 	return engine, manager, credentials
 }
 
@@ -304,7 +311,13 @@ func TestRevealHandlerSetsNoStoreWithoutRelyingOnTheMiddleware(t *testing.T) {
 			return next(c)
 		}
 	})
-	registerKeyRoutes(engine, KeyHandlers{Keys: service, Sessions: manager})
+	keyActions := actionRegistry{}
+	addKeyActions(keyActions, service)
+	registerKeyRoutes(engine, KeyHandlers{
+		Keys:     service,
+		Sessions: manager,
+		Actions:  ActionHandlers{Sessions: manager, Kinds: keyActions},
+	})
 
 	evidence, err := service.ConfirmationEvidence(keys.ConfirmRevealKey, "key-one")
 	if err != nil {
