@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"ssh-ui/internal/diagnostics"
@@ -135,6 +136,33 @@ func TestServiceConfigCheckSummarisesTheIncludeGraph(t *testing.T) {
 		if diagnostic.Severity > 0 {
 			t.Errorf("unexpected diagnostic: %#v", diagnostic)
 		}
+	}
+}
+
+// TestServiceAuthenticateSanitisesTheHomePathOutOfReportedOutput guards what
+// leaves this process. Verbose ssh output names every file it read by absolute
+// path, which would carry the account name into a response body.
+func TestServiceAuthenticateSanitisesTheHomePathOutOfReportedOutput(t *testing.T) {
+	service := newTestService(t, &scriptedRunner{})
+	home := service.Workspace.Home()
+	service.Authentication.Runner = &scriptedRunner{output: platform.Output{
+		ExitCode: 255,
+		Stderr: []byte("debug1: Reading configuration data " + home + "/.ssh/config\n" +
+			"ops@203.0.113.10: Permission denied (publickey).\n"),
+	}}
+
+	result, err := service.Authenticate(context.Background(), "bastion", true)
+	if err != nil {
+		t.Fatalf("Authenticate = %v", err)
+	}
+	if strings.Contains(result.Stderr, home) {
+		t.Fatalf("reported stderr names the home directory: %q", result.Stderr)
+	}
+	if !strings.Contains(result.Stderr, "~/.ssh/config") {
+		t.Errorf("stderr = %q, want the path rewritten to ~", result.Stderr)
+	}
+	if !strings.Contains(result.Stderr, "Permission denied") {
+		t.Error("sanitising removed the reason for the failure")
 	}
 }
 

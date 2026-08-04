@@ -119,9 +119,11 @@ func (h RemoteKeyHandlers) Register(c *echo.Context) error {
 		return remoteKeyProblem(c, err)
 	}
 	return c.JSON(http.StatusOK, api.RemoteKeyRegisterResponse{
-		Outcome:   result.Outcome,
-		ExitCode:  result.ExitCode,
-		Stderr:    result.Stderr,
+		Outcome:  result.Outcome,
+		ExitCode: result.ExitCode,
+		// ssh names the files it read by absolute path; the account name is
+		// removed before the output leaves this process.
+		Stderr:    platform.SanitiseHomePaths(result.Stderr, h.Diagnostics.Home()),
 		Truncated: result.Truncated,
 	})
 }

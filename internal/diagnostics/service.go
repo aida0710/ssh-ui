@@ -82,6 +82,10 @@ func NewService(workspace *storage.Workspace, runner platform.OutputRunner, tool
 // ConfigPath is the user configuration this service evaluates.
 func (s *Service) ConfigPath() string { return filepath.Join(s.Workspace.Root(), "config") }
 
+// Home is the user's home directory, used to sanitise captured output before
+// it leaves this process.
+func (s *Service) Home() string { return s.Workspace.Home() }
+
 func (s *Service) graph() (*config.Graph, error) { return s.Resolver.Resolve(s.ConfigPath()) }
 
 // Safety scans the current configuration for executable directives.
@@ -238,10 +242,19 @@ func (s *Service) TerminalCommand(alias string) (string, bool, string) {
 }
 
 // Authenticate runs the authentication test for alias.
+//
+// The captured stderr is shown to the user, so the home directory is rewritten
+// to "~" first: verbose OpenSSH output names every file it read by absolute
+// path, which would otherwise carry the account name into a response body.
 func (s *Service) Authenticate(ctx context.Context, alias string, acknowledged bool) (AuthenticationResult, error) {
 	report, err := s.Safety()
 	if err != nil {
 		return AuthenticationResult{}, err
 	}
-	return s.Authentication.Test(ctx, report, alias, acknowledged)
+	result, err := s.Authentication.Test(ctx, report, alias, acknowledged)
+	if err != nil {
+		return AuthenticationResult{}, err
+	}
+	result.Stderr = platform.SanitiseHomePaths(result.Stderr, s.Workspace.Home())
+	return result, nil
 }

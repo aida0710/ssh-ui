@@ -17,7 +17,7 @@ Plans are executed in this order. A later plan may consume only interfaces commi
 - Subsystem 2 (Lossless config engine): delivered on `feature/config-engine`; plan `2026-08-05-ssh-ui-config-engine-implementation-plan.md`; acceptance gate verified 2026-08-05, including a clean 60-second parser fuzz run and no new module dependency.
 - Subsystem 3 (Connections UI and groups): planned, not started. `2026-08-05-ssh-ui-connections-ui-implementation-plan.md`, 10 tasks.
 - Subsystem 4 (Key vault): planned, not started. `2026-08-05-ssh-ui-key-vault-implementation-plan.md`, 9 tasks.
-- Subsystem 5 (SSH integrations): planned, not started. `2026-08-05-ssh-ui-ssh-integrations-implementation-plan.md`, 9 tasks.
+- Subsystem 5 (SSH integrations): delivered on `feature/ssh-integrations`; plan `2026-08-05-ssh-ui-ssh-integrations-implementation-plan.md`, 9 tasks; acceptance gate verified 2026-08-05, including a clean fuzz run, an unchanged `go.mod`/`go.sum` and a `make generate` that leaves no diff. The `ssh -G` differential test subsystem 2 deferred is now implemented in `internal/effective/differential_test.go`; it compares the engine's projection against the installed OpenSSH on fixtures containing no executable directive, inside `t.TempDir()`, and skips rather than fails when `ssh` is absent.
 - Subsystem 6 (Hardening and release): not planned.
 - Follow-up `ssh-ui-file-operations`: not planned. Owns `~/.ssh` file and folder move, rename and delete, which subsystem 3 defers.
 
