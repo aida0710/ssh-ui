@@ -36,7 +36,7 @@ func New(options Options) (*Server, error) {
 		return nil, ErrNonLoopbackListener
 	}
 	tcpAddress, ok := options.Listener.Addr().(*net.TCPAddr)
-	if !ok || !tcpAddress.IP.Equal(net.IPv4(127, 0, 0, 1)) {
+	if !ok || len(tcpAddress.IP) != net.IPv4len || tcpAddress.IP[0] != 127 || tcpAddress.IP[1] != 0 || tcpAddress.IP[2] != 0 || tcpAddress.IP[3] != 1 {
 		return nil, ErrNonLoopbackListener
 	}
 

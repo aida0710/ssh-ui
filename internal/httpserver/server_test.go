@@ -24,16 +24,22 @@ func TestNewRejectsNonLoopbackListeners(t *testing.T) {
 	tests := []struct {
 		name    string
 		address net.Addr
+		wantErr bool
 	}{
-		{name: "unspecified IPv4", address: &net.TCPAddr{IP: net.IPv4zero}},
-		{name: "unspecified IPv6", address: &net.TCPAddr{IP: net.IPv6unspecified}},
-		{name: "non TCP address", address: fakeAddr("unix")},
+		{name: "unmapped IPv4 loopback", address: &net.TCPAddr{IP: net.IP{127, 0, 0, 1}, Port: 43123}},
+		{name: "IPv4 mapped IPv6 loopback", address: &net.TCPAddr{IP: net.ParseIP("::ffff:127.0.0.1")}, wantErr: true},
+		{name: "unspecified IPv4", address: &net.TCPAddr{IP: net.IPv4zero}, wantErr: true},
+		{name: "unspecified IPv6", address: &net.TCPAddr{IP: net.IPv6unspecified}, wantErr: true},
+		{name: "non TCP address", address: fakeAddr("unix"), wantErr: true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := New(Options{Listener: fakeListener{address: test.address}})
-			if !errors.Is(err, ErrNonLoopbackListener) {
+			if test.wantErr && !errors.Is(err, ErrNonLoopbackListener) {
 				t.Fatalf("New error = %v, want %v", err, ErrNonLoopbackListener)
+			}
+			if !test.wantErr && err != nil {
+				t.Fatalf("New error = %v", err)
 			}
 		})
 	}
