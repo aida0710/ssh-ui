@@ -72,7 +72,7 @@ func (m *Manager) Pending() ([]Pending, error) {
 				HasBackup: entry.Backup != "",
 			}
 			switch {
-			case pendingEntry.Committed && pendingEntry.Action == actionRemove:
+			case pendingEntry.Committed && pendingEntry.Action == actionRemove && entry.NoBackup:
 				item.CanRollback = false
 			case pendingEntry.Committed && pendingEntry.Action == actionWrite && entry.HadPrevious && entry.NoBackup:
 				item.CanRollback = false
@@ -123,7 +123,10 @@ func (m *Manager) Rollback(identifier string) error {
 	}
 	for index := 0; index < record.Committed; index++ {
 		entry := record.Entries[index]
-		if entry.action() == actionRemove {
+		// A removal that kept a backup is as reversible as a replacement: the
+		// bytes are in the generational directory and the mode is in the
+		// entry. Only one that deliberately kept none cannot be undone.
+		if entry.action() == actionRemove && entry.NoBackup {
 			return ErrIrreversibleRemoval
 		}
 		if entry.action() == actionWrite && entry.HadPrevious && entry.NoBackup {

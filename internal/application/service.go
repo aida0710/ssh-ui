@@ -50,6 +50,14 @@ const (
 	// in the configuration rather than in metadata, so it survives for anyone
 	// reading the file without this application.
 	EditComment EditKind = "comment"
+	// EditFileRename moves one configuration file and rewrites the Include
+	// lines that named it. EditFileDelete removes one and removes those lines.
+	// Both are file operations rather than block operations, which is why they
+	// are their own kinds rather than a shape of file_raw: file_raw can empty a
+	// file but cannot make it stop existing, and a file that is no longer
+	// included is a different thing from a file that is empty.
+	EditFileRename EditKind = "file_rename"
+	EditFileDelete EditKind = "file_delete"
 )
 
 // EditRequest is one requested change.
@@ -452,6 +460,10 @@ func (s *Service) plan(request EditRequest) (planned, error) {
 		return s.planMetadataEdit(graph, request)
 	case EditMove:
 		return s.planMoveHost(graph, request)
+	case EditFileRename:
+		return s.planFileRename(graph, request)
+	case EditFileDelete:
+		return s.planFileDelete(graph, request)
 	default:
 		return planned{}, ErrUnknownEditKind
 	}

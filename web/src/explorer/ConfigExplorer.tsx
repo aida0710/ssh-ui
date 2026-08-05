@@ -44,6 +44,8 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
   const [preview, setPreview] = useState<SavePreview | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
   const [newPath, setNewPath] = useState("");
+  const [renameTo, setRenameTo] = useState("");
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [jump, setJump] = useState("");
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const jumped = useRef<FileTarget | null>(null);
@@ -89,7 +91,53 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
       setDraft(loaded.contents);
       setPreview(null);
       setProblem(null);
+      setRenameTo("");
+      setConfirmingDelete(false);
     } catch (error) {
+      setProblem(toProblem(error));
+    }
+  }
+
+  // Renaming and deleting are file operations, not edits, so they send the
+  // bytes that were read as the precondition rather than the draft. A draft
+  // that has not been saved is not what is on disk, and moving a file on the
+  // strength of it would move something the user never looked at.
+  async function renameFile() {
+    if (file === null || file.file.path === undefined || renameTo === "") return;
+    try {
+      const result = await configApi.save({
+        kind: "file_rename",
+        path: file.file.path,
+        base: file.contents,
+        destinationPath: renameTo,
+      });
+      setPreview(result.preview);
+      setProblem(null);
+      setRenameTo("");
+      await reload();
+      await open(renameTo);
+    } catch (error) {
+      setPreview(null);
+      setProblem(toProblem(error));
+    }
+  }
+
+  async function deleteFile() {
+    if (file === null || file.file.path === undefined) return;
+    try {
+      const result = await configApi.save({
+        kind: "file_delete",
+        path: file.file.path,
+        base: file.contents,
+      });
+      setPreview(result.preview);
+      setProblem(null);
+      setConfirmingDelete(false);
+      setFile(null);
+      setDraft("");
+      await reload();
+    } catch (error) {
+      setPreview(null);
       setProblem(toProblem(error));
     }
   }
@@ -288,6 +336,72 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
                 {t("explorer.saveFile")}
               </button>
             </div>
+
+            {file.file.path === undefined || !file.editable ? null : (
+              <div className="flex flex-col gap-2 rounded border border-zinc-800 p-3">
+                <h4 className={sectionHeading}>{t("explorer.fileOperations")}</h4>
+                {/*
+                  The Include lines that name this file travel with it. That is
+                  the whole reason to do this here rather than with mv: a file
+                  moved out from under its Include still parses and quietly
+                  stops applying.
+                */}
+                <p className={hintText}>{t("explorer.fileOperationsNote")}</p>
+                <label htmlFor="rename-file-path" className={fieldLabel}>{t("explorer.renameTo")}</label>
+                <input
+                  id="rename-file-path"
+                  value={renameTo}
+                  onChange={(event) => setRenameTo(event.target.value)}
+                  placeholder={file.file.path}
+                  className={control}
+                />
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void renameFile()}
+                    disabled={renameTo === "" || renameTo === file.file.path || modified}
+                    className={secondaryAction}
+                  >
+                    {t("explorer.renameFile")}
+                  </button>
+                  {confirmingDelete ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void deleteFile()}
+                        className="rounded border border-rose-700 px-2 py-1 text-xs text-rose-200 hover:bg-rose-950"
+                      >
+                        {t("explorer.confirmDelete")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingDelete(false)}
+                        className={secondaryAction}
+                      >
+                        {t("explorer.cancelDelete")}
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingDelete(true)}
+                      disabled={modified}
+                      className={secondaryAction}
+                    >
+                      {t("explorer.deleteFile")}
+                    </button>
+                  )}
+                </div>
+                {/*
+                  Deleting keeps a generational backup, so History offers the
+                  file back. Saying so is what makes the confirmation a
+                  decision rather than a dare.
+                */}
+                <p className={hintText}>
+                  {modified ? t("explorer.saveOrDiscardFirst") : t("explorer.deleteIsRecoverable")}
+                </p>
+              </div>
+            )}
           </div>
         )}
         <SavePreviewPanel preview={preview} conflict={problem?.conflict ?? null} problem={problem} />

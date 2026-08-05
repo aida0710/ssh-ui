@@ -631,3 +631,65 @@ func TestADirectoryOutsideTheWorkspaceIsRefused(t *testing.T) {
 		}
 	}
 }
+
+func TestARemovalCanKeepABackupSoHistoryCanRestoreIt(t *testing.T) {
+	// A configuration file the user deleted from the explorer is not key
+	// material, and every other change this application makes can be undone
+	// from History. The generational copy is what puts a removal on the same
+	// footing: Restore reads exactly this file.
+	manager, workspace := newTestManager(t)
+	path := writeWorkspaceFile(t, workspace, "conf.d/10-home.conf", "Host nas\n\tUser aida\n", 0o600)
+
+	result, err := manager.Commit(Request{
+		Operation: "config.file_delete",
+		Removals: []Removal{{
+			Path:         path,
+			Precondition: Precondition{Exists: true, Digest: Digest([]byte("Host nas\n\tUser aida\n"))},
+			Backup:       true,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Commit = %v", err)
+	}
+	if _, err := os.Stat(path); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("the file is still there: %v", err)
+	}
+
+	backup := filepath.Join(result.BackupDir, "conf.d", "10-home.conf")
+	kept, err := os.ReadFile(backup)
+	if err != nil {
+		t.Fatalf("the removal kept no backup: %v", err)
+	}
+	if string(kept) != "Host nas\n\tUser aida\n" {
+		t.Errorf("backup = %q", kept)
+	}
+	info, err := os.Stat(backup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Errorf("backup mode = %v, want the mode the file had", info.Mode().Perm())
+	}
+}
+
+func TestAPurgeStillCopiesNothingIntoTheBackupDirectory(t *testing.T) {
+	// The permanent key delete is the reason removals keep nothing by default.
+	// Copying key material into the backup directory would defeat the two
+	// confirmations the user gave for it.
+	manager, workspace := newTestManager(t)
+	path := writeWorkspaceFile(t, workspace, "keys/id_ed25519", "PRIVATE", 0o600)
+
+	result, err := manager.Commit(Request{
+		Operation: "key.purge",
+		Removals: []Removal{{
+			Path:         path,
+			Precondition: Precondition{Exists: true, Digest: Digest([]byte("PRIVATE"))},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Commit = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(result.BackupDir, "keys", "id_ed25519")); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("the purge wrote the key into the backup directory: %v", err)
+	}
+}

@@ -43,7 +43,7 @@ var (
 	ErrIrreversibleChange  = errors.New("a committed change that kept no backup cannot be rolled back")
 	ErrMoveTargetExists    = errors.New("move target already exists")
 	ErrMissingSource       = errors.New("file to move or remove does not exist")
-	ErrIrreversibleRemoval = errors.New("a committed removal cannot be rolled back")
+	ErrIrreversibleRemoval = errors.New("a committed removal that kept no backup cannot be rolled back")
 )
 
 // Precondition records the state the caller based its new contents on.
@@ -81,13 +81,20 @@ type Move struct {
 
 // Removal deletes one file.
 //
-// A removal never writes a backup. Its only caller is a permanent delete the
-// user has confirmed twice, and copying key material into the backup directory
-// would defeat that decision. An interrupted removal can therefore be completed
-// but not rolled back, and Rollback says so instead of pretending otherwise.
+// By default it writes no backup, because its first caller is a permanent
+// delete the user has confirmed twice and copying key material into the backup
+// directory would defeat that decision. Such a removal can be completed after
+// an interruption but not rolled back, and Rollback says so instead of
+// pretending otherwise.
+//
+// Backup opts in to the generational copy, for callers deleting something that
+// is not key material — a configuration file the user removed from the
+// explorer. That removal then behaves like every other change this application
+// makes: it is in History and it can be undone.
 type Removal struct {
 	Path         string
 	Precondition Precondition
+	Backup       bool
 }
 
 // DirectoryCreate creates one directory and any missing parent below the root.
@@ -377,16 +384,23 @@ func (m *Manager) Commit(request Request) (Result, error) {
 		if err != nil {
 			return Result{}, err
 		}
+		var previous []byte
+		if removal.Backup {
+			if previous, err = m.workspace.FileSystem().ReadFile(target); err != nil {
+				return Result{}, err
+			}
+		}
 		entries = append(entries, journalEntry{
 			Action:         actionRemove,
 			Path:           target,
+			NoBackup:       !removal.Backup,
 			HadPrevious:    true,
 			Mode:           uint32(mode),
 			Digest:         digest,
 			PreviousDigest: digest,
 		})
 		stagedContents = append(stagedContents, nil)
-		previousContents = append(previousContents, nil)
+		previousContents = append(previousContents, previous)
 		written = append(written, target)
 	}
 
@@ -479,13 +493,17 @@ func (m *Manager) Commit(request Request) (Result, error) {
 		}
 	}
 
-	// Copy the previous contents before anything is replaced. Only a
-	// replacement needs a generational backup: a move keeps the single copy of
-	// the file, and a removal is deliberately irreversible. Entries and the
-	// staged and previous slices stay index-aligned throughout Commit.
+	// Copy the previous contents before anything is replaced or unlinked. A
+	// move needs no copy, because it keeps the single copy of the file; a
+	// replacement always needs one, and a removal needs one exactly when its
+	// caller asked for it. Entries and the staged and previous slices stay
+	// index-aligned throughout Commit.
 	for index := range record.Entries {
 		entry := &record.Entries[index]
-		if entry.action() != actionWrite || !entry.HadPrevious || entry.NoBackup {
+		if entry.action() != actionWrite && entry.action() != actionRemove {
+			continue
+		}
+		if !entry.HadPrevious || entry.NoBackup {
 			continue
 		}
 		relative, err := filepath.Rel(m.workspace.Root(), entry.Path)

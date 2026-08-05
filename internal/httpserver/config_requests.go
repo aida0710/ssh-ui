@@ -138,7 +138,8 @@ func validateEditRequest(request application.EditRequest) error {
 	}
 	switch request.Kind {
 	case application.EditHostFields, application.EditBlockRaw, application.EditFileRaw,
-		application.EditRename, application.EditMove, application.EditComment:
+		application.EditRename, application.EditMove, application.EditComment,
+		application.EditFileRename, application.EditFileDelete:
 		if err := validatePathParameter(request.Path); err != nil {
 			return err
 		}
@@ -206,6 +207,13 @@ func validateEditRequest(request application.EditRequest) error {
 		if err := validatePathParameter(request.DestinationPath); err != nil {
 			return err
 		}
+	case application.EditFileRename:
+		if err := validatePathParameter(request.DestinationPath); err != nil {
+			return err
+		}
+	case application.EditFileDelete:
+		// The base is the whole precondition. A delete carries no new bytes,
+		// so there is nothing else about it to validate here.
 	case application.EditGroups, application.EditMetadata:
 		if request.Metadata == nil {
 			return errInvalidEdit
@@ -280,8 +288,15 @@ func serviceProblem(c *echo.Context, err error) error {
 			Path:     report.Path,
 			Conflict: &report,
 		})
-	case errors.Is(err, application.ErrHostNotFound), errors.Is(err, storage.ErrUnknownTransaction):
+	case errors.Is(err, application.ErrHostNotFound), errors.Is(err, storage.ErrUnknownTransaction),
+		errors.Is(err, application.ErrFileNotFound):
 		return problemWith(c, http.StatusNotFound, problemPayload{Code: "not_found"})
+	case errors.Is(err, application.ErrCannotTouchEntryFile):
+		return problemWith(c, http.StatusConflict, problemPayload{Code: "entry_file_protected"})
+	case errors.Is(err, application.ErrDestinationExists):
+		return problemWith(c, http.StatusConflict, problemPayload{Code: "destination_exists"})
+	case errors.Is(err, application.ErrSamePath):
+		return problemWith(c, http.StatusBadRequest, problemPayload{Code: "invalid_request"})
 	case errors.Is(err, application.ErrGroupNotDeclared):
 		return problemWith(c, http.StatusUnprocessableEntity, problemPayload{Code: "group_not_declared"})
 	case errors.Is(err, application.ErrGroupExists):

@@ -22,3 +22,75 @@ test("shows the Include hierarchy and edits an included file", async ({ page, in
   expect(after).toContain("Host printer");
   expect(after).toContain("Host nas");
 });
+
+test("renames an included file and carries the Include that named it", async ({
+  page,
+  installation,
+}) => {
+  // The entry file reaches conf.d/10-home.conf through a glob, so a rename
+  // within conf.d needs no rewriting. Adding a literal Include first is what
+  // makes this test about the thing that matters.
+  await installation.write(
+    "config",
+    (await installation.read("config")).replace(
+      "Include conf.d/*.conf",
+      "Include conf.d/*.conf\nInclude work/lon.conf",
+    ),
+  );
+  await installation.write("work/lon.conf", "Host lon\n\tHostName 198.51.100.7\n");
+
+  await page.goto(installation.url);
+  await openSection(page, "Config");
+  await page.getByRole("button", { name: "work/lon.conf" }).click();
+
+  await page.getByLabel("New path").fill("work/london.conf");
+  expect(await clickAndAwait(page, "Rename file", "/api/v1/config/save")).toBe(200);
+
+  expect(await installation.read("work/london.conf")).toBe("Host lon\n\tHostName 198.51.100.7\n");
+  const entry = await installation.read("config");
+  expect(entry).toContain("Include work/london.conf");
+  expect(entry).not.toContain("Include work/lon.conf");
+  // Every other byte of a file that says not to reformat it.
+  expect(entry).toContain("# Managed by hand since 2019. Do not reformat.");
+  expect(entry).toContain("Include conf.d/*.conf");
+  expect(entry).toContain("HostName=203.0.113.10");
+});
+
+test("deletes a file after a confirmation and offers it back in History", async ({
+  page,
+  installation,
+}) => {
+  await installation.write(
+    "config",
+    (await installation.read("config")).replace(
+      "Include conf.d/*.conf",
+      "Include conf.d/*.conf\nInclude work/lon.conf",
+    ),
+  );
+  await installation.write("work/lon.conf", "Host lon\n\tHostName 198.51.100.7\n");
+
+  await page.goto(installation.url);
+  await openSection(page, "Config");
+  await page.getByRole("button", { name: "work/lon.conf" }).click();
+
+  // One press arms it, the second does it. A file operation behind a single
+  // click is one misplaced click away from a deletion nobody asked for.
+  await page.getByRole("button", { name: "Delete file" }).click();
+  expect(await clickAndAwait(page, "Delete it", "/api/v1/config/save")).toBe(200);
+
+  await expect
+    .poll(async () => {
+      try {
+        await installation.read("work/lon.conf");
+        return "still there";
+      } catch {
+        return "gone";
+      }
+    })
+    .toBe("gone");
+  expect(await installation.read("config")).not.toContain("work/lon.conf");
+
+  // The bytes are not lost: History lists the file as restorable.
+  await openSection(page, "History");
+  await expect(page.getByText("work/lon.conf").first()).toBeVisible();
+});

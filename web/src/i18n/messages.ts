@@ -68,6 +68,12 @@ export const en = {
   "notice.group_member_missing": "This group member has no host block in the configuration.",
   "notice.explained_values_only": "These values explain what this engine reads. Run ssh -G from the Diagnostics tab for the authoritative answer.",
   "notice.destination_not_included": "No Include reaches this file yet, so OpenSSH will not read the moved connection until you add one.",
+  "notice.include_no_longer_matches":
+    "A pattern that reached this file will not match its new name, so OpenSSH will stop reading it.",
+  "notice.include_not_rewritten":
+    "An Include names this file in a form this application will not rewrite, so it was left exactly as it was. Check it by hand.",
+  "notice.include_now_unreached":
+    "No Include reaches the new path, so OpenSSH will not read this file until you add one.",
 
   "preview.heading": "Save preview",
   "preview.newFile": " (new file)",
@@ -304,6 +310,18 @@ export const en = {
   "explorer.readOnly": "read only",
   "explorer.newFilePath": "New file path",
   "explorer.createFile": "Create file",
+  "explorer.fileOperations": "This file",
+  "explorer.fileOperationsNote":
+    "Renaming carries the Include lines that name this file. A pattern that matches by shape is left alone, and you are told when the file leaves its reach.",
+  "explorer.renameTo": "New path",
+  "explorer.renameFile": "Rename file",
+  "explorer.deleteFile": "Delete file",
+  "explorer.confirmDelete": "Delete it",
+  "explorer.cancelDelete": "Keep it",
+  "explorer.deleteIsRecoverable":
+    "Deleting removes the Include lines that named it and keeps a backup, so History can put the file back.",
+  "explorer.saveOrDiscardFirst":
+    "There are unsaved edits. Save them or reopen the file before renaming or deleting it.",
   "explorer.newFileNote":
     "A new file is only read once an Include in ~/.ssh/config points at it. Add that line in the entry file below. Moving a connection between groups is done from the Connections screen. Renaming and deleting arbitrary files and folders is not offered here yet: it needs journalled directory create, remove and rename, which do not exist.",
   "explorer.diagnostics": "Diagnostics",
@@ -613,6 +631,10 @@ export const ja: Record<MessageKey, string> = {
   "notice.group_member_missing": "このグループのメンバーに対応する Host ブロックが設定にありません。",
   "notice.explained_values_only": "これらの値はこのエンジンが読んだ内容の説明です。権威ある答えは Diagnostics タブの ssh -G で確認してください。",
   "notice.destination_not_included": "このファイルへ届く Include がまだないため、移動した接続を OpenSSH は読みません。Include を追加してください。",
+  "notice.include_no_longer_matches": "このファイルへ届いていたパターンが新しい名前に一致しないため、OpenSSH は読まなくなります。",
+  "notice.include_not_rewritten":
+    "このアプリが書き換えない形の Include がこのファイルを指しています。そのまま残したので、手で確認してください。",
+  "notice.include_now_unreached": "新しいパスへ届く Include がないため、追加するまで OpenSSH はこのファイルを読みません。",
 
   "preview.heading": "保存プレビュー",
   "preview.newFile": "（新規ファイル）",
@@ -848,6 +870,17 @@ export const ja: Record<MessageKey, string> = {
   "explorer.readOnly": "読み取り専用",
   "explorer.newFilePath": "新しいファイルのパス",
   "explorer.createFile": "ファイルを作成",
+  "explorer.fileOperations": "このファイル",
+  "explorer.fileOperationsNote":
+    "リネームは、このファイルを名指ししている Include 行も一緒に書き換えます。ワイルドカードのパターンはそのまま残し、届かなくなる場合は知らせます。",
+  "explorer.renameTo": "新しいパス",
+  "explorer.renameFile": "ファイルをリネーム",
+  "explorer.deleteFile": "ファイルを削除",
+  "explorer.confirmDelete": "削除する",
+  "explorer.cancelDelete": "やめる",
+  "explorer.deleteIsRecoverable":
+    "削除すると、名指ししていた Include 行も取り除きます。バックアップは残るので、履歴から戻せます。",
+  "explorer.saveOrDiscardFirst": "未保存の編集があります。リネームや削除の前に保存するか、ファイルを開き直してください。",
   "explorer.newFileNote":
     "新しいファイルは、~/.ssh/config の Include が指して初めて読まれます。下の起点ファイルにその行を追加してください。グループ間の移動は Connections 画面で行います。任意のファイルとフォルダの改名・削除はまだ提供していません。journal 付きのディレクトリ作成・削除・改名が必要です。",
   "explorer.diagnostics": "診断",
