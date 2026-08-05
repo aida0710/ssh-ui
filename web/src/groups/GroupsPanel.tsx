@@ -3,6 +3,7 @@ import { ApiError, type Problem } from "../api/client";
 import { configApi, type GroupMetadata, type Metadata, type Overview, type SavePreview } from "../api/config";
 import { SavePreviewPanel } from "../connections/SavePreview";
 import { formatValues, parseValues } from "../connections/values";
+import { useTranslate } from "../i18n/context";
 
 function toProblem(error: unknown): Problem {
   if (error instanceof ApiError && error.problem !== null) return error.problem;
@@ -11,6 +12,7 @@ function toProblem(error: unknown): Problem {
 }
 
 export function GroupsPanel() {
+  const t = useTranslate();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [metadata, setMetadata] = useState<Metadata | null>(null);
   const [preview, setPreview] = useState<SavePreview | null>(null);
@@ -38,7 +40,7 @@ export function GroupsPanel() {
   }, [reload]);
 
   if (overview === null || metadata === null) {
-    return <p role="status" className="text-sm text-zinc-300">Loading groups…</p>;
+    return <p role="status" className="text-sm text-zinc-300">{t("groups.loading")}</p>;
   }
 
   // Hoisted function declarations do not inherit the narrowing above, so the
@@ -56,7 +58,7 @@ export function GroupsPanel() {
 
   function addGroup() {
     if (newName === "" || groups.some((group) => group.name === newName)) {
-      setLocalError("A group needs a name that is not already used.");
+      setLocalError(t("groups.nameTaken"));
       return;
     }
     const added: GroupMetadata = newParent === "" ? { name: newName } : { name: newName, parent: newParent };
@@ -68,14 +70,14 @@ export function GroupsPanel() {
 
   function addSetting() {
     if (settingGroup === "" || settingKeyword === "") {
-      setLocalError("Choose a group and a directive keyword.");
+      setLocalError(t("groups.chooseGroupAndKeyword"));
       return;
     }
     let values: string[];
     try {
       values = parseValues(settingValue);
     } catch {
-      setLocalError("A value has an unbalanced quote. OpenSSH has no escape inside quotes, so this cannot be saved.");
+      setLocalError(t("groups.unbalancedQuote"));
       return;
     }
     setMetadata({
@@ -101,13 +103,13 @@ export function GroupsPanel() {
   function renameGroup(from: string, to: string) {
     const target = to.trim();
     if (target === "" || target === from) {
-      setLocalError("A renamed group needs a name of its own.");
+      setLocalError(t("groups.renameNeedsName"));
       return;
     }
     if (groups.some((group) => group.name === target)) {
       // Renaming onto an existing group would merge two sets of settings and
       // two sets of members, and nothing here knows which should win.
-      setLocalError(`${target} already exists. Rename it to something else, or remove one of the two.`);
+      setLocalError(t("groups.renameCollides", { name: target }));
       return;
     }
     setMetadata({
@@ -158,8 +160,7 @@ export function GroupsPanel() {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-xs text-zinc-400">
-        Groups compile into ordinary Host blocks in {loaded.groupsFile ?? "groups.ssh-ui.conf"}, with child groups
-        written before their parents so OpenSSH keeps the most specific value it reads first.
+        {t("groups.compileNote", { file: loaded.groupsFile ?? "groups.ssh-ui.conf" })}
       </p>
       {localError === "" ? null : <p role="alert" className="text-sm text-rose-300">{localError}</p>}
 
@@ -168,7 +169,7 @@ export function GroupsPanel() {
           <li key={group.name} className="rounded border border-zinc-800 p-3">
             <h3 className="text-sm font-medium">{group.name}</h3>
             {group.parent === undefined ? null : (
-              <p className="text-xs text-zinc-400">{`inherits from ${group.parent}`}</p>
+              <p className="text-xs text-zinc-400">{t("groups.inheritsFrom", { parent: group.parent })}</p>
             )}
             <ul className="mt-1 text-xs text-zinc-300">
               {(group.settings ?? []).map((setting, index) => (
@@ -176,11 +177,12 @@ export function GroupsPanel() {
               ))}
             </ul>
             <p className="mt-1 text-xs text-zinc-400">
-              Members: <span>{membersOf(group.name).length === 0 ? "none" : membersOf(group.name).join(", ")}</span>
+              {t("groups.members")}{" "}
+              <span>{membersOf(group.name).length === 0 ? t("groups.noMembers") : membersOf(group.name).join(", ")}</span>
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <label htmlFor={`group-colour-${group.name}`} className="text-xs text-zinc-400">
-                Colour
+                {t("groups.colour")}
               </label>
               <input
                 id={`group-colour-${group.name}`}
@@ -195,11 +197,11 @@ export function GroupsPanel() {
                   onClick={() => updateGroup(group.name, { colour: "" })}
                   className="rounded border border-zinc-700 px-2 py-1 text-xs"
                 >
-                  {`Clear ${group.name} colour`}
+                  {t("groups.clearColour", { name: group.name })}
                 </button>
               )}
               <label htmlFor={`group-rename-${group.name}`} className="text-xs text-zinc-400">
-                {`Rename ${group.name} to`}
+                {t("groups.renameTo", { name: group.name })}
               </label>
               <input
                 id={`group-rename-${group.name}`}
@@ -212,10 +214,10 @@ export function GroupsPanel() {
                 onClick={() => renameGroup(group.name, renaming[group.name] ?? "")}
                 className="rounded border border-zinc-700 px-2 py-1 text-xs"
               >
-                {`Rename ${group.name}`}
+                {t("groups.rename", { name: group.name })}
               </button>
               <label htmlFor={`group-order-${group.name}`} className="text-xs text-zinc-400">
-                Display order
+                {t("groups.displayOrder")}
               </label>
               <input
                 id={`group-order-${group.name}`}
@@ -230,58 +232,58 @@ export function GroupsPanel() {
               onClick={() => removeGroup(group.name)}
               className="mt-2 rounded border border-zinc-700 px-2 py-1 text-xs"
             >
-              {`Remove ${group.name}`}
+              {t("groups.remove", { name: group.name })}
             </button>
           </li>
         ))}
       </ul>
 
       <section className="flex flex-col gap-2 rounded border border-zinc-800 p-3">
-        <label htmlFor="group-name" className="text-xs text-zinc-400">New group name</label>
+        <label htmlFor="group-name" className="text-xs text-zinc-400">{t("groups.newName")}</label>
         <input
           id="group-name"
           value={newName}
           onChange={(event) => setNewName(event.target.value)}
           className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
         />
-        <label htmlFor="group-parent" className="text-xs text-zinc-400">Parent group</label>
+        <label htmlFor="group-parent" className="text-xs text-zinc-400">{t("groups.parent")}</label>
         <select
           id="group-parent"
           value={newParent}
           onChange={(event) => setNewParent(event.target.value)}
           className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
         >
-          <option value="">None</option>
+          <option value="">{t("groups.none")}</option>
           {groups.map((group) => (
             <option key={group.name} value={group.name}>{group.name}</option>
           ))}
         </select>
         <button type="button" onClick={addGroup} className="self-start rounded bg-zinc-800 px-3 py-1 text-sm">
-          Add group
+          {t("groups.add")}
         </button>
       </section>
 
       <section className="flex flex-col gap-2 rounded border border-zinc-800 p-3">
-        <label htmlFor="setting-group" className="text-xs text-zinc-400">Group</label>
+        <label htmlFor="setting-group" className="text-xs text-zinc-400">{t("groups.group")}</label>
         <select
           id="setting-group"
           value={settingGroup}
           onChange={(event) => setSettingGroup(event.target.value)}
           className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
         >
-          <option value="">Choose a group</option>
+          <option value="">{t("groups.chooseGroup")}</option>
           {groups.map((group) => (
             <option key={group.name} value={group.name}>{group.name}</option>
           ))}
         </select>
-        <label htmlFor="setting-keyword" className="text-xs text-zinc-400">Directive</label>
+        <label htmlFor="setting-keyword" className="text-xs text-zinc-400">{t("groups.directive")}</label>
         <input
           id="setting-keyword"
           value={settingKeyword}
           onChange={(event) => setSettingKeyword(event.target.value)}
           className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
         />
-        <label htmlFor="setting-value" className="text-xs text-zinc-400">Value</label>
+        <label htmlFor="setting-value" className="text-xs text-zinc-400">{t("groups.value")}</label>
         <input
           id="setting-value"
           value={settingValue}
@@ -289,16 +291,16 @@ export function GroupsPanel() {
           className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
         />
         <button type="button" onClick={addSetting} className="self-start rounded bg-zinc-800 px-3 py-1 text-sm">
-          Add setting
+          {t("groups.addSetting")}
         </button>
       </section>
 
       <div className="flex gap-2">
         <button type="button" onClick={() => void run("preview")} className="rounded border border-zinc-700 px-3 py-1 text-sm">
-          Preview group changes
+          {t("groups.previewChanges")}
         </button>
         <button type="button" onClick={() => void run("save")} className="rounded bg-zinc-200 px-3 py-1 text-sm text-zinc-900">
-          Save groups
+          {t("groups.save")}
         </button>
       </div>
 

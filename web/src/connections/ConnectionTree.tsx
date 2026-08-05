@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { HostEntry, Overview } from "../api/config";
+import { useTranslate } from "../i18n/context";
 
 export type HostSelection = { path: string; alias: string };
 
@@ -14,7 +15,10 @@ type ConnectionTreeProps = {
   onOpenPatternRule: (path: string, line: number) => void;
 };
 
-const ungrouped = "Ungrouped";
+// The ungrouped bucket is keyed by a constant that never reaches the screen:
+// its label is translated, but matching a host to it must not depend on the
+// display language.
+const ungrouped = "\u0000ungrouped";
 
 function hostLabel(host: HostEntry): string {
   return host.identity.alias === "" ? `Host ${host.patterns.join(" ")}` : host.identity.alias;
@@ -29,6 +33,7 @@ function matchesQuery(host: HostEntry, tags: string[], query: string): boolean {
 }
 
 export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule }: ConnectionTreeProps) {
+  const t = useTranslate();
   const [query, setQuery] = useState("");
   const [grouping, setGrouping] = useState<"groups" | "files">("groups");
 
@@ -93,7 +98,7 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
   }, [grouping, overview.files, overview.metadata.groups, visible]);
 
   return (
-    <nav aria-label="Connections" className="flex h-full flex-col gap-3 border-r border-zinc-800 p-4">
+    <nav aria-label={t("tree.navLabel")} className="flex h-full flex-col gap-3 border-r border-zinc-800 p-4">
       <div className="flex gap-2">
         {(["groups", "files"] as const).map((mode) => (
           <button
@@ -103,32 +108,34 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
             aria-pressed={grouping === mode}
             className={`rounded px-2 py-1 text-xs ${grouping === mode ? "bg-zinc-800 text-zinc-100" : "text-zinc-400"}`}
           >
-            {mode === "groups" ? "Groups" : "Files"}
+            {mode === "groups" ? t("tree.byGroups") : t("tree.byFiles")}
           </button>
         ))}
       </div>
       <label className="text-xs text-zinc-400" htmlFor="connection-filter">
-        Filter connections
+        {t("tree.filter")}
       </label>
       <input
         id="connection-filter"
         type="search"
         value={query}
         onChange={(event) => setQuery(event.target.value)}
-        placeholder="alias, pattern or tag"
+        placeholder={t("tree.filterPlaceholder")}
         className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
       />
 
       {visible.length === 0 ? (
         <p role="status" className="text-sm text-zinc-400">
-          No connection matches this filter.
+          {t("tree.noMatch")}
         </p>
       ) : null}
 
       {sections.map((section) => (
         section.items.length === 0 ? null : (
           <section key={section.title} className="flex flex-col gap-1">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{section.title}</h2>
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              {section.title === ungrouped ? t("tree.ungrouped") : section.title}
+            </h2>
             <ul>
               {section.items.map((item) => {
                 const active =
@@ -147,7 +154,7 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
                         <p aria-describedby={descriptionId} className="w-full rounded px-2 py-1 text-sm text-zinc-400">
                           <span className="block">{hostLabel(item.host)}</span>
                           <span className="block text-xs text-zinc-500">
-                            {`Pattern rule in ${item.host.file.absolute}, a file this editor only reads.`}
+                            {t("tree.patternRuleExternal", { path: item.host.file.absolute })}
                           </span>
                         </p>
                       ) : (
@@ -159,7 +166,7 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
                         >
                           <span className="block">{hostLabel(item.host)}</span>
                           <span className="block text-xs text-zinc-500">
-                            {`Pattern rule — open it in the Config file view (${rulePath}:${item.host.line})`}
+                            {t("tree.patternRuleOpen", { path: rulePath, line: item.host.line })}
                           </span>
                         </button>
                       )
@@ -212,9 +219,9 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
                     )}
                     <span id={descriptionId} className="sr-only">
                       {[
-                        item.favourite ? "favourite" : "",
-                        item.host.duplicate === true ? "duplicate alias" : "",
-                        item.host.wildcard === true ? "pattern rule" : "",
+                        item.favourite ? t("tree.favourite") : "",
+                        item.host.duplicate === true ? t("tree.duplicateAlias") : "",
+                        item.host.wildcard === true ? t("tree.patternRule") : "",
                         item.host.file.path ?? item.host.file.absolute,
                       ]
                         .filter((part) => part !== "")

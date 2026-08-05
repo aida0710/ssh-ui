@@ -94,9 +94,53 @@ test("keeps no secret in persistent browser storage", async ({ page, installatio
   await page.goto(installation.url);
   await expect(sessionStatus(page)).toContainText("Local session active");
 
+  // Nothing is written until the user chooses a language, so an untouched
+  // session leaves both stores empty exactly as before.
+  expect(
+    await page.evaluate(() => ({
+      local: window.localStorage.length,
+      session: window.sessionStorage.length,
+    })),
+  ).toEqual({ local: 0, session: 0 });
+
+  await page.getByLabel("Language").selectOption("ja");
+
+  // An allowlist rather than a count. A count would have passed just as well
+  // with a session token in place of the language, and checking the value is
+  // what makes that impossible: nothing but "en" or "ja" may be stored, and
+  // nothing but that one key may exist.
   const stored = await page.evaluate(() => ({
-    local: window.localStorage.length,
+    keys: Object.keys(window.localStorage),
+    language: window.localStorage.getItem("ssh-ui.language"),
     session: window.sessionStorage.length,
   }));
-  expect(stored).toEqual({ local: 0, session: 0 });
+  expect(stored.keys).toEqual(["ssh-ui.language"]);
+  expect(["en", "ja"]).toContain(stored.language);
+  expect(stored.session).toBe(0);
+});
+
+test("keeps the chosen language across a reload, and translates the panels", async ({
+  page,
+  installation,
+}) => {
+  await page.goto(installation.url);
+  await expect(sessionStatus(page)).toContainText("Local session active");
+
+  await page.getByLabel("Language").selectOption("ja");
+  await expect(page.getByRole("button", { name: "鍵", exact: true })).toBeVisible();
+
+  // A panel, not just the shell: the provider has to be above the section
+  // being rendered, and only a real page proves that.
+  await page.getByRole("button", { name: "鍵", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "鍵", level: 2 })).toBeVisible();
+  await expect(page.getByRole("button", { name: "鍵を作成" })).toBeVisible();
+
+  // A reload cannot restore the session: the bootstrap fragment is one-time
+  // and was spent on the first load. What it does show is that the stored
+  // language outlived the page, because the refusal itself arrives in
+  // Japanese — the shell reads the choice back before it knows the session
+  // failed.
+  await page.reload();
+  await expect(page.getByRole("alert")).toContainText("ローカルセッションを開始できませんでした");
+  expect(await page.evaluate(() => Object.keys(window.localStorage))).toEqual(["ssh-ui.language"]);
 });

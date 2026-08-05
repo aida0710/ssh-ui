@@ -15,6 +15,7 @@ import { ConnectionTree, type HostSelection } from "./ConnectionTree";
 import { HostDetailPanel } from "./HostDetail";
 import { NoticeList } from "./SavePreview";
 import { OrphanPanel } from "./OrphanPanel";
+import { useTranslate } from "../i18n/context";
 import { appendHostBlock, duplicateHostBlock, removeHostBlock } from "./blocks";
 
 function toProblem(error: unknown): Problem {
@@ -30,6 +31,7 @@ type ConnectionsPageProps = {
 };
 
 export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
+  const t = useTranslate();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [selection, setSelection] = useState<HostSelection | null>(null);
   const [detail, setDetail] = useState<HostDetail | null>(null);
@@ -139,7 +141,7 @@ export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
 
   async function createHost() {
     if (newAlias === "") {
-      setLocalError("A new connection needs an alias.");
+      setLocalError(t("conn.needsAlias"));
       return;
     }
     try {
@@ -168,7 +170,7 @@ export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
       });
       setLocalError("");
     } catch {
-      setLocalError("This block moved on disk. Reload the connection and try again.");
+      setLocalError(t("conn.blockMoved"));
     }
   }
 
@@ -203,7 +205,7 @@ export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
     try {
       raw = removeHostBlock(detail.file.contents, detail.form.entry.line, detail.form.raw);
     } catch {
-      setLocalError("This block moved on disk. Reload the connection and try again.");
+      setLocalError(t("conn.blockMoved"));
       return;
     }
     const path = selection.path;
@@ -216,20 +218,20 @@ export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
   }
 
   if (overview === null) {
-    return <p role="status" className="text-sm text-zinc-300">Loading connections…</p>;
+    return <p role="status" className="text-sm text-zinc-300">{t("conn.loading")}</p>;
   }
 
   return (
     <div className="grid grid-cols-[18rem_1fr] gap-6">
       <div className="flex flex-col gap-2">
-        <label htmlFor="new-alias" className="text-xs text-zinc-400">New connection alias</label>
+        <label htmlFor="new-alias" className="text-xs text-zinc-400">{t("conn.newAlias")}</label>
         <input
           id="new-alias"
           value={newAlias}
           onChange={(event) => setNewAlias(event.target.value)}
           className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
         />
-        <label htmlFor="new-file" className="text-xs text-zinc-400">Target file</label>
+        <label htmlFor="new-file" className="text-xs text-zinc-400">{t("conn.targetFile")}</label>
         <select
           id="new-file"
           value={targetFile}
@@ -243,7 +245,7 @@ export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
             ))}
         </select>
         <button type="button" onClick={() => void createHost()} className="rounded bg-zinc-800 px-3 py-1 text-sm">
-          Create connection
+          {t("conn.create")}
         </button>
         <ConnectionTree
           overview={overview}
@@ -260,22 +262,22 @@ export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
           onSave={(metadata) => void submit({ kind: "metadata", metadata })}
         />
         {detail === null ? (
-          <p role="status" className="text-sm text-zinc-400">Select a connection to edit it.</p>
+          <p role="status" className="text-sm text-zinc-400">{t("conn.select")}</p>
         ) : (
           <>
             {localError === "" ? null : <p role="alert" className="text-sm text-rose-300">{localError}</p>}
             <div className="flex gap-2">
               <button type="button" onClick={duplicateHost} className="rounded border border-zinc-700 px-2 py-1 text-xs">
-                Duplicate connection
+                {t("conn.duplicate")}
               </button>
-              <label htmlFor="move-target" className="sr-only">Move to file</label>
+              <label htmlFor="move-target" className="sr-only">{t("conn.moveToFile")}</label>
               <select
                 id="move-target"
                 value={moveTarget}
                 onChange={(event) => setMoveTarget(event.target.value)}
                 className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs"
               >
-                <option value="">Move to file…</option>
+                <option value="">{t("conn.moveToFilePlaceholder")}</option>
                 {overview.files
                   .filter((node) => node.editable && node.file.path !== undefined && node.file.path !== selection?.path)
                   .map((node) => (
@@ -283,11 +285,11 @@ export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
                   ))}
               </select>
               <button type="button" onClick={() => void moveHost()} className="rounded border border-zinc-700 px-2 py-1 text-xs">
-                Move connection
+                {t("conn.move")}
               </button>
               {confirmingDelete ? (
                 <button type="button" onClick={() => void deleteHost()} className="rounded bg-rose-700 px-2 py-1 text-xs text-zinc-100">
-                  Confirm delete
+                  {t("conn.confirmDelete")}
                 </button>
               ) : (
                 <button
@@ -295,7 +297,7 @@ export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
                   onClick={() => setConfirmingDelete(true)}
                   className="rounded border border-rose-700 px-2 py-1 text-xs text-rose-300"
                 >
-                  Delete connection
+                  {t("conn.delete")}
                 </button>
               )}
             </div>

@@ -3,6 +3,8 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
+import { LanguageProvider } from "./i18n/context";
+import { ja } from "./i18n/messages";
 
 vi.mock("./connections/ConnectionsPage", () => ({
   ConnectionsPage: ({ onOpenFile }: { onOpenFile: (path: string, line: number) => void }) => (
@@ -160,5 +162,52 @@ describe("App", () => {
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Local session active · 0.1.0"));
     expect(exchange).toHaveBeenCalledTimes(1);
     expect(health).toHaveBeenCalledTimes(1);
+  });
+  // The panels translate into English when they are rendered outside the
+  // provider, which is what lets a component test render one on its own. That
+  // convenience is a hazard here: a shell that stopped mounting the provider
+  // would look correct in English and stay English for everyone else.
+  it("renders every panel inside the language provider", async () => {
+    const user = userEvent.setup();
+    render(
+      <LanguageProvider initial="ja">
+        <App
+          bootstrap={vi.fn().mockResolvedValue({ csrfToken })}
+          health={vi.fn().mockResolvedValue({ status: "ok", version: "0.1.0" })}
+        />
+      </LanguageProvider>,
+    );
+
+    // The shell itself translates.
+    expect(await screen.findByRole("status")).toHaveTextContent(ja["shell.active"].replace("{version}", "0.1.0"));
+    expect(screen.getByRole("button", { name: ja["section.keys"] })).toBeInTheDocument();
+
+    // And the section it switches to is inside the same provider, so a panel
+    // reached through the shell is translated too.
+    await user.click(screen.getByRole("button", { name: ja["section.keys"] }));
+    expect(screen.getByText("keys panel")).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: ja["shell.primaryNavigation"] })).toBeInTheDocument();
+  });
+
+  it("switches language from the header and leaves the open section alone", async () => {
+    const user = userEvent.setup();
+    render(
+      <LanguageProvider initial="en">
+        <App
+          bootstrap={vi.fn().mockResolvedValue({ csrfToken })}
+          health={vi.fn().mockResolvedValue({ status: "ok", version: "0.1.0" })}
+        />
+      </LanguageProvider>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "History" }));
+    expect(screen.getByText("history panel")).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("Language"), "ja");
+
+    // The label changed; which panel is open did not. Section identity is not
+    // the section's name.
+    expect(screen.getByRole("button", { name: ja["section.history"] })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByText("history panel")).toBeInTheDocument();
   });
 });
