@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { RevealDialog } from "./RevealDialog";
+import { CopyButton } from "../ui/CopyButton";
 import {
   keysApi,
+  type KeyCertificate,
   type KeyInventoryResponse,
   type KeyItem,
   type KeysApi,
@@ -12,6 +14,39 @@ import {
 type KeysScreenProps = { api?: KeysApi };
 
 type ScreenState = "loading" | "ready" | "error";
+
+// certificateLines describes an OpenSSH certificate in the terms that decide
+// whether it is usable: who it names, who it is for, and whether it has run
+// out. An expired certificate that only says "certificate" is indistinguishable
+// from a working one, which is the whole reason design §6.3 classifies them.
+function certificateLines(certificate: KeyCertificate, now: number): { text: string; expired: boolean }[] {
+  const lines: { text: string; expired: boolean }[] = [];
+  if (certificate.keyId !== "") lines.push({ text: `key id ${certificate.keyId}`, expired: false });
+  if (certificate.principals.length > 0) {
+    lines.push({ text: `for ${certificate.principals.join(", ")}`, expired: false });
+  } else {
+    // A certificate with no principal is valid for every user on the host that
+    // trusts its CA. That is a fact about its reach, not a missing field.
+    lines.push({ text: "for any principal", expired: false });
+  }
+  if (certificate.neverExpires) {
+    lines.push({ text: "never expires", expired: false });
+  } else {
+    const expiry = new Date(certificate.validBefore * 1000);
+    const expired = certificate.validBefore * 1000 <= now;
+    lines.push({
+      text: `${expired ? "expired" : "valid until"} ${expiry.toISOString().slice(0, 16).replace("T", " ")}Z`,
+      expired,
+    });
+  }
+  if (certificate.signedKeyType !== "") {
+    lines.push({
+      text: `signs ${certificate.signedKeyType} ${certificate.signedKeyFingerprint}`.trim(),
+      expired: false,
+    });
+  }
+  return lines;
+}
 
 const noteLabels: Record<string, string> = {
   fingerprint_unavailable: "Fingerprint unavailable",
@@ -41,6 +76,7 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
   const [agentPassphrase, setAgentPassphrase] = useState("");
   const [agentLifetime, setAgentLifetime] = useState(0);
   const [storeInKeychain, setStoreInKeychain] = useState(false);
+  const [publicKeyView, setPublicKeyView] = useState<{ relativePath: string; text: string } | null>(null);
   const [pendingPurge, setPendingPurge] = useState("");
   const [failure, setFailure] = useState("");
 
@@ -66,6 +102,9 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
 
   const selected = variants.find((variant) => variant.algorithm === algorithm);
   const inProcess = selected === undefined || selected.inProcess;
+  // Read at render, so a certificate that runs out while this screen is open
+  // stops being described as valid the next time anything refreshes it.
+  const now = Date.now();
 
   async function submitGeneration() {
     setFailure("");
@@ -149,6 +188,21 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
     }
   }
 
+  // A public key is not a secret, so this is an ordinary read with no
+  // confirmation and no audit note. It is shown before it is copied for the
+  // same reason every other value on this screen is: what goes on the
+  // clipboard should be the thing the user is looking at.
+  async function showPublicKey(item: KeyItem) {
+    setFailure("");
+    try {
+      const response = await api.publicKey(item.id);
+      setPublicKeyView({ relativePath: response.relativePath, text: response.publicKey.trimEnd() });
+    } catch {
+      setPublicKeyView(null);
+      setFailure("The public key could not be read.");
+    }
+  }
+
   async function moveToTrash(keyId: string) {
     setFailure("");
     try {
@@ -219,7 +273,18 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
           {inventory.items.map((item) => (
             <tr key={item.id}>
               <td>{item.relativePath}</td>
-              <td>{item.kind}</td>
+              <td>
+                {item.kind}
+                {item.certificate === undefined ? null : (
+                  <ul className="text-xs text-zinc-400">
+                    {certificateLines(item.certificate, now).map((line) => (
+                      <li key={line.text} className={line.expired ? "text-red-300" : undefined}>
+                        {line.text}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </td>
               <td>{item.bits > 0 ? `${item.algorithm} · ${item.bits}` : item.algorithm}</td>
               <td>
                 {item.fingerprint !== "" ? item.fingerprint : null}
@@ -235,6 +300,11 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
               </td>
               <td>{item.references.map((reference) => reference.hostPatterns.join(" ")).join(", ")}</td>
               <td>
+                {(item.kind === "public_key" || item.kind === "certificate") && (
+                  <button type="button" onClick={() => void showPublicKey(item)}>
+                    Show public key
+                  </button>
+                )}
                 {item.kind === "private_key" && (
                   <>
                     <button type="button" onClick={() => setRevealing(item)}>
@@ -271,6 +341,61 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
           ))}
         </tbody>
       </table>
+
+      {publicKeyView !== null && (
+        <section aria-labelledby="public-key-heading" className="flex flex-col gap-2 rounded-xl border border-zinc-800 p-4">
+          <h3 id="public-key-heading" className="font-medium">
+            {`Public key: ${publicKeyView.relativePath}`}
+          </h3>
+          <pre aria-label="Public key" className="overflow-x-auto rounded-md bg-zinc-950 p-4 text-xs">
+            {publicKeyView.text}
+          </pre>
+          <div className="flex gap-2">
+            <CopyButton value={publicKeyView.text} label="public key" />
+            <button type="button" onClick={() => setPublicKeyView(null)}>
+              Close
+            </button>
+          </div>
+        </section>
+      )}
+
+      {/*
+        A file the scanner refused to interpret used to be simply absent from
+        the table, which made an incomplete inventory look like a complete one.
+        Design §6.3 classifies everything under ~/.ssh; these are the entries it
+        could not, and saying so is the difference between "there is nothing
+        else here" and "there is something here I could not read".
+      */}
+      {inventory.unreadable.length > 0 && (
+        <section aria-labelledby="unreadable-heading" className="flex flex-col gap-2">
+          <h3 id="unreadable-heading" className="font-medium text-amber-300">
+            Files this scan could not classify
+          </h3>
+          <p className="text-sm text-zinc-400">
+            These are inside ~/.ssh and are missing from the table above. Nothing was changed about them.
+          </p>
+          <ul className="text-sm text-zinc-300">
+            {inventory.unreadable.map((file) => (
+              <li key={file.relativePath}>{`${file.relativePath} — ${file.reason}`}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {inventory.unresolvedReferences.length > 0 && (
+        <section aria-labelledby="unresolved-heading" className="flex flex-col gap-2">
+          <h3 id="unresolved-heading" className="font-medium text-amber-300">
+            Configuration entries pointing at a key that is not there
+          </h3>
+          <ul className="text-sm text-zinc-300">
+            {inventory.unresolvedReferences.map((reference) => (
+              <li key={`${reference.configPath}:${reference.line}:${reference.value}`}>
+                {`${reference.directive} ${reference.value} — ${reference.configPath}:${reference.line} (${reference.reason})`}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section aria-labelledby="agent-heading" className="flex flex-col gap-2">
         <h3 id="agent-heading" className="font-medium">
@@ -506,6 +631,9 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
           <pre aria-label="Terminal command" className="overflow-x-auto rounded-md bg-zinc-950 p-4 text-xs">
             {terminalCommand.join(" ")}
           </pre>
+          <div className="mt-2">
+            <CopyButton value={terminalCommand.join(" ")} label="Terminal command" />
+          </div>
         </div>
       )}
 

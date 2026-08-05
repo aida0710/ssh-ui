@@ -583,6 +583,15 @@ type Problem struct {
 	Path        *string         `json:"path,omitempty"`
 }
 
+// PublicKeyResponse defines model for PublicKeyResponse.
+type PublicKeyResponse struct {
+	Comment      string `json:"comment"`
+	Fingerprint  string `json:"fingerprint"`
+	Id           string `json:"id"`
+	PublicKey    string `json:"publicKey"`
+	RelativePath string `json:"relativePath"`
+}
+
 // PurgeTrashResponse defines model for PurgeTrashResponse.
 type PurgeTrashResponse struct {
 	EntryId       string   `json:"entryId"`

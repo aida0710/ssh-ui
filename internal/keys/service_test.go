@@ -696,3 +696,93 @@ func TestValidateFileNameRefusesNamesTheApplicationDependsOn(t *testing.T) {
 		}
 	}
 }
+
+// PublicKey is the one key route with no confirmation behind it, so what stops
+// it being a way to read a private key is the kind check and nothing else.
+// These tests hold that check to the classifier's judgement rather than to the
+// file's name.
+func TestPublicKeyReadsThePublicHalfAndRefusesThePrivateOne(t *testing.T) {
+	service, _ := newTestService(t, newQueryRunner())
+
+	generated, err := service.Generate(GenerateRequest{
+		Algorithm:  AlgorithmEd25519,
+		FileName:   "id_work",
+		Comment:    "aida@laptop",
+		Passphrase: []byte("correct horse"),
+	})
+	if err != nil {
+		t.Fatalf("Generate error = %v", err)
+	}
+
+	inventory, err := service.Inventory()
+	if err != nil {
+		t.Fatalf("Inventory error = %v", err)
+	}
+	var publicID string
+	for _, item := range inventory.Items {
+		if item.Kind == KindPublicKey && item.RelativePath == "id_work.pub" {
+			publicID = item.ID
+		}
+	}
+	if publicID == "" {
+		t.Fatalf("the generated public key is not in the inventory")
+	}
+
+	result, err := service.PublicKey(publicID)
+	if err != nil {
+		t.Fatalf("PublicKey error = %v", err)
+	}
+	if !strings.HasPrefix(result.Contents, "ssh-ed25519 ") {
+		t.Fatalf("contents = %q, want the public key line", result.Contents)
+	}
+	if strings.Contains(result.Contents, "PRIVATE KEY") {
+		t.Fatalf("the public route returned private key material")
+	}
+
+	// The private key of the same pair is refused, so the unconfirmed route
+	// cannot be turned into a reveal by passing the other identifier.
+	if _, err := service.PublicKey(generated.ID); !errors.Is(err, ErrUnknownKey) {
+		t.Fatalf("PublicKey(private key) error = %v, want ErrUnknownKey", err)
+	}
+}
+
+func TestPublicKeyRefusesAPrivateKeyWearingAPublicName(t *testing.T) {
+	service, workspace := newTestService(t, newQueryRunner())
+
+	// Classification is by content and permissions, never by the suffix. A
+	// private key saved as id_decoy.pub must still be refused here.
+	generated, err := service.Generate(GenerateRequest{
+		Algorithm:   AlgorithmEd25519,
+		FileName:    "id_decoy",
+		Unencrypted: true,
+	})
+	if err != nil {
+		t.Fatalf("Generate error = %v", err)
+	}
+	private, err := os.ReadFile(filepath.Join(workspace.Root(), generated.RelativePath))
+	if err != nil {
+		t.Fatalf("read generated key: %v", err)
+	}
+	decoy := filepath.Join(workspace.Root(), "id_decoy.pub")
+	if err := os.WriteFile(decoy, private, 0o600); err != nil {
+		t.Fatalf("write decoy: %v", err)
+	}
+
+	inventory, err := service.Inventory()
+	if err != nil {
+		t.Fatalf("Inventory error = %v", err)
+	}
+	for _, item := range inventory.Items {
+		if item.RelativePath != "id_decoy.pub" {
+			continue
+		}
+		if item.Kind == KindPublicKey {
+			t.Fatalf("a private key named .pub was classified as a public key")
+		}
+		if _, err := service.PublicKey(item.ID); !errors.Is(err, ErrUnknownKey) {
+			t.Fatalf("PublicKey(decoy) error = %v, want ErrUnknownKey", err)
+		}
+		return
+	}
+	t.Fatalf("the decoy file is not in the inventory")
+}

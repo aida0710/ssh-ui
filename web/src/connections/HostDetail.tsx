@@ -310,6 +310,38 @@ export function HostDetailPanel({
           onChange={(event) => onMetadata({ ...detail.metadata, note: event.target.value })}
           className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
         />
+        <label htmlFor="host-colour" className="text-xs text-zinc-400">Colour</label>
+        <div className="flex items-center gap-2">
+          <input
+            id="host-colour"
+            type="color"
+            // A colour input has no empty state, so "no colour" is the absence
+            // of the value in metadata and this control shows a neutral swatch
+            // for it. Clearing is a separate, explicit act.
+            value={detail.metadata.colour === undefined || detail.metadata.colour === "" ? "#71717a" : detail.metadata.colour}
+            onChange={(event) => onMetadata({ ...detail.metadata, colour: event.target.value })}
+            className="h-7 w-12 rounded border border-zinc-700 bg-zinc-900"
+          />
+          {detail.metadata.colour === undefined || detail.metadata.colour === "" ? null : (
+            <button
+              type="button"
+              onClick={() => onMetadata({ ...detail.metadata, colour: "" })}
+              className="rounded border border-zinc-700 px-2 py-1 text-xs"
+            >
+              Clear colour
+            </button>
+          )}
+        </div>
+        <label htmlFor="host-order" className="text-xs text-zinc-400">
+          Display order — lower sorts earlier; 0 leaves this host where the file puts it
+        </label>
+        <input
+          id="host-order"
+          type="number"
+          value={String(detail.metadata.order ?? 0)}
+          onChange={(event) => onMetadata({ ...detail.metadata, order: Number(event.target.value) || 0 })}
+          className="w-24 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
+        />
         <label htmlFor="host-tags" className="text-xs text-zinc-400">Tags, comma separated</label>
         <input
           id="host-tags"

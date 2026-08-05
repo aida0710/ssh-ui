@@ -43,7 +43,9 @@ export function GroupsPanel() {
   // Hoisted function declarations do not inherit the narrowing above, so the
   // loaded document is captured once as a non-null const the closures can use.
   const loaded: Metadata = metadata;
-  const groups = loaded.groups ?? [];
+  // Displayed in the order the user gave, with the stored order left alone: a
+  // sort for display must not become an edit to the document being saved.
+  const groups = [...(loaded.groups ?? [])].sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
 
   function membersOf(name: string): string[] {
     return (loaded.hosts ?? [])
@@ -86,6 +88,13 @@ export function GroupsPanel() {
     setSettingKeyword("");
     setSettingValue("");
     setLocalError("");
+  }
+
+  function updateGroup(name: string, change: Partial<GroupMetadata>) {
+    setMetadata({
+      ...loaded,
+      groups: (loaded.groups ?? []).map((group) => (group.name === name ? { ...group, ...change } : group)),
+    });
   }
 
   function removeGroup(name: string) {
@@ -136,6 +145,37 @@ export function GroupsPanel() {
             <p className="mt-1 text-xs text-zinc-400">
               Members: <span>{membersOf(group.name).length === 0 ? "none" : membersOf(group.name).join(", ")}</span>
             </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <label htmlFor={`group-colour-${group.name}`} className="text-xs text-zinc-400">
+                Colour
+              </label>
+              <input
+                id={`group-colour-${group.name}`}
+                type="color"
+                value={group.colour === undefined || group.colour === "" ? "#71717a" : group.colour}
+                onChange={(event) => updateGroup(group.name, { colour: event.target.value })}
+                className="h-7 w-12 rounded border border-zinc-700 bg-zinc-900"
+              />
+              {group.colour === undefined || group.colour === "" ? null : (
+                <button
+                  type="button"
+                  onClick={() => updateGroup(group.name, { colour: "" })}
+                  className="rounded border border-zinc-700 px-2 py-1 text-xs"
+                >
+                  {`Clear ${group.name} colour`}
+                </button>
+              )}
+              <label htmlFor={`group-order-${group.name}`} className="text-xs text-zinc-400">
+                Display order
+              </label>
+              <input
+                id={`group-order-${group.name}`}
+                type="number"
+                value={String(group.order ?? 0)}
+                onChange={(event) => updateGroup(group.name, { order: Number(event.target.value) || 0 })}
+                className="w-20 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs"
+              />
+            </div>
             <button
               type="button"
               onClick={() => removeGroup(group.name)}

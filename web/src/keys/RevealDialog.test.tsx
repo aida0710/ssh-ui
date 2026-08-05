@@ -104,4 +104,31 @@ describe("RevealDialog", () => {
     expect(await screen.findByLabelText("Private key")).toBeInTheDocument();
     expect(reveal).toHaveBeenCalledTimes(2);
   });
+  it("copies exactly the key it showed, and offers no copy before the reveal", async () => {
+    const user = userEvent.setup();
+    const reveal = revealing();
+    render(<RevealDialog keyId="key-one" relativePath="id_work" api={{ reveal }} onClose={vi.fn()} />);
+
+    // Opening the dialog is not a disclosure, so there is nothing to copy yet.
+    expect(screen.queryByRole("button", { name: "Copy private key" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Show private key" }));
+    await screen.findByLabelText("Private key");
+    await user.click(screen.getByRole("button", { name: "Copy private key" }));
+
+    expect(await navigator.clipboard.readText()).toBe(privateKey);
+  });
+
+  it("takes the copy control away with the key when the dialog closes", async () => {
+    const user = userEvent.setup();
+    const reveal = revealing();
+    render(<RevealDialog keyId="key-one" relativePath="id_work" api={{ reveal }} onClose={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "Show private key" }));
+    await screen.findByLabelText("Private key");
+    await user.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(screen.queryByRole("button", { name: "Copy private key" })).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("BEGIN OPENSSH PRIVATE KEY");
+  });
 });

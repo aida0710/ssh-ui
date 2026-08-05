@@ -324,6 +324,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/keys/{keyId}/public": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns the text of one public key or certificate file. A public key is not a secret, so this needs no confirmation token and is not separated from the ordinary detail API the way reveal is. It refuses any entry that is not a public key or a certificate, so it can never be used to read private key material. */
+        get: operations["readPublicKey"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/keys/{keyId}/agent": {
         parameters: {
             query?: never;
@@ -884,6 +901,13 @@ export interface components {
         IssueActionResponse: {
             token: string;
             expiresAt: string;
+        };
+        PublicKeyResponse: {
+            id: string;
+            relativePath: string;
+            publicKey: string;
+            fingerprint: string;
+            comment: string;
         };
         RegisterKeyRequest: {
             passphrase: string;
@@ -1728,6 +1752,30 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    readPublicKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                keyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Public key text */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicKeyResponse"];
+                };
+            };
+            401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };
     };

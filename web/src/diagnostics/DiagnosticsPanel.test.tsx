@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
@@ -158,6 +158,175 @@ describe("DiagnosticsPanel", () => {
     await userEvent.click(screen.getByRole("button", { name: "Check reachability" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/could not/i);
+  });
+
+  it("shows what OpenSSH said when it refused, instead of rendering nothing", async () => {
+    // A failed `ssh -G` is a 200 with the reason inside it. Nothing throws, so
+    // the panel used to render silence and the click looked like a no-op.
+    const api = buildApi({
+      effective: vi.fn().mockResolvedValue({
+        alias: "broken",
+        evaluated: false,
+        requiresConfirmation: false,
+        tokenWarning: "",
+        executableDirectives: [],
+        values: [],
+        sources: [],
+        complexities: [],
+        route: [],
+        failure: {
+          failed: true,
+          exitCode: 255,
+          stderr: "/home/tester/.ssh/config line 12: Bad configuration option: HostNam",
+          truncated: false,
+        },
+      }),
+    });
+    render(<DiagnosticsPanel api={api} />);
+
+    await userEvent.type(screen.getByLabelText("Host alias"), "broken");
+    await userEvent.click(screen.getByRole("button", { name: "Explain" }));
+
+    expect(await screen.findByText(/ssh -G exited with 255/)).toBeInTheDocument();
+    expect(screen.getByText(/Bad configuration option: HostNam/)).toBeInTheDocument();
+  });
+
+  it("says when the captured output was cut off rather than presenting it whole", async () => {
+    const api = buildApi({
+      effective: vi.fn().mockResolvedValue({
+        alias: "broken",
+        evaluated: false,
+        requiresConfirmation: false,
+        tokenWarning: "",
+        executableDirectives: [],
+        values: [],
+        sources: [],
+        complexities: [],
+        route: [],
+        failure: { failed: true, exitCode: 255, stderr: "the first 64 KiB", truncated: true },
+      }),
+    });
+    render(<DiagnosticsPanel api={api} />);
+
+    await userEvent.type(screen.getByLabelText("Host alias"), "broken");
+    await userEvent.click(screen.getByRole("button", { name: "Explain" }));
+
+    expect(await screen.findByText(/hit the capture limit and was cut off/)).toBeInTheDocument();
+  });
+
+  it("marks the rules it will not project instead of answering for them", async () => {
+    const api = buildApi({
+      effective: vi.fn().mockResolvedValue({
+        alias: "lab",
+        evaluated: true,
+        requiresConfirmation: false,
+        tokenWarning: "",
+        executableDirectives: [],
+        values: [],
+        sources: [],
+        complexities: [
+          {
+            code: "negated_pattern",
+            path: "~/.ssh/config",
+            line: 21,
+            condition: "Host *,!lab",
+            detail: "A negated pattern does not project onto a single host.",
+          },
+        ],
+        route: [],
+        failure: { failed: false, exitCode: 0, stderr: "", truncated: false },
+      }),
+    });
+    render(<DiagnosticsPanel api={api} />);
+
+    await userEvent.type(screen.getByLabelText("Host alias"), "lab");
+    await userEvent.click(screen.getByRole("button", { name: "Explain" }));
+
+    expect(await screen.findByText("negated_pattern")).toBeInTheDocument();
+    expect(screen.getByText(/~\/\.ssh\/config:21/)).toBeInTheDocument();
+    expect(screen.getByText(/inside Host \*,!lab/)).toBeInTheDocument();
+    expect(screen.getByText(/does not project onto a single host/)).toBeInTheDocument();
+  });
+
+  it("shows the multi-hop route and marks a hop it did not resolve", async () => {
+    const api = buildApi({
+      effective: vi.fn().mockResolvedValue({
+        alias: "deep",
+        evaluated: true,
+        requiresConfirmation: false,
+        tokenWarning: "",
+        executableDirectives: [],
+        values: [],
+        sources: [],
+        complexities: [],
+        route: [
+          { order: 0, depth: 0, parent: "", hop: "edge", hostname: "198.51.100.1", user: "ops", port: "22", complex: false },
+          { order: 1, depth: 1, parent: "edge", hop: "inner-*", hostname: "", user: "", port: "", complex: true },
+        ],
+        failure: { failed: false, exitCode: 0, stderr: "", truncated: false },
+      }),
+    });
+    render(<DiagnosticsPanel api={api} />);
+
+    await userEvent.type(screen.getByLabelText("Host alias"), "deep");
+    await userEvent.click(screen.getByRole("button", { name: "Explain" }));
+
+    expect(await screen.findByText("edge")).toBeInTheDocument();
+    expect(screen.getByText("ops@198.51.100.1:22")).toBeInTheDocument();
+    expect(screen.getByText("inner-*")).toBeInTheDocument();
+    expect(screen.getByText(/not a simple alias/)).toBeInTheDocument();
+    expect(screen.getByText(/reached through edge/)).toBeInTheDocument();
+  });
+
+  it("keeps the lines that lost, because they are the answer to why not", async () => {
+    const api = buildApi({
+      effective: vi.fn().mockResolvedValue({
+        alias: "bastion",
+        evaluated: true,
+        requiresConfirmation: false,
+        tokenWarning: "",
+        executableDirectives: [],
+        values: [],
+        sources: [
+          { keyword: "Port", value: "2222", path: "~/.ssh/config", line: 4, condition: "Host bastion", kind: "exact", winner: true },
+          { keyword: "Port", value: "22", path: "~/.ssh/config", line: 11, condition: "Host *", kind: "wildcard", winner: false },
+        ],
+        complexities: [],
+        route: [],
+        failure: { failed: false, exitCode: 0, stderr: "", truncated: false },
+      }),
+    });
+    render(<DiagnosticsPanel api={api} />);
+
+    await userEvent.type(screen.getByLabelText("Host alias"), "bastion");
+    await userEvent.click(screen.getByRole("button", { name: "Explain" }));
+
+    const superseded = await screen.findByRole("row", { name: /Host \*/ });
+    expect(within(superseded).getByText("22")).toBeInTheDocument();
+    expect(within(superseded).getByText("superseded")).toBeInTheDocument();
+    expect(within(screen.getByRole("row", { name: /Host bastion/ })).getByText("in effect")).toBeInTheDocument();
+  });
+
+  it("shows the configuration diagnostics it already read", async () => {
+    const api = buildApi({
+      configCheck: vi.fn().mockResolvedValue({
+        root: "~/.ssh/config",
+        files: [{ path: "~/.ssh/config", editable: true, missing: false, loads: 1, includes: 1 }],
+        diagnostics: [
+          {
+            severity: "error",
+            code: "include_cycle",
+            path: "~/.ssh/conf.d/10-home.conf",
+            line: 3,
+            detail: "This file includes itself.",
+          },
+        ],
+      }),
+    });
+    render(<DiagnosticsPanel api={api} />);
+
+    expect(await screen.findByText(/include_cycle/)).toBeInTheDocument();
+    expect(screen.getByText(/This file includes itself/)).toBeInTheDocument();
   });
 
   it("diagnoses a fixed host without asking for an alias", async () => {

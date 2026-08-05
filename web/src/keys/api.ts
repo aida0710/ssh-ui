@@ -2,6 +2,9 @@ import { apiClient } from "../api/client";
 import type { components } from "../api/schema";
 
 export type KeyItem = components["schemas"]["KeyItem"];
+export type KeyCertificate = components["schemas"]["KeyCertificate"];
+export type UnreadableFile = components["schemas"]["UnreadableFile"];
+export type UnresolvedReference = components["schemas"]["UnresolvedReference"];
 export type KeyReference = components["schemas"]["KeyReference"];
 export type KeyVariant = components["schemas"]["KeyVariant"];
 export type KeyInventoryResponse = components["schemas"]["KeyInventoryResponse"];
@@ -11,6 +14,7 @@ export type HardwareCommandResponse = components["schemas"]["HardwareCommandResp
 export type ChangePassphraseResponse = components["schemas"]["ChangePassphraseResponse"];
 export type RevealPrivateKeyResponse = components["schemas"]["RevealPrivateKeyResponse"];
 export type RegisterKeyResponse = components["schemas"]["RegisterKeyResponse"];
+export type PublicKeyResponse = components["schemas"]["PublicKeyResponse"];
 export type AgentIdentity = components["schemas"]["AgentIdentity"];
 export type IssueActionResponse = components["schemas"]["IssueActionResponse"];
 export type TrashListResponse = components["schemas"]["TrashListResponse"];
@@ -61,6 +65,7 @@ export type KeysApi = {
   hardwareCommand(input: HardwareCommandInput): Promise<HardwareCommandResponse>;
   changePassphrase(keyId: string, input: PassphraseInput): Promise<ChangePassphraseResponse>;
   reveal(keyId: string): Promise<RevealPrivateKeyResponse>;
+  publicKey(keyId: string): Promise<PublicKeyResponse>;
   registerWithAgent(keyId: string, input: RegisterAgentInput): Promise<RegisterKeyResponse>;
   trash(keyId: string): Promise<TrashKeyResponse>;
   listTrash(): Promise<TrashListResponse>;
@@ -110,9 +115,20 @@ function validateInventory(value: unknown): KeyInventoryResponse {
     asArray(entry.references);
     asArray(entry.notes);
   }
-  asArray(record.unreadable);
+  for (const file of asArray(record.unreadable)) {
+    const entry = asRecord(file);
+    asString(entry.relativePath);
+    asString(entry.reason);
+  }
   asArray(record.agentDelegations);
-  asArray(record.unresolvedReferences);
+  for (const reference of asArray(record.unresolvedReferences)) {
+    const entry = asRecord(reference);
+    asString(entry.directive);
+    asString(entry.value);
+    asString(entry.configPath);
+    asNumber(entry.line);
+    asString(entry.reason);
+  }
   asBoolean(record.agentAvailable);
   validateAgentIdentities(record.agentIdentities);
   return record as unknown as KeyInventoryResponse;
@@ -159,6 +175,16 @@ function validateRegister(value: unknown): RegisterKeyResponse {
   asBoolean(record.storedInKeychain);
   validateAgentIdentities(record.identities);
   return record as unknown as RegisterKeyResponse;
+}
+
+function validatePublicKey(value: unknown): PublicKeyResponse {
+  const record = asRecord(value);
+  asString(record.id);
+  asString(record.relativePath);
+  asString(record.publicKey);
+  asString(record.fingerprint);
+  asString(record.comment);
+  return record as unknown as PublicKeyResponse;
 }
 
 function validateTrashList(value: unknown): TrashListResponse {
@@ -240,6 +266,12 @@ export const keysApi: KeysApi = {
         headers: { "X-SSH-UI-Action": token },
       }),
     );
+  },
+  // A public key is not a secret, so this is an ordinary read: no confirmation,
+  // no no-store, no audit note. The server refuses any entry that is not a
+  // public key or a certificate, which is what keeps that true.
+  async publicKey(keyId) {
+    return validatePublicKey(await apiClient.read(`/api/v1/keys/${encodeURIComponent(keyId)}/public`));
   },
   // The passphrase travels in the request body and no further. The server hands
   // it to ssh-add on standard input, so it reaches neither argv nor the child

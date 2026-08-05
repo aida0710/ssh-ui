@@ -356,6 +356,28 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/keys/{keyId}/public:
+    get:
+      operationId: readPublicKey
+      description: >-
+        Returns the text of one public key or certificate file. A public key is
+        not a secret, so this needs no confirmation token and is not separated
+        from the ordinary detail API the way reveal is. It refuses any entry
+        that is not a public key or a certificate, so it can never be used to
+        read private key material.
+      parameters:
+        - name: keyId
+          in: path
+          required: true
+          schema: { type: string, minLength: 32, maxLength: 32 }
+      responses:
+        "200":
+          description: Public key text
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicKeyResponse" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
   /api/v1/keys/{keyId}/agent:
     post:
       operationId: registerKeyWithAgent
@@ -1111,6 +1133,16 @@ components:
       properties:
         token: { type: string, minLength: 43, maxLength: 43 }
         expiresAt: { type: string, minLength: 1 }
+    PublicKeyResponse:
+      type: object
+      additionalProperties: false
+      required: [id, relativePath, publicKey, fingerprint, comment]
+      properties:
+        id: { type: string }
+        relativePath: { type: string }
+        publicKey: { type: string }
+        fingerprint: { type: string }
+        comment: { type: string }
     RegisterKeyRequest:
       type: object
       additionalProperties: false
