@@ -1065,6 +1065,8 @@ export interface components {
             entry: components["schemas"]["HostEntry"];
             fields: components["schemas"]["FormField"][];
             raw: string;
+            /** @description The comment lines attached above the Host line, with the '#' markers stripped. Empty when the block has none. ssh_config has no trailing comment syntax, so only whole lines are ever attached. */
+            comment: string;
             notices?: components["schemas"]["Notice"][];
         };
         Source: {
@@ -1111,6 +1113,7 @@ export interface components {
             newAlias?: string;
             fields?: components["schemas"]["FieldEdit"][];
             raw?: string;
+            comment?: string;
             metadata?: components["schemas"]["Metadata"];
             destinationPath?: string;
             destinationBase?: string;

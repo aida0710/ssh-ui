@@ -296,6 +296,31 @@ func ReconcileMetadata(metadata Metadata, present []HostIdentity) (Metadata, []N
 	return reconciled, notices
 }
 
+// ClearHostNote removes the note from one host's entry and leaves every other
+// field and every other entry untouched.
+//
+// A note and a comment are the same thing written in two places, so saving a
+// comment retires the note for that host in the same transaction. Doing it per
+// host, as the user edits, converges without a migration that rewrites every
+// file at once. An entry left with nothing but its identity is dropped, because
+// an entry that says nothing is not worth keeping.
+func ClearHostNote(metadata Metadata, identity HostIdentity) Metadata {
+	cleared := metadata
+	cleared.Hosts = make([]HostMetadata, 0, len(metadata.Hosts))
+	for _, host := range metadata.Hosts {
+		if host.Identity != identity {
+			cleared.Hosts = append(cleared.Hosts, host)
+			continue
+		}
+		host.Note = ""
+		if host.Group == "" && len(host.Tags) == 0 && host.Colour == "" && !host.Favourite && host.Order == 0 {
+			continue
+		}
+		cleared.Hosts = append(cleared.Hosts, host)
+	}
+	return cleared
+}
+
 // RenameHostIdentity moves the entry for one host and leaves every other entry
 // untouched. The caller commits the result in the same transaction as the
 // configuration change that performed the rename.

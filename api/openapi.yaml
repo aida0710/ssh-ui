@@ -1364,11 +1364,17 @@ components:
     HostForm:
       type: object
       additionalProperties: false
-      required: [entry, fields, raw]
+      required: [entry, fields, raw, comment]
       properties:
         entry: { $ref: "#/components/schemas/HostEntry" }
         fields: { type: array, items: { $ref: "#/components/schemas/FormField" } }
         raw: { type: string }
+        comment:
+          type: string
+          description: >-
+            The comment lines attached above the Host line, with the '#' markers
+            stripped. Empty when the block has none. ssh_config has no trailing
+            comment syntax, so only whole lines are ever attached.
         notices: { type: array, items: { $ref: "#/components/schemas/Notice" } }
     Source:
       type: object
@@ -1435,6 +1441,7 @@ components:
         newAlias: { type: string }
         fields: { type: array, items: { $ref: "#/components/schemas/FieldEdit" } }
         raw: { type: string }
+        comment: { type: string }
         metadata: { $ref: "#/components/schemas/Metadata" }
         destinationPath: { type: string }
         destinationBase: { type: string }

@@ -405,3 +405,28 @@ func RenameHostAlias(file *config.File, block config.Block, oldAlias, newAlias s
 	file.Lines[block.Header] = rebuilt
 	return nil
 }
+
+// SetHostComment replaces the comment attached to a host block.
+//
+// The attached comment is the run of contiguous comment lines immediately above
+// the Host line, as defined by config.File.CommentRun. Everything outside that
+// run is untouched, which is what keeps a file banner separated by a blank line
+// out of reach of an edit to the first block.
+//
+// The rewritten lines take the Host line's own indentation, so a block indented
+// inside a Match keeps its comment aligned with it.
+func SetHostComment(file *config.File, block config.Block, text string) error {
+	if block.Kind != config.BlockHost || block.Header < 0 || block.Header >= len(file.Lines) {
+		return ErrHostNotFound
+	}
+	start := file.CommentRun(block.Header)
+	indent := file.Lines[block.Header].Indent
+	replacement := config.RenderComment(text, indent, blockEnding(file, block))
+
+	lines := make([]config.Line, 0, len(file.Lines)-(block.Header-start)+len(replacement))
+	lines = append(lines, file.Lines[:start]...)
+	lines = append(lines, replacement...)
+	lines = append(lines, file.Lines[block.Header:]...)
+	file.Lines = lines
+	return nil
+}

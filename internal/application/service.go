@@ -38,6 +38,10 @@ const (
 	EditGroups     EditKind = "groups"
 	EditMetadata   EditKind = "metadata"
 	EditMove       EditKind = "move"
+	// EditComment sets the comment lines above a Host block. The comment lives
+	// in the configuration rather than in metadata, so it survives for anyone
+	// reading the file without this application.
+	EditComment EditKind = "comment"
 )
 
 // EditRequest is one requested change.
@@ -58,6 +62,7 @@ type EditRequest struct {
 	NewAlias string      `json:"newAlias,omitempty"`
 	Fields   []FieldEdit `json:"fields,omitempty"`
 	Raw      string      `json:"raw,omitempty"`
+	Comment  string      `json:"comment,omitempty"`
 	Metadata *Metadata   `json:"metadata,omitempty"`
 	// DestinationPath and DestinationBase describe the second file of a move.
 	// DestinationBase carries the exact bytes the client loaded for it, so the
@@ -412,7 +417,7 @@ func (s *Service) plan(request EditRequest) (planned, error) {
 		return planned{}, err
 	}
 	switch request.Kind {
-	case EditHostFields, EditBlockRaw, EditRename, EditFileRaw:
+	case EditHostFields, EditBlockRaw, EditRename, EditFileRaw, EditComment:
 		return s.planFileEdit(graph, request)
 	case EditGroups, EditMetadata:
 		return s.planMetadataEdit(graph, request)
@@ -438,7 +443,7 @@ func (s *Service) planFileEdit(graph *config.Graph, request EditRequest) (planne
 	switch request.Kind {
 	case EditFileRaw:
 		file = config.Parse([]byte(request.Raw))
-	case EditHostFields, EditBlockRaw, EditRename:
+	case EditHostFields, EditBlockRaw, EditRename, EditComment:
 		block, ok := FindHostBlock(file, request.Alias)
 		if !ok {
 			return planned{}, ErrHostNotFound
@@ -450,6 +455,10 @@ func (s *Service) planFileEdit(graph *config.Graph, request EditRequest) (planne
 			}
 		case EditBlockRaw:
 			if err := ReplaceBlock(file, block, request.Raw); err != nil {
+				return planned{}, err
+			}
+		case EditComment:
+			if err := SetHostComment(file, block, request.Comment); err != nil {
 				return planned{}, err
 			}
 		case EditRename:
@@ -503,6 +512,32 @@ func (s *Service) planFileEdit(graph *config.Graph, request EditRequest) (planne
 		prepared.base[filepath.Clean(change.Path)] = previous
 		prepared.preview.Diffs = append(prepared.preview.Diffs,
 			BuildFileDiff(s.displayPath(change.Path), previous, change.Contents))
+	}
+
+	// A comment retires the note for the same host. Both are the same thing
+	// written in two places, and the configuration is the one that survives
+	// without this application, so the note goes in the same transaction that
+	// writes the comment rather than being left to disagree with it.
+	if request.Kind == EditComment {
+		stored, precondition, err := s.metadata.Load()
+		if err != nil {
+			return planned{}, err
+		}
+		cleared := ClearHostNote(stored, HostIdentity{Path: request.Path, Alias: request.Alias})
+		change, err := s.metadata.Change(cleared, precondition)
+		if err != nil {
+			return planned{}, err
+		}
+		previous, _, err := s.readFile(change.Path)
+		if err != nil {
+			return planned{}, err
+		}
+		if !bytes.Equal(previous, change.Contents) {
+			prepared.changes = append(prepared.changes, change)
+			prepared.base[filepath.Clean(change.Path)] = previous
+			prepared.preview.Diffs = append(prepared.preview.Diffs,
+				BuildFileDiff(s.displayPath(change.Path), previous, change.Contents))
+		}
 	}
 
 	if request.Alias != "" {

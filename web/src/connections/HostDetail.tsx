@@ -33,6 +33,7 @@ type HostDetailPanelProps = {
   onFieldEdits: (edits: FieldEdit[]) => void;
   onBlockRaw: (raw: string) => void;
   onRename: (newAlias: string) => void;
+  onComment: (comment: string) => void;
   onMetadata: (metadata: HostMetadata) => void;
   // The Diagnostics tab runs the same checks as the Diagnostics section, so it
   // consumes the same client. It is a prop only so a test can inject one; the
@@ -52,6 +53,7 @@ export function HostDetailPanel({
   onFieldEdits,
   onBlockRaw,
   onRename,
+  onComment,
   onMetadata,
   integrations = integrationsApi,
 }: HostDetailPanelProps) {
@@ -64,6 +66,10 @@ export function HostDetailPanel({
   const [newValue, setNewValue] = useState("");
   const [blockRaw, setBlockRaw] = useState(detail.form.raw);
   const [renameTo, setRenameTo] = useState(detail.form.entry.identity.alias);
+  // A legacy note seeds the editor when the block has no comment yet, so the
+  // first save moves it into the configuration instead of leaving the two to
+  // disagree. Once written, the comment is the only source.
+  const [comment, setComment] = useState(detail.form.comment || detail.metadata.note || "");
   const [localError, setLocalError] = useState("");
 
   // Opening a different host, or reloading the same one after a save, discards
@@ -80,7 +86,9 @@ export function HostDetailPanel({
     setNewValue("");
     setBlockRaw(formRaw);
     setRenameTo(identityAlias);
+    setComment(detail.form.comment || detail.metadata.note || "");
     setLocalError("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [identityPath, identityAlias, formRaw]);
 
   const visibleFields = useMemo(
@@ -315,13 +323,26 @@ export function HostDetailPanel({
           />
           {t("host.favourite")}
         </label>
-        <label htmlFor="host-note" className="text-xs text-zinc-400">{t("host.note")}</label>
-        <input
-          id="host-note"
-          value={detail.metadata.note ?? ""}
-          onChange={(event) => onMetadata({ ...detail.metadata, note: event.target.value })}
+        <label htmlFor="host-comment" className="text-xs text-zinc-400">{t("host.comment")}</label>
+        <textarea
+          id="host-comment"
+          value={comment}
+          onChange={(event) => setComment(event.target.value)}
+          rows={3}
           className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
         />
+        <p className="text-xs text-zinc-500">
+          {detail.form.comment === "" && (detail.metadata.note ?? "") !== ""
+            ? t("host.commentFromNote")
+            : t("host.commentNote")}
+        </p>
+        <button
+          type="button"
+          onClick={() => onComment(comment)}
+          className="self-start rounded border border-zinc-700 px-2 py-1 text-xs"
+        >
+          {t("host.saveComment")}
+        </button>
         <label htmlFor="host-colour" className="text-xs text-zinc-400">{t("host.colour")}</label>
         <div className="flex items-center gap-2">
           <input

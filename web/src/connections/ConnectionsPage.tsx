@@ -130,6 +130,19 @@ export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
     });
   }
 
+  // The comment is written into the configuration file, so it goes through the
+  // same base-and-precondition path as every other edit to that file.
+  function onComment(comment: string) {
+    if (detail === null || selection === null) return;
+    void submit({
+      kind: "comment",
+      path: selection.path,
+      alias: selection.alias,
+      base: detail.file.contents,
+      comment,
+    });
+  }
+
   function onMetadata(host: HostMetadata) {
     if (overview === null) return;
     const others = (overview.metadata.hosts ?? []).filter(
@@ -309,6 +322,7 @@ export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
               onFieldEdits={onFieldEdits}
               onBlockRaw={onBlockRaw}
               onRename={onRename}
+              onComment={onComment}
               onMetadata={onMetadata}
             />
           </>

@@ -101,10 +101,13 @@ type HostEntry struct {
 // text of the block, so saving it back unchanged reproduces the file byte for
 // byte.
 type HostForm struct {
-	Entry   HostEntry   `json:"entry"`
-	Fields  []FormField `json:"fields"`
-	Raw     string      `json:"raw"`
-	Notices []Notice    `json:"notices,omitempty"`
+	Entry  HostEntry   `json:"entry"`
+	Fields []FormField `json:"fields"`
+	Raw    string      `json:"raw"`
+	// Comment is the text of the comment lines attached above the Host line,
+	// with the '#' markers stripped. It is empty when the block has none.
+	Comment string   `json:"comment"`
+	Notices []Notice `json:"notices,omitempty"`
 }
 
 // PrimaryAlias returns the first concrete alias of a Host line, which is the
@@ -264,7 +267,8 @@ func ProjectHostForm(graph *config.Graph, root string, identity HostIdentity) (H
 		},
 		// Fields is required by the contract, so it is an empty array rather
 		// than null for a block that declares no directive.
-		Fields: []FormField{},
+		Fields:  []FormField{},
+		Comment: node.File.CommentText(block.Header),
 	}
 	for _, pattern := range block.Patterns {
 		form.Entry.Patterns = append(form.Entry.Patterns, pattern.Raw)

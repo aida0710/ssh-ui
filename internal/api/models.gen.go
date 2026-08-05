@@ -119,6 +119,7 @@ type DiffLine struct {
 type EditRequest struct {
 	Alias           *string      `json:"alias,omitempty"`
 	Base            *string      `json:"base,omitempty"`
+	Comment         *string      `json:"comment,omitempty"`
 	DestinationBase *string      `json:"destinationBase,omitempty"`
 	DestinationPath *string      `json:"destinationPath,omitempty"`
 	Fields          *[]FieldEdit `json:"fields,omitempty"`
@@ -336,6 +337,8 @@ type HostEntry struct {
 
 // HostForm defines model for HostForm.
 type HostForm struct {
+	// Comment The comment lines attached above the Host line, with the '#' markers stripped. Empty when the block has none. ssh_config has no trailing comment syntax, so only whole lines are ever attached.
+	Comment string      `json:"comment"`
 	Entry   HostEntry   `json:"entry"`
 	Fields  []FormField `json:"fields"`
 	Notices *[]Notice   `json:"notices,omitempty"`
