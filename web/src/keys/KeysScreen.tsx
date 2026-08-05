@@ -55,6 +55,12 @@ function certificateLines(
   return lines;
 }
 
+// A row's actions were bare buttons in a table with no rules, so they ran
+// together as text and read as prose rather than as controls. The border and
+// these classes are what separate one key from the next.
+const rowAction = "rounded border border-zinc-700 px-2 py-1 text-xs hover:bg-zinc-800 disabled:text-zinc-600";
+const dangerAction = "rounded border border-rose-700 px-2 py-1 text-xs text-rose-300 hover:bg-rose-950";
+
 const noteLabels: Record<string, MessageKey> = {
   fingerprint_unavailable: "keys.noteFingerprintUnavailable",
   symbolic_link: "keys.noteSymbolicLink",
@@ -265,7 +271,7 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
       <table className="w-full text-left text-sm">
         <caption className="sr-only">{t("keys.tableCaption")}</caption>
         <thead>
-          <tr>
+          <tr className="border-b border-zinc-700 text-xs uppercase tracking-wide text-zinc-400">
             <th scope="col">{t("keys.colFile")}</th>
             <th scope="col">{t("keys.colKind")}</th>
             <th scope="col">{t("keys.colAlgorithm")}</th>
@@ -277,9 +283,9 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
         </thead>
         <tbody>
           {inventory.items.map((item) => (
-            <tr key={item.id}>
-              <td>{item.relativePath}</td>
-              <td>
+            <tr key={item.id} className="border-b border-zinc-800 align-top">
+              <td className="py-2 pr-3 font-mono text-xs">{item.relativePath}</td>
+              <td className="py-2 pr-3">
                 {item.kind}
                 {item.certificate === undefined ? null : (
                   <ul className="text-xs text-zinc-400">
@@ -291,8 +297,8 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
                   </ul>
                 )}
               </td>
-              <td>{item.bits > 0 ? `${item.algorithm} · ${item.bits}` : item.algorithm}</td>
-              <td>
+              <td className="py-2 pr-3">{item.bits > 0 ? `${item.algorithm} · ${item.bits}` : item.algorithm}</td>
+              <td className="py-2 pr-3 font-mono text-xs break-all">
                 {item.fingerprint !== "" ? item.fingerprint : null}
                 {item.notes.map((note) => (
                   <span key={note} className="ml-2 text-amber-300">
@@ -300,24 +306,28 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
                   </span>
                 ))}
               </td>
-              <td>
+              <td className="py-2 pr-3">
                 {item.permission}
                 {item.permissionRisk && <span className="ml-2 text-red-300">{t("keys.permissionRisk")}</span>}
               </td>
-              <td>{item.references.map((reference) => reference.hostPatterns.join(" ")).join(", ")}</td>
-              <td>
+              <td className="py-2 pr-3">
+                {item.references.map((reference) => reference.hostPatterns.join(" ")).join(", ")}
+              </td>
+              <td className="py-2">
+                <div className="flex flex-wrap gap-1">
                 {(item.kind === "public_key" || item.kind === "certificate") && (
-                  <button type="button" onClick={() => void showPublicKey(item)}>
+                  <button type="button" className={rowAction} onClick={() => void showPublicKey(item)}>
                     {t("keys.showPublicKey")}
                   </button>
                 )}
                 {item.kind === "private_key" && (
                   <>
-                    <button type="button" onClick={() => setRevealing(item)}>
+                    <button type="button" className={rowAction} onClick={() => setRevealing(item)}>
                       {t("keys.showPrivateKey")}
                     </button>
                     <button
                       type="button"
+                      className={rowAction}
                       onClick={() => {
                         closePassphraseForm();
                         closeAgentForm();
@@ -328,6 +338,7 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
                     </button>
                     <button
                       type="button"
+                      className={rowAction}
                       disabled={!inventory.agentAvailable}
                       onClick={() => {
                         closePassphraseForm();
@@ -337,11 +348,12 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
                     >
                       {t("keys.addToAgent")}
                     </button>
-                    <button type="button" onClick={() => void moveToTrash(item.id)}>
+                    <button type="button" className={rowAction} onClick={() => void moveToTrash(item.id)}>
                       {t("keys.moveToTrash")}
                     </button>
                   </>
                 )}
+                </div>
               </td>
             </tr>
           ))}
@@ -418,7 +430,7 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
             <table className="w-full text-left text-sm">
               <caption className="sr-only">{t("keys.agentIdentitiesCaption")}</caption>
               <thead>
-                <tr>
+                <tr className="border-b border-zinc-700 text-xs uppercase tracking-wide text-zinc-400">
                   <th scope="col">{t("keys.colAlgorithm")}</th>
                   <th scope="col">{t("keys.colFingerprint")}</th>
                   <th scope="col">{t("keys.colComment")}</th>
@@ -426,10 +438,12 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
               </thead>
               <tbody>
                 {inventory.agentIdentities.map((identity) => (
-                  <tr key={identity.fingerprint}>
-                    <td>{identity.bits > 0 ? `${identity.algorithm} · ${identity.bits}` : identity.algorithm}</td>
-                    <td>{identity.fingerprint}</td>
-                    <td>{identity.comment}</td>
+                  <tr key={identity.fingerprint} className="border-b border-zinc-800">
+                    <td className="py-2 pr-3">
+                      {identity.bits > 0 ? `${identity.algorithm} · ${identity.bits}` : identity.algorithm}
+                    </td>
+                    <td className="py-2 pr-3 font-mono text-xs break-all">{identity.fingerprint}</td>
+                    <td className="py-2">{identity.comment}</td>
                   </tr>
                 ))}
               </tbody>
@@ -655,7 +669,7 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
         <table className="w-full text-left text-sm">
           <caption className="sr-only">{t("keys.trashCaption")}</caption>
           <thead>
-            <tr>
+            <tr className="border-b border-zinc-700 text-xs uppercase tracking-wide text-zinc-400">
               <th scope="col">{t("keys.colFiles")}</th>
               <th scope="col">{t("keys.colAge")}</th>
               <th scope="col">{t("keys.colStatus")}</th>
@@ -664,33 +678,37 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
           </thead>
           <tbody>
             {trash.entries.map((entry) => (
-              <tr key={entry.id}>
-                <td>{entry.files.map((file) => file.originalRelativePath).join(", ")}</td>
-                <td>
+              <tr key={entry.id} className="border-b border-zinc-800 align-top">
+                <td className="py-2 pr-3 font-mono text-xs">
+                  {entry.files.map((file) => file.originalRelativePath).join(", ")}
+                </td>
+                <td className="py-2 pr-3">
                   {entry.stale
                     ? t("keys.ageStale", { days: entry.ageDays, retention: trash.retentionDays })
                     : t("keys.age", { days: entry.ageDays })}
                 </td>
-                <td>{entry.restorable ? t("keys.restorable") : entry.blockers.join(", ")}</td>
-                <td>
-                  <button type="button" onClick={() => void restore(entry.id)}>
+                <td className="py-2 pr-3">{entry.restorable ? t("keys.restorable") : entry.blockers.join(", ")}</td>
+                <td className="py-2">
+                  <div className="flex flex-wrap items-center gap-1">
+                  <button type="button" className={rowAction} onClick={() => void restore(entry.id)}>
                     {t("keys.restore")}
                   </button>
                   {pendingPurge === entry.id ? (
                     <>
                       <span>{t("keys.purgeWarning")}</span>
-                      <button type="button" onClick={() => void purge(entry.id)}>
+                      <button type="button" className={dangerAction} onClick={() => void purge(entry.id)}>
                         {t("keys.confirmPurge")}
                       </button>
-                      <button type="button" onClick={() => setPendingPurge("")}>
+                      <button type="button" className={rowAction} onClick={() => setPendingPurge("")}>
                         {t("keys.cancel")}
                       </button>
                     </>
                   ) : (
-                    <button type="button" onClick={() => setPendingPurge(entry.id)}>
+                    <button type="button" className={dangerAction} onClick={() => setPendingPurge(entry.id)}>
                       {t("keys.purge")}
                     </button>
                   )}
+                  </div>
                 </td>
               </tr>
             ))}
