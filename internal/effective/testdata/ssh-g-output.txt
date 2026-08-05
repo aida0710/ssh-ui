@@ -64,7 +64,7 @@ identityfile /tmp/ssh-ui-fixture/id_a
 identityfile /tmp/ssh-ui-fixture/id_b
 canonicaldomains none
 globalknownhostsfile /etc/ssh/ssh_known_hosts /etc/ssh/ssh_known_hosts2
-userknownhostsfile /Users/aida/.ssh/known_hosts /Users/aida/.ssh/known_hosts2
+userknownhostsfile /Users/example/.ssh/known_hosts /Users/example/.ssh/known_hosts2
 logverbose none
 channeltimeout none
 permitremoteopen any
