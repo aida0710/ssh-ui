@@ -158,13 +158,16 @@ func TestIntegratedBootstrapFlow(t *testing.T) {
 	}
 	readBody(replay)
 
-	unauthenticatedHealth := do(http.MethodGet, server.URL()+"/api/v1/health", host, nil, nil)
+	// Fetch Metadata now accompanies every API request, including a read, so
+	// these three carry the header the frontend's own fetch would carry.
+	sameOriginRead := map[string]string{"Sec-Fetch-Site": "same-origin"}
+	unauthenticatedHealth := do(http.MethodGet, server.URL()+"/api/v1/health", host, sameOriginRead, nil)
 	if unauthenticatedHealth.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("health without cookie = %d, want %d", unauthenticatedHealth.StatusCode, http.StatusUnauthorized)
 	}
 	readBody(unauthenticatedHealth)
 
-	authenticatedHealth := do(http.MethodGet, server.URL()+"/api/v1/health", host, nil, cookies[0])
+	authenticatedHealth := do(http.MethodGet, server.URL()+"/api/v1/health", host, sameOriginRead, cookies[0])
 	if authenticatedHealth.StatusCode != http.StatusOK {
 		t.Fatalf("health with cookie = %d, want %d", authenticatedHealth.StatusCode, http.StatusOK)
 	}
@@ -179,7 +182,9 @@ func TestIntegratedBootstrapFlow(t *testing.T) {
 	}
 	readBody(missingCSRF)
 
-	apiFallback := do(http.MethodGet, server.URL()+"/api/v1/missing", host, map[string]string{"Accept": "text/html"}, cookies[0])
+	apiFallback := do(http.MethodGet, server.URL()+"/api/v1/missing", host, map[string]string{
+		"Accept": "text/html", "Sec-Fetch-Site": "same-origin",
+	}, cookies[0])
 	if apiFallback.StatusCode != http.StatusNotFound || readBody(apiFallback) == document {
 		t.Fatalf("missing API = %d, must not serve SPA", apiFallback.StatusCode)
 	}

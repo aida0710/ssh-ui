@@ -1,5 +1,20 @@
 .PHONY: generate test build fuzz
 
+# FUZZTIME is per target. `make fuzz` is a campaign, not a single run, so the
+# default is short enough to be part of an ordinary verification pass; raise it
+# for a deliberate soak: `make fuzz FUZZTIME=10m`.
+FUZZTIME ?= 30s
+
+# Every fuzz target in the repository, as package:Target. Adding a target
+# without adding it here fails TestMakefileFuzzTargetsCoverEveryFuzzFunction.
+FUZZ_TARGETS = \
+	internal/config:FuzzParseRendersOriginalBytes \
+	internal/config:FuzzExpandIncludePattern \
+	internal/effective:FuzzParseValues \
+	internal/knownhosts:FuzzParseKnownHostsRoundTrip \
+	internal/acceptance:FuzzAPIRequestBodies
+
+
 generate:
 	go generate ./internal/api
 	npm run generate:api --prefix web
@@ -11,7 +26,12 @@ test:
 	npm run typecheck --prefix web
 
 fuzz:
-	go test ./internal/config -run '^$$' -fuzz FuzzParseRendersOriginalBytes -fuzztime 60s
+	@set -e; for target in $(FUZZ_TARGETS); do \
+		package="$${target%%:*}"; \
+		name="$${target##*:}"; \
+		echo "==> fuzz $$package $$name for $(FUZZTIME)"; \
+		go test "./$$package" -run '^$$' -fuzz "^$$name$$" -fuzztime "$(FUZZTIME)"; \
+	done
 
 build:
 	npm run build --prefix web

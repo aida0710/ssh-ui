@@ -42,6 +42,27 @@ type Server struct {
 	listener net.Listener
 	http     *http.Server
 	url      string
+	engine   *echo.Echo
+}
+
+// Route is one route this server registered.
+type Route struct {
+	Method string
+	Path   string
+}
+
+// Routes reports every registered route in registration order.
+//
+// The hardening suite enumerates this instead of keeping its own list, so a
+// route added by a later change inherits the transport, cache, session and leak
+// assertions without anyone remembering to add it anywhere.
+func (s *Server) Routes() []Route {
+	registered := s.engine.Router().Routes()
+	routes := make([]Route, 0, len(registered))
+	for _, info := range registered {
+		routes = append(routes, Route{Method: info.Method, Path: info.Path})
+	}
+	return routes
 }
 
 func New(options Options) (*Server, error) {
@@ -113,7 +134,8 @@ func New(options Options) (*Server, error) {
 			Handler:           e,
 			ReadHeaderTimeout: 5 * time.Second,
 		},
-		url: "http://" + host,
+		url:    "http://" + host,
+		engine: e,
 	}, nil
 }
 

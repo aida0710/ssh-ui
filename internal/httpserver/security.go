@@ -16,6 +16,11 @@ const (
 	SessionContextKey = "ssh-ui-session"
 
 	contentSecurityPolicy = "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'"
+
+	// MaxRequestBodyCeiling is the hard ceiling every /api/ request body is read
+	// through. Handlers apply their own, smaller limits; this one exists so a
+	// route added later cannot read an unbounded body by forgetting to.
+	MaxRequestBodyCeiling = 2 << 20
 )
 
 type Security struct {
@@ -38,12 +43,32 @@ func (s Security) Middleware(next echo.HandlerFunc) echo.HandlerFunc {
 			return next(c)
 		}
 
+		// Fetch Metadata is checked on every API request, not only on the ones
+		// that change state. A cross-site GET is already starved of its cookie
+		// by SameSite=Strict, but design §8.1 asks for the header to be verified
+		// by exact match, and a browser that mishandles SameSite must not be the
+		// only thing standing between another site and this API.
+		if request.Header.Get("Sec-Fetch-Site") != "same-origin" {
+			return problem(c, http.StatusForbidden, "cross_site_request")
+		}
+		// The ceiling is a limit on the request, not merely on what a handler
+		// happens to read. A declared length over the ceiling is refused before
+		// the handler runs, so a route that ignores its body — /diagnostics/config
+		// and /keys/:keyId/trash today, and any route added later that takes its
+		// input from the path alone — cannot be handed an unbounded one either.
+		if request.ContentLength > MaxRequestBodyCeiling {
+			return problem(c, http.StatusRequestEntityTooLarge, "request_body_too_large")
+		}
+		// A chunked request declares no length, so the reader still has to be
+		// bounded for the handlers that do read.
+		if request.Body != nil {
+			request.Body = http.MaxBytesReader(c.Response(), request.Body, MaxRequestBodyCeiling)
+		}
+
 		isBootstrap := request.Method == http.MethodPost && request.URL.Path == "/api/v1/session/bootstrap"
 		isStateChanging := request.Method != http.MethodGet && request.Method != http.MethodHead
-		if isStateChanging || isBootstrap {
-			if request.Header.Get(echo.HeaderOrigin) != s.ExpectedOrigin || request.Header.Get("Sec-Fetch-Site") != "same-origin" {
-				return problem(c, http.StatusForbidden, "cross_site_request")
-			}
+		if (isStateChanging || isBootstrap) && request.Header.Get(echo.HeaderOrigin) != s.ExpectedOrigin {
+			return problem(c, http.StatusForbidden, "cross_site_request")
 		}
 		if isBootstrap {
 			return next(c)

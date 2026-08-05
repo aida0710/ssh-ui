@@ -119,6 +119,7 @@ func TestHealthRequiresSessionCookie(t *testing.T) {
 	call := func(authenticated bool) *httptest.ResponseRecorder {
 		request := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
 		request.Host = "127.0.0.1:43123"
+		request.Header.Set("Sec-Fetch-Site", "same-origin")
 		if authenticated {
 			request.AddCookie(&http.Cookie{Name: SessionCookie, Value: credentials.SessionID})
 		}

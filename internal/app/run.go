@@ -47,6 +47,10 @@ type Dependencies struct {
 	// starts receive platform.MinimalEnvironment. Only cmd/ssh-ui may supply
 	// os.LookupEnv; a nil value lets children inherit, which suits a test.
 	Lookup func(string) (string, bool)
+	// SessionNow is the clock the session manager uses for action-token expiry.
+	// It is nil in production, where time.Now is used. The hardening suite sets
+	// it so a token can be aged without sleeping.
+	SessionNow func() time.Time
 }
 
 // buildKeyService prepares the key vault over the same workspace the
@@ -76,22 +80,32 @@ func buildKeyService(workspace *storage.Workspace, dependencies Dependencies) ht
 	})
 }
 
-func Run(ctx context.Context, dependencies Dependencies, version string) error {
+// Build wires every dependency into an HTTP server without serving it, and
+// returns the one-time bootstrap token the UI must present.
+//
+// Run calls Build and then serves. The hardening suite calls Build directly, so
+// its assertions run against the same route table, the same middleware and the
+// same handler construction the shipped binary uses, instead of a hand-built
+// subset that can drift.
+func Build(dependencies Dependencies, version string) (*httpserver.Server, string, error) {
 	listener, err := dependencies.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
-		return fmt.Errorf("listen: %w", err)
+		return nil, "", fmt.Errorf("listen: %w", err)
 	}
 
 	sessions, bootstrap, err := session.NewManager(dependencies.Random)
 	if err != nil {
 		listener.Close()
-		return fmt.Errorf("session: %w", err)
+		return nil, "", fmt.Errorf("session: %w", err)
+	}
+	if dependencies.SessionNow != nil {
+		sessions.Now = dependencies.SessionNow
 	}
 
 	workspace, err := storage.NewWorkspace(storage.OSFileSystem{}, dependencies.Home)
 	if err != nil {
 		listener.Close()
-		return fmt.Errorf("workspace: %w", err)
+		return nil, "", fmt.Errorf("workspace: %w", err)
 	}
 	// Random must be safe for concurrent use: the session manager and both
 	// transaction managers read from it. Production passes crypto/rand.
@@ -132,6 +146,14 @@ func Run(ctx context.Context, dependencies Dependencies, version string) error {
 	})
 	if err != nil {
 		listener.Close()
+		return nil, "", err
+	}
+	return server, bootstrap, nil
+}
+
+func Run(ctx context.Context, dependencies Dependencies, version string) error {
+	server, bootstrap, err := Build(dependencies, version)
+	if err != nil {
 		return err
 	}
 
