@@ -27,10 +27,12 @@ Go module は `make generate`、`make test`、`make build` の初回実行時に
 ## 開発コマンド
 
 ```sh
-make generate  # OpenAPI から Go/TypeScript 型を再生成
-make test      # Go、race detector、Vitest、TypeScript を検証
-make fuzz      # 全 fuzz target を既定 30 秒ずつ実行（FUZZTIME で変更）
-make build     # UI を生成し bin/ssh-ui へ単一バイナリを作成
+make generate         # OpenAPI から Go/TypeScript 型を再生成
+make verify-generated # 生成物が契約と一致することを確認
+make test             # Go、race detector、Vitest、TypeScript を検証
+make fuzz             # 全 fuzz target を既定 30 秒ずつ実行（FUZZTIME で変更）
+make e2e              # バイナリをビルドし Playwright で主要フローを検証
+make build            # UI を生成し bin/ssh-ui へ単一バイナリを作成
 ```
 
 `./bin/ssh-ui` を起動すると、OS の既定ブラウザで一度限りの bootstrap fragment を持つ URL を開きます。Ctrl-C または SIGTERM で localhost サーバーを停止します。
@@ -106,3 +108,6 @@ make build     # UI を生成し bin/ssh-ui へ単一バイナリを作成
 - 外部コマンドの出力は `platform.MaxCapturedOutput`（64 KiB）で打ち切られます。打ち切られた `ssh -G` 出力は解析せず、部分的な実効値として返しません。認証テストの stderr は `MaxReportedOutput`（8 KiB）までに制限して表示します。
 - `make fuzz` は `FUZZ_TARGETS` に列挙した全 target を順に実行します。`go test -fuzz` は一度に 1 target しか動かせないため、1 行で書くと最初の target しか回りません。target を追加して一覧に加え忘れると `TestMakefileFuzzTargetsCoverEveryFuzzFunction` が失敗します。
 - fuzz の対象は、設定パーサーのラウンドトリップ、Include パターン展開、`known_hosts` リーダー、`ssh -G` 出力パーサー、HTTP リクエストデコーダーの 5 つです。いずれも実 fixture を seed にしています。
+- `./bin/ssh-ui -open=false` は既定ブラウザを開かず、bootstrap fragment 付き URL を標準出力へ 1 行だけ出します。自動化用の明示的なオプションであり、通常の利用では使いません。token は `open <url>` の argv と同程度の露出であり、それ以上ではありません。
+- 配布物は UI を埋め込んだ単一バイナリです。`otool -L` はシステムライブラリのみを表示し、同梱ランタイムはありません。`make e2e` は毎回ビルドし直した実バイナリを Playwright で駆動するため、埋め込み済み UI が古いままだと E2E が失敗します。
+- `make verify-generated` は `api/openapi.yaml` から Go と TypeScript の型を再生成し、コミット済みの生成物と一致しなければ失敗します。生成物を手で編集してはいけません。

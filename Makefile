@@ -36,6 +36,12 @@ fuzz:
 e2e: build
 	npm run e2e --prefix web
 
+# verify-generated regenerates the API models and fails if the committed ones
+# differ. It is the proof that api/openapi.yaml is still the single source for
+# both the Go models and the TypeScript types.
+verify-generated: generate
+	git diff --exit-code -- internal/api/models.gen.go web/src/api/schema.d.ts
+
 build:
 	npm run build --prefix web
 	mkdir -p bin
