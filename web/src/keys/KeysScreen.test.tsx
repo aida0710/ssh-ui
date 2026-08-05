@@ -642,4 +642,22 @@ describe("KeysScreen", () => {
     // offers the stem rather than a name the server would refuse.
     expect(screen.getByLabelText("Name")).toHaveValue("colleague");
   });
+
+  // The bug this catches was not subtle and was not caught: on a dark page a
+  // bare <input> has no border and no background, so the create-key form asked
+  // for a file name, a comment and a passphrase in three fields that could not
+  // be seen at all. Any styling passes; none does not.
+  it("gives every form control a visible style", async () => {
+    const { container } = render(<KeysScreen api={buildApi()} groups={["work"]} />);
+    await screen.findByRole("row", { name: /id_work/ });
+
+    const controls = container.querySelectorAll("input, select, textarea");
+    expect(controls.length).toBeGreaterThan(0);
+    for (const element of controls) {
+      // A checkbox and a colour swatch are drawn by the browser and are visible
+      // without a border; a text field is not.
+      if (element instanceof HTMLInputElement && ["checkbox", "color"].includes(element.type)) continue;
+      expect(element.className, `${element.tagName} ${element.getAttribute("value") ?? ""} has no style`).not.toBe("");
+    }
+  });
 });
