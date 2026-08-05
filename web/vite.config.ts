@@ -12,5 +12,8 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./vitest.setup.ts"],
     restoreMocks: true,
+    // Vitest must never collect a Playwright spec: e2e/*.spec.ts drives a real
+    // browser against a real binary and would fail meaninglessly under jsdom.
+    include: ["src/**/*.test.{ts,tsx}"],
   },
 });

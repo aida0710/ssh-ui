@@ -1,4 +1,4 @@
-.PHONY: generate test build fuzz
+.PHONY: generate test build fuzz e2e verify-generated
 
 # FUZZTIME is per target. `make fuzz` is a campaign, not a single run, so the
 # default is short enough to be part of an ordinary verification pass; raise it
@@ -32,6 +32,15 @@ fuzz:
 		echo "==> fuzz $$package $$name for $(FUZZTIME)"; \
 		go test "./$$package" -run '^$$' -fuzz "^$$name$$" -fuzztime "$(FUZZTIME)"; \
 	done
+
+e2e: build
+	npm run e2e --prefix web
+
+# verify-generated regenerates the API models and fails if the committed ones
+# differ. It is the proof that api/openapi.yaml is still the single source for
+# both the Go models and the TypeScript types.
+verify-generated: generate
+	git diff --exit-code -- internal/api/models.gen.go web/src/api/schema.d.ts
 
 build:
 	npm run build --prefix web

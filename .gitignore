@@ -2,6 +2,9 @@
 /coverage/
 /web/node_modules/
 /web/tsconfig.tsbuildinfo
+/web/.playwright-browsers/
+/web/playwright-report/
+/web/test-results/
 .DS_Store
 .worktrees/
 /.claude/worktrees/
