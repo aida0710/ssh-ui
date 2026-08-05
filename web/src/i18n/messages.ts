@@ -255,6 +255,10 @@ export const en = {
     "A group is a directory. Its connections live in {connections}/<group>/ and its keys in {keys}/<group>/, and ~/.ssh/config gains one Include line per group so the reading order — and therefore which value wins — is written down rather than left to a glob.",
   "groups.directories": "{connections}/ · {keys}/",
   "groups.nestingNote": "Use a slash to nest: work/eu is a group inside work.",
+  "groups.addChild": "Add a group inside {name}",
+  "groups.listLabel": "Groups, parent before child",
+  "groups.orderNote":
+    "Listed as a tree, parent first. The Include lines are written in the opposite order — deepest group first — because OpenSSH keeps the first value it reads, so a child's setting has to be read before its parent's.",
   "groups.removeInto": "Move the connections of {name} into",
   "groups.removeIntoNone": "No group (connections/ itself)",
   "groups.parent": "Parent group",
@@ -708,6 +712,10 @@ export const ja: Record<MessageKey, string> = {
     "グループはディレクトリです。接続先は {connections}/<group>/、鍵は {keys}/<group>/ に置かれ、~/.ssh/config にはグループごとに Include 行が 1 行ずつ生成されます。読み込み順、つまりどの値が勝つかが glob 任せではなくファイルに書かれた状態になります。",
   "groups.directories": "{connections}/ · {keys}/",
   "groups.nestingNote": "スラッシュで入れ子にできます。work/eu は work の中のグループです。",
+  "groups.addChild": "{name} の中にグループを追加",
+  "groups.listLabel": "グループ一覧（親が先）",
+  "groups.orderNote":
+    "ここでは親が先に来るツリー順で表示しています。Include 行は逆順（深い子グループが先）で書かれます。OpenSSH は最初に読んだ値を採用するため、子の設定を親より先に読ませる必要があるからです。",
   "groups.removeInto": "{name} の接続先の移動先",
   "groups.removeIntoNone": "グループなし（connections/ 直下）",
   "groups.parent": "親グループ",
