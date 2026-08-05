@@ -9,13 +9,23 @@ import {
   type TerminalCommandResponse,
 } from "../api/integrations";
 
-type DiagnosticsPanelProps = { api?: IntegrationsApi };
+type DiagnosticsPanelProps = {
+  api?: IntegrationsApi;
+  // The host to diagnose. The standalone section leaves it undefined and asks
+  // for an alias; the Host editor already knows which connection is open, so it
+  // passes one and no alias field is rendered. A fixed host also skips the
+  // configuration read, which describes the file set rather than this host and
+  // is what the Config section is for.
+  host?: string;
+};
 
 // Every check on this screen is started by the user on purpose. Opening the
 // panel reads the configuration, which runs nothing; each of the other
 // operations spends a confirmation and may start a process.
-export function DiagnosticsPanel({ api = integrationsApi }: DiagnosticsPanelProps) {
-  const [alias, setAlias] = useState("");
+export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPanelProps) {
+  const embedded = host !== undefined;
+  const [typedAlias, setTypedAlias] = useState("");
+  const alias = host ?? typedAlias;
   const [config, setConfig] = useState<ConfigCheckResponse | null>(null);
   const [effective, setEffective] = useState<EffectiveResponse | null>(null);
   const [reach, setReach] = useState<ReachabilityResponse | null>(null);
@@ -25,6 +35,7 @@ export function DiagnosticsPanel({ api = integrationsApi }: DiagnosticsPanelProp
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    if (embedded) return;
     let active = true;
     void api
       .configCheck()
@@ -37,7 +48,18 @@ export function DiagnosticsPanel({ api = integrationsApi }: DiagnosticsPanelProp
     return () => {
       active = false;
     };
-  }, [api]);
+  }, [api, embedded]);
+
+  // Every result on this panel is about one host. Opening a different one must
+  // clear them, or a reachability verdict earned by the previous connection
+  // would sit under the new one's name and read as its own.
+  useEffect(() => {
+    setEffective(null);
+    setReach(null);
+    setAuth(null);
+    setTerminal(null);
+    setError("");
+  }, [host]);
 
   async function run<T>(operation: () => Promise<T>, apply: (value: T) => void, failure: string) {
     setError("");
@@ -54,10 +76,16 @@ export function DiagnosticsPanel({ api = integrationsApi }: DiagnosticsPanelProp
   const directives = effective?.executableDirectives ?? [];
 
   return (
-    <section aria-labelledby="diagnostics-heading" className="flex flex-col gap-4">
-      <h2 id="diagnostics-heading" className="font-medium">
-        Diagnostics
-      </h2>
+    <section
+      aria-label={embedded ? `Diagnostics for ${host}` : undefined}
+      aria-labelledby={embedded ? undefined : "diagnostics-heading"}
+      className="flex flex-col gap-4"
+    >
+      {embedded ? null : (
+        <h2 id="diagnostics-heading" className="font-medium">
+          Diagnostics
+        </h2>
+      )}
 
       <p aria-live="polite" className="text-sm text-zinc-400">
         {busy ? "Running the requested check…" : "No check runs until you start it."}
@@ -69,14 +97,16 @@ export function DiagnosticsPanel({ api = integrationsApi }: DiagnosticsPanelProp
       ) : null}
 
       <div className="flex flex-wrap items-end gap-2">
-        <label className="flex flex-col gap-1 text-sm">
-          <span>Host alias</span>
-          <input
-            value={alias}
-            onChange={(event) => setAlias(event.target.value)}
-            className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1"
-          />
-        </label>
+        {embedded ? null : (
+          <label className="flex flex-col gap-1 text-sm">
+            <span>Host alias</span>
+            <input
+              value={typedAlias}
+              onChange={(event) => setTypedAlias(event.target.value)}
+              className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1"
+            />
+          </label>
+        )}
         <button
           type="button"
           onClick={() => void run(() => api.effective(alias, false), setEffective, "The alias could not be explained.")}

@@ -10,6 +10,8 @@ export type GenerateKeyResponse = components["schemas"]["GenerateKeyResponse"];
 export type HardwareCommandResponse = components["schemas"]["HardwareCommandResponse"];
 export type ChangePassphraseResponse = components["schemas"]["ChangePassphraseResponse"];
 export type RevealPrivateKeyResponse = components["schemas"]["RevealPrivateKeyResponse"];
+export type RegisterKeyResponse = components["schemas"]["RegisterKeyResponse"];
+export type AgentIdentity = components["schemas"]["AgentIdentity"];
 export type IssueActionResponse = components["schemas"]["IssueActionResponse"];
 export type TrashListResponse = components["schemas"]["TrashListResponse"];
 export type TrashKeyResponse = components["schemas"]["TrashKeyResponse"];
@@ -42,6 +44,16 @@ export type PassphraseInput = {
   unencrypted: boolean;
 };
 
+// RegisterAgentInput is what ssh-add needs to load one key. lifetimeSeconds is
+// ssh-add's own -t: zero means the agent keeps the key until it exits.
+// storeInKeychain adds --apple-use-keychain, which is the only way a passphrase
+// outlives this request, and it is macOS that keeps it, not this application.
+export type RegisterAgentInput = {
+  passphrase: string;
+  lifetimeSeconds: number;
+  storeInKeychain: boolean;
+};
+
 export type KeysApi = {
   inventory(): Promise<KeyInventoryResponse>;
   algorithms(): Promise<KeyAlgorithmsResponse>;
@@ -49,6 +61,7 @@ export type KeysApi = {
   hardwareCommand(input: HardwareCommandInput): Promise<HardwareCommandResponse>;
   changePassphrase(keyId: string, input: PassphraseInput): Promise<ChangePassphraseResponse>;
   reveal(keyId: string): Promise<RevealPrivateKeyResponse>;
+  registerWithAgent(keyId: string, input: RegisterAgentInput): Promise<RegisterKeyResponse>;
   trash(keyId: string): Promise<TrashKeyResponse>;
   listTrash(): Promise<TrashListResponse>;
   restore(entryId: string): Promise<RestoreTrashResponse>;
@@ -101,7 +114,7 @@ function validateInventory(value: unknown): KeyInventoryResponse {
   asArray(record.agentDelegations);
   asArray(record.unresolvedReferences);
   asBoolean(record.agentAvailable);
-  asArray(record.agentIdentities);
+  validateAgentIdentities(record.agentIdentities);
   return record as unknown as KeyInventoryResponse;
 }
 
@@ -125,6 +138,27 @@ function validateReveal(value: unknown): RevealPrivateKeyResponse {
   asString(record.privateKey);
   asBoolean(record.encrypted);
   return record as unknown as RevealPrivateKeyResponse;
+}
+
+function validateAgentIdentities(value: unknown): void {
+  for (const identity of asArray(value)) {
+    const entry = asRecord(identity);
+    asNumber(entry.bits);
+    asString(entry.fingerprint);
+    asString(entry.comment);
+    asString(entry.algorithm);
+  }
+}
+
+function validateRegister(value: unknown): RegisterKeyResponse {
+  const record = asRecord(value);
+  asString(record.id);
+  asString(record.relativePath);
+  asString(record.fingerprint);
+  asNumber(record.lifetimeSeconds);
+  asBoolean(record.storedInKeychain);
+  validateAgentIdentities(record.identities);
+  return record as unknown as RegisterKeyResponse;
 }
 
 function validateTrashList(value: unknown): TrashListResponse {
@@ -204,6 +238,19 @@ export const keysApi: KeysApi = {
       await apiClient.mutate<unknown>(`/api/v1/keys/${encodeURIComponent(keyId)}/reveal`, {
         method: "POST",
         headers: { "X-SSH-UI-Action": token },
+      }),
+    );
+  },
+  // The passphrase travels in the request body and no further. The server hands
+  // it to ssh-add on standard input, so it reaches neither argv nor the child
+  // environment, and nothing here keeps a copy: the caller clears its own state
+  // and the reply carries what the agent now holds, not what unlocked it.
+  async registerWithAgent(keyId, input) {
+    return validateRegister(
+      await apiClient.mutate<unknown>(`/api/v1/keys/${encodeURIComponent(keyId)}/agent`, {
+        method: "POST",
+        headers: jsonHeaders,
+        body: JSON.stringify(input),
       }),
     );
   },

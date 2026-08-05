@@ -30,10 +30,13 @@
 ## M3. 実 macOS Keychain と ssh-agent
 
 1. 本番の `~/.ssh` を退避したうえで実施する。
-2. 鍵を Keychain へ登録し、`ssh-add -l` に現れることを確認する。
-3. `security find-generic-password -s "SSH: <path>"` で Keychain 項目が作られたことを確認する。
-4. `ssh-add -d <path>` と Keychain 項目の削除で原状復帰する。
-5. パスフレーズが `ps` の出力にも環境変数にも現れないことを、登録中に `ps -Eww -p $(pgrep ssh-add)` で確認する。
+2. Keys 画面で鍵の行の「Add to agent」を押し、ライフタイムと「login Keychain に保存する」を選んで登録し、`ssh-add -l` に現れることを確認する。
+3. 画面の ssh-agent 節が、`ssh-add -l` と同じ fingerprint を同じ数だけ表示していることを確認する。
+4. `security find-generic-password -s "SSH: <path>"` で Keychain 項目が作られたことを確認する。
+5. `ssh-add -d <path>` と Keychain 項目の削除で原状復帰する。
+6. パスフレーズが `ps` の出力にも環境変数にも現れないことを、登録中に `ps -Eww -p $(pgrep ssh-add)` で確認する。
+
+自動テストが到達できるのは、agent が無い状態の拒否だけです（`web/e2e/keys.spec.ts`）。実際に登録が成立することを示せるのはこの手動試験だけです。
 
 ## M4. 実 Terminal 起動
 

@@ -37,6 +37,10 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
   const [currentPassphrase, setCurrentPassphrase] = useState("");
   const [newPassphrase, setNewPassphrase] = useState("");
   const [removePassphrase, setRemovePassphrase] = useState(false);
+  const [registering, setRegistering] = useState<KeyItem | null>(null);
+  const [agentPassphrase, setAgentPassphrase] = useState("");
+  const [agentLifetime, setAgentLifetime] = useState(0);
+  const [storeInKeychain, setStoreInKeychain] = useState(false);
   const [pendingPurge, setPendingPurge] = useState("");
   const [failure, setFailure] = useState("");
 
@@ -112,6 +116,36 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
       setCurrentPassphrase("");
       setNewPassphrase("");
       setFailure("The passphrase could not be changed. Check the current passphrase and try again.");
+    }
+  }
+
+  function closeAgentForm() {
+    setAgentPassphrase("");
+    setAgentLifetime(0);
+    setStoreInKeychain(false);
+    setRegistering(null);
+  }
+
+  // Registration holds the passphrase exactly as long as the change-passphrase
+  // form does: for one submit, cleared on success and on failure alike. The
+  // reply is deliberately discarded — refresh re-reads the inventory, so what
+  // the screen shows afterwards is what the agent reports it holds, not what
+  // this request claimed it would.
+  async function submitRegistration(item: KeyItem) {
+    setFailure("");
+    try {
+      await api.registerWithAgent(item.id, {
+        passphrase: agentPassphrase,
+        lifetimeSeconds: agentLifetime,
+        storeInKeychain,
+      });
+      closeAgentForm();
+      await refresh();
+    } catch {
+      setAgentPassphrase("");
+      setFailure(
+        "The key could not be added to the agent. Check the passphrase, and that an agent this process can reach is running.",
+      );
     }
   }
 
@@ -210,10 +244,22 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
                       type="button"
                       onClick={() => {
                         closePassphraseForm();
+                        closeAgentForm();
                         setChangingPassphrase(item);
                       }}
                     >
                       Change passphrase
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!inventory.agentAvailable}
+                      onClick={() => {
+                        closePassphraseForm();
+                        closeAgentForm();
+                        setRegistering(item);
+                      }}
+                    >
+                      Add to agent
                     </button>
                     <button type="button" onClick={() => void moveToTrash(item.id)}>
                       Move to trash
@@ -225,6 +271,116 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
           ))}
         </tbody>
       </table>
+
+      <section aria-labelledby="agent-heading" className="flex flex-col gap-2">
+        <h3 id="agent-heading" className="font-medium">
+          ssh-agent
+        </h3>
+        {inventory.agentAvailable ? (
+          inventory.agentIdentities.length === 0 ? (
+            <p className="text-sm text-zinc-400">An agent is reachable and holds no identity yet.</p>
+          ) : (
+            <table className="w-full text-left text-sm">
+              <caption className="sr-only">Identities the agent currently holds</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Algorithm</th>
+                  <th scope="col">Fingerprint</th>
+                  <th scope="col">Comment</th>
+                </tr>
+              </thead>
+              <tbody>
+                {inventory.agentIdentities.map((identity) => (
+                  <tr key={identity.fingerprint}>
+                    <td>{identity.bits > 0 ? `${identity.algorithm} · ${identity.bits}` : identity.algorithm}</td>
+                    <td>{identity.fingerprint}</td>
+                    <td>{identity.comment}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )
+        ) : (
+          // ssh-add talks to whatever SSH_AUTH_SOCK names. Saying "no agent is
+          // running" would be a guess: this process may simply not have been
+          // given the socket. The message says what is missing, not why.
+          <p className="text-sm text-amber-300">
+            No agent is reachable from this process, so registration is unavailable. ssh-add needs both an ssh-add
+            program and an SSH_AUTH_SOCK to talk to.
+          </p>
+        )}
+        {inventory.agentDelegations.length > 0 && (
+          <>
+            <p className="text-sm text-zinc-400">
+              These configuration entries expect the agent to supply a key rather than naming a file:
+            </p>
+            <ul className="text-sm text-zinc-300">
+              {inventory.agentDelegations.map((reference) => (
+                <li key={`${reference.configPath}:${reference.line}`}>
+                  {`${reference.directive} ${reference.value} — ${reference.configPath}:${reference.line}`}
+                  {reference.hostPatterns.length > 0 ? ` (${reference.hostPatterns.join(" ")})` : ""}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </section>
+
+      {registering !== null && (
+        <form
+          aria-labelledby="agent-register-heading"
+          className="flex flex-col gap-3 rounded-xl border border-zinc-800 p-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submitRegistration(registering);
+          }}
+        >
+          <h3 id="agent-register-heading" className="font-medium">
+            {`Add to agent: ${registering.relativePath}`}
+          </h3>
+          <p className="text-sm text-zinc-400">
+            The passphrase is handed to ssh-add on standard input, so it reaches neither the command line nor the
+            child environment. ssh-ui does not store it. The login Keychain is the only place it can outlive this
+            request, and only if you ask for that below.
+          </p>
+          {registering.encrypted && (
+            // "Key passphrase", not "Passphrase": the generation form below has
+            // a field of its own, and two controls with one name are two
+            // controls a user cannot tell apart.
+            <label className="block">
+              Key passphrase
+              <input
+                type="password"
+                value={agentPassphrase}
+                onChange={(event) => setAgentPassphrase(event.target.value)}
+              />
+            </label>
+          )}
+          <label className="block">
+            Lifetime
+            <select value={String(agentLifetime)} onChange={(event) => setAgentLifetime(Number(event.target.value))}>
+              <option value="0">Until the agent exits</option>
+              <option value="3600">1 hour</option>
+              <option value="14400">4 hours</option>
+              <option value="43200">12 hours</option>
+            </select>
+          </label>
+          <label className="block">
+            <input
+              type="checkbox"
+              checked={storeInKeychain}
+              onChange={(event) => setStoreInKeychain(event.target.checked)}
+            />
+            Also store the passphrase in the login Keychain, so macOS unlocks this key without asking again
+          </label>
+          <div className="flex gap-2">
+            <button type="submit">Register with the agent</button>
+            <button type="button" onClick={closeAgentForm}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
 
       {revealing !== null && (
         <RevealDialog
@@ -248,8 +404,8 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
             {`Change passphrase: ${changingPassphrase.relativePath}`}
           </h3>
           <p className="text-sm text-zinc-400">
-            The passphrase is used only for this change. ssh-ui never stores it. Use agent registration if you
-            want macOS to remember it.
+            The passphrase is used only for this change. ssh-ui never stores it. Use “Add to agent” with the login
+            Keychain option if you want macOS to remember it.
           </p>
           <label className="block">
             Current passphrase

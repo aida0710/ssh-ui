@@ -55,3 +55,31 @@ test("lists generated keys and reveals one only after an explicit confirmation",
   ).toEqual({ local: 0, session: 0 });
   expect(await page.evaluate(() => document.cookie)).toBe("");
 });
+
+// The binary under test is started with HOME and PATH only, so it is handed no
+// SSH_AUTH_SOCK and can reach no agent. That is what makes this spec safe to
+// automate: it exercises the registration interface against the real server
+// without going anywhere near the developer's own agent or Keychain. Design
+// §6.3 owns the other half — a real registration is manual test M4.
+test("offers agent registration and refuses it honestly when no agent is reachable", async ({
+  page,
+  installation,
+}) => {
+  await page.goto(installation.url);
+  await openSection(page, "Keys");
+
+  await page.getByLabel("File name").fill("id_agent");
+  await page.getByRole("textbox", { name: "Passphrase" }).fill("end-to-end-passphrase");
+  expect(await clickAndAwait(page, "Create key", "/api/v1/keys")).toBe(201);
+
+  const row = page.getByRole("row", { name: /id_agent\b/ }).first();
+  await expect(row).toBeVisible();
+
+  // The control exists and is reachable from the inventory — the gap this
+  // closes was an implemented endpoint with no way to reach it — but it is
+  // disabled, and the screen says what is missing rather than failing later.
+  const register = row.getByRole("button", { name: "Add to agent" });
+  await expect(register).toBeVisible();
+  await expect(register).toBeDisabled();
+  await expect(page.getByText(/No agent is reachable from this process/)).toBeVisible();
+});
