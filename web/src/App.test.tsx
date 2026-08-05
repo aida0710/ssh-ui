@@ -4,8 +4,19 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
-vi.mock("./connections/ConnectionsPage", () => ({ ConnectionsPage: () => <div>connections panel</div> }));
-vi.mock("./explorer/ConfigExplorer", () => ({ ConfigExplorer: () => <div>config panel</div> }));
+vi.mock("./connections/ConnectionsPage", () => ({
+  ConnectionsPage: ({ onOpenFile }: { onOpenFile: (path: string, line: number) => void }) => (
+    <div>
+      connections panel
+      <button type="button" onClick={() => onOpenFile("config", 9)}>open pattern rule</button>
+    </div>
+  ),
+}));
+vi.mock("./explorer/ConfigExplorer", () => ({
+  ConfigExplorer: ({ target }: { target?: { path: string; line: number } | null }) => (
+    <div>{`config panel ${target === null || target === undefined ? "no target" : `${target.path}:${target.line}`}`}</div>
+  ),
+}));
 vi.mock("./groups/GroupsPanel", () => ({ GroupsPanel: () => <div>groups panel</div> }));
 vi.mock("./history/HistoryPanel", () => ({ HistoryPanel: () => <div>history panel</div> }));
 vi.mock("./keys/KeysScreen", () => ({ KeysScreen: () => <div>keys panel</div> }));
@@ -109,6 +120,22 @@ describe("App", () => {
     await user.click(await screen.findByRole("button", { name: "History" }));
 
     expect(screen.getByText("history panel")).toBeInTheDocument();
+  });
+
+  it("opens the config file view on the line a pattern rule asks for", async () => {
+    const user = userEvent.setup();
+    render(
+      <App
+        bootstrap={vi.fn().mockResolvedValue({ csrfToken })}
+        health={vi.fn().mockResolvedValue({ status: "ok", version: "0.1.0" })}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "open pattern rule" }));
+
+    expect(screen.getByText("config panel config:9")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Config" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getAllByRole("status")).toHaveLength(1);
   });
 
   it("shows a recovery action when bootstrap fails", async () => {

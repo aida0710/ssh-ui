@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { apiClient, type HealthResponse } from "./api/client";
 import type { SessionState } from "./session/bootstrap";
 import { ConnectionsPage } from "./connections/ConnectionsPage";
-import { ConfigExplorer } from "./explorer/ConfigExplorer";
+import { ConfigExplorer, type FileTarget } from "./explorer/ConfigExplorer";
 import { GroupsPanel } from "./groups/GroupsPanel";
 import { HistoryPanel } from "./history/HistoryPanel";
 import { KeysScreen } from "./keys/KeysScreen";
@@ -32,6 +32,14 @@ export function App({ bootstrap, health }: AppProps) {
   const [state, setState] = useState<"starting" | "ready" | "error">("starting");
   const [version, setVersion] = useState("");
   const [section, setSection] = useState<Section>("Connections");
+  const [fileTarget, setFileTarget] = useState<FileTarget | null>(null);
+
+  // The shell owns section switching, so a view that can only address a block
+  // by file and line hands the jump up here rather than routing by itself.
+  function openFile(path: string, line: number) {
+    setFileTarget({ path, line });
+    setSection("Config");
+  }
 
   useEffect(() => {
     let active = true;
@@ -93,18 +101,28 @@ export function App({ bootstrap, health }: AppProps) {
             ))}
           </ul>
         </nav>
-        <main className="p-6">{state === "ready" ? <SectionView section={section} /> : null}</main>
+        <main className="p-6">
+          {state === "ready" ? (
+            <SectionView section={section} fileTarget={fileTarget} onOpenFile={openFile} />
+          ) : null}
+        </main>
       </div>
     </div>
   );
 }
 
-function SectionView({ section }: { section: Section }) {
+type SectionViewProps = {
+  section: Section;
+  fileTarget: FileTarget | null;
+  onOpenFile: (path: string, line: number) => void;
+};
+
+function SectionView({ section, fileTarget, onOpenFile }: SectionViewProps) {
   if (section === "Connections") {
-    return <ConnectionsPage />;
+    return <ConnectionsPage onOpenFile={onOpenFile} />;
   }
   if (section === "Config") {
-    return <ConfigExplorer />;
+    return <ConfigExplorer target={fileTarget} />;
   }
   if (section === "Groups") {
     return <GroupsPanel />;
