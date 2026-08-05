@@ -90,20 +90,36 @@ integration-up:
 #
 # A person connecting to their own server does not do this, so the penalty is
 # measuring the harness rather than the product. It is turned off for the
-# container only, and loudly, so a future failure here is not mistaken for one.
+# container only, and the result is checked rather than assumed: the directive
+# goes into every sshd_config in the image, because which one this image starts
+# sshd with is its business and not something worth hard-coding — the first
+# attempt guessed the documented path and the image had moved it.
 integration-sshd-relax:
 	@docker exec ssh-ui-sshd sh -c ' \
-		configuration=/config/ssh_host_keys/sshd_config; \
-		if [ ! -f "$$configuration" ]; then \
-			echo "$$configuration is not in this image; find where sshd_config lives now" >&2; \
+		found=$$(find /config /etc /defaults -name sshd_config 2>/dev/null); \
+		if [ -z "$$found" ]; then \
+			echo "this image has no sshd_config; the penalty cannot be turned off" >&2; \
 			exit 1; \
 		fi; \
-		grep -q "^PerSourcePenalties" "$$configuration" || \
-			printf "\nPerSourcePenalties no\n" >> "$$configuration"; \
-		pkill -HUP sshd'
-	@echo "sshd restarted without per-source penalties"
+		for configuration in $$found; do \
+			grep -q "^PerSourcePenalties" "$$configuration" || \
+				printf "\nPerSourcePenalties no\n" >> "$$configuration"; \
+		done; \
+		echo "PerSourcePenalties no ->" $$found'
+	docker restart ssh-ui-sshd
 	@for i in $$(seq 1 60); do \
-		(exec 3<>/dev/tcp/127.0.0.1/$(SSHD_PORT)) 2>/dev/null && break; sleep 1; done
+		ssh-keyscan -p $(SSHD_PORT) 127.0.0.1 2>/dev/null | grep -q . && break; sleep 1; done
+	@# The check is the failure mode itself. Eight scans in a row from one
+	@# address is more than the whole suite makes; with the penalty still on,
+	@# sshd starts refusing part way through and this says so here, where the
+	@# cause is obvious, instead of in the middle of a test.
+	@for i in 1 2 3 4 5 6 7 8; do \
+		ssh-keyscan -p $(SSHD_PORT) 127.0.0.1 2>/dev/null | grep -q . || { \
+			echo "sshd refused connection $$i of 8 from one address: the per-source penalty is still on" >&2; \
+			exit 1; \
+		}; \
+	done
+	@echo "sshd accepts repeated connections from one address"
 
 integration-down:
 	docker rm -f ssh-ui-s3 ssh-ui-sshd >/dev/null 2>&1 || true
