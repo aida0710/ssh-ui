@@ -241,3 +241,37 @@ func TestServiceSafetyReportsTheSameEvidenceAsAFreshScan(t *testing.T) {
 		t.Error("a configuration with a ProxyCommand must not produce empty evidence")
 	}
 }
+
+// The account name must not be carried out of ssh's own output. It is replaced
+// in the stderr of an authentication test and was not replaced in the values of
+// an evaluation, though both are ssh output put into a response — and the
+// values are the part that always contains a home path, because
+// UserKnownHostsFile and the default IdentityFile list are absolute.
+func TestInspectReplacesTheHomeDirectoryInEvaluatedValues(t *testing.T) {
+	workspace := newServiceWorkspace(t, serviceConfig)
+	home := workspace.Home()
+	runner := &scriptedRunner{output: platform.Output{Stdout: []byte(
+		"hostname 203.0.113.10\n" +
+			"userknownhostsfile " + home + "/.ssh/known_hosts " + home + "/.ssh/known_hosts2\n" +
+			"identityfile " + home + "/.ssh/id_ed25519\n")}}
+	service := diagnostics.NewService(workspace, runner,
+		fixedToolchain{ssh: "/usr/bin/ssh", keyscan: "/usr/bin/ssh-keyscan"}, nil, nil)
+
+	inspection, err := service.Inspect(context.Background(), "bastion", false)
+	if err != nil {
+		t.Fatalf("Inspect error = %v", err)
+	}
+	if !inspection.Evaluated {
+		t.Fatal("the fixture did not evaluate")
+	}
+	for _, keyword := range inspection.Values.Keywords {
+		for _, value := range inspection.Values.Entries[keyword] {
+			if strings.Contains(value, home) {
+				t.Errorf("%s = %q still carries the home directory %q", keyword, value, home)
+			}
+		}
+	}
+	if got := inspection.Values.First("userknownhostsfile"); got != "~/.ssh/known_hosts ~/.ssh/known_hosts2" {
+		t.Errorf("userknownhostsfile = %q, want both paths shortened", got)
+	}
+}

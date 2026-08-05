@@ -8,6 +8,48 @@ import (
 	"ssh-ui/internal/config"
 )
 
+// regionSource is the shape every entry file takes once groups are declared.
+// The region is inserted before the first catch-all, which puts it inside the
+// line range of the concrete block above it — a block's range runs to the next
+// header, and the region sits between the two.
+const regionSource = `Host bastion
+	User ops
+
+` + RegionStartMarker + `
+Include connections/work/*.conf
+Include groups.ssh-ui.conf
+` + RegionEndMarker + `
+
+Host *
+	ServerAliveInterval 30
+`
+
+// The generated region is the entry file's own structure, not part of any
+// connection. Carrying it off with a moved block un-declares every group at
+// once: the entry file keeps a lone end marker, which FindRegion then refuses
+// as damaged, and the Include lines land in a file that is only read because
+// one of them named it.
+func TestExtractHostBlockLeavesTheGeneratedRegionBehind(t *testing.T) {
+	file := config.Parse([]byte(regionSource))
+	extracted, err := ExtractHostBlock(file, "bastion")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	moved := string((&config.File{Lines: extracted}).Render())
+	if strings.Contains(moved, RegionStartMarker) || strings.Contains(moved, "Include connections/") {
+		t.Errorf("the moved block carried the generated region:\n%s", moved)
+	}
+
+	remaining := string(file.Render())
+	if !strings.Contains(remaining, "Include connections/work/*.conf") {
+		t.Errorf("the entry file stopped declaring its group:\n%s", remaining)
+	}
+	if _, _, found, regionErr := FindRegion(config.Parse([]byte(remaining))); !found || regionErr != nil {
+		t.Errorf("FindRegion after the move = found %v, err %v:\n%s", found, regionErr, remaining)
+	}
+}
+
 // moveSource exercises every construct the move must carry across untouched:
 // the comment attached above the header, an inline trailing comment, a comment
 // line inside the block, blank lines and a line the engine cannot decompose.

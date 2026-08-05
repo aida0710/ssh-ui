@@ -2,6 +2,7 @@ package application
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 
 	"ssh-ui/internal/config"
@@ -42,6 +43,21 @@ type Effective struct {
 	Notices     []Notice         `json:"notices,omitempty"`
 }
 
+// declaresExactly reports whether a Host line names this alias outright rather
+// than matching it through a pattern. A catch-all matches every alias and
+// declares none, so it can never be the "two blocks claim this name" case.
+func declaresExactly(patterns []config.Pattern, alias string) bool {
+	for _, pattern := range patterns {
+		if pattern.Negated || pattern.Wildcard {
+			continue
+		}
+		if pattern.Value == alias {
+			return true
+		}
+	}
+	return false
+}
+
 // ComputeEffective walks the graph in reading order and records the first value
 // for each keyword, accumulating the keywords OpenSSH accumulates. Match blocks
 // are never evaluated, because `Match exec` can run the user's shell; their
@@ -50,6 +66,13 @@ func ComputeEffective(graph *config.Graph, root, alias string) Effective {
 	effective := Effective{Alias: alias, Approximate: true, Entries: []EffectiveEntry{}}
 	effective.Notices = appendNotice(effective.Notices, Notice{Code: NoticeExplainedValuesOnly})
 	seen := map[string]bool{}
+	// Blocks that name this alias outright, keyed by where they are, because
+	// the walk visits a block once per directive. A catch-all that happens to
+	// match is not one of these: it is reported as a wildcard shadow, which is
+	// a different statement. Two blocks declaring one alias is the case where
+	// the values on screen are not the values the user gets, so the tab that
+	// exists to answer "what do I actually get?" has to say it.
+	declaring := map[string]bool{}
 
 	WalkDirectives(graph, func(visit Visit) bool {
 		if visit.Block.Header == visit.Index {
@@ -72,6 +95,18 @@ func ComputeEffective(graph *config.Graph, root, alias string) Effective {
 		case config.BlockHost:
 			if !MatchHostLine(visit.Block.Patterns, alias) {
 				return true
+			}
+			if declaresExactly(visit.Block.Patterns, alias) {
+				where := visit.Path + "\x00" + strconv.Itoa(visit.Block.Header)
+				if !declaring[where] {
+					declaring[where] = true
+					if len(declaring) > 1 {
+						effective.Notices = appendNotice(effective.Notices, Notice{
+							Code: NoticeDuplicateAlias, Path: reference.Path,
+							Line: visit.Block.Header + 1, Detail: alias,
+						})
+					}
+				}
 			}
 			for _, pattern := range visit.Block.Patterns {
 				if !pattern.Negated {

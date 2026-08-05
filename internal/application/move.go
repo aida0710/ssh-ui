@@ -9,6 +9,12 @@ import (
 var (
 	ErrDuplicateDestinationAlias = errors.New("the destination file already declares this alias")
 	ErrSameFileMove              = errors.New("source and destination are the same file")
+	// ErrAliasAlreadyDeclared reports a rename onto a name some other block in
+	// the Include graph already claims. Writing it would not create a second
+	// host; it would create a second claim on one name, and OpenSSH hands the
+	// name to whichever block it reads first — which, once the group region
+	// leads the entry file, is often not the one the user was looking at.
+	ErrAliasAlreadyDeclared = errors.New("another block in the configuration already declares this alias")
 )
 
 // ExtractHostBlock removes the block declaring alias and returns its lines.
@@ -33,6 +39,9 @@ func ExtractHostBlock(file *config.File, alias string) ([]config.Line, error) {
 	// the next connection's description away with this one — the mirror image of
 	// leaving this one's behind, and just as wrong.
 	end := file.CommentRun(block.End)
+	// The tail can also hold the generated region, which belongs to no
+	// connection at all.
+	start, end = ClampToRegion(file, start, end)
 	extracted := make([]config.Line, 0, end-start)
 	extracted = append(extracted, file.Lines[start:end]...)
 

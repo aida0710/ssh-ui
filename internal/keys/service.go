@@ -18,7 +18,11 @@ import (
 )
 
 var (
-	ErrUnknownKey                  = errors.New("no key with that identifier is in the inventory")
+	ErrUnknownKey = errors.New("no key with that identifier is in the inventory")
+	// ErrNoPublicKey reports a private key with no public half beside it. The
+	// agent is removed from by public key, so without one there is nothing to
+	// hand ssh-add.
+	ErrNoPublicKey                 = errors.New("this key has no public half, which is what removing it from the agent needs")
 	ErrInvalidFileName             = errors.New("file name is not a safe single path segment")
 	ErrInvalidComment              = errors.New("comment contains characters this application will not put in a command line")
 	ErrConflictingPassphraseChoice = errors.New("a passphrase was supplied together with the unencrypted flag")
@@ -35,9 +39,20 @@ const KeysDirectoryName = "keys"
 // a file outside ~/.ssh even before Workspace.ResolveForWrite sees it.
 var fileNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 
-// commentPattern accepts only characters that need no shell quoting, because a
-// comment is shown inside a copyable ssh-keygen command line.
-var commentPattern = regexp.MustCompile(`^[A-Za-z0-9@._+=:,/-]{0,127}$`)
+// hardwareCommentPattern accepts only characters that need no shell quoting,
+// because a hardware key's comment is shown inside a copyable ssh-keygen
+// command line and the user runs that line themselves.
+var hardwareCommentPattern = regexp.MustCompile(`^[A-Za-z0-9@._+=:,/-]{0,127}$`)
+
+// commentPattern is the rule for a comment this application embeds itself.
+//
+// A software key is generated in process and its comment goes to
+// ssh.MarshalPrivateKey, so it reaches no shell and needs no quoting. It was
+// held to the hardware rule anyway, which refused a space — the character an
+// ordinary comment is most likely to contain, and the one `ssh-keygen -C "work
+// laptop"` puts there. What is refused here is what would damage the file or
+// the line it is written on: a newline, a carriage return or a nul.
+var commentPattern = regexp.MustCompile(`^[^\x00\r\n]{0,127}$`)
 
 // safeArgumentPattern is the final check applied to every element of a command
 // line this application displays.
@@ -79,9 +94,19 @@ var reservedFileNames = map[string]bool{
 	"ssh-ui":           true,
 }
 
-// ValidateComment rejects a comment this application would have to quote.
+// ValidateComment rejects a comment that would damage the key file or the line
+// it is written on. It is the rule for a key this application generates itself.
 func ValidateComment(comment string) error {
 	if !commentPattern.MatchString(comment) {
+		return ErrInvalidComment
+	}
+	return nil
+}
+
+// ValidateHardwareComment rejects a comment this application would have to
+// quote inside the ssh-keygen command line it shows for a hardware key.
+func ValidateHardwareComment(comment string) error {
+	if !hardwareCommentPattern.MatchString(comment) {
 		return ErrInvalidComment
 	}
 	return nil
@@ -609,6 +634,59 @@ func (service *Service) Register(ctx context.Context, request RegisterRequest) (
 		StoredInKeychain: request.StoreInKeychain,
 		Identities:       identities,
 	}, nil
+}
+
+// Deregister takes one key back out of the agent.
+//
+// A key could be handed to the agent and not taken back, so purging it left the
+// agent holding material the user had just destroyed, and the screen that lists
+// what the agent holds could only list it.
+//
+// `ssh-add -d` reads the *public* key, so this needs the public half to exist.
+// Removing an identity whose public key is gone is a thing only the agent
+// protocol can do directly, and this application talks to the agent through
+// ssh-add on purpose; when the public key is missing the agent is left alone
+// and the caller is told, rather than a removal being claimed that did not
+// happen.
+func (service *Service) Deregister(ctx context.Context, keyID string) error {
+	if service.agent == nil {
+		return platform.ErrAgentUnavailable
+	}
+	inventory, err := service.Inventory()
+	if err != nil {
+		return err
+	}
+	item, ok := inventory.Find(keyID)
+	if !ok || item.Kind != KindPrivateKey {
+		return ErrUnknownKey
+	}
+	public, ok := publicKeyFor(inventory, item)
+	if !ok {
+		return ErrNoPublicKey
+	}
+	if err := service.agent.Remove(ctx, service.absolutePath(public.RelativePath)); err != nil {
+		return err
+	}
+	_, err = service.transactions.Note("key.agent_remove", []string{service.absolutePath(item.RelativePath)})
+	return err
+}
+
+// publicKeyFor finds the public half of a private key by fingerprint, falling
+// back to the conventional ".pub" name beside it.
+func publicKeyFor(inventory *Inventory, item *Item) (*Item, bool) {
+	for index := range inventory.Items {
+		candidate := &inventory.Items[index]
+		if candidate.Kind != KindPublicKey {
+			continue
+		}
+		if item.Fingerprint != "" && candidate.Fingerprint == item.Fingerprint {
+			return candidate, true
+		}
+		if candidate.RelativePath == item.RelativePath+".pub" {
+			return candidate, true
+		}
+	}
+	return nil, false
 }
 
 // AgentIdentities reports what the agent currently holds. The second return

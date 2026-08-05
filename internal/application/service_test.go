@@ -796,6 +796,68 @@ func TestMoveHostIntoAGroupDerivesTheDestinationPath(t *testing.T) {
 	}
 }
 
+// The entry file is where every ungrouped connection starts, so moving one out
+// of it is the first move a workspace makes. Its base name is "config", which
+// "connections/<group>/*.conf" does not match, so a destination derived from it
+// verbatim is written and then never read: the connection disappears from the
+// configuration OpenSSH sees while both files look correct on disk.
+func TestMoveHostFromTheEntryFileIntoAGroupLandsWhereTheIncludeReadsIt(t *testing.T) {
+	service, workspace := newTestService(t)
+	declareGroup(t, service, "work")
+
+	if _, err := service.Save(EditRequest{
+		Kind:             EditMove,
+		Path:             "config",
+		Base:             readFile(t, workspace, "config"),
+		Alias:            "bastion",
+		DestinationGroup: "work",
+	}); err != nil {
+		t.Fatalf("Save error = %v", err)
+	}
+
+	overview, err := service.Overview()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var moved *HostEntry
+	for index := range overview.Hosts {
+		if overview.Hosts[index].Identity.Alias == "bastion" {
+			moved = &overview.Hosts[index]
+		}
+	}
+	if moved == nil {
+		t.Fatal("the moved connection is not read back: no Include reaches where it was written")
+	}
+	if moved.Group != "work" {
+		t.Errorf("group = %q, want work", moved.Group)
+	}
+}
+
+// The notice tells the user OpenSSH will not read the block until they add an
+// Include. A declared group already has one, and the destination is named so
+// that it matches, so saying otherwise here trains the user to click past the
+// warning in the one case where it is true.
+func TestMoveHostIntoADeclaredGroupDoesNotWarnThatNoIncludeReachesIt(t *testing.T) {
+	service, _ := newTestService(t)
+	declareGroup(t, service, "work")
+
+	preview, err := service.Preview(EditRequest{
+		Kind:             EditMove,
+		Path:             "conf.d/10-home.conf",
+		Base:             "Host nas\n\tUser aida\t# personal\n",
+		Alias:            "nas",
+		DestinationGroup: "work",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, notice := range preview.Notices {
+		if notice.Code == NoticeDestinationNotIncluded {
+			t.Fatalf("the group's Include reaches the destination: %#v", preview.Notices)
+		}
+	}
+}
+
 func TestMoveHostIntoAGroupUpdatesTheMetadataIdentityInTheSameTransaction(t *testing.T) {
 	service, workspace := newTestService(t)
 	declareGroup(t, service, "work")
@@ -968,5 +1030,106 @@ func TestAGroupMoveStillRefusesAFileThatChangedUnderIt(t *testing.T) {
 	}
 	if conflict.Report.Path != "conf.d/10-home.conf" {
 		t.Errorf("the conflict names %q, want the source", conflict.Report.Path)
+	}
+}
+
+// A rename that lands on an alias something else already declares does not
+// create a second host: it creates a second claim on one name, and OpenSSH
+// gives the name to whichever block it reads first. The move path has refused
+// this since it was written; rename accepted it, wrote it, and said nothing,
+// so a rename could take a live alias away from the host that owned it.
+func TestRenameOntoAnAliasAnotherFileDeclaresIsRefused(t *testing.T) {
+	service, workspace := newTestService(t)
+	before := readFile(t, workspace, "conf.d/10-home.conf")
+
+	_, err := service.Save(EditRequest{
+		Kind:     EditRename,
+		Path:     "conf.d/10-home.conf",
+		Base:     before,
+		Alias:    "nas",
+		NewAlias: "bastion", // declared by the entry file
+	})
+	if !errors.Is(err, ErrAliasAlreadyDeclared) {
+		t.Fatalf("Save error = %v, want ErrAliasAlreadyDeclared", err)
+	}
+	if readFile(t, workspace, "conf.d/10-home.conf") != before {
+		t.Error("a refused rename changed the file")
+	}
+}
+
+func TestRenameOntoAnAliasTheSameFileDeclaresIsRefused(t *testing.T) {
+	service, workspace := newTestService(t)
+	const two = "Host nas\n\tUser aida\n\nHost attic\n\tUser aida\n"
+	if err := os.WriteFile(filepath.Join(workspace.Root(), "conf.d", "10-home.conf"),
+		[]byte(two), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := service.Save(EditRequest{
+		Kind: EditRename, Path: "conf.d/10-home.conf", Base: two,
+		Alias: "nas", NewAlias: "attic",
+	})
+	if !errors.Is(err, ErrAliasAlreadyDeclared) {
+		t.Fatalf("Save error = %v, want ErrAliasAlreadyDeclared", err)
+	}
+}
+
+func TestRenameToAFreeAliasStillWorks(t *testing.T) {
+	service, workspace := newTestService(t)
+	before := readFile(t, workspace, "conf.d/10-home.conf")
+
+	if _, err := service.Save(EditRequest{
+		Kind: EditRename, Path: "conf.d/10-home.conf", Base: before,
+		Alias: "nas", NewAlias: "attic",
+	}); err != nil {
+		t.Fatalf("Save error = %v", err)
+	}
+	if got := readFile(t, workspace, "conf.d/10-home.conf"); !strings.Contains(got, "Host attic") {
+		t.Errorf("file = %q, want the renamed alias", got)
+	}
+}
+
+// A .conf file under connections/ that no Include names is read by nobody. The
+// group delete puts one there deliberately when it is given no destination, on
+// the stated understanding that the interface reports it; nothing did, so a
+// connection could leave the configuration without a word being said about it.
+func TestOverviewReportsAConnectionFileNothingIncludes(t *testing.T) {
+	service, workspace := newTestService(t)
+	if err := workspace.EnsureDirectory(filepath.Join(workspace.Root(), "connections")); err != nil {
+		t.Fatal(err)
+	}
+	stray := filepath.Join(workspace.Root(), "connections", "orphan.conf")
+	if err := os.WriteFile(stray, []byte("Host nowhere\n\tUser nobody\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	overview, err := service.Overview()
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, notice := range overview.Notices {
+		if notice.Code == NoticeGroupFileUnreached && notice.Path == "connections/orphan.conf" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("notices = %#v, want group_file_unreached for connections/orphan.conf", overview.Notices)
+	}
+}
+
+func TestOverviewDoesNotCallAReachedGroupFileUnreached(t *testing.T) {
+	service, workspace := newTestService(t)
+	declareGroup(t, service, "work")
+	writeGroupFile(t, workspace, "work", "hosts.conf", "Host inwork\n\tUser aida\n")
+
+	overview, err := service.Overview()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, notice := range overview.Notices {
+		if notice.Code == NoticeGroupFileUnreached {
+			t.Errorf("a file a group Include reaches was called unreached: %#v", notice)
+		}
 	}
 }

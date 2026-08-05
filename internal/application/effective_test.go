@@ -124,3 +124,35 @@ func TestDiffEffectiveIgnoresALineShiftButNotARealMove(t *testing.T) {
 		t.Fatalf("a move to another block was not reported: %#v", diff.Changes)
 	}
 }
+
+// The Effective tab of a host detail is where a user asks "what do I actually
+// get?". Two files claiming the alias is the one situation where the answer is
+// not what the block on screen says, so it is the situation the tab most needs
+// to mention. The connections tree flags it; this said nothing.
+func TestComputeEffectiveReportsAnAliasClaimedByTwoFiles(t *testing.T) {
+	graph := newTestGraph(t, map[string]string{
+		"config":              "Include conf.d/*.conf\n\nHost nas\n\tUser aida\n",
+		"conf.d/10-home.conf": "Host nas\n\tUser someone-else\n",
+	})
+
+	effective := ComputeEffective(graph, testRoot, "nas")
+	found := false
+	for _, notice := range effective.Notices {
+		if notice.Code == NoticeDuplicateAlias {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("notices = %#v, want a duplicate_alias", effective.Notices)
+	}
+}
+
+func TestComputeEffectiveDoesNotCallOneBlockADuplicate(t *testing.T) {
+	graph := newTestGraph(t, map[string]string{"config": "Host nas\n\tUser aida\n"})
+
+	for _, notice := range ComputeEffective(graph, testRoot, "nas").Notices {
+		if notice.Code == NoticeDuplicateAlias {
+			t.Errorf("a single block was reported as a duplicate: %#v", notice)
+		}
+	}
+}

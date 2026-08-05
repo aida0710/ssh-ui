@@ -51,6 +51,7 @@ type KeyService interface {
 	Reveal(keyID string) (keys.RevealResult, error)
 	PublicKey(keyID string) (keys.PublicKeyResult, error)
 	Register(ctx context.Context, request keys.RegisterRequest) (keys.RegisterResult, error)
+	Deregister(ctx context.Context, keyID string) error
 	Trash(keyID string) (keys.TrashResult, error)
 	ListTrash() ([]keys.TrashEntry, error)
 	Restore(entryID string) (keys.RestoreResult, error)
@@ -80,6 +81,7 @@ func registerKeyRoutes(engine *echo.Echo, handlers KeyHandlers) {
 	engine.GET("/api/v1/keys/:keyId/public", handlers.PublicKey)
 	engine.POST("/api/v1/keys/:keyId/location", handlers.Relocate)
 	engine.POST("/api/v1/keys/:keyId/agent", handlers.Register)
+	engine.DELETE("/api/v1/keys/:keyId/agent", handlers.Deregister)
 	engine.POST("/api/v1/keys/:keyId/trash", handlers.Trash)
 	engine.GET("/api/v1/trash", handlers.ListTrash)
 	engine.POST("/api/v1/trash/:entryId/restore", handlers.Restore)
@@ -328,6 +330,29 @@ func relocateKeyResponse(result application.KeyRelocateResult) api.RelocateKeyRe
 		})
 	}
 	return response
+}
+
+// Deregister takes one key back out of the agent.
+//
+// No confirmation token: this destroys nothing, and the worst it can cost the
+// user is being asked for a passphrase again. The answer carries what the agent
+// holds afterwards, so the screen shows the result rather than assuming it.
+func (h KeyHandlers) Deregister(c *echo.Context) error {
+	keyID := c.Param("keyId")
+	if err := h.Keys.Deregister(c.Request().Context(), keyID); err != nil {
+		return keyProblem(c, err)
+	}
+	identities, available := h.Keys.AgentIdentities(c.Request().Context())
+	described := make([]api.AgentIdentity, 0, len(identities))
+	for _, identity := range identities {
+		described = append(described, api.AgentIdentity{
+			Bits: identity.Bits, Fingerprint: identity.Fingerprint,
+			Comment: identity.Comment, Algorithm: identity.Algorithm,
+		})
+	}
+	return c.JSON(http.StatusOK, api.AgentIdentitiesResponse{
+		Id: keyID, AgentAvailable: available, Identities: described,
+	})
 }
 
 func (h KeyHandlers) Register(c *echo.Context) error {

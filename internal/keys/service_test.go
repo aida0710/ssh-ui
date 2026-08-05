@@ -500,6 +500,8 @@ type fakeAgent struct {
 	passphrases [][]byte
 	identities  []platform.AgentIdentity
 	addError    error
+	removed     []string
+	removeError error
 }
 
 func (fake *fakeAgent) Available(context.Context) bool { return fake.available }
@@ -520,7 +522,13 @@ func (fake *fakeAgent) Add(_ context.Context, request platform.AgentAddRequest) 
 	return fake.addError
 }
 
-func (fake *fakeAgent) Remove(context.Context, string) error { return nil }
+func (fake *fakeAgent) Remove(_ context.Context, publicKeyPath string) error {
+	if !fake.available {
+		return platform.ErrAgentUnavailable
+	}
+	fake.removed = append(fake.removed, publicKeyPath)
+	return fake.removeError
+}
 
 func generateWorkKey(t *testing.T, service *Service) {
 	t.Helper()
@@ -903,5 +911,82 @@ func TestHardwareCommandNamesTheGroupDirectory(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("command = %#v, want it to name %q", command, want)
+	}
+}
+
+// A software key's comment is embedded by ssh.MarshalPrivateKey and reaches no
+// command line, so the shell-quoting rule the hardware path needs does not
+// apply to it. "work laptop" is what people actually type.
+func TestValidateCommentAcceptsAnOrdinaryComment(t *testing.T) {
+	for _, comment := range []string{"work laptop", "aida@mbp", "", "backup key 2026"} {
+		if err := ValidateComment(comment); err != nil {
+			t.Errorf("ValidateComment(%q) = %v, want nil", comment, err)
+		}
+	}
+}
+
+func TestValidateCommentStillRefusesWhatWouldBreakAFile(t *testing.T) {
+	for _, comment := range []string{"two\nlines", "nul\x00byte", "carriage\rreturn"} {
+		if err := ValidateComment(comment); err == nil {
+			t.Errorf("ValidateComment(%q) = nil, want a refusal", comment)
+		}
+	}
+}
+
+// The hardware path builds an ssh-keygen command line for the user to run, so
+// it keeps the stricter rule.
+func TestHardwareCommentKeepsTheShellSafeRule(t *testing.T) {
+	if err := ValidateHardwareComment("work laptop"); err == nil {
+		t.Error("ValidateHardwareComment accepted a space, which would need quoting in the shown command")
+	}
+	if err := ValidateHardwareComment("aida@mbp"); err != nil {
+		t.Errorf("ValidateHardwareComment(aida@mbp) = %v, want nil", err)
+	}
+}
+
+// A key can be handed to the agent and could not be taken back. Purging the key
+// left its identity loaded, so the material the user had just destroyed was
+// still there to authenticate with, and the screen that lists what the agent
+// holds had nothing to offer but the list.
+func TestDeregisterTakesTheKeyBackOutOfTheAgent(t *testing.T) {
+	agent := &fakeAgent{available: true}
+	service, _ := newServiceWithAgent(t, newQueryRunner(), agent)
+	generateWorkKey(t, service)
+
+	inventory, err := service.Inventory()
+	if err != nil {
+		t.Fatal(err)
+	}
+	item, ok := inventory.Find(ItemID("id_work"))
+	if !ok {
+		t.Fatal("the generated key is not in the inventory")
+	}
+
+	if err := service.Deregister(context.Background(), item.ID); err != nil {
+		t.Fatalf("Deregister error = %v", err)
+	}
+	if len(agent.removed) != 1 || !strings.HasSuffix(agent.removed[0], "id_work.pub") {
+		t.Errorf("removed = %#v, want the public key path ssh-add -d needs", agent.removed)
+	}
+}
+
+func TestDeregisterRefusesAKeyThatIsNotThere(t *testing.T) {
+	agent := &fakeAgent{available: true}
+	service, _ := newServiceWithAgent(t, newQueryRunner(), agent)
+
+	if err := service.Deregister(context.Background(), ItemID("nope")); !errors.Is(err, ErrUnknownKey) {
+		t.Errorf("Deregister error = %v, want ErrUnknownKey", err)
+	}
+}
+
+func TestDeregisterSaysSoWhenThereIsNoAgent(t *testing.T) {
+	agent := &fakeAgent{available: false}
+	service, _ := newServiceWithAgent(t, newQueryRunner(), agent)
+	generateWorkKey(t, service)
+
+	inventory, _ := service.Inventory()
+	item, _ := inventory.Find(ItemID("id_work"))
+	if err := service.Deregister(context.Background(), item.ID); !errors.Is(err, platform.ErrAgentUnavailable) {
+		t.Errorf("Deregister error = %v, want ErrAgentUnavailable", err)
 	}
 }

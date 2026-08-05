@@ -562,7 +562,7 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["registerKeyWithAgent"];
-        delete?: never;
+        delete: operations["deregisterKeyFromAgent"];
         options?: never;
         head?: never;
         patch?: never;
@@ -848,6 +848,11 @@ export interface components {
             fingerprint: string;
             comment: string;
             algorithm: string;
+        };
+        AgentIdentitiesResponse: {
+            id: string;
+            agentAvailable: boolean;
+            identities: components["schemas"]["AgentIdentity"][];
         };
         KeyInventoryResponse: {
             items: components["schemas"]["KeyItem"][];
@@ -2500,6 +2505,34 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+        };
+    };
+    deregisterKeyFromAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                keyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Key removed from the ssh-agent */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentIdentitiesResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
         };
     };

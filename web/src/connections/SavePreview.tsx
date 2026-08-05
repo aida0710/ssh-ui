@@ -21,6 +21,8 @@ const noticeKeys: Record<string, MessageKey> = {
   include_no_longer_matches: "notice.include_no_longer_matches",
   include_not_rewritten: "notice.include_not_rewritten",
   include_now_unreached: "notice.include_now_unreached",
+  group_file_unreached: "notice.group_file_unreached",
+  group_directory_leftover: "notice.group_directory_leftover",
 };
 
 function DiffView({ lines }: { lines: DiffLine[] }) {

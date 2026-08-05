@@ -22,9 +22,11 @@ test("declares a group in the entry file and moves a connection into it", async 
   expect(entry).toContain("Include connections/work/*.conf\n");
   expect(entry).toContain("Include groups.ssh-ui.conf\n");
   expect(entry).toContain("# <<< ssh-ui groups");
-  // The region sits before the catch-all, so the user's own Host * still loses
-  // to everything above it — which is what makes it a default.
-  expect(entry.indexOf("# >>> ssh-ui groups")).toBeLessThan(entry.indexOf("Host *"));
+  // The region sits above every Host line. An Include written below one belongs
+  // to that block, and OpenSSH applies an included file's options only when the
+  // block matches, so anywhere lower declares the groups to one host and to
+  // nothing else.
+  expect(entry.indexOf("# >>> ssh-ui groups")).toBeLessThan(entry.indexOf("Host "));
 
   await openSection(page, "Connections");
   await page
