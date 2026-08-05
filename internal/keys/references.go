@@ -195,3 +195,12 @@ func (inventory *Inventory) AttachReferences(index *ReferenceIndex) {
 	inventory.AgentDelegations = index.AgentDelegations()
 	inventory.UnresolvedReferences = index.Unresolved()
 }
+
+// ExpandsTo reports whether an IdentityFile-style argument names this exact
+// file. It is the one way another package may ask that question: expandKeyPath
+// stays unexported so the rule about what this engine refuses to guess — a
+// relative path, an unknown token — is decided in one place.
+func ExpandsTo(value, home, absolute string) bool {
+	expanded, reason := expandKeyPath(value, home)
+	return reason == "" && expanded == filepath.Clean(absolute)
+}

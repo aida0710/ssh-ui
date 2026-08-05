@@ -2,6 +2,17 @@ import { useCallback, useEffect, useState } from "react";
 import { RevealDialog } from "./RevealDialog";
 import { CopyButton } from "../ui/CopyButton";
 import { useTranslate, type Translate } from "../i18n/context";
+import {
+  CheckboxField,
+  Field,
+  control,
+  primaryAction,
+  secondaryAction,
+  sectionCard,
+  sectionHeading,
+  tableHeadCell,
+  tableHeadRow,
+} from "../ui/form";
 import type { MessageKey } from "../i18n/messages";
 import {
   keysApi,
@@ -10,11 +21,14 @@ import {
   type KeyItem,
   type KeysApi,
   type KeyVariant,
-  type RenameKeyResponse,
+  type RelocateKeyResponse,
   type TrashListResponse,
 } from "./api";
 
-type KeysScreenProps = { api?: KeysApi };
+// groups are the declared group names, supplied by the shell from the overview.
+// The Keys screen never infers them: a directory is a group because a line in
+// ~/.ssh/config says so, and only the configuration engine reads that line.
+type KeysScreenProps = { api?: KeysApi; groups?: string[] };
 
 type ScreenState = "loading" | "ready" | "error";
 
@@ -60,7 +74,7 @@ function certificateLines(
 // together as text and read as prose rather than as controls. The border and
 // these classes are what separate one key from the next.
 const rowAction = "rounded border border-zinc-700 px-2 py-1 text-xs hover:bg-zinc-800 disabled:text-zinc-600";
-const dangerAction = "rounded border border-rose-700 px-2 py-1 text-xs text-rose-300 hover:bg-rose-950";
+const rowDanger = "rounded border border-rose-700 px-2 py-1 text-xs text-rose-300 hover:bg-rose-950";
 
 const noteLabels: Record<string, MessageKey> = {
   fingerprint_unavailable: "keys.noteFingerprintUnavailable",
@@ -75,16 +89,19 @@ const noteLabels: Record<string, MessageKey> = {
 // the sentence and the detail fills it in, so a reason the server adds later
 // still shows the path it names instead of being dropped.
 const blockerLabels: Record<string, MessageKey> = {
-  rename_target_occupied: "keys.renameBlockerTargetOccupied",
-  rename_reference_unresolved: "keys.renameBlockerUnresolved",
-  rename_reference_not_editable: "keys.renameBlockerNotEditable",
+  key_destination_occupied: "keys.blockerTargetOccupied",
+  key_reference_unresolved: "keys.blockerUnresolved",
+  key_reference_outside_workspace: "keys.blockerReferenceExternal",
+  key_group_not_declared: "keys.blockerGroupNotDeclared",
+  key_destination_is_config: "keys.blockerDestinationIsConfig",
+  key_in_state_directory: "keys.blockerStateDirectory",
 };
 
 function describeBlocker(blocker: string, t: Translate): string {
   const separator = blocker.indexOf(":");
   const code = separator < 0 ? blocker : blocker.slice(0, separator);
   const detail = separator < 0 ? blocker : blocker.slice(separator + 1);
-  return t(blockerLabels[code] ?? "keys.renameBlockerOther", { detail });
+  return t(blockerLabels[code] ?? "keys.blockerOther", { detail });
 }
 
 // renameable reports whether this application can rename a file without having
@@ -106,10 +123,18 @@ function renameable(item: KeyItem, items: KeyItem[]): boolean {
   return !items.some((candidate) => candidate.kind === "private_key" && candidate.fingerprint === fingerprint);
 }
 
-// renameStem is the part of the name the user is being asked to replace. It
-// mirrors the server's rule, so the field starts at the name the rename would
-// actually change rather than at one the server would refuse.
-function renameStem(item: KeyItem): string {
+// groupOfKeyPath reads a key's group out of where it sits, mirroring the
+// server's rule: keys/<group>/<file>, and nothing else is in a group.
+export function groupOfKeyPath(relativePath: string): string {
+  const segments = relativePath.split("/");
+  if (segments.length < 3 || segments[0] !== "keys") return "";
+  return segments.slice(1, -1).join("/");
+}
+
+// relocateStem is the part of the name the user is being asked to replace. It
+// mirrors the server's rule, so the field starts at the name the relocation
+// would actually change rather than at one the server would refuse.
+function relocateStem(item: KeyItem): string {
   const base = item.relativePath.split("/").pop() ?? item.relativePath;
   if (item.kind === "private_key") return base;
   for (const suffix of ["-cert.pub", ".pub"]) {
@@ -118,7 +143,7 @@ function renameStem(item: KeyItem): string {
   return base;
 }
 
-export function KeysScreen({ api = keysApi }: KeysScreenProps) {
+export function KeysScreen({ api = keysApi, groups = [] }: KeysScreenProps) {
   const t = useTranslate();
   const [state, setState] = useState<ScreenState>("loading");
   const [inventory, setInventory] = useState<KeyInventoryResponse | null>(null);
@@ -140,9 +165,11 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
   const [agentLifetime, setAgentLifetime] = useState(0);
   const [storeInKeychain, setStoreInKeychain] = useState(false);
   const [publicKeyView, setPublicKeyView] = useState<{ relativePath: string; text: string } | null>(null);
-  const [renaming, setRenaming] = useState<KeyItem | null>(null);
+  const [relocating, setRelocating] = useState<KeyItem | null>(null);
   const [newName, setNewName] = useState("");
-  const [renamed, setRenamed] = useState<RenameKeyResponse | null>(null);
+  const [newGroup, setNewGroup] = useState("");
+  const [relocated, setRelocated] = useState<RelocateKeyResponse | null>(null);
+  const [createGroup, setCreateGroup] = useState("");
   const [pendingPurge, setPendingPurge] = useState("");
   const [failure, setFailure] = useState("");
 
@@ -177,7 +204,7 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
     setTerminalCommand(null);
     try {
       if (selected !== undefined && !selected.inProcess) {
-        const response = await api.hardwareCommand({ algorithm, fileName, comment });
+        const response = await api.hardwareCommand({ algorithm, fileName, group: createGroup, comment });
         setTerminalCommand(response.command);
         return;
       }
@@ -185,6 +212,7 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
         algorithm,
         bits: selected?.bits ?? 0,
         fileName,
+        group: createGroup,
         comment,
         passphrase,
         unencrypted,
@@ -267,25 +295,30 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
     }
   }
 
-  function closeRenameForm() {
+  function closeRelocateForm() {
     setNewName("");
-    setRenaming(null);
+    setNewGroup("");
+    setRelocating(null);
   }
 
-  // A blocked rename is not a failure to report and forget: the server wrote
-  // nothing and said why, so the reasons stay on screen and the form stays open
-  // with what the user typed still in it.
-  async function submitRename(item: KeyItem) {
+  // A blocked relocation is not a failure to report and forget: the server
+  // wrote nothing and said why, so the reasons stay on screen and the form
+  // stays open with what the user typed still in it.
+  async function submitRelocation(item: KeyItem) {
     setFailure("");
-    setRenamed(null);
+    setRelocated(null);
     try {
-      const response = await api.rename(item.id, newName);
-      setRenamed(response);
+      const currentGroup = groupOfKeyPath(item.relativePath);
+      const response = await api.relocate(item.id, {
+        ...(newName === relocateStem(item) ? {} : { newName }),
+        ...(newGroup === currentGroup ? {} : { group: newGroup }),
+      });
+      setRelocated(response);
       if (response.blockers.length > 0) return;
-      closeRenameForm();
+      closeRelocateForm();
       await refresh();
     } catch {
-      setFailure(t("keys.renameFailed"));
+      setFailure(t("keys.relocateFailed"));
     }
   }
 
@@ -342,17 +375,18 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
         </p>
       )}
 
-      <table className="w-full text-left text-sm">
+      <div className="overflow-x-auto">
+      <table className="w-full min-w-[56rem] text-left text-sm">
         <caption className="sr-only">{t("keys.tableCaption")}</caption>
         <thead>
-          <tr className="border-b border-zinc-700 text-xs uppercase tracking-wide text-zinc-400">
-            <th scope="col">{t("keys.colFile")}</th>
-            <th scope="col">{t("keys.colKind")}</th>
-            <th scope="col">{t("keys.colAlgorithm")}</th>
-            <th scope="col">{t("keys.colFingerprint")}</th>
-            <th scope="col">{t("keys.colPermissions")}</th>
-            <th scope="col">{t("keys.colUsedBy")}</th>
-            <th scope="col">{t("keys.colActions")}</th>
+          <tr className={tableHeadRow}>
+            <th scope="col" className={`${tableHeadCell} whitespace-nowrap`}>{t("keys.colFile")}</th>
+            <th scope="col" className={`${tableHeadCell} whitespace-nowrap`}>{t("keys.colKind")}</th>
+            <th scope="col" className={`${tableHeadCell} whitespace-nowrap`}>{t("keys.colAlgorithm")}</th>
+            <th scope="col" className={`${tableHeadCell} whitespace-nowrap`}>{t("keys.colFingerprint")}</th>
+            <th scope="col" className={`${tableHeadCell} whitespace-nowrap`}>{t("keys.colPermissions")}</th>
+            <th scope="col" className={`${tableHeadCell} whitespace-nowrap`}>{t("keys.colUsedBy")}</th>
+            <th scope="col" className={`${tableHeadCell} whitespace-nowrap`}>{t("keys.colActions")}</th>
           </tr>
         </thead>
         <tbody>
@@ -434,24 +468,33 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
                     onClick={() => {
                       closePassphraseForm();
                       closeAgentForm();
-                      setRenamed(null);
-                      setNewName(renameStem(item));
-                      setRenaming(item);
+                      setRelocated(null);
+                      setNewName(relocateStem(item));
+                      setNewGroup(groupOfKeyPath(item.relativePath));
+                      setRelocating(item);
                     }}
                   >
-                    {t("keys.rename")}
+                    {t("keys.relocate")}
                   </button>
                 )}
                 </div>
               </td>
             </tr>
           ))}
+          {inventory.items.length === 0 && (
+            <tr>
+              <td colSpan={7} className="py-3 text-sm text-zinc-400">
+                {t("keys.inventoryEmpty")}
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
+      </div>
 
       {publicKeyView !== null && (
-        <section aria-labelledby="public-key-heading" className="flex flex-col gap-2 rounded-xl border border-zinc-800 p-4">
-          <h3 id="public-key-heading" className="font-medium">
+        <section aria-labelledby="public-key-heading" className={sectionCard}>
+          <h3 id="public-key-heading" className={sectionHeading}>
             {t("keys.publicKeyHeading", { path: publicKeyView.relativePath })}
           </h3>
           <pre aria-label={t("keys.publicKeyLabel")} className="overflow-x-auto rounded-md bg-zinc-950 p-4 text-xs">
@@ -459,7 +502,7 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
           </pre>
           <div className="flex gap-2">
             <CopyButton value={publicKeyView.text} label="copy.publicKey" />
-            <button type="button" onClick={() => setPublicKeyView(null)}>
+            <button type="button" className={secondaryAction} onClick={() => setPublicKeyView(null)}>
               {t("keys.close")}
             </button>
           </div>
@@ -475,7 +518,7 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
       */}
       {inventory.unreadable.length > 0 && (
         <section aria-labelledby="unreadable-heading" className="flex flex-col gap-2">
-          <h3 id="unreadable-heading" className="font-medium text-amber-300">
+          <h3 id="unreadable-heading" className="text-sm font-medium text-amber-300">
             {t("keys.unreadableHeading")}
           </h3>
           <p className="text-sm text-zinc-400">{t("keys.unreadableNote")}</p>
@@ -489,7 +532,7 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
 
       {inventory.unresolvedReferences.length > 0 && (
         <section aria-labelledby="unresolved-heading" className="flex flex-col gap-2">
-          <h3 id="unresolved-heading" className="font-medium text-amber-300">
+          <h3 id="unresolved-heading" className="text-sm font-medium text-amber-300">
             {t("keys.unresolvedHeading")}
           </h3>
           <ul className="text-sm text-zinc-300">
@@ -509,20 +552,20 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
       )}
 
       <section aria-labelledby="agent-heading" className="flex flex-col gap-2">
-        <h3 id="agent-heading" className="font-medium">
+        <h3 id="agent-heading" className={sectionHeading}>
           {t("keys.agentHeading")}
         </h3>
         {inventory.agentAvailable ? (
           inventory.agentIdentities.length === 0 ? (
             <p className="text-sm text-zinc-400">{t("keys.agentEmpty")}</p>
           ) : (
-            <table className="w-full text-left text-sm">
+            <table className="w-full min-w-[32rem] text-left text-sm">
               <caption className="sr-only">{t("keys.agentIdentitiesCaption")}</caption>
               <thead>
-                <tr className="border-b border-zinc-700 text-xs uppercase tracking-wide text-zinc-400">
-                  <th scope="col">{t("keys.colAlgorithm")}</th>
-                  <th scope="col">{t("keys.colFingerprint")}</th>
-                  <th scope="col">{t("keys.colComment")}</th>
+                <tr className={tableHeadRow}>
+                  <th scope="col" className={`${tableHeadCell} whitespace-nowrap`}>{t("keys.colAlgorithm")}</th>
+                  <th scope="col" className={`${tableHeadCell} whitespace-nowrap`}>{t("keys.colFingerprint")}</th>
+                  <th scope="col" className={`${tableHeadCell} whitespace-nowrap`}>{t("keys.colComment")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -571,77 +614,92 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
       {registering !== null && (
         <form
           aria-labelledby="agent-register-heading"
-          className="flex flex-col gap-3 rounded-xl border border-zinc-800 p-4"
+          className={sectionCard}
           onSubmit={(event) => {
             event.preventDefault();
             void submitRegistration(registering);
           }}
         >
-          <h3 id="agent-register-heading" className="font-medium">
+          <h3 id="agent-register-heading" className={sectionHeading}>
             {t("keys.registerHeading", { path: registering.relativePath })}
           </h3>
-          <p className="text-sm text-zinc-400">
-            {t("keys.registerNote")}
-          </p>
-          {registering.encrypted && (
-            // "Key passphrase", not "Passphrase": the generation form below has
-            // a field of its own, and two controls with one name are two
-            // controls a user cannot tell apart.
-            <label className="block">
-              {t("keys.keyPassphrase")}
-              <input
-                type="password"
-                value={agentPassphrase}
-                onChange={(event) => setAgentPassphrase(event.target.value)}
-              />
-            </label>
-          )}
-          <label className="block">
-            {t("keys.lifetime")}
-            <select value={String(agentLifetime)} onChange={(event) => setAgentLifetime(Number(event.target.value))}>
-              <option value="0">{t("keys.lifetimeForever")}</option>
-              <option value="3600">{t("keys.lifetimeHour")}</option>
-              <option value="14400">{t("keys.lifetimeFourHours")}</option>
-              <option value="43200">{t("keys.lifetimeTwelveHours")}</option>
-            </select>
-          </label>
-          <label className="block">
-            <input
-              type="checkbox"
-              checked={storeInKeychain}
-              onChange={(event) => setStoreInKeychain(event.target.checked)}
-            />
-            {t("keys.storeInKeychain")}
-          </label>
+          <p className="text-sm text-zinc-400">{t("keys.registerNote")}</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {registering.encrypted && (
+              // "Key passphrase", not "Passphrase": the generation form below
+              // has a field of its own, and two controls with one name are two
+              // controls a user cannot tell apart.
+              <Field label={t("keys.keyPassphrase")}>
+                <input
+                  className={control}
+                  type="password"
+                  value={agentPassphrase}
+                  onChange={(event) => setAgentPassphrase(event.target.value)}
+                />
+              </Field>
+            )}
+            <Field label={t("keys.lifetime")}>
+              <select
+                className={control}
+                value={String(agentLifetime)}
+                onChange={(event) => setAgentLifetime(Number(event.target.value))}
+              >
+                <option value="0">{t("keys.lifetimeForever")}</option>
+                <option value="3600">{t("keys.lifetimeHour")}</option>
+                <option value="14400">{t("keys.lifetimeFourHours")}</option>
+                <option value="43200">{t("keys.lifetimeTwelveHours")}</option>
+              </select>
+            </Field>
+          </div>
+          <CheckboxField
+            label={t("keys.storeInKeychain")}
+            checked={storeInKeychain}
+            onChange={setStoreInKeychain}
+          />
           <div className="flex gap-2">
-            <button type="submit">{t("keys.registerSubmit")}</button>
-            <button type="button" onClick={closeAgentForm}>
+            <button type="submit" className={primaryAction}>
+              {t("keys.registerSubmit")}
+            </button>
+            <button type="button" className={secondaryAction} onClick={closeAgentForm}>
               {t("keys.cancel")}
             </button>
           </div>
         </form>
       )}
 
-      {renaming !== null && (
+      {relocating !== null && (
         <form
-          aria-labelledby="rename-heading"
-          className="flex flex-col gap-3 rounded-xl border border-zinc-800 p-4"
+          aria-labelledby="relocate-heading"
+          className={sectionCard}
           onSubmit={(event) => {
             event.preventDefault();
-            void submitRename(renaming);
+            void submitRelocation(relocating);
           }}
         >
-          <h3 id="rename-heading" className="font-medium">
-            {t("keys.renameHeading", { path: renaming.relativePath })}
+          <h3 id="relocate-heading" className={sectionHeading}>
+            {t("keys.relocateHeading", { path: relocating.relativePath })}
           </h3>
-          <p className="text-sm text-zinc-400">{t("keys.renameNote")}</p>
-          <label className="block">
-            {t("keys.renameNewName")}
-            <input value={newName} onChange={(event) => setNewName(event.target.value)} />
-          </label>
+          <p className="text-sm text-zinc-400">{t("keys.relocateNote")}</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label={t("keys.relocateNewName")}>
+              <input className={control} value={newName} onChange={(event) => setNewName(event.target.value)} />
+            </Field>
+            <Field label={t("keys.relocateGroup")}>
+              <select className={control} value={newGroup} onChange={(event) => setNewGroup(event.target.value)}>
+                <option value="">{t("keys.groupNone")}</option>
+                {groups.map((group) => (
+                  <option key={group} value={group}>
+                    {group}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
           <div className="flex gap-2">
-            <button type="submit">{t("keys.renameSubmit")}</button>
-            <button type="button" onClick={closeRenameForm}>
+            <button type="submit" className={primaryAction}>
+              {t("keys.relocateSubmit")}
+            </button>
+            <button type="button" className={secondaryAction} onClick={closeRelocateForm}>
               {t("keys.cancel")}
             </button>
           </div>
@@ -654,40 +712,40 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
         this application decided not to touch. A rename that only said "done"
         would hide the part the user cannot check for themselves.
       */}
-      {renamed !== null && (
+      {relocated !== null && (
         <section
-          aria-labelledby="rename-result-heading"
-          className="flex flex-col gap-2 rounded-xl border border-zinc-800 p-4 text-sm"
+          aria-labelledby="relocate-result-heading"
+          className={`${sectionCard} gap-2 text-sm`}
         >
-          <h3 id="rename-result-heading" className="font-medium">
-            {renamed.blockers.length > 0
-              ? t("keys.renameRefused")
-              : t("keys.renameDone", { path: renamed.relativePath })}
+          <h3 id="relocate-result-heading" className={sectionHeading}>
+            {relocated.blockers.length > 0
+              ? t("keys.relocateRefused")
+              : t("keys.relocateDone", { path: relocated.relativePath })}
           </h3>
-          {renamed.blockers.length > 0 && (
+          {relocated.blockers.length > 0 && (
             <ul role="alert" className="text-amber-300">
-              {renamed.blockers.map((blocker) => (
+              {relocated.blockers.map((blocker) => (
                 <li key={blocker}>{describeBlocker(blocker, t)}</li>
               ))}
             </ul>
           )}
-          {renamed.files.length > 0 && (
+          {relocated.files.length > 0 && (
             <>
-              <h4 className="text-xs uppercase tracking-wide text-zinc-400">{t("keys.renameMoved")}</h4>
+              <h4 className="text-xs uppercase tracking-wide text-zinc-400">{t("keys.relocateMoved")}</h4>
               <ul className="font-mono text-xs text-zinc-300">
-                {renamed.files.map((file) => (
-                  <li key={file.from}>{t("keys.renameFilePair", { from: file.from, to: file.to })}</li>
+                {relocated.files.map((file) => (
+                  <li key={file.from}>{t("keys.relocateFilePair", { from: file.from, to: file.to })}</li>
                 ))}
               </ul>
             </>
           )}
-          {renamed.references.length > 0 && (
+          {relocated.references.length > 0 && (
             <>
-              <h4 className="text-xs uppercase tracking-wide text-zinc-400">{t("keys.renameRewritten")}</h4>
+              <h4 className="text-xs uppercase tracking-wide text-zinc-400">{t("keys.relocateRewritten")}</h4>
               <ul className="text-xs text-zinc-300">
-                {renamed.references.map((reference) => (
+                {relocated.references.map((reference) => (
                   <li key={`${reference.configPath}:${reference.line}:${reference.from}`}>
-                    {t("keys.renameReference", {
+                    {t("keys.relocateReference", {
                       directive: reference.directive,
                       from: reference.from,
                       to: reference.to,
@@ -699,16 +757,16 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
               </ul>
             </>
           )}
-          {renamed.skipped.length > 0 && (
-            <p className="text-zinc-400">{t("keys.renameSkipped", { paths: renamed.skipped.join(", ") })}</p>
+          {relocated.skipped.length > 0 && (
+            <p className="text-zinc-400">{t("keys.relocateSkipped", { paths: relocated.skipped.join(", ") })}</p>
           )}
-          {renamed.notes.map((note) => (
+          {relocated.notes.map((note) => (
             <p key={note} className="text-amber-300">
               {note in noteLabels ? t(noteLabels[note]!) : note}
             </p>
           ))}
           <div>
-            <button type="button" onClick={() => setRenamed(null)}>
+            <button type="button" className={secondaryAction} onClick={() => setRelocated(null)}>
               {t("keys.close")}
             </button>
           </div>
@@ -727,49 +785,48 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
       {changingPassphrase !== null && (
         <form
           aria-labelledby="passphrase-heading"
-          className="flex flex-col gap-3 rounded-xl border border-zinc-800 p-4"
+          className={sectionCard}
           onSubmit={(event) => {
             event.preventDefault();
             void submitPassphrase(changingPassphrase);
           }}
         >
-          <h3 id="passphrase-heading" className="font-medium">
+          <h3 id="passphrase-heading" className={sectionHeading}>
             {t("keys.passphraseHeading", { path: changingPassphrase.relativePath })}
           </h3>
-          <p className="text-sm text-zinc-400">
-            {t("keys.passphraseNote")}
-          </p>
-          <label className="block">
-            {t("keys.currentPassphrase")}
-            <input
-              type="password"
-              value={currentPassphrase}
-              onChange={(event) => setCurrentPassphrase(event.target.value)}
-            />
-          </label>
-          <label className="block">
-            {t("keys.newPassphrase")}
-            <input
-              type="password"
-              value={newPassphrase}
-              onChange={(event) => setNewPassphrase(event.target.value)}
-              disabled={removePassphrase}
-            />
-          </label>
-          <label className="block">
-            <input
-              type="checkbox"
-              checked={removePassphrase}
-              onChange={(event) => {
-                setRemovePassphrase(event.target.checked);
-                setNewPassphrase("");
-              }}
-            />
-            {t("keys.removePassphrase")}
-          </label>
+          <p className="text-sm text-zinc-400">{t("keys.passphraseNote")}</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label={t("keys.currentPassphrase")}>
+              <input
+                className={control}
+                type="password"
+                value={currentPassphrase}
+                onChange={(event) => setCurrentPassphrase(event.target.value)}
+              />
+            </Field>
+            <Field label={t("keys.newPassphrase")}>
+              <input
+                className={control}
+                type="password"
+                value={newPassphrase}
+                onChange={(event) => setNewPassphrase(event.target.value)}
+                disabled={removePassphrase}
+              />
+            </Field>
+          </div>
+          <CheckboxField
+            label={t("keys.removePassphrase")}
+            checked={removePassphrase}
+            onChange={(checked) => {
+              setRemovePassphrase(checked);
+              setNewPassphrase("");
+            }}
+          />
           <div className="flex gap-2">
-            <button type="submit">{t("keys.savePassphrase")}</button>
-            <button type="button" onClick={closePassphraseForm}>
+            <button type="submit" className={primaryAction}>
+              {t("keys.savePassphrase")}
+            </button>
+            <button type="button" className={secondaryAction} onClick={closePassphraseForm}>
               {t("keys.cancel")}
             </button>
           </div>
@@ -777,56 +834,67 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
       )}
 
       <form
-        className="flex flex-col gap-3"
+        aria-labelledby="create-key-heading"
+        className={sectionCard}
         onSubmit={(event) => {
           event.preventDefault();
           void submitGeneration();
         }}
       >
-        <h3 className="font-medium">{t("keys.createHeading")}</h3>
-        <label className="block">
-          {t("keys.algorithm")}
-          <select value={algorithm} onChange={(event) => setAlgorithm(event.target.value)}>
-            {variants.map((variant) => (
-              <option key={`${variant.algorithm}-${variant.bits}`} value={variant.algorithm}>
-                {variant.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block">
-          {t("keys.fileName")}
-          <input value={fileName} onChange={(event) => setFileName(event.target.value)} />
-        </label>
-        <label className="block">
-          {t("keys.comment")}
-          <input value={comment} onChange={(event) => setComment(event.target.value)} />
-        </label>
-        {inProcess && (
-          <>
-            <label className="block">
-              {t("keys.passphrase")}
+        <h3 id="create-key-heading" className={sectionHeading}>
+          {t("keys.createHeading")}
+        </h3>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label={t("keys.algorithm")}>
+            <select className={control} value={algorithm} onChange={(event) => setAlgorithm(event.target.value)}>
+              {variants.map((variant) => (
+                <option key={`${variant.algorithm}-${variant.bits}`} value={variant.algorithm}>
+                  {variant.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label={t("keys.createGroup")}>
+            <select className={control} value={createGroup} onChange={(event) => setCreateGroup(event.target.value)}>
+              <option value="">{t("keys.groupNone")}</option>
+              {groups.map((group) => (
+                <option key={group} value={group}>
+                  {group}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label={t("keys.fileName")}>
+            <input className={control} value={fileName} onChange={(event) => setFileName(event.target.value)} />
+          </Field>
+          <Field label={t("keys.comment")}>
+            <input className={control} value={comment} onChange={(event) => setComment(event.target.value)} />
+          </Field>
+          {inProcess && (
+            <Field label={t("keys.passphrase")}>
               <input
+                className={control}
                 type="password"
                 value={passphrase}
                 onChange={(event) => setPassphrase(event.target.value)}
                 disabled={unencrypted}
               />
-            </label>
-            <label className="block">
-              <input
-                type="checkbox"
-                checked={unencrypted}
-                onChange={(event) => {
-                  setUnencrypted(event.target.checked);
-                  setPassphrase("");
-                }}
-              />
-              {t("keys.createUnencrypted")}
-            </label>
-          </>
+            </Field>
+          )}
+        </div>
+        {inProcess && (
+          <CheckboxField
+            label={t("keys.createUnencrypted")}
+            checked={unencrypted}
+            onChange={(checked) => {
+              setUnencrypted(checked);
+              setPassphrase("");
+            }}
+          />
         )}
-        <button type="submit">{inProcess ? t("keys.createSubmit") : t("keys.showTerminalCommand")}</button>
+        <button type="submit" className={`self-start ${primaryAction}`}>
+          {inProcess ? t("keys.createSubmit") : t("keys.showTerminalCommand")}
+        </button>
       </form>
 
       {terminalCommand !== null && (
@@ -843,19 +911,18 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
         </div>
       )}
 
-      <div>
-        <h3 className="font-medium">{t("keys.trashHeading")}</h3>
-        <p className="text-sm text-zinc-400">
-          {t("keys.trashNote")}
-        </p>
-        <table className="w-full text-left text-sm">
+      <div className="flex flex-col gap-2">
+        <h3 className={sectionHeading}>{t("keys.trashHeading")}</h3>
+        <p className="text-sm text-zinc-400">{t("keys.trashNote")}</p>
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[40rem] text-left text-sm">
           <caption className="sr-only">{t("keys.trashCaption")}</caption>
           <thead>
-            <tr className="border-b border-zinc-700 text-xs uppercase tracking-wide text-zinc-400">
-              <th scope="col">{t("keys.colFiles")}</th>
-              <th scope="col">{t("keys.colAge")}</th>
-              <th scope="col">{t("keys.colStatus")}</th>
-              <th scope="col">{t("keys.colActions")}</th>
+            <tr className={tableHeadRow}>
+              <th scope="col" className={`${tableHeadCell} whitespace-nowrap`}>{t("keys.colFiles")}</th>
+              <th scope="col" className={`${tableHeadCell} whitespace-nowrap`}>{t("keys.colAge")}</th>
+              <th scope="col" className={`${tableHeadCell} whitespace-nowrap`}>{t("keys.colStatus")}</th>
+              <th scope="col" className={`${tableHeadCell} whitespace-nowrap`}>{t("keys.colActions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -878,7 +945,7 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
                   {pendingPurge === entry.id ? (
                     <>
                       <span>{t("keys.purgeWarning")}</span>
-                      <button type="button" className={dangerAction} onClick={() => void purge(entry.id)}>
+                      <button type="button" className={rowDanger} onClick={() => void purge(entry.id)}>
                         {t("keys.confirmPurge")}
                       </button>
                       <button type="button" className={rowAction} onClick={() => setPendingPurge("")}>
@@ -886,7 +953,7 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
                       </button>
                     </>
                   ) : (
-                    <button type="button" className={dangerAction} onClick={() => setPendingPurge(entry.id)}>
+                    <button type="button" className={rowDanger} onClick={() => setPendingPurge(entry.id)}>
                       {t("keys.purge")}
                     </button>
                   )}
@@ -894,8 +961,16 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
                 </td>
               </tr>
             ))}
+            {trash.entries.length === 0 && (
+              <tr>
+                <td colSpan={4} className="py-3 text-sm text-zinc-400">
+                  {t("keys.trashEmpty")}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
+        </div>
       </div>
     </section>
   );

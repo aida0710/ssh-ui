@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiClient, type HealthResponse } from "./api/client";
+import { configApi } from "./api/config";
 import type { SessionState } from "./session/bootstrap";
 import { ConnectionsPage } from "./connections/ConnectionsPage";
 import { ConfigExplorer, type FileTarget } from "./explorer/ConfigExplorer";
@@ -56,6 +57,10 @@ export function App({ bootstrap, health }: AppProps) {
   const [version, setVersion] = useState("");
   const [section, setSection] = useState<Section>("Connections");
   const [fileTarget, setFileTarget] = useState<FileTarget | null>(null);
+  // The declared group names, read once the session is up. The Keys screen
+  // offers them as destinations; it never infers a group from a directory,
+  // because a directory is a group only when the entry file declares it.
+  const [groups, setGroups] = useState<string[]>([]);
 
   // The shell owns section switching, so a view that can only address a block
   // by file and line hands the jump up here rather than routing by itself.
@@ -76,6 +81,14 @@ export function App({ bootstrap, health }: AppProps) {
         if (!active || result === null) return;
         setVersion(result.version);
         setState("ready");
+        return configApi
+          .overview()
+          .then((overview) => {
+            if (active) setGroups((overview.metadata.groups ?? []).map((group) => group.name));
+          })
+          // A shell that cannot list groups still works: the destination list
+          // is empty and every other screen is unaffected.
+          .catch(() => undefined);
       })
       .catch(() => {
         if (active) setState("error");
@@ -161,7 +174,7 @@ export function App({ bootstrap, health }: AppProps) {
         </nav>
         <main className="relative overflow-y-auto p-6">
           {state === "ready" ? (
-            <SectionView section={section} fileTarget={fileTarget} onOpenFile={openFile} />
+            <SectionView section={section} fileTarget={fileTarget} groups={groups} onOpenFile={openFile} />
           ) : null}
         </main>
       </div>
@@ -170,12 +183,16 @@ export function App({ bootstrap, health }: AppProps) {
 }
 
 type SectionViewProps = {
+  // groups are the declared group names. The Keys screen needs them to offer a
+  // destination, and it must not infer them: a directory is a group because a
+  // line in ~/.ssh/config declares it, which only the configuration API reads.
+  groups: string[];
   section: Section;
   fileTarget: FileTarget | null;
   onOpenFile: (path: string, line: number) => void;
 };
 
-function SectionView({ section, fileTarget, onOpenFile }: SectionViewProps) {
+function SectionView({ section, fileTarget, groups, onOpenFile }: SectionViewProps) {
   if (section === "Connections") {
     return <ConnectionsPage onOpenFile={onOpenFile} />;
   }
@@ -189,7 +206,7 @@ function SectionView({ section, fileTarget, onOpenFile }: SectionViewProps) {
     return <HistoryPanel />;
   }
   if (section === "Keys") {
-    return <KeysScreen />;
+    return <KeysScreen groups={groups} />;
   }
   if (section === "Known Hosts") {
     return <KnownHostsPanel />;

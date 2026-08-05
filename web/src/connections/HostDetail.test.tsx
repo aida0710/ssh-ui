@@ -50,7 +50,7 @@ const detail: HostDetail = {
     commentLines: 0,
     notices: [{ code: "dangerous_directive", path: "config", line: 5, detail: "ProxyCommand" }],
   },
-  metadata: { identity: { path: "config", alias: "bastion" }, group: "work", favourite: false },
+  metadata: { identity: { path: "config", alias: "bastion" }, favourite: false },
   effective: {
     alias: "bastion",
     approximate: true,
@@ -75,6 +75,7 @@ function renderPanel(overrides: Partial<Parameters<typeof HostDetailPanel>[0]> =
     onBlockRaw: vi.fn(),
     onRename: vi.fn(),
     onComment: vi.fn(),
+    onMoveToGroup: vi.fn(),
     onMetadata: vi.fn(),
     ...overrides,
   };

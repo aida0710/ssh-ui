@@ -180,7 +180,7 @@ test("re-associates a note whose connection is gone, without guessing", async ({
       schemaVersion: 1,
       groups: [{ name: "work" }],
       hosts: [
-        { identity: { path: "config", alias: "retired" }, group: "work", note: "the old builder" },
+        { identity: { path: "config", alias: "retired" }, tags: ["ci"], note: "the old builder" },
       ],
     }),
   );
@@ -190,9 +190,10 @@ test("re-associates a note whose connection is gone, without guessing", async ({
   const panel = page.getByRole("region", { name: "Settings whose connection is gone" });
   await expect(panel).toBeVisible();
   await expect(panel.getByText("retired in config")).toBeVisible();
-  // The note is retired in favour of a configuration comment, so the panel
-  // describes the entry by what it still carries.
-  await expect(panel.getByText(/group work/)).toBeVisible();
+  // The note is retired in favour of a configuration comment, and membership is
+  // the directory now, so the panel describes the entry by what it still
+  // carries: the presentation that has no home in the configuration.
+  await expect(panel.getByText(/tags ci/)).toBeVisible();
 
   await panel.getByLabel("Re-associate retired with").selectOption("config\u0000bastion");
   expect(await clickAndAwait(page, "Re-associate retired", "/api/v1/config/save")).toBe(200);

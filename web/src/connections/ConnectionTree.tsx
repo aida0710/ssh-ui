@@ -40,11 +40,10 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
   const metadataByAlias = useMemo(() => {
     const index = new Map<
       string,
-      { group: string; tags: string[]; favourite: boolean; colour: string; order: number }
+      { tags: string[]; favourite: boolean; colour: string; order: number }
     >();
     for (const host of overview.metadata.hosts ?? []) {
       index.set(`${host.identity.path}\u0000${host.identity.alias}`, {
-        group: host.group ?? "",
         tags: host.tags ?? [],
         favourite: host.favourite === true,
         colour: host.colour ?? "",
@@ -65,7 +64,9 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
           const entry = metadataByAlias.get(`${host.identity.path}\u0000${host.identity.alias}`);
           return {
             host,
-            group: entry?.group ?? "",
+            // Membership is the directory the file sits in, which the server
+            // already read from the path. Metadata has no say in it.
+            group: host.group ?? "",
             tags: entry?.tags ?? [],
             favourite: entry?.favourite ?? false,
             colour: entry?.colour ?? "",

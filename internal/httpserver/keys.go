@@ -13,6 +13,7 @@ import (
 	"github.com/labstack/echo/v5"
 
 	"ssh-ui/internal/api"
+	"ssh-ui/internal/application"
 	"ssh-ui/internal/keys"
 	"ssh-ui/internal/platform"
 	"ssh-ui/internal/session"
@@ -45,11 +46,10 @@ type KeyService interface {
 	AgentIdentities(ctx context.Context) ([]platform.AgentIdentity, bool)
 	Algorithms(ctx context.Context) keys.Catalogue
 	Generate(request keys.GenerateRequest) (keys.GenerateResult, error)
-	HardwareCommand(algorithm keys.Algorithm, fileName, comment string) ([]string, error)
+	HardwareCommand(algorithm keys.Algorithm, fileName, group, comment string) ([]string, error)
 	ChangePassphrase(change keys.PassphraseChange) (keys.PassphraseResult, error)
 	Reveal(keyID string) (keys.RevealResult, error)
 	PublicKey(keyID string) (keys.PublicKeyResult, error)
-	Rename(request keys.RenameRequest) (keys.RenameResult, error)
 	Register(ctx context.Context, request keys.RegisterRequest) (keys.RegisterResult, error)
 	Trash(keyID string) (keys.TrashResult, error)
 	ListTrash() ([]keys.TrashEntry, error)
@@ -58,7 +58,12 @@ type KeyService interface {
 }
 
 type KeyHandlers struct {
-	Keys     KeyService
+	Keys KeyService
+	// Config relocates a key. A relocation rewrites configuration files, so it
+	// is committed through the configuration service's transaction manager,
+	// which re-parses and re-resolves before anything lands — the key vault's
+	// own manager deliberately has no such validator.
+	Config   *application.Service
 	Sessions *session.Manager
 	// Actions issues and spends confirmations. The endpoint that mints them is
 	// shared with every other subsystem, so it is registered once elsewhere.
@@ -73,7 +78,7 @@ func registerKeyRoutes(engine *echo.Echo, handlers KeyHandlers) {
 	engine.POST("/api/v1/keys/:keyId/passphrase", handlers.ChangePassphrase)
 	engine.POST("/api/v1/keys/:keyId/reveal", handlers.Reveal)
 	engine.GET("/api/v1/keys/:keyId/public", handlers.PublicKey)
-	engine.POST("/api/v1/keys/:keyId/name", handlers.Rename)
+	engine.POST("/api/v1/keys/:keyId/location", handlers.Relocate)
 	engine.POST("/api/v1/keys/:keyId/agent", handlers.Register)
 	engine.POST("/api/v1/keys/:keyId/trash", handlers.Trash)
 	engine.GET("/api/v1/trash", handlers.ListTrash)
@@ -168,6 +173,7 @@ func (h KeyHandlers) Generate(c *echo.Context) error {
 		Algorithm:   keys.Algorithm(body.Algorithm),
 		Bits:        optionalInt(body.Bits),
 		FileName:    body.FileName,
+		Group:       optionalString(body.Group),
 		Comment:     body.Comment,
 		Passphrase:  []byte(body.Passphrase),
 		Unencrypted: body.Unencrypted,
@@ -192,7 +198,7 @@ func (h KeyHandlers) HardwareCommand(c *echo.Context) error {
 	if err := decodeBody(c, &body); err != nil {
 		return problem(c, http.StatusBadRequest, "invalid_request")
 	}
-	command, err := h.Keys.HardwareCommand(keys.Algorithm(body.Algorithm), body.FileName, body.Comment)
+	command, err := h.Keys.HardwareCommand(keys.Algorithm(body.Algorithm), body.FileName, optionalString(body.Group), body.Comment)
 	if err != nil {
 		return keyProblem(c, err)
 	}
@@ -266,36 +272,62 @@ func (h KeyHandlers) PublicKey(c *echo.Context) error {
 	})
 }
 
-// Rename answers with what the rename moved and rewrote, or with what blocked
-// it.
+// Relocate answers with what the relocation moved and rewrote, or with what
+// blocked it.
 //
-// A blocked rename is a 409 carrying the same body as a successful one, so the
-// screen can list the reasons in the place it would have listed the changes.
-// Nothing was written in that case: the blockers are computed before the
-// transaction is built.
-func (h KeyHandlers) Rename(c *echo.Context) error {
-	var body api.RenameKeyRequest
+// A blocked relocation is a 409 carrying the same body as a successful one, so
+// the screen can list the reasons in the place it would have listed the
+// changes. Nothing was written in that case: the blockers are computed before
+// the transaction is built.
+func (h KeyHandlers) Relocate(c *echo.Context) error {
+	var body api.RelocateKeyRequest
 	if err := decodeBody(c, &body); err != nil {
 		return problem(c, http.StatusBadRequest, "invalid_request")
 	}
-	result, err := h.Keys.Rename(keys.RenameRequest{KeyID: c.Param("keyId"), NewName: body.NewName})
-	response := api.RenameKeyResponse{
-		Id:            result.ID,
-		RelativePath:  result.RelativePath,
-		Files:         renamedFiles(result.Files),
-		References:    rewrittenReferences(result.References),
-		Skipped:       nonNilStrings(result.Skipped),
-		Notes:         nonNilStrings(result.Notes),
-		Blockers:      nonNilStrings(result.Blockers),
-		TransactionId: result.TransactionID,
+	inventory, err := h.Keys.Inventory()
+	if err != nil {
+		return problem(c, http.StatusInternalServerError, "inventory_failed")
 	}
-	if errors.Is(err, keys.ErrRenameBlocked) {
+	result, err := h.Config.RelocateKey(inventory, application.KeyRelocateRequest{
+		KeyID:   c.Param("keyId"),
+		NewName: body.NewName,
+		Group:   body.Group,
+	})
+	response := relocateKeyResponse(result)
+	if errors.Is(err, application.ErrKeyRelocateBlocked) {
 		return c.JSON(http.StatusConflict, response)
 	}
 	if err != nil {
 		return keyProblem(c, err)
 	}
 	return c.JSON(http.StatusOK, response)
+}
+
+func relocateKeyResponse(result application.KeyRelocateResult) api.RelocateKeyResponse {
+	response := api.RelocateKeyResponse{
+		Id:            result.ID,
+		RelativePath:  result.RelativePath,
+		Group:         result.Group,
+		Files:         make([]api.RelocatedKeyFile, 0, len(result.Files)),
+		References:    make([]api.RewrittenKeyReference, 0, len(result.References)),
+		Skipped:       nonNilStrings(result.Skipped),
+		Notes:         nonNilStrings(result.Notes),
+		Blockers:      nonNilStrings(result.Blockers),
+		TransactionId: result.TransactionID,
+	}
+	for _, file := range result.Files {
+		response.Files = append(response.Files, api.RelocatedKeyFile{From: file.From, To: file.To})
+	}
+	for _, reference := range result.References {
+		response.References = append(response.References, api.RewrittenKeyReference{
+			Directive:  reference.Directive,
+			ConfigPath: reference.ConfigPath,
+			Line:       reference.Line,
+			From:       reference.From,
+			To:         reference.To,
+		})
+	}
+	return response
 }
 
 func (h KeyHandlers) Register(c *echo.Context) error {
@@ -401,12 +433,16 @@ func keyProblem(c *echo.Context, err error) error {
 		return problem(c, http.StatusBadRequest, "unknown_action_kind")
 	case errors.Is(err, keys.ErrInvalidFileName), errors.Is(err, keys.ErrInvalidComment):
 		return problem(c, http.StatusBadRequest, "invalid_request")
-	case errors.Is(err, keys.ErrRenameUnchanged):
-		return problem(c, http.StatusBadRequest, "name_unchanged")
-	case errors.Is(err, keys.ErrRenameNotSupported):
-		return problem(c, http.StatusUnprocessableEntity, "rename_not_supported")
-	case errors.Is(err, keys.ErrConfigurationChanged):
+	case errors.Is(err, application.ErrKeyRelocateUnchanged):
+		return problem(c, http.StatusBadRequest, "location_unchanged")
+	case errors.Is(err, application.ErrKeyRelocateNotSupported):
+		return problem(c, http.StatusUnprocessableEntity, "relocate_not_supported")
+	case errors.Is(err, application.ErrKeyReferenceMoved):
 		return problem(c, http.StatusConflict, "external_change")
+	case errors.Is(err, application.ErrInvalidGroupName):
+		return problem(c, http.StatusBadRequest, "invalid_request")
+	case errors.Is(err, keys.ErrUnknownGroup), errors.Is(err, application.ErrGroupNotDeclared):
+		return problem(c, http.StatusUnprocessableEntity, "group_not_declared")
 	case errors.Is(err, keys.ErrUnsupportedAlgorithm), errors.Is(err, keys.ErrUnsupportedBits):
 		return problem(c, http.StatusBadRequest, "unsupported_algorithm")
 	case errors.Is(err, keys.ErrHardwareAlgorithm):
@@ -529,28 +565,6 @@ func referenceList(references []keys.Reference) []api.KeyReference {
 	return converted
 }
 
-func renamedFiles(files []keys.RenamedFile) []api.RenamedKeyFile {
-	converted := make([]api.RenamedKeyFile, 0, len(files))
-	for _, file := range files {
-		converted = append(converted, api.RenamedKeyFile{From: file.From, To: file.To})
-	}
-	return converted
-}
-
-func rewrittenReferences(references []keys.RewrittenReference) []api.RewrittenKeyReference {
-	converted := make([]api.RewrittenKeyReference, 0, len(references))
-	for _, reference := range references {
-		converted = append(converted, api.RewrittenKeyReference{
-			Directive:  reference.Directive,
-			ConfigPath: reference.ConfigPath,
-			Line:       reference.Line,
-			From:       reference.From,
-			To:         reference.To,
-		})
-	}
-	return converted
-}
-
 func trashFiles(files []keys.TrashFile) []api.TrashFileSummary {
 	converted := make([]api.TrashFileSummary, 0, len(files))
 	for _, file := range files {
@@ -571,6 +585,13 @@ func nonNilStrings(values []string) []string {
 		return []string{}
 	}
 	return values
+}
+
+func optionalString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func optionalInt(value *int) int {

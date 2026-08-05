@@ -14,7 +14,13 @@ import (
 const (
 	// MetadataSchemaVersion is the only version this build writes. A file
 	// carrying a higher version is refused rather than silently downgraded.
-	MetadataSchemaVersion = 1
+	//
+	// Version 2 dropped group membership. A group is a directory under
+	// ~/.ssh/connections and the entry file's generated region declares which
+	// groups exist, so neither hosts[].group nor groups[].parent has anything
+	// left to say. A version 1 document decodes and simply loses those two
+	// fields: json.Unmarshal ignores what the struct no longer has.
+	MetadataSchemaVersion = 2
 	// MetadataFileName lives in the workspace state directory, never in the
 	// configuration tree, so it can never be read as SSH configuration.
 	MetadataFileName = "metadata.json"
@@ -64,9 +70,12 @@ type Setting struct {
 }
 
 // HostMetadata is the UI-only information attached to one host.
+//
+// It carries only what has no representation in the configuration itself.
+// Group membership is the directory the file sits in, and a note is a comment
+// above the Host line, so neither is here.
 type HostMetadata struct {
 	Identity  HostIdentity `json:"identity"`
-	Group     string       `json:"group,omitempty"`
 	Tags      []string     `json:"tags,omitempty"`
 	Colour    string       `json:"colour,omitempty"`
 	Note      string       `json:"note,omitempty"`
@@ -77,11 +86,11 @@ type HostMetadata struct {
 
 func (host HostMetadata) Alias() string { return host.Identity.Alias }
 
-// GroupMetadata is one primary group. Parent forms the inheritance hierarchy;
-// Settings are compiled into an ordinary Host block.
+// GroupMetadata is the presentation attached to one group name. The group
+// itself is a directory and its hierarchy is its name; this is what a directory
+// cannot carry. Settings are compiled into an ordinary Host block.
 type GroupMetadata struct {
 	Name     string    `json:"name"`
-	Parent   string    `json:"parent,omitempty"`
 	Colour   string    `json:"colour,omitempty"`
 	Note     string    `json:"note,omitempty"`
 	Order    int       `json:"order,omitempty"`
@@ -165,10 +174,15 @@ func ValidateMetadata(metadata Metadata) error {
 	}
 	names := make(map[string]bool, len(metadata.Groups))
 	for _, group := range metadata.Groups {
-		if group.Name == "" || names[group.Name] || group.Name == group.Parent {
+		// The name is a directory path, so it has to be one this application
+		// would be willing to create. Refusing here keeps a hand-edited
+		// metadata file from naming "../escape" and having it believed.
+		if names[strings.ToLower(group.Name)] || ValidateGroupName(group.Name) != nil {
 			return ErrMetadataGroup
 		}
-		names[group.Name] = true
+		// Case-insensitively, because two groups whose names differ only in
+		// case are one directory on a default macOS volume.
+		names[strings.ToLower(group.Name)] = true
 		for _, setting := range group.Settings {
 			if containsSecretMarker(setting.Keyword) {
 				return ErrMetadataSecret
@@ -180,20 +194,12 @@ func ValidateMetadata(metadata Metadata) error {
 			}
 		}
 	}
-	for _, group := range metadata.Groups {
-		if group.Parent != "" && !names[group.Parent] {
-			return ErrMetadataGroup
-		}
-	}
 	for _, host := range metadata.Hosts {
 		if _, err := checkRelative(host.Identity.Path); err != nil {
 			return err
 		}
 		if host.Identity.Alias == "" {
 			return ErrMetadataPath
-		}
-		if host.Group != "" && !names[host.Group] {
-			return ErrMetadataGroup
 		}
 		for _, text := range append([]string{host.Note, host.Colour}, host.Tags...) {
 			if containsSecretMarker(text) {
@@ -313,7 +319,7 @@ func ClearHostNote(metadata Metadata, identity HostIdentity) Metadata {
 			continue
 		}
 		host.Note = ""
-		if host.Group == "" && len(host.Tags) == 0 && host.Colour == "" && !host.Favourite && host.Order == 0 {
+		if len(host.Tags) == 0 && host.Colour == "" && !host.Favourite && host.Order == 0 {
 			continue
 		}
 		cleared.Hosts = append(cleared.Hosts, host)
@@ -324,6 +330,25 @@ func ClearHostNote(metadata Metadata, identity HostIdentity) Metadata {
 // RenameHostIdentity moves the entry for one host and leaves every other entry
 // untouched. The caller commits the result in the same transaction as the
 // configuration change that performed the rename.
+// RelocateHostIdentities rewrites the path of every entry declared in one file,
+// keeping each alias. It is the file-level counterpart of RenameHostIdentity,
+// which moves exactly one identity.
+//
+// Only an exact path match is rewritten. A prefix match would make renaming
+// "work" eat "workshop"; a caller moving a directory passes each file.
+func RelocateHostIdentities(metadata Metadata, fromPath, toPath string) Metadata {
+	relocated := metadata
+	relocated.Hosts = append([]HostMetadata(nil), metadata.Hosts...)
+	for index := range relocated.Hosts {
+		if relocated.Hosts[index].Identity.Path != fromPath {
+			continue
+		}
+		relocated.Hosts[index].Identity.Path = toPath
+		relocated.Hosts[index].Orphan = false
+	}
+	return relocated
+}
+
 func RenameHostIdentity(metadata Metadata, from, to HostIdentity) Metadata {
 	renamed := metadata
 	renamed.Hosts = append([]HostMetadata(nil), metadata.Hosts...)

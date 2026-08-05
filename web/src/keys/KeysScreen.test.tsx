@@ -120,9 +120,10 @@ function buildApi(overrides: Partial<KeysApi> = {}): KeysApi {
       storedInKeychain: false,
       identities: [],
     }),
-    rename: vi.fn().mockResolvedValue({
-      id: "key-renamed",
+    relocate: vi.fn().mockResolvedValue({
+      id: "key-relocated",
       relativePath: "id_build",
+      group: "",
       files: [
         { from: "id_work", to: "id_build" },
         { from: "id_work.pub", to: "id_build.pub" },
@@ -547,23 +548,23 @@ describe("KeysScreen", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("public key could not be read");
     expect(screen.queryByLabelText("Public key")).not.toBeInTheDocument();
   });
-  it("renames a key and reports what moved and what it rewrote", async () => {
+  it("relocates a key and reports what moved and what it rewrote", async () => {
     const user = userEvent.setup();
     const api = buildApi();
     render(<KeysScreen api={api} />);
 
     const row = await screen.findByRole("row", { name: /id_work\b/ });
-    await user.click(within(row).getByRole("button", { name: "Rename" }));
+    await user.click(within(row).getByRole("button", { name: "Rename or move" }));
 
     // The field starts at the name the rename would change, so the user edits a
     // name rather than retyping one.
-    const field = screen.getByLabelText("New name");
+    const field = screen.getByLabelText("Name");
     expect(field).toHaveValue("id_work");
     await user.clear(field);
     await user.type(field, "id_build");
-    await user.click(screen.getByRole("button", { name: "Rename key" }));
+    await user.click(screen.getByRole("button", { name: "Apply" }));
 
-    await waitFor(() => expect(api.rename).toHaveBeenCalledWith("key-one", "id_build"));
+    await waitFor(() => expect(api.relocate).toHaveBeenCalledWith("key-one", { newName: "id_build" }));
     // The rewritten IdentityFile is the part the user cannot check for
     // themselves, so it has to be on screen and not summarised into "done".
     expect(await screen.findByText(/IdentityFile ~\/\.ssh\/id_work → ~\/\.ssh\/id_build/)).toBeInTheDocument();
@@ -571,27 +572,28 @@ describe("KeysScreen", () => {
     expect(screen.getByText(/login Keychain/)).toBeInTheDocument();
   });
 
-  it("keeps a blocked rename on screen with the reasons it refused", async () => {
+  it("keeps a blocked relocation on screen with the reasons it refused", async () => {
     const user = userEvent.setup();
     const api = buildApi({
-      rename: vi.fn().mockResolvedValue({
+      relocate: vi.fn().mockResolvedValue({
         id: "",
         relativePath: "",
+        group: "",
         files: [],
         references: [],
         skipped: [],
         notes: [],
-        blockers: ["rename_reference_unresolved:id_work", "rename_target_occupied:id_build"],
+        blockers: ["key_reference_unresolved:id_work", "key_destination_occupied:id_build"],
         transactionId: "",
       }),
     });
     render(<KeysScreen api={api} />);
 
     const row = await screen.findByRole("row", { name: /id_work\b/ });
-    await user.click(within(row).getByRole("button", { name: "Rename" }));
-    await user.clear(screen.getByLabelText("New name"));
-    await user.type(screen.getByLabelText("New name"), "id_build");
-    await user.click(screen.getByRole("button", { name: "Rename key" }));
+    await user.click(within(row).getByRole("button", { name: "Rename or move" }));
+    await user.clear(screen.getByLabelText("Name"));
+    await user.type(screen.getByLabelText("Name"), "id_build");
+    await user.click(screen.getByRole("button", { name: "Apply" }));
 
     const reasons = await screen.findByRole("alert");
     expect(reasons).toHaveTextContent("cannot resolve");
@@ -599,10 +601,10 @@ describe("KeysScreen", () => {
     // Nothing was written, so the inventory must not be re-read as though it
     // had been, and the form stays open with what was typed still in it.
     expect(api.inventory).toHaveBeenCalledTimes(1);
-    expect(screen.getByLabelText("New name")).toHaveValue("id_build");
+    expect(screen.getByLabelText("Name")).toHaveValue("id_build");
   });
 
-  it("offers no rename for half of a key pair", async () => {
+  it("offers no relocation for half of a key pair", async () => {
     const inventory = buildInventory();
     // The public half of key-one: renaming it alone would leave two files that
     // OpenSSH still pairs by name and a reader no longer can.
@@ -613,13 +615,13 @@ describe("KeysScreen", () => {
     render(<KeysScreen api={buildApi({ inventory: vi.fn().mockResolvedValue(inventory) })} />);
 
     const publicRow = await screen.findByRole("row", { name: /id_work\.pub/ });
-    expect(within(publicRow).queryByRole("button", { name: "Rename" })).not.toBeInTheDocument();
+    expect(within(publicRow).queryByRole("button", { name: "Rename or move" })).not.toBeInTheDocument();
     // The private key is where the rename belongs, and it is offered there.
     const privateRow = screen.getByRole("row", { name: /id_work\s/ });
-    expect(within(privateRow).getByRole("button", { name: "Rename" })).toBeInTheDocument();
+    expect(within(privateRow).getByRole("button", { name: "Rename or move" })).toBeInTheDocument();
   });
 
-  it("offers rename for a public key that stands alone, starting from its stem", async () => {
+  it("offers relocation for a public key that stands alone, starting from its stem", async () => {
     const user = userEvent.setup();
     const inventory = buildInventory();
     inventory.items = [
@@ -634,10 +636,28 @@ describe("KeysScreen", () => {
     render(<KeysScreen api={buildApi({ inventory: vi.fn().mockResolvedValue(inventory) })} />);
 
     const row = await screen.findByRole("row", { name: /colleague\.pub/ });
-    await user.click(within(row).getByRole("button", { name: "Rename" }));
+    await user.click(within(row).getByRole("button", { name: "Rename or move" }));
 
     // The suffix says what the file is and the server keeps it, so the field
     // offers the stem rather than a name the server would refuse.
-    expect(screen.getByLabelText("New name")).toHaveValue("colleague");
+    expect(screen.getByLabelText("Name")).toHaveValue("colleague");
+  });
+
+  // The bug this catches was not subtle and was not caught: on a dark page a
+  // bare <input> has no border and no background, so the create-key form asked
+  // for a file name, a comment and a passphrase in three fields that could not
+  // be seen at all. Any styling passes; none does not.
+  it("gives every form control a visible style", async () => {
+    const { container } = render(<KeysScreen api={buildApi()} groups={["work"]} />);
+    await screen.findByRole("row", { name: /id_work/ });
+
+    const controls = container.querySelectorAll("input, select, textarea");
+    expect(controls.length).toBeGreaterThan(0);
+    for (const element of controls) {
+      // A checkbox and a colour swatch are drawn by the browser and are visible
+      // without a border; a text field is not.
+      if (element instanceof HTMLInputElement && ["checkbox", "color"].includes(element.type)) continue;
+      expect(element.className, `${element.tagName} ${element.getAttribute("value") ?? ""} has no style`).not.toBe("");
+    }
   });
 });

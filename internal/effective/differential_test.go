@@ -28,8 +28,12 @@ func TestProjectionMatchesInstalledOpenSSH(t *testing.T) {
 	}
 
 	tests := []struct {
-		name       string
-		contents   string
+		name     string
+		contents string
+		// files are written beside the entry file, by workspace-relative path.
+		// A group fixture needs them: the whole claim is about which file an
+		// Include reaches and in which order.
+		files      map[string]string
 		alias      string
 		keywords   []string
 		wantSimple bool
@@ -66,6 +70,29 @@ func TestProjectionMatchesInstalledOpenSSH(t *testing.T) {
 			keywords:   []string{"hostname", "proxyjump"},
 			wantSimple: true,
 		},
+		{
+			// The generated region, verbatim, in front of the real OpenSSH.
+			// The claim under test is the ordering rule: one Include per group,
+			// deepest first, then the compiled settings. lon-1 is in the nested
+			// group, so its own file wins over the parent group's settings
+			// block, and connections/work/*.conf must not reach it at all.
+			name: "generated group region",
+			contents: "# >>> ssh-ui groups (generated). Child groups first: OpenSSH keeps the first value it reads.\n" +
+				"# Edit through the UI; lines between these markers are replaced on the next save.\n" +
+				"Include connections/work/eu/*.conf\n" +
+				"Include connections/work/*.conf\n" +
+				"Include groups.ssh-ui.conf\n" +
+				"# <<< ssh-ui groups\n" +
+				"Host *\n\tPort 22\n",
+			files: map[string]string{
+				"connections/work/eu/lon.conf": "Host lon-1\n\tHostName 203.0.113.11\n\tPort 2210\n",
+				"connections/work/web.conf":    "Host web-1\n\tHostName 203.0.113.10\n",
+				"groups.ssh-ui.conf":           "Host lon-1 web-1\n\tUser ops\n\nHost lon-1\n\tPort 2299\n",
+			},
+			alias:      "lon-1",
+			keywords:   []string{"hostname", "port", "user"},
+			wantSimple: false,
+		},
 	}
 
 	for _, test := range tests {
@@ -78,6 +105,15 @@ func TestProjectionMatchesInstalledOpenSSH(t *testing.T) {
 			configPath := filepath.Join(root, "config")
 			if err := os.WriteFile(configPath, []byte(test.contents), 0o600); err != nil {
 				t.Fatal(err)
+			}
+			for relative, contents := range test.files {
+				absolute := filepath.Join(root, filepath.FromSlash(relative))
+				if err := os.MkdirAll(filepath.Dir(absolute), 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(absolute, []byte(contents), 0o600); err != nil {
+					t.Fatal(err)
+				}
 			}
 
 			workspace, err := storage.NewWorkspace(storage.OSFileSystem{}, home)

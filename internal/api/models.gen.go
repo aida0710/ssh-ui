@@ -117,17 +117,18 @@ type DiffLine struct {
 
 // EditRequest defines model for EditRequest.
 type EditRequest struct {
-	Alias           *string      `json:"alias,omitempty"`
-	Base            *string      `json:"base,omitempty"`
-	Comment         *string      `json:"comment,omitempty"`
-	DestinationBase *string      `json:"destinationBase,omitempty"`
-	DestinationPath *string      `json:"destinationPath,omitempty"`
-	Fields          *[]FieldEdit `json:"fields,omitempty"`
-	Kind            string       `json:"kind"`
-	Metadata        *Metadata    `json:"metadata,omitempty"`
-	NewAlias        *string      `json:"newAlias,omitempty"`
-	Path            *string      `json:"path,omitempty"`
-	Raw             *string      `json:"raw,omitempty"`
+	Alias            *string      `json:"alias,omitempty"`
+	Base             *string      `json:"base,omitempty"`
+	Comment          *string      `json:"comment,omitempty"`
+	DestinationBase  *string      `json:"destinationBase,omitempty"`
+	DestinationGroup *string      `json:"destinationGroup,omitempty"`
+	DestinationPath  *string      `json:"destinationPath,omitempty"`
+	Fields           *[]FieldEdit `json:"fields,omitempty"`
+	Kind             string       `json:"kind"`
+	Metadata         *Metadata    `json:"metadata,omitempty"`
+	NewAlias         *string      `json:"newAlias,omitempty"`
+	Path             *string      `json:"path,omitempty"`
+	Raw              *string      `json:"raw,omitempty"`
 }
 
 // Effective defines model for Effective.
@@ -249,12 +250,13 @@ type FormField struct {
 
 // GenerateKeyRequest defines model for GenerateKeyRequest.
 type GenerateKeyRequest struct {
-	Algorithm   string `json:"algorithm"`
-	Bits        *int   `json:"bits,omitempty"`
-	Comment     string `json:"comment"`
-	FileName    string `json:"fileName"`
-	Passphrase  string `json:"passphrase"`
-	Unencrypted bool   `json:"unencrypted"`
+	Algorithm   string  `json:"algorithm"`
+	Bits        *int    `json:"bits,omitempty"`
+	Comment     string  `json:"comment"`
+	FileName    string  `json:"fileName"`
+	Group       *string `json:"group,omitempty"`
+	Passphrase  string  `json:"passphrase"`
+	Unencrypted bool    `json:"unencrypted"`
 }
 
 // GenerateKeyResponse defines model for GenerateKeyResponse.
@@ -269,21 +271,33 @@ type GenerateKeyResponse struct {
 	TransactionId      string `json:"transactionId"`
 }
 
+// GroupDeleteRequest defines model for GroupDeleteRequest.
+type GroupDeleteRequest struct {
+	Destination *string `json:"destination,omitempty"`
+	Name        string  `json:"name"`
+}
+
 // GroupMetadata defines model for GroupMetadata.
 type GroupMetadata struct {
 	Colour   *string    `json:"colour,omitempty"`
 	Name     string     `json:"name"`
 	Note     *string    `json:"note,omitempty"`
 	Order    *int       `json:"order,omitempty"`
-	Parent   *string    `json:"parent,omitempty"`
 	Settings *[]Setting `json:"settings,omitempty"`
+}
+
+// GroupRenameRequest defines model for GroupRenameRequest.
+type GroupRenameRequest struct {
+	From string `json:"from"`
+	To   string `json:"to"`
 }
 
 // HardwareCommandRequest defines model for HardwareCommandRequest.
 type HardwareCommandRequest struct {
-	Algorithm string `json:"algorithm"`
-	Comment   string `json:"comment"`
-	FileName  string `json:"fileName"`
+	Algorithm string  `json:"algorithm"`
+	Comment   string  `json:"comment"`
+	FileName  string  `json:"fileName"`
+	Group     *string `json:"group,omitempty"`
 }
 
 // HardwareCommandResponse defines model for HardwareCommandResponse.
@@ -328,6 +342,7 @@ type HostEntry struct {
 	Duplicate *bool        `json:"duplicate,omitempty"`
 	Editable  bool         `json:"editable"`
 	File      FileRef      `json:"file"`
+	Group     *string      `json:"group,omitempty"`
 	Identity  HostIdentity `json:"identity"`
 	Line      int          `json:"line"`
 	Negated   *bool        `json:"negated,omitempty"`
@@ -358,7 +373,6 @@ type HostIdentity struct {
 type HostMetadata struct {
 	Colour    *string      `json:"colour,omitempty"`
 	Favourite *bool        `json:"favourite,omitempty"`
-	Group     *string      `json:"group,omitempty"`
 	Identity  HostIdentity `json:"identity"`
 	Note      *string      `json:"note,omitempty"`
 	Order     *int         `json:"order,omitempty"`
@@ -642,6 +656,31 @@ type RegisterKeyResponse struct {
 	StoredInKeychain bool            `json:"storedInKeychain"`
 }
 
+// RelocateKeyRequest defines model for RelocateKeyRequest.
+type RelocateKeyRequest struct {
+	Group   *string `json:"group,omitempty"`
+	NewName *string `json:"newName,omitempty"`
+}
+
+// RelocateKeyResponse defines model for RelocateKeyResponse.
+type RelocateKeyResponse struct {
+	Blockers      []string                `json:"blockers"`
+	Files         []RelocatedKeyFile      `json:"files"`
+	Group         string                  `json:"group"`
+	Id            string                  `json:"id"`
+	Notes         []string                `json:"notes"`
+	References    []RewrittenKeyReference `json:"references"`
+	RelativePath  string                  `json:"relativePath"`
+	Skipped       []string                `json:"skipped"`
+	TransactionId string                  `json:"transactionId"`
+}
+
+// RelocatedKeyFile defines model for RelocatedKeyFile.
+type RelocatedKeyFile struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
 // RemoteKeyPlan defines model for RemoteKeyPlan.
 type RemoteKeyPlan struct {
 	Alias                string                `json:"alias"`
@@ -680,29 +719,6 @@ type RemoteKeyRegisterResponse struct {
 	Outcome   string `json:"outcome"`
 	Stderr    string `json:"stderr"`
 	Truncated bool   `json:"truncated"`
-}
-
-// RenameKeyRequest defines model for RenameKeyRequest.
-type RenameKeyRequest struct {
-	NewName string `json:"newName"`
-}
-
-// RenameKeyResponse defines model for RenameKeyResponse.
-type RenameKeyResponse struct {
-	Blockers      []string                `json:"blockers"`
-	Files         []RenamedKeyFile        `json:"files"`
-	Id            string                  `json:"id"`
-	Notes         []string                `json:"notes"`
-	References    []RewrittenKeyReference `json:"references"`
-	RelativePath  string                  `json:"relativePath"`
-	Skipped       []string                `json:"skipped"`
-	TransactionId string                  `json:"transactionId"`
-}
-
-// RenamedKeyFile defines model for RenamedKeyFile.
-type RenamedKeyFile struct {
-	From string `json:"from"`
-	To   string `json:"to"`
 }
 
 // RestoreRequest defines model for RestoreRequest.
@@ -873,6 +889,12 @@ type PurgeTrashEntryParams struct {
 // IssueActionTokenJSONRequestBody defines body for IssueActionToken for application/json ContentType.
 type IssueActionTokenJSONRequestBody = IssueActionRequest
 
+// DeleteGroupJSONRequestBody defines body for DeleteGroup for application/json ContentType.
+type DeleteGroupJSONRequestBody = GroupDeleteRequest
+
+// RenameGroupJSONRequestBody defines body for RenameGroup for application/json ContentType.
+type RenameGroupJSONRequestBody = GroupRenameRequest
+
 // PreviewConfigEditJSONRequestBody defines body for PreviewConfigEdit for application/json ContentType.
 type PreviewConfigEditJSONRequestBody = EditRequest
 
@@ -903,8 +925,8 @@ type BuildHardwareKeyCommandJSONRequestBody = HardwareCommandRequest
 // RegisterKeyWithAgentJSONRequestBody defines body for RegisterKeyWithAgent for application/json ContentType.
 type RegisterKeyWithAgentJSONRequestBody = RegisterKeyRequest
 
-// RenameKeyJSONRequestBody defines body for RenameKey for application/json ContentType.
-type RenameKeyJSONRequestBody = RenameKeyRequest
+// RelocateKeyJSONRequestBody defines body for RelocateKey for application/json ContentType.
+type RelocateKeyJSONRequestBody = RelocateKeyRequest
 
 // ChangeKeyPassphraseJSONRequestBody defines body for ChangeKeyPassphrase for application/json ContentType.
 type ChangeKeyPassphraseJSONRequestBody = ChangePassphraseRequest

@@ -64,7 +64,7 @@ type Dependencies struct {
 // Two managers over one workspace is safe: a Manager holds no mutable state
 // between calls, and every transaction is identified by its own timestamp and
 // random suffix, so the journal and the history remain one consistent stream.
-func buildKeyService(workspace *storage.Workspace, dependencies Dependencies) httpserver.KeyService {
+func buildKeyService(workspace *storage.Workspace, dependencies Dependencies, configuration *application.Service) httpserver.KeyService {
 	transactions := storage.NewManager(workspace, time.Now, dependencies.Random)
 	return keys.NewService(keys.ServiceOptions{
 		Workspace:    workspace,
@@ -77,6 +77,10 @@ func buildKeyService(workspace *storage.Workspace, dependencies Dependencies) ht
 		Agent:  dependencies.KeyAgent,
 		Now:    time.Now,
 		Random: dependencies.Random,
+		// What a group is belongs to the configuration engine, which reads the
+		// declaration out of ~/.ssh/config. The key vault asks rather than
+		// deciding, so a key can only be generated into a group that exists.
+		ValidateGroup: configuration.ValidateDeclaredGroup,
 	})
 }
 
@@ -111,7 +115,7 @@ func Build(dependencies Dependencies, version string) (*httpserver.Server, strin
 	// transaction managers read from it. Production passes crypto/rand.
 	transactions := storage.NewManager(workspace, time.Now, dependencies.Random)
 	configService := application.NewService(workspace, transactions)
-	keyService := buildKeyService(workspace, dependencies)
+	keyService := buildKeyService(workspace, dependencies, configService)
 	diagnosticsService := diagnostics.NewService(
 		workspace, dependencies.Runner, dependencies.Toolchain, dependencies.Terminal, dependencies.Lookup)
 	// known_hosts shares the config transaction manager: both write ordinary

@@ -6,27 +6,47 @@ import { configApi } from "../api/config";
 
 vi.mock("../api/config", async () => {
   const actual = await vi.importActual<typeof import("../api/config")>("../api/config");
-  return { ...actual, configApi: { overview: vi.fn(), preview: vi.fn(), save: vi.fn() } };
+  return {
+    ...actual,
+    configApi: {
+      overview: vi.fn(),
+      preview: vi.fn(),
+      save: vi.fn(),
+      renameGroup: vi.fn(),
+      deleteGroup: vi.fn(),
+    },
+  };
 });
 
+// build01 sits in connections/company, so it is in the "company" group. The
+// projection reports that on the entry; nothing here reads a metadata field,
+// because there is no longer one to read.
 const overview = {
   entry: { path: "config", absolute: "/home/tester/.ssh/config" },
   files: [],
-  hosts: [{
-    identity: { path: "config", alias: "build01" },
-    file: { path: "config", absolute: "/home/tester/.ssh/config" },
-    line: 1, patterns: ["build01"], editable: true,
-  }],
+  hosts: [
+    {
+      identity: { path: "connections/company/build.conf", alias: "build01" },
+      file: { path: "connections/company/build.conf", absolute: "/home/tester/.ssh/connections/company/build.conf" },
+      line: 1,
+      patterns: ["build01"],
+      editable: true,
+      group: "company",
+    },
+  ],
   metadata: {
-    schemaVersion: 1,
+    schemaVersion: 2,
     groups: [{ name: "company", settings: [{ keyword: "ServerAliveInterval", values: ["30"] }] }],
-    hosts: [{ identity: { path: "config", alias: "build01" }, group: "company" }],
+    hosts: [{ identity: { path: "connections/company/build.conf", alias: "build01" } }],
   },
   diagnostics: [],
   notices: [],
 };
 
 beforeEach(() => {
+  // The mocked client is module-level, so its recorded calls would otherwise
+  // accumulate across tests and "was not called" would be about the wrong test.
+  vi.clearAllMocks();
   vi.mocked(configApi.overview).mockResolvedValue(overview as never);
   vi.mocked(configApi.preview).mockResolvedValue({
     operation: "config.groups",
@@ -36,20 +56,24 @@ beforeEach(() => {
 });
 
 describe("GroupsPanel", () => {
-  it("lists groups with their members and settings", async () => {
+  it("lists groups with their directories, members and settings", async () => {
     render(<GroupsPanel />);
 
     expect(await screen.findByRole("heading", { name: "company" })).toBeInTheDocument();
     expect(screen.getByText("ServerAliveInterval 30")).toBeInTheDocument();
     expect(screen.getByText("build01")).toBeInTheDocument();
+    // The directory is the group, so the panel says where it is rather than
+    // leaving the user to infer it.
+    expect(screen.getByText("connections/company/ · keys/company/")).toBeInTheDocument();
   });
 
-  it("adds a child group and previews the effective value change before saving", async () => {
+  it("adds a nested group by naming its path and saves it", async () => {
     const user = userEvent.setup();
     render(<GroupsPanel />);
 
-    await user.type(await screen.findByLabelText("New group name"), "work");
-    await user.selectOptions(screen.getByLabelText("Parent group"), "company");
+    // A slash is the whole of the nesting syntax: the name carries the
+    // hierarchy, so there is no parent field that could disagree with it.
+    await user.type(await screen.findByLabelText("New group name"), "company/work");
     await user.click(screen.getByRole("button", { name: "Add group" }));
     await user.click(screen.getByRole("button", { name: "Preview group changes" }));
 
@@ -63,56 +87,53 @@ describe("GroupsPanel", () => {
     } as never);
     await user.click(screen.getByRole("button", { name: "Save groups" }));
 
-    await waitFor(() => expect(configApi.save).toHaveBeenCalledWith(expect.objectContaining({
-      kind: "groups",
-      metadata: expect.objectContaining({
-        groups: expect.arrayContaining([expect.objectContaining({ name: "work", parent: "company" })]),
-      }),
-    })));
+    await waitFor(() =>
+      expect(configApi.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: "groups",
+          metadata: expect.objectContaining({
+            groups: expect.arrayContaining([expect.objectContaining({ name: "company/work" })]),
+          }),
+        }),
+      ),
+    );
   });
-  it("renames a group and carries its members and children with it", async () => {
+
+  it("refuses a name that is not a safe relative directory", async () => {
     const user = userEvent.setup();
-    vi.mocked(configApi.overview).mockResolvedValue({
-      ...overview,
-      metadata: {
-        ...overview.metadata,
-        groups: [
-          { name: "company", settings: [{ keyword: "ServerAliveInterval", values: ["30"] }] },
-          { name: "build", parent: "company" },
-        ],
-      },
+    render(<GroupsPanel />);
+
+    await user.type(await screen.findByLabelText("New group name"), "../escape");
+    await user.click(screen.getByRole("button", { name: "Add group" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("relative directory path");
+    expect(configApi.save).not.toHaveBeenCalled();
+  });
+
+  it("renames a group through the server rather than editing the document", async () => {
+    const user = userEvent.setup();
+    vi.mocked(configApi.renameGroup).mockResolvedValue({
+      transactionId: "t1",
+      written: ["config"],
+      preview: { operation: "config.group_rename", diffs: [] },
     } as never);
-    vi.mocked(configApi.save).mockResolvedValue({ preview: { operation: "config.groups", diffs: [] } } as never);
     render(<GroupsPanel />);
 
     await user.type(await screen.findByLabelText("Rename company to"), "corp");
     await user.click(screen.getByRole("button", { name: "Rename company" }));
-    await user.click(screen.getByRole("button", { name: "Save groups" }));
 
-    await waitFor(() => expect(configApi.save).toHaveBeenCalled());
-    // The mocked client is module-level, so its calls accumulate across tests:
-    // the last one is this test's.
-    const saved = vi.mocked(configApi.save).mock.calls.at(-1)![0] as { metadata: {
-      groups: { name: string; parent?: string }[];
-      hosts: { group?: string }[];
-    } };
-    // The name is the group's only identifier, so all three references move
-    // together: the group itself, the child that names it as a parent, and the
-    // host that names it as its group.
-    expect(saved.metadata.groups.map((group) => group.name)).toEqual(["corp", "build"]);
-    expect(saved.metadata.groups.find((group) => group.name === "build")?.parent).toBe("corp");
-    expect(saved.metadata.hosts.every((host) => host.group !== "company")).toBe(true);
-    expect(saved.metadata.hosts.some((host) => host.group === "corp")).toBe(true);
+    // A group is a directory, so a rename is N file moves plus the Include
+    // region plus every IdentityFile naming its keys: one transaction the
+    // client cannot assemble, so it asks the server to do it.
+    await waitFor(() => expect(configApi.renameGroup).toHaveBeenCalledWith("company", "corp"));
+    expect(configApi.save).not.toHaveBeenCalled();
   });
 
   it("refuses a rename onto a group that already exists instead of merging", async () => {
     const user = userEvent.setup();
     vi.mocked(configApi.overview).mockResolvedValue({
       ...overview,
-      metadata: {
-        ...overview.metadata,
-        groups: [{ name: "company" }, { name: "lab" }],
-      },
+      metadata: { ...overview.metadata, groups: [{ name: "company" }, { name: "lab" }] },
     } as never);
     render(<GroupsPanel />);
 
@@ -120,7 +141,8 @@ describe("GroupsPanel", () => {
     await user.click(screen.getByRole("button", { name: "Rename company" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("lab already exists");
-    // Nothing was staged, so a later save cannot carry the merge through.
+    // Nothing was asked of the server, so the merge cannot happen by accident.
+    expect(configApi.renameGroup).not.toHaveBeenCalled();
     expect(screen.getByRole("heading", { name: "company" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "lab" })).toBeInTheDocument();
   });
@@ -132,5 +154,26 @@ describe("GroupsPanel", () => {
     await user.click(await screen.findByRole("button", { name: "Rename company" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("needs a name of its own");
+  });
+
+  it("removes a group by naming where its connections go", async () => {
+    const user = userEvent.setup();
+    vi.mocked(configApi.overview).mockResolvedValue({
+      ...overview,
+      metadata: { ...overview.metadata, groups: [{ name: "company" }, { name: "archive" }] },
+    } as never);
+    vi.mocked(configApi.deleteGroup).mockResolvedValue({
+      transactionId: "t1",
+      written: ["config"],
+      preview: { operation: "config.group_delete", diffs: [] },
+    } as never);
+    render(<GroupsPanel />);
+
+    // Removing a group relocates its connections; nothing is deleted, so the
+    // control asks where they go rather than offering to destroy them.
+    await user.selectOptions(await screen.findByLabelText("Move the connections of company into"), "archive");
+    await user.click(screen.getByRole("button", { name: "Remove company" }));
+
+    await waitFor(() => expect(configApi.deleteGroup).toHaveBeenCalledWith("company", "archive"));
   });
 });

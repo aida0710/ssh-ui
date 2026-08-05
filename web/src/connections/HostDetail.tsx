@@ -6,6 +6,15 @@ import { DiagnosticsPanel } from "../diagnostics/DiagnosticsPanel";
 import { formatValues, parseValues } from "./values";
 import { NoticeList, SavePreviewPanel } from "./SavePreview";
 import { useTranslate } from "../i18n/context";
+import {
+  CheckboxField,
+  control,
+  fieldLabel,
+  hintText,
+  narrowControl,
+  secondaryAction,
+  sectionHeading,
+} from "../ui/form";
 import type { MessageKey } from "../i18n/messages";
 
 const tabs = ["Basic", "Jump", "Advanced", "Raw", "Effective", "Diagnostics"] as const;
@@ -34,6 +43,10 @@ type HostDetailPanelProps = {
   onBlockRaw: (raw: string) => void;
   onRename: (newAlias: string) => void;
   onComment: (comment: string) => void;
+  // onMoveToGroup relocates the file rather than editing a field: a group is a
+  // directory, so changing it is a move, and the caller sends the group name to
+  // the server which derives the destination path from it.
+  onMoveToGroup: (group: string) => void;
   onMetadata: (metadata: HostMetadata) => void;
   // The Diagnostics tab runs the same checks as the Diagnostics section, so it
   // consumes the same client. It is a prop only so a test can inject one; the
@@ -54,6 +67,7 @@ export function HostDetailPanel({
   onBlockRaw,
   onRename,
   onComment,
+  onMoveToGroup,
   onMetadata,
   integrations = integrationsApi,
 }: HostDetailPanelProps) {
@@ -66,6 +80,10 @@ export function HostDetailPanel({
   const [newValue, setNewValue] = useState("");
   const [blockRaw, setBlockRaw] = useState(detail.form.raw);
   const [renameTo, setRenameTo] = useState(detail.form.entry.identity.alias);
+  // Starts at the group the file is actually in, which the projection read from
+  // its path, so the control shows where the connection is before it offers to
+  // move it.
+  const [moveTo, setMoveTo] = useState(detail.form.entry.group ?? "");
   // A legacy note seeds the editor when the block has no comment yet, so the
   // first save moves it into the configuration instead of leaving the two to
   // disagree. Once written, the comment is the only source.
@@ -301,106 +319,133 @@ export function HostDetailPanel({
         )
       ) : null}
 
-      <section className="flex flex-col gap-2 rounded border border-zinc-800 p-3">
-        <h3 className="text-sm font-medium">{t("host.organisation")}</h3>
-        <label htmlFor="host-group" className="text-xs text-zinc-400">{t("host.primaryGroup")}</label>
-        <select
-          id="host-group"
-          value={detail.metadata.group ?? ""}
-          onChange={(event) => onMetadata({ ...detail.metadata, group: event.target.value })}
-          className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
-        >
-          <option value="">{t("host.groupNone")}</option>
-          {groups.map((group) => (
-            <option key={group.name} value={group.name}>{group.name}</option>
-          ))}
-        </select>
-        <label className="flex items-center gap-2 text-xs text-zinc-400">
-          <input
-            type="checkbox"
-            checked={detail.metadata.favourite === true}
-            onChange={(event) => onMetadata({ ...detail.metadata, favourite: event.target.checked })}
-          />
-          {t("host.favourite")}
-        </label>
-        <label htmlFor="host-comment" className="text-xs text-zinc-400">{t("host.comment")}</label>
-        <textarea
-          id="host-comment"
-          value={comment}
-          onChange={(event) => setComment(event.target.value)}
-          rows={3}
-          className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
-        />
-        <p className="text-xs text-zinc-500">
-          {detail.form.comment === "" && (detail.metadata.note ?? "") !== ""
-            ? t("host.commentFromNote")
-            : t("host.commentNote")}
-        </p>
-        <button
-          type="button"
-          onClick={() => onComment(comment)}
-          className="self-start rounded border border-zinc-700 px-2 py-1 text-xs"
-        >
-          {t("host.saveComment")}
-        </button>
-        <label htmlFor="host-colour" className="text-xs text-zinc-400">{t("host.colour")}</label>
-        <div className="flex items-center gap-2">
-          <input
-            id="host-colour"
-            type="color"
-            // A colour input has no empty state, so "no colour" is the absence
-            // of the value in metadata and this control shows a neutral swatch
-            // for it. Clearing is a separate, explicit act.
-            value={detail.metadata.colour === undefined || detail.metadata.colour === "" ? "#71717a" : detail.metadata.colour}
-            onChange={(event) => onMetadata({ ...detail.metadata, colour: event.target.value })}
-            className="h-7 w-12 rounded border border-zinc-700 bg-zinc-900"
-          />
-          {detail.metadata.colour === undefined || detail.metadata.colour === "" ? null : (
+      {/*
+        Everything here is one property of the connection, and they were laid
+        out as a single column of alternating captions and controls with no
+        grouping — a wall in which the caption for the next control read as the
+        hint for the last. Each property is now its own row with its own gap.
+      */}
+      <section className="flex flex-col gap-5 rounded-xl border border-zinc-800 p-4">
+        <h3 className={sectionHeading}>{t("host.organisation")}</h3>
+
+        <div className="flex flex-col gap-2">
+          <label htmlFor="host-group" className={fieldLabel}>{t("host.primaryGroup")}</label>
+          <p className={hintText}>{t("host.groupIsADirectory")}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              id="host-group"
+              value={moveTo}
+              onChange={(event) => setMoveTo(event.target.value)}
+              className={narrowControl}
+            >
+              <option value="">{t("host.groupNone")}</option>
+              {groups.map((group) => (
+                <option key={group.name} value={group.name}>{group.name}</option>
+              ))}
+            </select>
             <button
               type="button"
-              onClick={() => onMetadata({ ...detail.metadata, colour: "" })}
-              className="rounded border border-zinc-700 px-2 py-1 text-xs"
+              disabled={moveTo === "" || moveTo === detail.form.entry.group}
+              onClick={() => onMoveToGroup(moveTo)}
+              className={secondaryAction}
             >
-              {t("host.clearColour")}
+              {t("host.moveToGroup")}
             </button>
-          )}
+          </div>
         </div>
-        <label htmlFor="host-order" className="text-xs text-zinc-400">
-          {t("host.displayOrder")}
-        </label>
-        <input
-          id="host-order"
-          type="number"
-          value={String(detail.metadata.order ?? 0)}
-          onChange={(event) => onMetadata({ ...detail.metadata, order: Number(event.target.value) || 0 })}
-          className="w-24 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
+
+        <CheckboxField
+          label={t("host.favourite")}
+          checked={detail.metadata.favourite === true}
+          onChange={(checked) => onMetadata({ ...detail.metadata, favourite: checked })}
         />
-        <label htmlFor="host-tags" className="text-xs text-zinc-400">{t("host.tags")}</label>
-        <input
-          id="host-tags"
-          value={(detail.metadata.tags ?? []).join(", ")}
-          onChange={(event) =>
-            onMetadata({
-              ...detail.metadata,
-              tags: event.target.value
-                .split(",")
-                .map((tag) => tag.trim())
-                .filter((tag) => tag !== ""),
-            })
-          }
-          className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
-        />
-        <label htmlFor="host-rename" className="text-xs text-zinc-400">{t("host.renameAlias")}</label>
-        <div className="flex gap-2">
-          <input
-            id="host-rename"
-            value={renameTo}
-            onChange={(event) => setRenameTo(event.target.value)}
-            className="flex-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
+
+        <div className="flex flex-col gap-2">
+          <label htmlFor="host-comment" className={fieldLabel}>{t("host.comment")}</label>
+          <textarea
+            id="host-comment"
+            value={comment}
+            onChange={(event) => setComment(event.target.value)}
+            rows={3}
+            className={control}
           />
-          <button type="button" onClick={() => onRename(renameTo)} className="rounded border border-zinc-700 px-2 py-1 text-xs">
-            {t("host.rename")}
+          <p className={hintText}>
+            {detail.form.comment === "" && (detail.metadata.note ?? "") !== ""
+              ? t("host.commentFromNote")
+              : t("host.commentNote")}
+          </p>
+          <button type="button" onClick={() => onComment(comment)} className={`self-start ${secondaryAction}`}>
+            {t("host.saveComment")}
           </button>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label htmlFor="host-colour" className={fieldLabel}>{t("host.colour")}</label>
+          <div className="flex items-center gap-2">
+            <input
+              id="host-colour"
+              type="color"
+              // A colour input has no empty state, so "no colour" is the absence
+              // of the value in metadata and this control shows a neutral swatch
+              // for it. Clearing is a separate, explicit act.
+              value={detail.metadata.colour === undefined || detail.metadata.colour === "" ? "#71717a" : detail.metadata.colour}
+              onChange={(event) => onMetadata({ ...detail.metadata, colour: event.target.value })}
+              className="h-8 w-14 rounded border border-zinc-700 bg-zinc-900"
+            />
+            {detail.metadata.colour === undefined || detail.metadata.colour === "" ? null : (
+              <button
+                type="button"
+                onClick={() => onMetadata({ ...detail.metadata, colour: "" })}
+                className={secondaryAction}
+              >
+                {t("host.clearColour")}
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label htmlFor="host-order" className={fieldLabel}>{t("host.displayOrder")}</label>
+          <input
+            id="host-order"
+            type="number"
+            value={String(detail.metadata.order ?? 0)}
+            onChange={(event) => onMetadata({ ...detail.metadata, order: Number(event.target.value) || 0 })}
+            className="w-24 rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label htmlFor="host-tags" className={fieldLabel}>{t("host.tags")}</label>
+          <input
+            id="host-tags"
+            value={(detail.metadata.tags ?? []).join(", ")}
+            onChange={(event) =>
+              onMetadata({
+                ...detail.metadata,
+                tags: event.target.value
+                  .split(",")
+                  .map((tag) => tag.trim())
+                  .filter((tag) => tag !== ""),
+              })
+            }
+            className={control}
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label htmlFor="host-rename" className={fieldLabel}>{t("host.renameAlias")}</label>
+          <div className="flex gap-2">
+            <input
+              id="host-rename"
+              value={renameTo}
+              onChange={(event) => setRenameTo(event.target.value)}
+              className={control}
+            />
+            <button type="button" onClick={() => onRename(renameTo)} className={secondaryAction}>
+              {t("host.rename")}
+            </button>
+          </div>
         </div>
       </section>
 

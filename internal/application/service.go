@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io/fs"
+	"path"
 	"path/filepath"
 	"sync"
 	"time"
@@ -25,6 +26,12 @@ var (
 	ErrUnknownEditKind       = errors.New("unknown edit kind")
 	ErrUnknownRecoveryAction = errors.New("unknown recovery action")
 	ErrNotEditable           = errors.New("file is not editable through this application")
+	// ErrGroupNotDeclared refuses an operation naming a group that no Include
+	// line declares. A directory that exists is not a group.
+	ErrGroupNotDeclared = errors.New("no generated Include line declares that group")
+	// ErrAmbiguousDestination refuses a move that names both a group and a
+	// path, because the two can disagree and this application will not pick.
+	ErrAmbiguousDestination = errors.New("a move names either a destination group or a destination path")
 )
 
 // EditKind names the operations the UI can request.
@@ -64,6 +71,10 @@ type EditRequest struct {
 	Raw      string      `json:"raw,omitempty"`
 	Comment  string      `json:"comment,omitempty"`
 	Metadata *Metadata   `json:"metadata,omitempty"`
+	// DestinationGroup moves a host into a group by naming the group rather
+	// than the file. The destination path is derived from it, so the caller
+	// cannot name a group and a path that disagree; sending both is refused.
+	DestinationGroup string `json:"destinationGroup,omitempty"`
 	// DestinationPath and DestinationBase describe the second file of a move.
 	// DestinationBase carries the exact bytes the client loaded for it, so the
 	// destination has the same precondition guarantee as the source.
@@ -347,9 +358,15 @@ func (s *Service) FileContents(relative string) (FileContents, error) {
 type planned struct {
 	operation string
 	changes   []storage.Change
-	base      map[string][]byte
-	baseline  map[string]bool
-	preview   SavePreview
+	// moves and removals travel in the same transaction as the changes, so a
+	// file relocation and the configuration that names it land together or not
+	// at all. directories are created before Commit resolves its write paths.
+	moves       []storage.Move
+	removals    []storage.Removal
+	directories []string
+	base        map[string][]byte
+	baseline    map[string]bool
+	preview     SavePreview
 }
 
 // Preview prepares a transaction and returns its diffs without writing.
@@ -371,8 +388,9 @@ func (s *Service) Save(request EditRequest) (SaveResult, error) {
 	if err != nil {
 		return SaveResult{}, err
 	}
-	// Only a metadata change needs the state directory before Commit resolves
-	// its write paths; a rejected save must leave the disk untouched.
+	// Commit resolves a write path against real directories, so the ones this
+	// transaction needs are created first. Only a planned transaction gets
+	// here: a refusal returns above, leaving the disk untouched.
 	metadataPath := filepath.Clean(s.metadata.Path())
 	for _, change := range prepared.changes {
 		if filepath.Clean(change.Path) != metadataPath {
@@ -382,12 +400,22 @@ func (s *Service) Save(request EditRequest) (SaveResult, error) {
 			return SaveResult{}, err
 		}
 	}
+	for _, directory := range prepared.directories {
+		if err := s.workspace.EnsureDirectory(directory); err != nil {
+			return SaveResult{}, err
+		}
+	}
 
 	s.pendingBase = prepared.base
 	s.pendingBaseline = prepared.baseline
 	defer func() { s.pendingBase, s.pendingBaseline = nil, nil }()
 
-	result, err := s.manager.Commit(storage.Request{Operation: prepared.operation, Changes: prepared.changes})
+	result, err := s.manager.Commit(storage.Request{
+		Operation: prepared.operation,
+		Changes:   prepared.changes,
+		Moves:     prepared.moves,
+		Removals:  prepared.removals,
+	})
 	var conflict *storage.ConflictError
 	if errors.As(err, &conflict) {
 		cleaned := filepath.Clean(conflict.Path)
@@ -558,12 +586,57 @@ func (s *Service) planFileEdit(graph *config.Graph, request EditRequest) (planne
 	return prepared, nil
 }
 
+// resolveDestination turns a destination group into the destination path.
+//
+// The file keeps its own name and changes directory, so a move between groups
+// is exactly what it looks like in a shell: the same file, somewhere else. The
+// group must already be declared — creating one is its own operation with its
+// own preview, and inferring a group from a move would put an Include in the
+// entry file as a side effect of an unrelated request.
+func (s *Service) resolveDestination(graph *config.Graph, request EditRequest) (EditRequest, error) {
+	if request.DestinationGroup == "" {
+		return request, nil
+	}
+	if request.DestinationPath != "" {
+		return EditRequest{}, ErrAmbiguousDestination
+	}
+	if err := ValidateGroupName(request.DestinationGroup); err != nil {
+		return EditRequest{}, err
+	}
+	declared := false
+	for _, name := range s.declaredGroups(graph) {
+		if name == request.DestinationGroup {
+			declared = true
+			break
+		}
+	}
+	if !declared {
+		return EditRequest{}, ErrGroupNotDeclared
+	}
+	name := path.Base(filepath.ToSlash(request.Path))
+	request.DestinationPath = GroupDirectory(request.DestinationGroup) + "/" + name
+	return request, nil
+}
+
+// declaredGroups reads the group declaration out of the resolved entry file.
+func (s *Service) declaredGroups(graph *config.Graph) []string {
+	node := graph.Nodes[s.entryPath]
+	if node == nil || node.File == nil {
+		return nil
+	}
+	return DeclaredGroups(node.File)
+}
+
 // planMoveHost moves one host block into another file. Both configuration
 // files and the metadata document are one storage.Request, so the move is a
 // single journalled transaction: every precondition is checked before anything
 // is staged, and a mismatch on either file writes nothing.
 func (s *Service) planMoveHost(graph *config.Graph, request EditRequest) (planned, error) {
 	root := s.workspace.Root()
+	request, err := s.resolveDestination(graph, request)
+	if err != nil {
+		return planned{}, err
+	}
 	sourceAbsolute, err := AbsolutePath(root, request.Path)
 	if err != nil {
 		return planned{}, err
@@ -666,6 +739,21 @@ func (s *Service) planMoveHost(graph *config.Graph, request EditRequest) (planne
 			Detail: request.Alias,
 		})
 	}
+	if request.DestinationGroup != "" {
+		// The directory is created before Commit resolves the write path. It is
+		// created only for a plan that got this far, so a refusal leaves no
+		// empty directory behind.
+		directory, dirErr := AbsolutePath(root, GroupDirectory(request.DestinationGroup))
+		if dirErr != nil {
+			return planned{}, dirErr
+		}
+		prepared.directories = append(prepared.directories, directory)
+		prepared.preview.Notices = appendNotice(prepared.preview.Notices, Notice{
+			Code:   NoticeGroupDirectoryCreated,
+			Path:   GroupDirectory(request.DestinationGroup),
+			Detail: request.DestinationGroup,
+		})
+	}
 
 	// Moving a block changes where OpenSSH reads it, and OpenSSH keeps the
 	// first value it finds. Show the before and after explanation for every
@@ -752,26 +840,23 @@ func (s *Service) planMetadataEdit(graph *config.Graph, request EditRequest) (pl
 		return planned{}, err
 	}
 	entryFile := config.Parse(entryContents)
-	groupContents, groupNotices := CompileGroups(reconciled, hosts, dominantEnding(entryFile))
-	prepared.preview.Notices = append(prepared.preview.Notices, groupNotices...)
 
-	groupsPrecondition := storage.Precondition{}
-	if groupsExist {
-		groupsPrecondition = storage.Precondition{Exists: true, Digest: storage.Digest(previousGroups)}
+	// The declared set is whatever the region already names plus every group the
+	// metadata carries presentation for. Declaring a group is what makes its
+	// directory a group at all, so this is the whole of it: a directory nobody
+	// declared stays a stranger's directory.
+	declared := declaredGroupSet(entryFile, reconciled)
+	regionPlan, err := PlanRegion(entryFile, declared, groupsRelative)
+	if err != nil {
+		return planned{}, err
 	}
-	prepared.changes = append(prepared.changes, storage.Change{
-		Path: groupsAbsolute, Contents: groupContents, Precondition: groupsPrecondition,
-	})
-	prepared.base[filepath.Clean(groupsAbsolute)] = previousGroups
-	prepared.preview.Diffs = append(prepared.preview.Diffs,
-		BuildFileDiff(groupsRelative, diskOrNil(previousGroups, groupsExist), groupContents))
+	if err := ApplyRegion(entryFile, regionPlan); err != nil {
+		return planned{}, err
+	}
+	entryUpdated := entryFile.Render()
 
-	pending := map[string][]byte{filepath.Clean(groupsAbsolute): groupContents}
-	if index, present := PlanGroupInclude(entryFile, groupsRelative); !present {
-		if err := InsertIncludeLine(entryFile, groupsRelative, index); err != nil {
-			return planned{}, err
-		}
-		entryUpdated := entryFile.Render()
+	pending := map[string][]byte{}
+	if !bytes.Equal(entryUpdated, entryContents) {
 		entryPrecondition := storage.Precondition{}
 		if entryExists {
 			entryPrecondition = storage.Precondition{Exists: true, Digest: storage.Digest(entryContents)}
@@ -785,12 +870,50 @@ func (s *Service) planMetadataEdit(graph *config.Graph, request EditRequest) (pl
 		pending[filepath.Clean(s.entryPath)] = entryUpdated
 	}
 
+	// Membership has to be read from the configuration the region produces, not
+	// from the one that came in: until the region names a group's directory
+	// nothing reads it, so every host in a group this save is declaring would
+	// otherwise be invisible and its settings block would come out empty.
+	reachable, err := s.resolveWith(pending)
+	if err != nil {
+		return planned{}, err
+	}
+	members, _ := ProjectHosts(reachable, root)
+	groupContents, groupNotices := CompileGroups(declared, reconciled, members, dominantEnding(entryFile))
+	prepared.preview.Notices = append(prepared.preview.Notices, groupNotices...)
+
+	groupsPrecondition := storage.Precondition{}
+	if groupsExist {
+		groupsPrecondition = storage.Precondition{Exists: true, Digest: storage.Digest(previousGroups)}
+	}
+	prepared.changes = append(prepared.changes, storage.Change{
+		Path: groupsAbsolute, Contents: groupContents, Precondition: groupsPrecondition,
+	})
+	prepared.base[filepath.Clean(groupsAbsolute)] = previousGroups
+	prepared.preview.Diffs = append(prepared.preview.Diffs,
+		BuildFileDiff(groupsRelative, diskOrNil(previousGroups, groupsExist), groupContents))
+	pending[filepath.Clean(groupsAbsolute)] = groupContents
+	// A declared group whose directory does not exist yet produces an
+	// include_no_match warning and nothing else, so the directories are created
+	// here rather than left for the first host to arrive.
+	for _, name := range declared {
+		absolute, dirErr := AbsolutePath(root, GroupDirectory(name))
+		if dirErr != nil {
+			return planned{}, dirErr
+		}
+		prepared.directories = append(prepared.directories, absolute)
+	}
+
 	after, err := s.resolveWith(pending)
 	if err != nil {
 		return planned{}, err
 	}
-	for _, host := range reconciled.Hosts {
-		if host.Group == "" || host.Orphan || len(prepared.preview.Effective) >= maxEffectivePreviews {
+	// The hosts to explain are the ones the saved configuration will have, not
+	// the ones it has: a group's files are unreadable until the region names
+	// them, so a host arriving with its group would otherwise be invisible here.
+	afterHosts, _ := ProjectHosts(after, root)
+	for _, host := range afterHosts {
+		if host.Group == "" || host.Identity.IsZero() || len(prepared.preview.Effective) >= maxEffectivePreviews {
 			continue
 		}
 		diff := DiffEffective(

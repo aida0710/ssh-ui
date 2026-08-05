@@ -378,16 +378,69 @@ paths:
               schema: { $ref: "#/components/schemas/PublicKeyResponse" }
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
-  /api/v1/keys/{keyId}/name:
+  /api/v1/config/groups/rename:
     post:
-      operationId: renameKey
+      operationId: renameGroup
       description: >-
-        Renames one key inside the directory it already occupies and rewrites
-        every configuration directive that names it, in one transaction. It
-        refuses rather than guesses: a directive whose path cannot be resolved,
-        or which lives in a file outside the workspace, blocks the rename and is
-        reported as a blocker so the user can see what would have been left
-        dangling.
+        Renames a group directory and everything that names it — every
+        connection file under connections/<old>, every key under keys/<old>,
+        every IdentityFile pointing into it, the generated Include region, the
+        compiled settings file and metadata.json — in one journalled
+        transaction. Nested groups travel with their parent. The emptied source
+        directory is reported and is not removed: storage moves files, not
+        directories.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GroupRenameRequest" }
+      responses:
+        "200":
+          description: Group renamed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SaveResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/config/groups/delete:
+    post:
+      operationId: deleteGroup
+      description: >-
+        Removes a group's declaration and relocates its connections and keys
+        into another group, or to the connections directory itself. No
+        configuration file is ever deleted by this operation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GroupDeleteRequest" }
+      responses:
+        "200":
+          description: Group removed and its connections relocated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SaveResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/keys/{keyId}/location:
+    post:
+      operationId: relocateKey
+      description: >-
+        Changes a key's name, its group, or both, and rewrites every
+        configuration directive that names it, in one transaction committed
+        through the configuration engine so the rewritten files are re-parsed
+        and re-resolved before anything lands. An absent field is left as it is;
+        an empty group moves the key to the root of ~/.ssh. It refuses rather
+        than guesses: a directive whose path cannot be resolved, one in a file
+        outside the workspace, a destination an Include glob would read as
+        configuration, or a group nothing declares each block the whole
+        transaction and are reported as blockers.
       parameters:
         - name: keyId
           in: path
@@ -397,22 +450,22 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/RenameKeyRequest" }
+            schema: { $ref: "#/components/schemas/RelocateKeyRequest" }
       responses:
         "200":
-          description: Key renamed
+          description: Key relocated
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/RenameKeyResponse" }
+              schema: { $ref: "#/components/schemas/RelocateKeyResponse" }
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "409":
-          description: The rename was blocked, and nothing was written
+          description: The relocation was blocked, and nothing was written
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/RenameKeyResponse" }
+              schema: { $ref: "#/components/schemas/RelocateKeyResponse" }
         "422": { $ref: "#/components/responses/Problem" }
   /api/v1/keys/{keyId}/agent:
     post:
@@ -791,6 +844,7 @@ components:
         algorithm: { type: string, minLength: 1, maxLength: 16 }
         bits: { type: integer }
         fileName: { type: string, minLength: 1, maxLength: 64 }
+        group: { type: string, maxLength: 400 }
         comment: { type: string, maxLength: 127 }
         passphrase: { type: string, maxLength: 1024 }
         unencrypted: { type: boolean }
@@ -812,6 +866,7 @@ components:
       additionalProperties: false
       required: [algorithm, fileName, comment]
       properties:
+        group: { type: string, maxLength: 400 }
         algorithm: { type: string, minLength: 1, maxLength: 16 }
         fileName: { type: string, minLength: 1, maxLength: 64 }
         comment: { type: string, maxLength: 127 }
@@ -1179,13 +1234,27 @@ components:
         publicKey: { type: string }
         fingerprint: { type: string }
         comment: { type: string }
-    RenameKeyRequest:
+    GroupRenameRequest:
       type: object
       additionalProperties: false
-      required: [newName]
+      required: [from, to]
+      properties:
+        from: { type: string, minLength: 1, maxLength: 400 }
+        to: { type: string, minLength: 1, maxLength: 400 }
+    GroupDeleteRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 400 }
+        destination: { type: string, maxLength: 400 }
+    RelocateKeyRequest:
+      type: object
+      additionalProperties: false
       properties:
         newName: { type: string, minLength: 1, maxLength: 64 }
-    RenamedKeyFile:
+        group: { type: string, maxLength: 400 }
+    RelocatedKeyFile:
       type: object
       additionalProperties: false
       required: [from, to]
@@ -1202,14 +1271,15 @@ components:
         line: { type: integer }
         from: { type: string }
         to: { type: string }
-    RenameKeyResponse:
+    RelocateKeyResponse:
       type: object
       additionalProperties: false
-      required: [id, relativePath, files, references, skipped, notes, blockers, transactionId]
+      required: [id, relativePath, group, files, references, skipped, notes, blockers, transactionId]
       properties:
         id: { type: string }
         relativePath: { type: string }
-        files: { type: array, items: { $ref: "#/components/schemas/RenamedKeyFile" } }
+        group: { type: string }
+        files: { type: array, items: { $ref: "#/components/schemas/RelocatedKeyFile" } }
         references: { type: array, items: { $ref: "#/components/schemas/RewrittenKeyReference" } }
         skipped: { type: array, items: { type: string } }
         notes: { type: array, items: { type: string } }
@@ -1338,6 +1408,7 @@ components:
         negated: { type: boolean }
         duplicate: { type: boolean }
         editable: { type: boolean }
+        group: { type: string }
     IncludeReference:
       type: object
       additionalProperties: false
@@ -1370,7 +1441,6 @@ components:
       required: [identity]
       properties:
         identity: { $ref: "#/components/schemas/HostIdentity" }
-        group: { type: string }
         tags: { type: array, items: { type: string } }
         colour: { type: string }
         note: { type: string }
@@ -1383,7 +1453,6 @@ components:
       required: [name]
       properties:
         name: { type: string }
-        parent: { type: string }
         colour: { type: string }
         note: { type: string }
         order: { type: integer }
@@ -1522,6 +1591,7 @@ components:
         raw: { type: string }
         comment: { type: string }
         metadata: { $ref: "#/components/schemas/Metadata" }
+        destinationGroup: { type: string, maxLength: 400 }
         destinationPath: { type: string }
         destinationBase: { type: string }
     DiffLine:

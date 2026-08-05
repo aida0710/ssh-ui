@@ -95,6 +95,9 @@ type HostEntry struct {
 	Negated   bool         `json:"negated,omitempty"`
 	Duplicate bool         `json:"duplicate,omitempty"`
 	Editable  bool         `json:"editable"`
+	// Group is the group this host belongs to, which is the directory its file
+	// sits in. Nothing else records it: metadata carries presentation only.
+	Group string `json:"group,omitempty"`
 }
 
 // HostForm is one Host block projected for the detail editor. Raw is the exact
@@ -189,6 +192,7 @@ func ProjectHosts(graph *config.Graph, root string) ([]HostEntry, []Notice) {
 			Line:     visit.Index + 1,
 			Patterns: make([]string, 0, len(visit.Block.Patterns)),
 		}
+		entry.Group, _ = GroupOfPath(entry.File.Path)
 		node, ok := graph.Nodes[visit.Path]
 		entry.Editable = ok && node.Editable && !entry.File.External
 		for _, pattern := range visit.Block.Patterns {
@@ -276,6 +280,7 @@ func ProjectHostForm(graph *config.Graph, root string, identity HostIdentity) (H
 		Comment:      node.File.CommentText(block.Header),
 		CommentLines: block.Header - node.File.CommentRun(block.Header),
 	}
+	form.Entry.Group, _ = GroupOfPath(form.Entry.File.Path)
 	for _, pattern := range block.Patterns {
 		form.Entry.Patterns = append(form.Entry.Patterns, pattern.Raw)
 		form.Entry.Wildcard = form.Entry.Wildcard || pattern.Wildcard

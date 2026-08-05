@@ -70,9 +70,9 @@ func TestSetHostCommentKeepsTheHostLineIndent(t *testing.T) {
 func TestClearHostNoteKeepsEveryOtherFieldAndEntry(t *testing.T) {
 	target := HostIdentity{Path: "config", Alias: "bastion"}
 	metadata := Metadata{
-		SchemaVersion: 1,
+		SchemaVersion: MetadataSchemaVersion,
 		Hosts: []HostMetadata{
-			{Identity: target, Note: "gone", Group: "work", Favourite: true},
+			{Identity: target, Note: "gone", Colour: "#f97316", Favourite: true},
 			{Identity: HostIdentity{Path: "config", Alias: "nas"}, Note: "kept"},
 		},
 	}
@@ -82,7 +82,7 @@ func TestClearHostNoteKeepsEveryOtherFieldAndEntry(t *testing.T) {
 	if len(cleared.Hosts) != 2 {
 		t.Fatalf("hosts = %#v", cleared.Hosts)
 	}
-	if cleared.Hosts[0].Note != "" || cleared.Hosts[0].Group != "work" || !cleared.Hosts[0].Favourite {
+	if cleared.Hosts[0].Note != "" || cleared.Hosts[0].Colour != "#f97316" || !cleared.Hosts[0].Favourite {
 		t.Fatalf("the target entry lost more than its note: %#v", cleared.Hosts[0])
 	}
 	if cleared.Hosts[1].Note != "kept" {
@@ -98,7 +98,7 @@ func TestClearHostNoteKeepsEveryOtherFieldAndEntry(t *testing.T) {
 func TestClearHostNoteDropsAnEntryThatHeldNothingElse(t *testing.T) {
 	target := HostIdentity{Path: "config", Alias: "bastion"}
 	cleared := ClearHostNote(Metadata{
-		SchemaVersion: 1,
+		SchemaVersion: MetadataSchemaVersion,
 		Hosts:         []HostMetadata{{Identity: target, Note: "only this"}},
 	}, target)
 

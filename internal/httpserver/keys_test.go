@@ -31,9 +31,6 @@ type stubKeyService struct {
 	revealCalls int
 	purgeCalls  int
 	registerErr error
-	renamed     keys.RenameRequest
-	renameErr   error
-	rename      keys.RenameResult
 }
 
 func (stub *stubKeyService) Inventory() (*keys.Inventory, error) { return stub.inventory, nil }
@@ -57,7 +54,7 @@ func (stub *stubKeyService) Generate(keys.GenerateRequest) (keys.GenerateResult,
 	return keys.GenerateResult{ID: "key-one", RelativePath: "id_work", PublicRelativePath: "id_work.pub", Encrypted: true, TransactionID: "tx"}, nil
 }
 
-func (stub *stubKeyService) HardwareCommand(keys.Algorithm, string, string) ([]string, error) {
+func (stub *stubKeyService) HardwareCommand(keys.Algorithm, string, string, string) ([]string, error) {
 	return []string{"ssh-keygen", "-t", "ed25519-sk", "-f", "/Users/example/.ssh/id_yubikey"}, nil
 }
 
@@ -87,11 +84,6 @@ func (stub *stubKeyService) PublicKey(keyID string) (keys.PublicKeyResult, error
 		Fingerprint:  "SHA256:abcdef",
 		Comment:      "aida@laptop",
 	}, nil
-}
-
-func (stub *stubKeyService) Rename(request keys.RenameRequest) (keys.RenameResult, error) {
-	stub.renamed = request
-	return stub.rename, stub.renameErr
 }
 
 func (stub *stubKeyService) Register(context.Context, keys.RegisterRequest) (keys.RegisterResult, error) {
@@ -554,90 +546,5 @@ func TestPublicKeyRefusesAnEntryThatIsNotAPublicKey(t *testing.T) {
 	}
 	if strings.Contains(response.Body.String(), "PRIVATE KEY") {
 		t.Fatalf("the refusal carried key material: %s", response.Body.String())
-	}
-}
-
-func TestRenameReportsWhatItMovedAndRewrote(t *testing.T) {
-	service := newRevealService()
-	service.rename = keys.RenameResult{
-		ID:            "key-renamed",
-		RelativePath:  "id_build",
-		Files:         []keys.RenamedFile{{From: "id_work", To: "id_build"}, {From: "id_work.pub", To: "id_build.pub"}},
-		References:    []keys.RewrittenReference{{Directive: "IdentityFile", ConfigPath: "/home/tester/.ssh/config", Line: 2, From: "~/.ssh/id_work", To: "~/.ssh/id_build"}},
-		Notes:         []string{keys.NoteKeychainEntryStale},
-		TransactionID: "tx",
-	}
-	engine, _, credentials := newKeyServer(t, service)
-
-	body, err := json.Marshal(api.RenameKeyRequest{NewName: "id_build"})
-	if err != nil {
-		t.Fatalf("marshal request: %v", err)
-	}
-	response := sendKeyRequest(t, engine, credentials, http.MethodPost, "/api/v1/keys/key-one/name", body, "")
-	if response.Code != http.StatusOK {
-		t.Fatalf("rename = %d, want 200: %s", response.Code, response.Body.String())
-	}
-	if service.renamed.KeyID != "key-one" || service.renamed.NewName != "id_build" {
-		t.Fatalf("request reached the service as %#v", service.renamed)
-	}
-
-	var decoded api.RenameKeyResponse
-	if err := json.Unmarshal(response.Body.Bytes(), &decoded); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if len(decoded.Files) != 2 || decoded.Files[1].To != "id_build.pub" {
-		t.Errorf("files = %#v, want both halves of the pair", decoded.Files)
-	}
-	// The rewritten directives are the part the user cannot see for themselves,
-	// so they have to travel with the answer rather than be summarised away.
-	if len(decoded.References) != 1 || decoded.References[0].To != "~/.ssh/id_build" {
-		t.Errorf("references = %#v, want the rewritten IdentityFile", decoded.References)
-	}
-	if len(decoded.Skipped) != 0 || len(decoded.Blockers) != 0 {
-		t.Errorf("empty lists = %#v/%#v, want arrays rather than null", decoded.Skipped, decoded.Blockers)
-	}
-}
-
-func TestRenameAnswersABlockedRenameWithItsReasons(t *testing.T) {
-	service := newRevealService()
-	service.renameErr = keys.ErrRenameBlocked
-	service.rename = keys.RenameResult{Blockers: []string{keys.BlockerRenameUnresolved + ":id_work"}}
-	engine, _, credentials := newKeyServer(t, service)
-
-	body, err := json.Marshal(api.RenameKeyRequest{NewName: "id_build"})
-	if err != nil {
-		t.Fatalf("marshal request: %v", err)
-	}
-	response := sendKeyRequest(t, engine, credentials, http.MethodPost, "/api/v1/keys/key-one/name", body, "")
-	if response.Code != http.StatusConflict {
-		t.Fatalf("blocked rename = %d, want 409: %s", response.Code, response.Body.String())
-	}
-
-	// A blocked rename is not an error page: the screen shows the reasons where
-	// it would have shown the changes, so the body has to carry them.
-	var decoded api.RenameKeyResponse
-	if err := json.Unmarshal(response.Body.Bytes(), &decoded); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if len(decoded.Blockers) != 1 || !strings.HasPrefix(decoded.Blockers[0], keys.BlockerRenameUnresolved) {
-		t.Errorf("blockers = %#v, want the unresolved directive", decoded.Blockers)
-	}
-}
-
-func TestRenameRefusesHalfOfAPairWithoutPretendingItIsMissing(t *testing.T) {
-	service := newRevealService()
-	service.renameErr = keys.ErrRenameNotSupported
-	engine, _, credentials := newKeyServer(t, service)
-
-	body, err := json.Marshal(api.RenameKeyRequest{NewName: "id_build"})
-	if err != nil {
-		t.Fatalf("marshal request: %v", err)
-	}
-	response := sendKeyRequest(t, engine, credentials, http.MethodPost, "/api/v1/keys/key-two/name", body, "")
-	if response.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("rename = %d, want 422: %s", response.Code, response.Body.String())
-	}
-	if !strings.Contains(response.Body.String(), "rename_not_supported") {
-		t.Errorf("body = %s, want the stable reason code", response.Body.String())
 	}
 }

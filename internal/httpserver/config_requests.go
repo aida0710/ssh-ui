@@ -51,6 +51,9 @@ type problemPayload struct {
 	Column      int                          `json:"column,omitempty"`
 	Diagnostics []application.DiagnosticView `json:"diagnostics,omitempty"`
 	Conflict    *application.ConflictReport  `json:"conflict,omitempty"`
+	// Blockers names the reasons a group operation refused. They are stable
+	// codes with a detail after a colon, the same shape a key relocation uses.
+	Blockers []string `json:"blockers,omitempty"`
 }
 
 func problemWith(c *echo.Context, status int, payload problemPayload) error {
@@ -191,6 +194,15 @@ func validateEditRequest(request application.EditRequest) error {
 		if err := validateAliasParameter(request.Alias); err != nil {
 			return err
 		}
+		// A move names its destination one way or the other: a group, whose
+		// path the service derives, or a path. Naming both is refused there,
+		// because the two can disagree and this application will not pick.
+		if request.DestinationGroup != "" {
+			if err := application.ValidateGroupName(request.DestinationGroup); err != nil {
+				return err
+			}
+			break
+		}
 		if err := validatePathParameter(request.DestinationPath); err != nil {
 			return err
 		}
@@ -239,7 +251,15 @@ func serviceProblem(c *echo.Context, err error) error {
 	var syntaxError *application.SyntaxError
 	var graphError *application.GraphError
 	var conflictError *application.ConflictError
+	var groupBlocked *application.GroupBlockedError
 	switch {
+	case errors.As(err, &groupBlocked):
+		// Nothing was written: the blockers are computed before the transaction
+		// is built, and they are what the user needs rather than a bare 409.
+		return problemWith(c, http.StatusConflict, problemPayload{
+			Code:     "group_blocked",
+			Blockers: groupBlocked.Blockers,
+		})
 	case errors.As(err, &syntaxError):
 		return problemWith(c, http.StatusUnprocessableEntity, problemPayload{
 			Code:   "config_syntax_error",
@@ -262,6 +282,10 @@ func serviceProblem(c *echo.Context, err error) error {
 		})
 	case errors.Is(err, application.ErrHostNotFound), errors.Is(err, storage.ErrUnknownTransaction):
 		return problemWith(c, http.StatusNotFound, problemPayload{Code: "not_found"})
+	case errors.Is(err, application.ErrGroupNotDeclared):
+		return problemWith(c, http.StatusUnprocessableEntity, problemPayload{Code: "group_not_declared"})
+	case errors.Is(err, application.ErrGroupExists):
+		return problemWith(c, http.StatusConflict, problemPayload{Code: "group_exists"})
 	case errors.Is(err, application.ErrExternalPath), errors.Is(err, storage.ErrOutsideWorkspace),
 		errors.Is(err, storage.ErrSymlinkPath), errors.Is(err, storage.ErrNotRegularFile),
 		// A path naming a directory that does not exist, or a component that is
@@ -273,7 +297,9 @@ func serviceProblem(c *echo.Context, err error) error {
 	case errors.Is(err, application.ErrUnknownEditKind), errors.Is(err, application.ErrUnknownRecoveryAction),
 		errors.Is(err, application.ErrMetadataSecret), errors.Is(err, application.ErrMetadataPath),
 		errors.Is(err, application.ErrMetadataGroup), errors.Is(err, application.ErrMetadataVersion),
-		errors.Is(err, application.ErrSameFileMove),
+		errors.Is(err, application.ErrSameFileMove), errors.Is(err, application.ErrAmbiguousDestination),
+		errors.Is(err, application.ErrInvalidGroupName), errors.Is(err, application.ErrGroupSelfNesting),
+		errors.Is(err, application.ErrKeyRelocateUnchanged),
 		errors.Is(err, errInvalidBody), errors.Is(err, errInvalidPath),
 		errors.Is(err, errInvalidAlias), errors.Is(err, errInvalidEdit):
 		return problemWith(c, http.StatusBadRequest, problemPayload{Code: "invalid_request"})

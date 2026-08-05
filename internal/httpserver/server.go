@@ -89,7 +89,7 @@ func New(options Options) (*Server, error) {
 	e.POST("/api/v1/session/bootstrap", handlers.Bootstrap)
 	e.GET("/api/v1/health", handlers.Health)
 	if options.Config != nil {
-		registerConfigRoutes(e, ConfigHandlers{Service: options.Config})
+		registerConfigRoutes(e, ConfigHandlers{Service: options.Config, Keys: options.Keys})
 	}
 
 	// Every subsystem that confirms an operation contributes its evidence
@@ -108,7 +108,9 @@ func New(options Options) (*Server, error) {
 	actions := ActionHandlers{Sessions: options.Sessions, Kinds: registry}
 
 	if options.Keys != nil {
-		registerKeyRoutes(e, KeyHandlers{Keys: options.Keys, Sessions: options.Sessions, Actions: actions})
+		registerKeyRoutes(e, KeyHandlers{
+			Keys: options.Keys, Config: options.Config, Sessions: options.Sessions, Actions: actions,
+		})
 	}
 	if options.Diagnostics != nil {
 		registerDiagnosticsRoutes(e, DiagnosticsHandlers{Service: options.Diagnostics, Actions: actions})

@@ -137,6 +137,16 @@ export const configApi = {
   async save(request: EditRequest): Promise<SaveResult> {
     return validateSaveResult(await postJSON<unknown>("/api/v1/config/save", request));
   },
+  // Renaming and removing a group are server operations, not edits to a
+  // document the client holds: a group is a directory, so the change is N file
+  // moves plus the Include region plus every IdentityFile that named its keys,
+  // all in one transaction the client could not assemble.
+  async renameGroup(from: string, to: string): Promise<SaveResult> {
+    return validateSaveResult(await postJSON<unknown>("/api/v1/config/groups/rename", { from, to }));
+  },
+  async deleteGroup(name: string, destination: string): Promise<SaveResult> {
+    return validateSaveResult(await postJSON<unknown>("/api/v1/config/groups/delete", { name, destination }));
+  },
   async history(): Promise<HistoryEntry[]> {
     return validateHistory(await apiClient.read("/api/v1/history"));
   },
