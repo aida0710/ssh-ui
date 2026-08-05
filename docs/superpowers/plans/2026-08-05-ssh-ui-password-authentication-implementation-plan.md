@@ -2,11 +2,19 @@
 
 **Status:** design, not yet implemented.
 
-**Goal:** For a host that only accepts password authentication, let the user store the password once and have `ssh` receive it without typing. No `sshpass`, no `expect`, no pty puppetry: OpenSSH already has a supported mechanism for handing a secret to the client from a program, and this plan uses it. The password lives in the macOS login Keychain, never in `~/.ssh` and never in `metadata.json`, and the feature is opt-in per host.
+**Goal:** For a host that only accepts password authentication, let the user store the password once and have `ssh` receive it without typing. No `sshpass`, no `expect`, no pty puppetry: OpenSSH already has a supported mechanism for handing a secret to the client from a program, and this plan uses it. The passwords live in one encrypted file inside the workspace, so they travel with everything else the remote-sync plan carries.
 
-**Architecture:** One new package, `internal/secret`, owning "store, fetch and forget one named secret in the login Keychain" through the existing `platform.OutputRunner`. `cmd/ssh-ui` gains one argv branch, `ssh-ui askpass`, which is the program `ssh` executes to obtain the password; it is the same binary so there is nothing extra to install, sign or keep in step. `internal/platform/macos/terminal.go` learns a second AppleScript that passes environment assignments as `argv`, exactly as the existing one passes the alias. `internal/diagnostics` decides whether a host is eligible and composes the command. Nothing about the configuration files changes: this feature writes no `ssh_config` byte.
+**Architecture:** One new package, `internal/secret`, owning an encrypted vault at `~/.ssh/ssh-ui/secrets`: AES-256-GCM with an Argon2id-derived key, opened by a passphrase this application never stores. `cmd/ssh-ui` gains one argv branch, `ssh-ui askpass`, which is the program `ssh` executes to obtain the password; it holds no key and decrypts nothing, and instead asks the running, unlocked ssh-ui over the loopback interface with a one-time token that process minted. `internal/platform/macos/terminal.go` learns a second AppleScript that passes environment assignments as `argv`, exactly as the existing one passes the alias. `internal/diagnostics` decides whether a host is eligible and composes the command. Nothing about the configuration files changes: this feature writes no `ssh_config` byte.
 
-**Tech Stack:** Go 1.26.5 (standard library only for this plan — no new module, and nothing new linked into the binary), Echo v5.3.1, oapi-codegen v2.7.0, React 19.2.8, TypeScript 5.9.3, Vitest 4.1.1, Playwright 1.62.1, `/usr/bin/security` and `/usr/bin/osascript` from the base macOS install, OpenSSH ≥ 8.4 (macOS ships 9.x/10.x).
+**Tech Stack:** Go 1.26.5 (standard library plus `golang.org/x/crypto/argon2`, from the module already committed — `go.mod` and `go.sum` are unchanged), Echo v5.3.1, oapi-codegen v2.7.0, React 19.2.8, TypeScript 5.9.3, Vitest 4.1.1, Playwright 1.62.1, `/usr/bin/osascript` from the base macOS install, OpenSSH ≥ 8.4 (macOS ships 9.x/10.x).
+
+## Why not the Keychain
+
+The first draft of this plan put the password in the macOS login Keychain, and it was wrong for one reason: **a Keychain item belongs to a machine, and these have to travel.** The point of the remote-sync plan is that a second machine gets the same `~/.ssh`, and a password that stays behind is a feature that works on one laptop and silently does not on the other.
+
+So the store is a file in the workspace, which is what syncs. That has a consequence that must be paid rather than argued away: the file sits on disk where any process running as the user can read it. It is therefore encrypted before it is written, with a key derived from a passphrase this application does not store anywhere — and the whole design follows from having to keep working without that passphrase on disk.
+
+The exchange is a good one. The Keychain design had a confused deputy with no fix: anything that could execute the helper could ask it for any password, at any time, forever. This one cannot be attacked that way, because the helper cannot decrypt anything and the process that can must be running and unlocked and must have just been asked by the user to open that connection.
 
 ## The mechanism, demonstrated rather than recalled
 
@@ -62,23 +70,45 @@ The rule: the prompt must end in `password: ` (OpenSSH's `askpass` prompt for `S
 
 ## 2. Where the password lives
 
-The macOS login Keychain, through `/usr/bin/security`, which is the same shape of platform integration the project already uses for `osascript` and `ssh-add --apple-use-keychain`.
+`~/.ssh/ssh-ui/secrets`, one file, encrypted. Implemented in `internal/secret/vault.go`.
 
 ```
-security add-generic-password -U -s ssh-ui-password -a <alias> -T <helper path> -w <password>
-security find-generic-password    -s ssh-ui-password -a <alias> -w
-security delete-generic-password  -s ssh-ui-password -a <alias>
+magic 15 | envelope 1 | kdf 1 | time 4 | memory 4 | threads 1 | saltLen 1 | salt | nonce 12 | AES-256-GCM(…)
+└──────────────────────── authenticated as additional data ────────────────────────┘
 ```
 
-`-s ssh-ui-password` namespaces every item this feature creates, so `delete` can never reach an item some other tool made. `-T <helper path>` puts the helper on the item's access-control list, so `ssh` invoking it does not raise a Keychain dialog on every connection.
+The plaintext is a JSON document mapping alias to password. The **header is the AEAD's additional data**, so the KDF cost cannot be rewritten down and replayed: change one byte of it and the open fails rather than deriving a cheaper key.
 
-**Three honest statements about this.**
+**The decisions inside that, and why.**
 
-1. `add-generic-password` has no way to read the secret from standard input, so the password is in the process's `argv` for the duration of that one call and visible to `ps`. There is no stdlib route to the Security framework without cgo, and this project is cgo-free. The window is short and any process that can read your `argv` can also execute the helper — see (2) — so this does not change the reachable outcome, but it should not be discovered later by reading the code.
+- **Argon2id, not PBKDF2.** This file leaves the machine — that is the whole point — so the threat is an offline attack by someone who obtained a copy. `golang.org/x/crypto/argon2` costs no new module (`x/crypto` is already a direct dependency and `x/sys` already indirect; `go.mod` and `go.sum` are unchanged), and it links `x/sys` into the shipped binary for the first time, which the release check should be told.
+- **A cost ceiling on read.** The header states how much work opening costs, and this file *arrives* — from another machine, a bucket, a restore. `readHeader` refuses time > 16, memory > 1 GiB, threads > 16 before deriving anything. This is not theoretical: the first run of this package's own tamper test flipped one bit in the cost field, turned time from 3 into 65539, and asked for about ninety minutes of one core. The test hung for five minutes before anyone looked. Refusing high parameters is not a weakening, because the header is authenticated and a real attacker cannot lower the true cost undetected; it only stops work being started that will never be worth finishing.
+- **A 12-rune minimum passphrase and no character-class rule.** Class rules push people towards short strings they cannot remember, and length is what makes an offline attack expensive.
+- **A fresh nonce per seal**, so two saves of the same content are different bytes and neither reveals that they are the same.
+- **Neither the passwords nor the aliases appear in the sealed bytes.** The set of hosts that have a stored password is not something an observer of the file should learn.
 
-2. The `-T` ACL restricts which *binaries* may read the item without a prompt. The helper is one of them, and the helper prints the secret to standard output. Anything that can execute the helper as you can therefore obtain the password by naming the alias. This is a confused deputy and it has no fix inside this design. It is the reason the feature is opt-in per host and the reason the UI says, in one sentence and not in a footnote, that this is weaker than a key.
+**What is still true and must be said on screen.** The password is the *remote account's* credential, and the same password is often reused elsewhere. The UI does not offer to store one for a host whose configuration already names an `IdentityFile`; it offers to use the key.
 
-3. The password is the *remote account's* credential, not a local one. Losing it is a different order of event from losing a key passphrase, because the same password is often reused. The UI does not offer to store a password for a host whose configuration also names an `IdentityFile`; it offers to use the key.
+## 2a. How the helper gets the password without holding the key
+
+The helper is spawned by `ssh`, not by this application, and it cannot be given the passphrase — putting it in the environment would put it in the process table and defeat the encryption entirely.
+
+So it does not decrypt. It asks:
+
+```
+ssh  ──spawns──▶  ssh-ui askpass "<prompt>"
+                        │  POST http://127.0.0.1:<port>/askpass
+                        │  X-SSH-UI-Askpass: <one-time token>
+                        │  {"alias":"bastion","prompt":"ops@…'s password: "}
+                        ▼
+                  the running ssh-ui, vault unlocked in memory
+```
+
+- **The token is minted when the user clicks connect**, is bound to that alias, is single-use and expires in two minutes. Running the helper by hand obtains nothing: there is no token, and a token is spent by the connection it was made for.
+- **The prompt rule is applied server-side as well**, so it cannot be skipped by invoking the helper differently. The helper checks it too, only so that an unanswerable prompt costs no round trip and spends no token.
+- **The helper refuses any endpoint that is not `127.0.0.1`.** The URL arrives in an environment variable, so it is input; an exported `SSH_UI_ASKPASS_URL` pointing elsewhere would otherwise turn the helper into an exfiltration tool for the password it is about to fetch.
+- **The endpoint is not under `/api/`.** It authenticates by token alone — no session cookie, no CSRF — and requires `Content-Type: application/json` and a custom header, both of which force a CORS preflight this server does not answer, so no web page can reach it however much it knows.
+- **The vault must be unlocked**, which means the application must be running and the user must have entered the passphrase this session. That is a real cost in convenience and it is what replaces the Keychain's confused deputy with something bounded.
 
 ## 3. What the Terminal receives
 
@@ -99,10 +129,10 @@ on run argv
 end run
 ```
 
-- **The alias is passed twice**, once as the ssh operand and once in `SSH_UI_ASKPASS_ALIAS`. The helper identifies the host from the variable, never by parsing it out of the prompt text — prompt parsing would tie the feature to OpenSSH's format string, and the prompt carries the *resolved* user and hostname rather than the alias the Keychain item is filed under.
+- **The alias is passed twice**, once as the ssh operand and once in `SSH_UI_ASKPASS_ALIAS`, alongside `SSH_UI_ASKPASS_URL` and `SSH_UI_ASKPASS_TOKEN`. The helper identifies the host from the variable, never by parsing it out of the prompt text — prompt parsing would tie the feature to OpenSSH's format string, and the prompt carries the *resolved* user and hostname rather than the alias the Keychain item is filed under.
 - **`NumberOfPasswordPrompts=1`** so a wrong stored password fails once instead of three times, which on some servers counts toward a lockout.
 - Both `quoted form of` and `platform.ValidateAlias` still stand between an alias and either interpreter, unchanged.
-- The environment assignments are visible in the Terminal window's scrollback. That discloses the helper's path and the alias. It does not disclose the password.
+- The environment assignments are visible in the Terminal window's scrollback and in the process table. That discloses the helper's path, the alias, the loopback port and a token that is single-use, bound to that alias and dead in two minutes. It does not disclose the password.
 
 ## 4. Eligibility
 
@@ -141,8 +171,10 @@ The last one matters more than it looks. A password sent to the wrong machine is
 cmd/ssh-ui/main.go                       # + one argv branch before flag.Parse
 cmd/ssh-ui/askpass.go                    # new: the helper's whole behaviour
 cmd/ssh-ui/askpass_test.go               # new
-internal/secret/secret.go                # new: Store, Fetch, Forget, over platform.OutputRunner
-internal/secret/secret_test.go           # new: argv assertions against a recording runner
+internal/secret/vault.go                 # new: the encrypted vault, its envelope and its cost ceiling
+internal/secret/vault_test.go            # new
+internal/secret/service.go               # new: the unlocked vault, its writes, its one-time tokens
+internal/secret/service_test.go          # new
 internal/platform/macos/terminal.go      # + TerminalPasswordScript, LaunchWithPassword
 internal/platform/macos/terminal_test.go # + argv and script assertions
 internal/diagnostics/password.go         # new: eligibility, command composition
@@ -155,85 +187,68 @@ web/src/i18n/messages.ts                 # + en and ja
 web/e2e/password.spec.ts                 # new
 ```
 
-## Task 1: One named secret in the Keychain
+## Task 1: The encrypted vault  ✅ implemented
 
-**Files:** create `internal/secret/secret.go`, `internal/secret/secret_test.go`.
+**Files:** `internal/secret/vault.go`, `internal/secret/vault_test.go`.
 
 **Interfaces:**
 
 ```go
-package secret
-
-// Store is where a named secret lives. One implementation, the macOS login
-// Keychain, reached through /usr/bin/security so that no test can touch a real
-// keychain without a real runner.
-type Store interface {
-    Store(ctx context.Context, name, secret string) error
-    Fetch(ctx context.Context, name string) (string, error)
-    Forget(ctx context.Context, name string) error
-    Has(ctx context.Context, name string) (bool, error)
-}
-
-var ErrNotFound = errors.New("no secret is stored under that name")
-
-type Keychain struct {
-    Runner  platform.OutputRunner
-    Program string        // "/usr/bin/security"
-    Service string        // "ssh-ui-password"
-    Allow   []string      // -T entries; the helper's absolute path
-    Timeout time.Duration
-}
+func Create(passphrase string) (*Vault, error)          // ErrWeakPassphrase below 12 runes
+func Open(sealed []byte, passphrase string) (*Vault, error)
+func (v *Vault) Seal() ([]byte, error)                  // fresh nonce every call
+func (v *Vault) Password(alias string) (string, bool)
+func (v *Vault) Has(alias string) bool
+func (v *Vault) Aliases() []string
+func (v *Vault) Set(alias, password string) error
+func (v *Vault) Remove(alias string)
+func (v *Vault) Rename(from, to string) error
 ```
+
+`Vault` holds the derived key, not the passphrase, so a change can be re-sealed without asking again.
 
 **What it must not change:** nothing. New package, no existing import.
 
-**Tests.** A recording `platform.OutputRunner`, never the real program.
-- `TestStorePassesTheServiceAccountAndACL` — argv is exactly `[-U -s ssh-ui-password -a bastion -T /Applications/… -w hunter2]`, in that order.
-- `TestFetchReturnsTheTrimmedSecret` — `security` prints a trailing newline; the returned secret has it removed and nothing else.
-- `TestFetchMapsExitCode44ToErrNotFound` — `security` exits 44 for "The specified item could not be found in the keychain"; that is `ErrNotFound`, not a generic failure.
-- `TestForgetIsIdempotent` — a missing item is not an error.
-- `TestNameIsRefusedWhenItIsNotASafeAlias` — `platform.ValidateAlias` guards the account name, so no argument can begin with `-`.
-- `TestNoMethodEverLogsTheSecret` — the package has no logger; asserted by grepping the compiled package for a `log` import in a `go/parser` test, in the same spirit as the existing "must not log" assertions.
+**Tests, all written and passing.**
+- `TestSealThenOpenRoundTrips` — including a password ending in a space, which nothing may trim.
+- `TestSealedBytesContainNoPasswordAndNoAlias` — the file syncs; an observer must not learn which hosts have one.
+- `TestOpenRefusesTheWrongPassphrase`, and the error carries no plaintext.
+- `TestOpenRefusesATamperedFileIncludingItsHeader`.
+- `TestOpenRefusesAHeaderDemandingAbsurdWork` — the cost ceiling of section 2, with the three fields tested separately.
+- `TestSealUsesAFreshNonceEveryTime` — fifty seals, fifty distinct outputs.
+- `TestOpenRefusesSomethingThatIsNotAVault` — empty, short, wrong magic, zero cost, truncated, header only, random.
+- `TestOpenSaysUpgradeRatherThanCorruptForAFutureFile` — "this build is too old" and "your data is gone" are different messages.
+- `TestCreateRefusesAShortPassphrase`, `TestSetRefusesAnUnsafeAliasAndAnEmptyPassword`.
+- `TestRenameCarriesThePasswordAndLeavesNothingBehind` — a host rename that orphaned the password would make it silently stop working.
+- `TestPackageImportsNoLogger` — structural, because a comment asking people not to log a password is not a guard.
 
-**Verification:** `go test ./internal/secret -v`; `go vet ./internal/secret`.
+**Verification:** `go test ./internal/secret -v` (1.5 s); `go vet ./internal/secret`; `git diff --exit-code go.mod go.sum`.
 
-## Task 2: The askpass helper
+## Task 2: The askpass helper  ✅ implemented
 
-**Files:** create `cmd/ssh-ui/askpass.go`, `cmd/ssh-ui/askpass_test.go`; modify `cmd/ssh-ui/main.go`.
+**Files:** `cmd/ssh-ui/askpass.go`, `cmd/ssh-ui/askpass_test.go`; `cmd/ssh-ui/main.go`.
 
 **Interfaces:**
 
 ```go
-// AnswerablePrompt reports whether this prompt asks for the remote account's
-// password. Everything else — a key passphrase, the host key question, an
-// unrecognised prompt — is refused.
 func AnswerablePrompt(prompt string) bool
-
-// runAskpass is the whole of `ssh-ui askpass <prompt>`. It writes the secret
-// and nothing else on standard output, and returns a non-zero status without
-// writing anything when it will not answer.
-func runAskpass(ctx context.Context, args []string, env func(string) string,
-    store secret.Store, out io.Writer, errOut io.Writer) int
+func runAskpass(ctx context.Context, arguments []string, lookup func(string) string,
+    client *http.Client, out, errOut io.Writer) int
 ```
 
-`main` branches before `flag.Parse()`, because `flag` would otherwise consume the prompt:
+`main` branches before `flag.Parse()`, because `flag` would otherwise consume the prompt.
 
-```go
-if len(os.Args) > 1 && os.Args[1] == "askpass" {
-    os.Exit(runAskpass(context.Background(), os.Args[2:], os.Getenv, keychain, os.Stdout, os.Stderr))
-}
-```
+**What it must not change:** the `-open` flag, the URL printing, the signal handling. `ssh-ui` with no arguments behaves exactly as it does today.
 
-**What it must not change:** the existing `-open` flag, the URL printing, the signal handling. `ssh-ui` with no arguments behaves exactly as it does today.
+**Tests, all written and passing.**
+- `TestAnswerablePromptAcceptsOnlyThePasswordPrompt` — a table of the literal prompts OpenSSH emits: four accepted, thirteen refused, including the host key question, both passphrase forms, keyboard-interactive, the FIDO PIN and presence prompts, and a prompt that contains both a passphrase request and a password suffix.
+- `TestAskpassWritesOnlyThePasswordOnStandardOutput` — one trailing newline, the token in the header, the alias in the body.
+- `TestAskpassWritesNothingOnStandardOutputWhenItRefuses` — seven refusal paths, each asserting zero bytes on stdout and a reason on stderr. A diagnostic on stdout would be handed to OpenSSH as the password.
+- `TestAskpassRefusesAnEndpointThatIsNotLoopback` — five non-loopback URLs including `localhost` and `::1`, and an assertion that no request reached the server at all.
+- `TestAskpassDistinguishesNothingStoredFromRefused`.
+- `TestAskpassRefusesAnEmptyPasswordFromTheServer` — an empty answer would spend a password attempt for nothing.
 
-**Tests.**
-- `TestAnswerablePromptAcceptsOnlyThePasswordPrompt` — a table carrying OpenSSH's literal prompts: `ops@203.0.113.10's password: ` accepted; `Enter passphrase for key '/x/id_ed25519': `, `Are you sure you want to continue connecting (yes/no/[fingerprint])? `, `Please type 'yes', 'no' or the fingerprint: `, `Verification code: `, the empty string, all refused.
-- `TestAskpassRefusesWithoutAnAlias` — `SSH_UI_ASKPASS_ALIAS` unset means exit 1 and an empty stdout, even for a well-formed password prompt.
-- `TestAskpassWritesOnlyTheSecret` — stdout is exactly the secret, no newline beyond the one OpenSSH tolerates, no banner, no log line.
-- `TestAskpassWritesNothingOnRefusal` — the refusal path's stdout is zero bytes. A helper that prints a diagnostic to stdout would hand OpenSSH that diagnostic as the password.
-- `TestAskpassReportsAMissingItemDistinctly` — `ErrNotFound` exits 2 with a message on stderr; any other failure exits 1.
-
-**Verification:** `go test ./cmd/ssh-ui -v`. Then, by hand and once: arm the helper against a throwaway account on a host you control and confirm the connection succeeds; then delete the Keychain item and confirm it fails cleanly rather than hanging.
+**Verification:** `go test ./cmd/ssh-ui -v`.
 
 ## Task 3: Terminal launch with the helper armed
 
@@ -320,13 +335,14 @@ make e2e
 Plus four statements that must be true and are each covered by a named test above:
 
 1. The helper answers the password prompt and nothing else — in particular never the host key question.
-2. No route, no log line, no file under `~/.ssh` ever contains a stored password.
+2. No route, no log line, and no file under `~/.ssh` in clear ever contains a stored password — the sealed vault contains neither the passwords nor the aliases.
 3. A host with no stored password takes today's code path unchanged.
 4. The copyable command and the launched command are the same command.
 
 ## Known Limitations
 
-- **The confused deputy has no fix here.** Any process that can execute the helper as you can read any stored password. The Keychain ACL protects against other binaries, not against ours being used as the tool. The feature is opt-in per host and says so on screen, which is mitigation by informed consent, not by mechanism.
-- **The password is briefly in `argv` when it is stored,** because `security` cannot read it from standard input and this project does not use cgo.
+- **The vault must be unlocked, every session.** A saved password does nothing until the passphrase has been entered once since the application started, and nothing at all if the application is not running. That is the price of not keeping a key on disk, and it should be stated in the interface rather than discovered.
+- **Lose the passphrase and the passwords are gone.** There is no recovery path and there must not be one.
+- **A password is readable by anything that can drive the unlocked application.** The token narrows the window to one connection the user asked for, but a process that can reach the loopback API with a session cookie is inside the trust boundary already — the same is true of every other route.
 - **The first connection to an unknown host fails when the helper is armed.** This is by design, and the interface refuses to arm it until the host key is known — but a key that *changes* later produces a failed connection rather than the usual warning, and the user has to go and look at the Known Hosts screen to see why.
 - **One prompt only.** A server that asks for a password and then a second factor will fail at the second prompt.

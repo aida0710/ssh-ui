@@ -9,9 +9,11 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"ssh-ui/internal/app"
 	"ssh-ui/internal/platform"
@@ -33,7 +35,26 @@ func (p urlPrinter) Open(_ context.Context, target string) error {
 	return err
 }
 
+// AskpassSubcommand is the argv word that turns this binary into the program
+// OpenSSH asks for a password. It is a subcommand rather than a second binary
+// so that there is nothing extra to install, sign, notarise or keep in step
+// with the application that armed it.
+const AskpassSubcommand = "askpass"
+
 func main() {
+	// The branch is before flag.Parse because the prompt OpenSSH passes is an
+	// arbitrary string and would otherwise be read as a flag.
+	if len(os.Args) > 1 && os.Args[1] == AskpassSubcommand {
+		os.Exit(runAskpass(
+			context.Background(),
+			os.Args[2:],
+			os.Getenv,
+			&http.Client{Timeout: 15 * time.Second},
+			os.Stdout,
+			os.Stderr,
+		))
+	}
+
 	openBrowser := flag.Bool("open", true,
 		"open the UI in the default browser; -open=false prints the URL on standard output instead")
 	flag.Parse()
