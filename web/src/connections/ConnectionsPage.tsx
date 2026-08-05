@@ -14,6 +14,7 @@ import {
 import { ConnectionTree, type HostSelection } from "./ConnectionTree";
 import { HostDetailPanel } from "./HostDetail";
 import { NoticeList } from "./SavePreview";
+import { OrphanPanel } from "./OrphanPanel";
 import { appendHostBlock, duplicateHostBlock, removeHostBlock } from "./blocks";
 
 function toProblem(error: unknown): Problem {
@@ -253,6 +254,11 @@ export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
       </div>
       <div className="flex flex-col gap-4">
         <NoticeList notices={overview.notices} />
+        <OrphanPanel
+          metadata={overview.metadata}
+          hosts={overview.hosts}
+          onSave={(metadata) => void submit({ kind: "metadata", metadata })}
+        />
         {detail === null ? (
           <p role="status" className="text-sm text-zinc-400">Select a connection to edit it.</p>
         ) : (

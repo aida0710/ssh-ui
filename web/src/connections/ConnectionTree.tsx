@@ -33,28 +33,41 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
   const [grouping, setGrouping] = useState<"groups" | "files">("groups");
 
   const metadataByAlias = useMemo(() => {
-    const index = new Map<string, { group: string; tags: string[]; favourite: boolean }>();
+    const index = new Map<
+      string,
+      { group: string; tags: string[]; favourite: boolean; colour: string; order: number }
+    >();
     for (const host of overview.metadata.hosts ?? []) {
       index.set(`${host.identity.path}\u0000${host.identity.alias}`, {
         group: host.group ?? "",
         tags: host.tags ?? [],
         favourite: host.favourite === true,
+        colour: host.colour ?? "",
+        order: host.order ?? 0,
       });
     }
     return index;
   }, [overview.metadata.hosts]);
 
+  // Sorting is by order and then by the position the configuration gives, which
+  // Array.prototype.sort preserves for equal keys. Zero means "leave it where
+  // the file puts it", so an untouched workspace reads in file order and
+  // pinning one host does not renumber everything around it.
   const decorated = useMemo(
     () =>
-      overview.hosts.map((host) => {
-        const entry = metadataByAlias.get(`${host.identity.path}\u0000${host.identity.alias}`);
-        return {
-          host,
-          group: entry?.group ?? "",
-          tags: entry?.tags ?? [],
-          favourite: entry?.favourite ?? false,
-        };
-      }),
+      overview.hosts
+        .map((host) => {
+          const entry = metadataByAlias.get(`${host.identity.path}\u0000${host.identity.alias}`);
+          return {
+            host,
+            group: entry?.group ?? "",
+            tags: entry?.tags ?? [],
+            favourite: entry?.favourite ?? false,
+            colour: entry?.colour ?? "",
+            order: entry?.order ?? 0,
+          };
+        })
+        .sort((left, right) => left.order - right.order),
     [overview.hosts, metadataByAlias],
   );
 
@@ -67,7 +80,12 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
         items: visible.filter((item) => item.host.file.absolute === file.file.absolute),
       }));
     }
-    const names = [...(overview.metadata.groups ?? []).map((group) => group.name), ungrouped];
+    const names = [
+      ...[...(overview.metadata.groups ?? [])]
+        .sort((left, right) => (left.order ?? 0) - (right.order ?? 0))
+        .map((group) => group.name),
+      ungrouped,
+    ];
     return names.map((name) => ({
       title: name,
       items: visible.filter((item) => (item.group === "" ? name === ungrouped : item.group === name)),
@@ -153,7 +171,43 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
                         aria-describedby={descriptionId}
                         className={`w-full rounded px-2 py-1 text-left text-sm ${active ? "bg-zinc-800" : "hover:bg-zinc-900"}`}
                       >
-                        {hostLabel(item.host)}
+                        <span className="flex items-center gap-1">
+                          {/*
+                            The colour, the star and the duplicate marker were
+                            written into the description below and nowhere else,
+                            so a sighted user could set a favourite and then not
+                            find it. aria-hidden here because that description
+                            still carries them for a screen reader, and hearing
+                            each one twice is worse than not seeing it once.
+                          */}
+                          {item.colour === "" ? null : (
+                            <span
+                              aria-hidden="true"
+                              className="inline-block size-2 shrink-0 rounded-full"
+                              style={{ backgroundColor: item.colour }}
+                            />
+                          )}
+                          {item.favourite ? (
+                            <span aria-hidden="true" className="text-amber-300">
+                              ★
+                            </span>
+                          ) : null}
+                          <span className="truncate">{hostLabel(item.host)}</span>
+                          {item.host.duplicate === true ? (
+                            <span aria-hidden="true" className="text-amber-300">
+                              ⧉
+                            </span>
+                          ) : null}
+                        </span>
+                        {item.tags.length === 0 ? null : (
+                          <span aria-hidden="true" className="mt-0.5 flex flex-wrap gap-1">
+                            {item.tags.map((tag) => (
+                              <span key={tag} className="rounded bg-zinc-800 px-1 text-[0.65rem] text-zinc-300">
+                                {tag}
+                              </span>
+                            ))}
+                          </span>
+                        )}
                       </button>
                     )}
                     <span id={descriptionId} className="sr-only">

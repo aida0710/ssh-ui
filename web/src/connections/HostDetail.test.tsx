@@ -206,4 +206,33 @@ describe("HostDetailPanel", () => {
     expect(screen.getByText(/names no destination of its own/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Check reachability" })).not.toBeInTheDocument();
   });
+  it("edits the colour and the display order the metadata schema has always carried", async () => {
+    const user = userEvent.setup();
+    const handlers = renderPanel();
+
+    // One character at a time: this input is controlled by metadata the mocked
+    // parent never writes back, so each keystroke starts from the same value.
+    await user.type(screen.getByLabelText(/Display order/), "7");
+
+    expect(handlers.onMetadata).toHaveBeenLastCalledWith(expect.objectContaining({ order: 7 }));
+  });
+
+  it("clears a colour rather than leaving the picker's fallback as a real value", async () => {
+    const user = userEvent.setup();
+    const coloured: HostDetail = { ...detail, metadata: { ...detail.metadata, colour: "#f97316" } };
+    const handlers = renderPanel({ detail: coloured });
+
+    // A colour input has no empty state, so an unset colour shows a neutral
+    // swatch. Clearing has to be its own act or "no colour" would be
+    // indistinguishable from "the colour that happens to be grey".
+    await user.click(screen.getByRole("button", { name: "Clear colour" }));
+
+    expect(handlers.onMetadata).toHaveBeenLastCalledWith(expect.objectContaining({ colour: "" }));
+  });
+
+  it("offers no clear button when there is no colour to clear", () => {
+    renderPanel();
+
+    expect(screen.queryByRole("button", { name: "Clear colour" })).not.toBeInTheDocument();
+  });
 });

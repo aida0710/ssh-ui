@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ConnectionTree } from "./ConnectionTree";
@@ -169,5 +169,57 @@ describe("ConnectionTree", () => {
       identity: { path: "config", alias: "bastion" },
     }));
     expect(onOpenPatternRule).not.toHaveBeenCalled();
+  });
+  it("shows the favourite, the colour and the tags, not only to a screen reader", () => {
+    const decorated: Overview = {
+      ...overview,
+      metadata: {
+        ...overview.metadata,
+        hosts: [
+          {
+            identity: { path: "conf.d/10-home.conf", alias: "nas" },
+            group: "home",
+            favourite: true,
+            colour: "#f97316",
+            tags: ["storage", "lan"],
+          },
+        ],
+      },
+    };
+    render(
+      <ConnectionTree overview={decorated} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} />,
+    );
+
+    const row = screen.getByRole("button", { name: /nas/ });
+    expect(within(row).getByText("★")).toBeInTheDocument();
+    expect(within(row).getByText("storage")).toBeInTheDocument();
+    expect(within(row).getByText("lan")).toBeInTheDocument();
+    // The swatch is decorative: the description below the row still carries
+    // "favourite" for a screen reader, so this must not be announced twice.
+    const swatch = row.querySelector('span[style*="background-color"]');
+    expect(swatch).not.toBeNull();
+    expect(swatch).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("sorts by the order the user gave and leaves file order alone at zero", () => {
+    const ordered: Overview = {
+      ...overview,
+      metadata: {
+        ...overview.metadata,
+        groups: [],
+        hosts: [
+          { identity: { path: "config", alias: "bastion" }, order: 5 },
+          { identity: { path: "conf.d/10-home.conf", alias: "nas" }, order: -1 },
+        ],
+      },
+    };
+    render(
+      <ConnectionTree overview={ordered} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} />,
+    );
+
+    const labels = screen.getAllByRole("button").map((button) => button.textContent ?? "");
+    const nasIndex = labels.findIndex((label) => label.includes("nas"));
+    const bastionIndex = labels.findIndex((label) => label.includes("bastion"));
+    expect(nasIndex).toBeLessThan(bastionIndex);
   });
 });

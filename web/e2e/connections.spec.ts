@@ -138,3 +138,70 @@ test("sends the Effective tab to the authoritative check instead of describing i
 
   await expect(page.getByRole("region", { name: "Diagnostics for bastion" })).toBeVisible();
 });
+
+// Metadata the schema has always carried but no screen could edit: a colour, a
+// display order, and a note whose Host block is gone.
+test("edits the display order it stores, and shows a favourite in the tree", async ({
+  page,
+  installation,
+}) => {
+  await openBastion(page, installation.url);
+
+  // Waiting on the write rather than polling the file: the metadata document
+  // does not exist until the first save creates it.
+  const [ordered] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/v1/config/save") && response.request().method() === "POST",
+    ),
+    page.getByLabel(/Display order/).fill("-1"),
+  ]);
+  expect(ordered.status()).toBe(200);
+  expect(JSON.parse(await installation.read("ssh-ui/metadata.json")).hosts[0].order).toBe(-1);
+
+  // The favourite marker used to live only in the screen reader description,
+  // so a sighted user could set one and then not find it. Clicking rather than
+  // checking: the panel reloads from the server as the save lands, and the star
+  // appearing in the tree is the assertion that matters anyway.
+  await page.getByLabel("Favourite").click();
+  const row = page
+    .getByRole("navigation", { name: "Connections" })
+    .getByRole("button", { name: /bastion/ });
+  await expect(row.getByText("\u2605")).toBeVisible();
+});
+
+test("re-associates a note whose connection is gone, without guessing", async ({
+  page,
+  installation,
+}) => {
+  await installation.write(
+    "ssh-ui/metadata.json",
+    JSON.stringify({
+      schemaVersion: 1,
+      groups: [{ name: "work" }],
+      hosts: [
+        { identity: { path: "config", alias: "retired" }, group: "work", note: "the old builder" },
+      ],
+    }),
+  );
+  await page.goto(installation.url);
+  await openSection(page, "Connections");
+
+  const panel = page.getByRole("region", { name: "Settings whose connection is gone" });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByText("retired in config")).toBeVisible();
+  await expect(panel.getByText(/note \u201cthe old builder\u201d/)).toBeVisible();
+
+  await panel.getByLabel("Re-associate retired with").selectOption("config\u0000bastion");
+  expect(await clickAndAwait(page, "Re-associate retired", "/api/v1/config/save")).toBe(200);
+
+  // The note moved to the host the user named, and the server's orphan flag is
+  // not written back into the document it describes.
+  const saved = JSON.parse(await installation.read("ssh-ui/metadata.json"));
+  expect(saved.hosts).toHaveLength(1);
+  expect(saved.hosts[0]).toMatchObject({
+    identity: { path: "config", alias: "bastion" },
+    note: "the old builder",
+  });
+  expect(saved.hosts[0].orphan).toBeUndefined();
+});
