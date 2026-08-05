@@ -289,6 +289,91 @@ describe("KeysScreen", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("could not be read");
   });
 
+  it("names the files it could not classify instead of leaving them out", async () => {
+    const inventory = buildInventory();
+    inventory.unreadable = [
+      { relativePath: "sockets/agent.sock", reason: "not_a_regular_file" },
+      { relativePath: "vault", reason: "permission_denied" },
+    ];
+    render(<KeysScreen api={buildApi({ inventory: vi.fn().mockResolvedValue(inventory) })} />);
+
+    expect(await screen.findByText(/sockets\/agent\.sock — not_a_regular_file/)).toBeInTheDocument();
+    expect(screen.getByText(/vault — permission_denied/)).toBeInTheDocument();
+    expect(screen.getByText(/missing from the table above/)).toBeInTheDocument();
+  });
+
+  it("reports a configuration entry pointing at a key that is not there", async () => {
+    const inventory = buildInventory();
+    inventory.unresolvedReferences = [
+      {
+        directive: "IdentityFile",
+        value: "~/.ssh/id_gone",
+        configPath: "config",
+        line: 14,
+        reason: "file_missing",
+      },
+    ];
+    render(<KeysScreen api={buildApi({ inventory: vi.fn().mockResolvedValue(inventory) })} />);
+
+    expect(
+      await screen.findByText(/IdentityFile ~\/\.ssh\/id_gone — config:14 \(file_missing\)/),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a certificate's principals and marks one that has run out", async () => {
+    const inventory = buildInventory();
+    inventory.items = [
+      {
+        ...inventory.items[0]!,
+        id: "cert-one",
+        relativePath: "id_work-cert.pub",
+        kind: "certificate",
+        certificate: {
+          keyId: "aida@dubguild",
+          principals: ["deploy", "ops"],
+          // 2020-01-01T00:00:00Z, comfortably in the past for any run of this
+          // suite, so "expired" is a property of the fixture and not of today.
+          validBefore: 1577836800,
+          neverExpires: false,
+          signedKeyType: "ssh-ed25519",
+          signedKeyFingerprint: "SHA256:signedkey",
+        },
+      },
+    ];
+    render(<KeysScreen api={buildApi({ inventory: vi.fn().mockResolvedValue(inventory) })} />);
+
+    const row = await screen.findByRole("row", { name: /id_work-cert\.pub/ });
+    expect(within(row).getByText("key id aida@dubguild")).toBeInTheDocument();
+    expect(within(row).getByText("for deploy, ops")).toBeInTheDocument();
+    expect(within(row).getByText("expired 2020-01-01 00:00Z")).toBeInTheDocument();
+    expect(within(row).getByText("signs ssh-ed25519 SHA256:signedkey")).toBeInTheDocument();
+  });
+
+  it("says a certificate with no principal is valid for any of them", async () => {
+    const inventory = buildInventory();
+    inventory.items = [
+      {
+        ...inventory.items[0]!,
+        id: "cert-two",
+        relativePath: "host-cert.pub",
+        kind: "certificate",
+        certificate: {
+          keyId: "host",
+          principals: [],
+          validBefore: 0,
+          neverExpires: true,
+          signedKeyType: "ssh-ed25519",
+          signedKeyFingerprint: "SHA256:hostkey",
+        },
+      },
+    ];
+    render(<KeysScreen api={buildApi({ inventory: vi.fn().mockResolvedValue(inventory) })} />);
+
+    const row = await screen.findByRole("row", { name: /host-cert\.pub/ });
+    expect(within(row).getByText("for any principal")).toBeInTheDocument();
+    expect(within(row).getByText("never expires")).toBeInTheDocument();
+  });
+
   it("refuses agent registration, and says what is missing, when no agent is reachable", async () => {
     const api = buildApi();
     render(<KeysScreen api={api} />);

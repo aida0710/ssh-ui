@@ -90,7 +90,9 @@ function validateConfigCheck(value: unknown): ConfigCheckResponse {
     const entry = asRecord(diagnostic);
     asString(entry.severity);
     asString(entry.code);
+    asString(entry.path);
     asNumber(entry.line);
+    asString(entry.detail);
   }
   return record as unknown as ConfigCheckResponse;
 }
@@ -120,9 +122,30 @@ function validateEffective(value: unknown): EffectiveResponse {
     asBoolean(entry.winner);
   }
   asArray(record.values);
-  asArray(record.complexities);
-  asArray(record.route);
-  asRecord(record.failure);
+  for (const note of asArray(record.complexities)) {
+    const entry = asRecord(note);
+    asString(entry.code);
+    asString(entry.path);
+    asNumber(entry.line);
+    asString(entry.condition);
+    asString(entry.detail);
+  }
+  for (const stage of asArray(record.route)) {
+    const entry = asRecord(stage);
+    asNumber(entry.order);
+    asNumber(entry.depth);
+    asString(entry.parent);
+    asString(entry.hop);
+    asString(entry.hostname);
+    asString(entry.user);
+    asString(entry.port);
+    asBoolean(entry.complex);
+  }
+  const failure = asRecord(record.failure);
+  asBoolean(failure.failed);
+  asNumber(failure.exitCode);
+  asString(failure.stderr);
+  asBoolean(failure.truncated);
   return record as unknown as EffectiveResponse;
 }
 

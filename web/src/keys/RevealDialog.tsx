@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { CopyButton } from "../ui/CopyButton";
 import type { KeysApi } from "./api";
 
 type RevealDialogProps = {
@@ -73,9 +74,21 @@ export function RevealDialog({ keyId, relativePath, api, onClose }: RevealDialog
         </p>
       )}
       {state === "shown" && (
-        <pre aria-label="Private key" className="mt-4 overflow-x-auto rounded-md bg-zinc-950 p-4 text-xs">
-          {material}
-        </pre>
+        <>
+          <pre aria-label="Private key" className="mt-4 overflow-x-auto rounded-md bg-zinc-950 p-4 text-xs">
+            {material}
+          </pre>
+          {/*
+            Copying is offered because design §6.3 asks for it and because the
+            alternative is a manual selection that lands on the clipboard just
+            the same. The warning above already says this application cannot
+            protect the key once it is there; a button does not make that
+            truer or less true.
+          */}
+          <div className="mt-2">
+            <CopyButton value={material} label="private key" />
+          </div>
+        </>
       )}
       {state === "error" && (
         <p role="alert" className="mt-2 text-sm text-red-300">

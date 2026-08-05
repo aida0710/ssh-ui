@@ -6,6 +6,7 @@ import {
   type RemoteKeyRegisterResponse,
   type RemoteKeysApi,
 } from "./api";
+import { CopyButton } from "../ui/CopyButton";
 
 type RemoteKeyPanelProps = { api?: RemoteKeysApi };
 
@@ -187,10 +188,16 @@ export function RemoteKeyPanel({ api = remoteKeysApi }: RemoteKeyPanelProps) {
           >
             {plan.keyLine}
           </pre>
+          <div className="mt-1">
+            <CopyButton value={plan.keyLine} label="key line" />
+          </div>
           <p className="mt-3 text-zinc-400">The remote host runs exactly this, with the key on standard input:</p>
           <pre aria-label="Remote command" className="mt-1 overflow-x-auto rounded bg-zinc-950 p-3 text-xs">
             {plan.routine}
           </pre>
+          <div className="mt-1">
+            <CopyButton value={plan.routine} label="remote command" />
+          </div>
 
           {unavoidable.length > 0 ? (
             <div className="mt-3 rounded border border-amber-700 p-2">

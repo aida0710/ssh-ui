@@ -2,6 +2,9 @@ import { apiClient } from "../api/client";
 import type { components } from "../api/schema";
 
 export type KeyItem = components["schemas"]["KeyItem"];
+export type KeyCertificate = components["schemas"]["KeyCertificate"];
+export type UnreadableFile = components["schemas"]["UnreadableFile"];
+export type UnresolvedReference = components["schemas"]["UnresolvedReference"];
 export type KeyReference = components["schemas"]["KeyReference"];
 export type KeyVariant = components["schemas"]["KeyVariant"];
 export type KeyInventoryResponse = components["schemas"]["KeyInventoryResponse"];
@@ -110,9 +113,20 @@ function validateInventory(value: unknown): KeyInventoryResponse {
     asArray(entry.references);
     asArray(entry.notes);
   }
-  asArray(record.unreadable);
+  for (const file of asArray(record.unreadable)) {
+    const entry = asRecord(file);
+    asString(entry.relativePath);
+    asString(entry.reason);
+  }
   asArray(record.agentDelegations);
-  asArray(record.unresolvedReferences);
+  for (const reference of asArray(record.unresolvedReferences)) {
+    const entry = asRecord(reference);
+    asString(entry.directive);
+    asString(entry.value);
+    asString(entry.configPath);
+    asNumber(entry.line);
+    asString(entry.reason);
+  }
   asBoolean(record.agentAvailable);
   validateAgentIdentities(record.agentIdentities);
   return record as unknown as KeyInventoryResponse;
