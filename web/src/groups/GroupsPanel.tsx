@@ -18,6 +18,44 @@ export function depthOf(name: string): number {
   return name.split("/").length;
 }
 
+// treeOrder puts a parent before its children, and siblings in their display
+// order, which is what a tree has to read like.
+//
+// It is deliberately not the order the Include lines take. OpenSSH keeps the
+// first value it reads, so on disk the deepest group must come first or a
+// parent's setting would beat its own child's. This panel used that order on
+// screen, which floated every child above its parent and put the parent last —
+// and the result reads as though nesting were not working at all.
+export function treeOrder(groups: GroupMetadata[]): GroupMetadata[] {
+  const orderOf = new Map(groups.map((group) => [group.name, group.order ?? 0]));
+  // The key interleaves each ancestor's display order with its own segment, so
+  // two siblings are compared by order and then by name at the level where
+  // their paths actually diverge, not at their first character.
+  const keyOf = (name: string): (number | string)[] => {
+    const key: (number | string)[] = [];
+    let prefix = "";
+    for (const segment of name.split("/")) {
+      prefix = prefix === "" ? segment : `${prefix}/${segment}`;
+      key.push(orderOf.get(prefix) ?? 0, segment);
+    }
+    return key;
+  };
+  return [...groups].sort((left, right) => {
+    const leftKey = keyOf(left.name);
+    const rightKey = keyOf(right.name);
+    for (let index = 0; index < Math.min(leftKey.length, rightKey.length); index += 1) {
+      const first = leftKey[index]!;
+      const second = rightKey[index]!;
+      if (first === second) continue;
+      return typeof first === "number" && typeof second === "number"
+        ? first - second
+        : String(first).localeCompare(String(second));
+    }
+    // One name is a prefix of the other, so it is the ancestor and comes first.
+    return leftKey.length - rightKey.length;
+  });
+}
+
 // A group name is a relative directory path, so the panel refuses locally what
 // the server refuses too. Doing it here as well is not duplication for its own
 // sake: it is what lets the panel say which character is wrong before a
@@ -69,15 +107,7 @@ export function GroupsPanel() {
   // loaded document is captured once as a non-null const the closures can use.
   const loaded: Metadata = metadata;
   const hosts = overview.hosts;
-  // Deepest first, then by the order the user gave, then by name: the same rule
-  // that decides which Include line comes first, so what the panel shows is the
-  // order OpenSSH will read.
-  const groups = [...(loaded.groups ?? [])].sort((left, right) => {
-    const depth = depthOf(right.name) - depthOf(left.name);
-    if (depth !== 0) return depth;
-    if ((left.order ?? 0) !== (right.order ?? 0)) return (left.order ?? 0) - (right.order ?? 0);
-    return left.name.localeCompare(right.name);
-  });
+  const groups = treeOrder(loaded.groups ?? []);
 
   // Membership is where the file sits, and the projection already read that
   // from the path. Nothing here counts a metadata field.
@@ -203,16 +233,28 @@ export function GroupsPanel() {
       <p className="text-xs text-zinc-400">
         {t("groups.compileNote", { file: loaded.groupsFile ?? "groups.ssh-ui.conf" })}
       </p>
+      <p className="text-xs text-zinc-500">{t("groups.orderNote")}</p>
       {localError === "" ? null : <p role="alert" className="text-sm text-rose-300">{localError}</p>}
 
-      <ul className="flex flex-col gap-3">
+      <ul aria-label={t("groups.listLabel")} className="flex flex-col gap-3">
         {groups.map((group) => (
           <li
             key={group.name}
             className="rounded border border-zinc-800 p-3"
             style={{ marginInlineStart: `${(depthOf(group.name) - 1) * 1.5}rem` }}
           >
-            <h3 className="text-sm font-medium">{group.name}</h3>
+            {/*
+              The heading is still the whole path, so it stays the group's one
+              name for a screen reader and for the rename button beside it. Only
+              the ancestor part is dimmed, which is what makes the tree readable
+              without inventing a second identifier.
+            */}
+            <h3 className="text-sm font-medium">
+              {depthOf(group.name) === 1 ? null : (
+                <span className="text-zinc-500">{group.name.slice(0, group.name.lastIndexOf("/") + 1)}</span>
+              )}
+              <span>{group.name.slice(group.name.lastIndexOf("/") + 1)}</span>
+            </h3>
             <p className="font-mono text-xs text-zinc-400">
               {t("groups.directories", {
                 connections: `connections/${group.name}`,
@@ -302,6 +344,19 @@ export function GroupsPanel() {
                 className="rounded border border-zinc-700 px-2 py-1 text-xs"
               >
                 {t("groups.remove", { name: group.name })}
+              </button>
+              {/*
+                Nesting was discoverable only through a sentence about slashes
+                under a text box at the bottom of the page. This puts it where
+                the group is, and prefills the path so the user types the child
+                name and nothing else.
+              */}
+              <button
+                type="button"
+                onClick={() => setNewName(`${group.name}/`)}
+                className="rounded border border-zinc-700 px-2 py-1 text-xs"
+              >
+                {t("groups.addChild", { name: group.name })}
               </button>
             </div>
           </li>

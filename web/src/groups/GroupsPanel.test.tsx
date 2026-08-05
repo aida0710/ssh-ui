@@ -1,7 +1,7 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { GroupsPanel } from "./GroupsPanel";
+import { GroupsPanel, treeOrder } from "./GroupsPanel";
 import { configApi } from "../api/config";
 
 vi.mock("../api/config", async () => {
@@ -175,5 +175,51 @@ describe("GroupsPanel", () => {
     await user.click(screen.getByRole("button", { name: "Remove company" }));
 
     await waitFor(() => expect(configApi.deleteGroup).toHaveBeenCalledWith("company", "archive"));
+  });
+  // The bug: the panel sorted by the rule that decides the Include order —
+  // deepest group first — and then indented as though that were a tree. Every
+  // child floated above its parent and the parent came last, which reads as
+  // nesting not working at all.
+  it("lists a parent before its children", async () => {
+    vi.mocked(configApi.overview).mockResolvedValue({
+      ...overview,
+      metadata: {
+        ...overview.metadata,
+        groups: [{ name: "office/tokyo" }, { name: "hpc" }, { name: "office" }, { name: "office/osaka" }],
+      },
+    } as never);
+    render(<GroupsPanel />);
+
+    await screen.findByRole("heading", { name: "hpc" });
+    const list = screen.getByRole("list", { name: "Groups, parent before child" });
+    const headings = within(list)
+      .getAllByRole("heading", { level: 3 })
+      .map((heading) => heading.textContent);
+    expect(headings).toEqual(["hpc", "office", "office/osaka", "office/tokyo"]);
+  });
+
+  it("orders siblings by display order and keeps them under their own parent", () => {
+    const ordered = treeOrder([
+      { name: "office/tokyo" },
+      { name: "office", order: 2 },
+      { name: "hpc", order: 1 },
+      { name: "office/osaka", order: -1 },
+    ]).map((group) => group.name);
+
+    // hpc before office by their own order; osaka before tokyo by theirs; and
+    // neither child escapes to the top, which is what the file order would do.
+    expect(ordered).toEqual(["hpc", "office", "office/osaka", "office/tokyo"]);
+  });
+
+  it("offers a child group from the group it would sit inside", async () => {
+    const user = userEvent.setup();
+    render(<GroupsPanel />);
+
+    await user.click(await screen.findByRole("button", { name: "Add a group inside company" }));
+
+    // The path is prefilled, so the user types the child's name and nothing
+    // else — nesting was previously discoverable only from a sentence about
+    // slashes at the bottom of the page.
+    expect(screen.getByLabelText("New group name")).toHaveValue("company/");
   });
 });
