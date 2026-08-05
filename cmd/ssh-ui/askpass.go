@@ -16,8 +16,12 @@ import (
 //
 // OpenSSH takes a secret from a program instead of a terminal when SSH_ASKPASS
 // names one and SSH_ASKPASS_REQUIRE is `force`. That program is this binary,
-// invoked as `ssh-ui askpass <prompt>`, and whatever it writes to standard
-// output becomes the answer.
+// and whatever it writes to standard output becomes the answer.
+//
+// OpenSSH execs the named program directly with the prompt as its only
+// argument. There is no shell in between, so there is nowhere to put a
+// subcommand word, and the environment is what says this is an askpass
+// invocation. `ssh-ui askpass <prompt>` does the same thing by hand.
 //
 // It holds no secret and can decrypt nothing. The passwords live in an
 // encrypted file whose key exists only inside a running, unlocked ssh-ui, so

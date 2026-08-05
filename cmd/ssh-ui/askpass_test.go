@@ -209,3 +209,50 @@ func TestAskpassRefusesAnEmptyPasswordFromTheServer(t *testing.T) {
 		t.Errorf("stdout = %q", out.String())
 	}
 }
+
+func TestOpenSSHsInvocationIsRecognisedAsTheHelperAndNotAsTheApplication(t *testing.T) {
+	// SSH_ASKPASS names a program. OpenSSH execs it with the prompt as its
+	// only argument — no shell, so no subcommand word can reach it. Reading
+	// argv[1] as a subcommand meant the real invocation fell through to the
+	// application, which started a second server and opened a browser while
+	// ssh waited for a password that was never sent.
+	environment := fullEnvironment("http://127.0.0.1:1/askpass")
+	arguments, ok := askpassInvocation(
+		[]string{"/opt/ssh-ui", "ops@203.0.113.10's password: "}, environment.lookup)
+	if !ok {
+		t.Fatal("the invocation OpenSSH actually makes was not recognised as the helper")
+	}
+	if len(arguments) != 1 || arguments[0] != "ops@203.0.113.10's password: " {
+		t.Errorf("arguments = %#v, want the prompt alone", arguments)
+	}
+}
+
+func TestTheSubcommandStillWorksForRunningItByHand(t *testing.T) {
+	arguments, ok := askpassInvocation(
+		[]string{"/opt/ssh-ui", AskpassSubcommand, "a prompt"}, askpassEnvironment{}.lookup)
+	if !ok {
+		t.Fatal("the explicit subcommand was not recognised")
+	}
+	if len(arguments) != 1 || arguments[0] != "a prompt" {
+		t.Errorf("arguments = %#v, want the prompt alone", arguments)
+	}
+}
+
+func TestAnOrdinaryStartIsNotTurnedIntoTheHelper(t *testing.T) {
+	// The application must still start normally, including when a stale
+	// variable is lying about in the environment: both the token and the
+	// endpoint are required before this binary becomes a password helper.
+	for name, environment := range map[string]askpassEnvironment{
+		"nothing set":    {},
+		"only the token": {TokenVariable: "one-time-token"},
+		"only the URL":   {URLVariable: "http://127.0.0.1:1/askpass"},
+		"only the alias": {AliasVariable: "bastion"},
+		"an empty token": {TokenVariable: "", URLVariable: "http://127.0.0.1:1/askpass"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, ok := askpassInvocation([]string{"/opt/ssh-ui", "-open=false"}, environment.lookup); ok {
+				t.Error("an ordinary start was taken for an askpass invocation")
+			}
+		})
+	}
+}

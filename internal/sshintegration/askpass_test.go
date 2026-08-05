@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -169,8 +170,36 @@ func hostKeyOf(t *testing.T, destination target) []byte {
 	return hostKey
 }
 
+// countingListener counts the connections the server accepts.
+//
+// It is the only way a test can tell "ssh refused the password this vault
+// holds" from "the helper never asked". Both end in Permission denied, and for
+// one CI run every negative test here passed while the helper was starting a
+// second copy of the application instead of answering: SSH_ASKPASS names a
+// program that OpenSSH execs with the prompt as its only argument, and the
+// binary was looking for a subcommand word that could never arrive.
+type countingListener struct {
+	net.Listener
+	connections atomic.Int64
+}
+
+func (l *countingListener) Accept() (net.Conn, error) {
+	connection, err := l.Listener.Accept()
+	if err == nil {
+		l.connections.Add(1)
+	}
+	return connection, err
+}
+
+func requireTheHelperAsked(t *testing.T, listener *countingListener, before int64, output string) {
+	t.Helper()
+	if listener.connections.Load() <= before {
+		t.Fatalf("the helper never reached this application, so nothing about the password was tested:\n%s", output)
+	}
+}
+
 // startServer runs the real HTTP server with the real /askpass endpoint.
-func startServer(t *testing.T, home string) (*secret.Service, string) {
+func startServer(t *testing.T, home string) (*secret.Service, string, *countingListener) {
 	t.Helper()
 	workspace, err := storage.NewWorkspace(storage.OSFileSystem{}, home)
 	if err != nil {
@@ -181,10 +210,11 @@ func startServer(t *testing.T, home string) (*secret.Service, string) {
 		t.Fatal(err)
 	}
 
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	bare, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
+	listener := &countingListener{Listener: bare}
 	sessions, _, err := session.NewManager(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
@@ -209,7 +239,7 @@ func startServer(t *testing.T, home string) (*secret.Service, string) {
 	if index := strings.Index(origin, "#"); index >= 0 {
 		origin = origin[:index]
 	}
-	return vault, strings.TrimSuffix(origin, "/") + httpserver.AskpassPath
+	return vault, strings.TrimSuffix(origin, "/") + httpserver.AskpassPath, listener
 }
 
 // answerable is the production rule, restated here because cmd/ssh-ui is a
@@ -254,7 +284,7 @@ func runSSH(t *testing.T, home, endpoint, token string, arguments ...string) (st
 func TestTheHelperAuthenticatesAgainstARealServer(t *testing.T) {
 	destination := requireTarget(t)
 	home := buildHome(t, destination)
-	vault, endpoint := startServer(t, home)
+	vault, endpoint, listener := startServer(t, home)
 
 	if err := vault.Set(alias, destination.password); err != nil {
 		t.Fatal(err)
@@ -264,10 +294,12 @@ func TestTheHelperAuthenticatesAgainstARealServer(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	asked := listener.connections.Load()
 	output, err := runSSH(t, home, endpoint, token, "echo", "authenticated-by-askpass")
 	if err != nil {
 		t.Fatalf("ssh = %v\n%s", err, output)
 	}
+	requireTheHelperAsked(t, listener, asked, output)
 	if !strings.Contains(output, "authenticated-by-askpass") {
 		t.Errorf("the remote command did not run:\n%s", output)
 	}
@@ -279,7 +311,7 @@ func TestTheWrongStoredPasswordFailsOnceRatherThanRepeatedly(t *testing.T) {
 	// servers. This is where that stops being a claim.
 	destination := requireTarget(t)
 	home := buildHome(t, destination)
-	vault, endpoint := startServer(t, home)
+	vault, endpoint, listener := startServer(t, home)
 
 	if err := vault.Set(alias, destination.password+"-wrong"); err != nil {
 		t.Fatal(err)
@@ -289,10 +321,12 @@ func TestTheWrongStoredPasswordFailsOnceRatherThanRepeatedly(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	asked := listener.connections.Load()
 	output, err := runSSH(t, home, endpoint, token)
 	if err == nil {
 		t.Fatalf("ssh authenticated with the wrong password:\n%s", output)
 	}
+	requireTheHelperAsked(t, listener, asked, output)
 	requireAuthenticationWasAttempted(t, output)
 	if attempts := strings.Count(output, "Permission denied"); attempts > 1 {
 		t.Errorf("the password was offered %d times:\n%s", attempts, output)
@@ -305,7 +339,7 @@ func TestASpentTokenDoesNotAuthenticate(t *testing.T) {
 	// minutes lasted.
 	destination := requireTarget(t)
 	home := buildHome(t, destination)
-	vault, endpoint := startServer(t, home)
+	vault, endpoint, listener := startServer(t, home)
 
 	if err := vault.Set(alias, destination.password); err != nil {
 		t.Fatal(err)
@@ -318,17 +352,20 @@ func TestASpentTokenDoesNotAuthenticate(t *testing.T) {
 		t.Fatalf("the first connection = %v\n%s", err, output)
 	}
 
+	asked := listener.connections.Load()
 	output, err := runSSH(t, home, endpoint, token, "true")
 	if err == nil {
 		t.Fatalf("the spent token authenticated a second connection:\n%s", output)
 	}
+	// The helper asked a second time and was told no, rather than not asking.
+	requireTheHelperAsked(t, listener, asked, output)
 	requireAuthenticationWasAttempted(t, output)
 }
 
 func TestALockedVaultCannotAnswer(t *testing.T) {
 	destination := requireTarget(t)
 	home := buildHome(t, destination)
-	vault, endpoint := startServer(t, home)
+	vault, endpoint, listener := startServer(t, home)
 
 	if err := vault.Set(alias, destination.password); err != nil {
 		t.Fatal(err)
@@ -339,10 +376,12 @@ func TestALockedVaultCannotAnswer(t *testing.T) {
 	}
 	vault.Lock()
 
+	asked := listener.connections.Load()
 	output, err := runSSH(t, home, endpoint, token, "true")
 	if err == nil {
 		t.Fatalf("a locked vault still answered:\n%s", output)
 	}
+	requireTheHelperAsked(t, listener, asked, output)
 	requireAuthenticationWasAttempted(t, output)
 }
 

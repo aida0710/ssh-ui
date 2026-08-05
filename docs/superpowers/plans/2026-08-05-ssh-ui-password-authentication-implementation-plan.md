@@ -95,8 +95,17 @@ The helper is spawned by `ssh`, not by this application, and it cannot be given 
 
 So it does not decrypt. It asks:
 
+This diagram was wrong about the invocation, and the error shipped. `SSH_ASKPASS`
+names a *program*: OpenSSH execs it with the prompt as its only argument, with no
+shell in between, so no subcommand word can reach it. The binary decides it is
+the helper from the environment — the one-time token and the endpoint, which only
+this application ever sets — and `ssh-ui askpass "<prompt>"` remains the way to
+run it by hand. Until that was fixed, `ssh` started a second copy of the whole
+application, browser and all, and got no password. The integration suite against
+a real sshd is what found it; nothing hermetic could have.
+
 ```
-ssh  ──spawns──▶  ssh-ui askpass "<prompt>"
+ssh  ──execs──▶  ssh-ui "<prompt>"   (SSH_UI_ASKPASS_TOKEN et al. in the environment)
                         │  POST http://127.0.0.1:<port>/askpass
                         │  X-SSH-UI-Askpass: <one-time token>
                         │  {"alias":"bastion","prompt":"ops@…'s password: "}
