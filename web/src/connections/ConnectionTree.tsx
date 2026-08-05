@@ -131,12 +131,23 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
         </p>
       ) : null}
 
+      {/*
+        A declared group is shown whether or not it holds anything. Hiding an
+        empty one meant a group made in the Groups panel was absent here until
+        something was put in it, and — since a connection can be dragged between
+        groups — that emptying a group removed the only thing it could be
+        dragged back onto. A file is different: it is not a place a connection
+        can be put, so an empty one is only noise.
+      */}
       {sections.map((section) => (
-        section.items.length === 0 ? null : (
+        section.items.length === 0 && grouping === "files" ? null : (
           <section key={section.title} className="flex flex-col gap-1">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
               {section.title === ungrouped ? t("tree.ungrouped") : section.title}
             </h2>
+            {section.items.length === 0 ? (
+              <p className="px-2 py-1 text-xs text-zinc-500">{t("tree.groupEmpty")}</p>
+            ) : (
             <ul>
               {section.items.map((item) => {
                 const active =
@@ -232,6 +243,7 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
                 );
               })}
             </ul>
+            )}
           </section>
         )
       ))}

@@ -224,3 +224,32 @@ describe("ConnectionTree", () => {
     expect(nasIndex).toBeLessThan(bastionIndex);
   });
 });
+
+describe("a group that holds nothing", () => {
+  const withEmptyGroup: Overview = {
+    ...overview,
+    metadata: { ...overview.metadata, groups: [{ name: "home" }, { name: "work" }] },
+  };
+
+  // Hiding it means a group made in the Groups panel never appears here, and —
+  // once a connection can be dragged out of a group — that emptying a group
+  // removes the only thing it could be dragged back onto.
+  it("still shows its heading", () => {
+    render(
+      <ConnectionTree overview={withEmptyGroup} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} />,
+    );
+
+    expect(screen.getByRole("heading", { name: "work" })).toBeInTheDocument();
+    expect(screen.getByText("No connection is in this group.")).toBeInTheDocument();
+  });
+
+  it("does not do the same for a file, which is not a place anything can be put", async () => {
+    const user = userEvent.setup();
+    render(
+      <ConnectionTree overview={withEmptyGroup} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} />,
+    );
+    await user.click(screen.getByRole("button", { name: "Files" }));
+
+    expect(screen.queryByText("No connection is in this group.")).not.toBeInTheDocument();
+  });
+});
