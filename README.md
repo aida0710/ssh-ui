@@ -29,7 +29,7 @@ Go module は `make generate`、`make test`、`make build` の初回実行時に
 ```sh
 make generate  # OpenAPI から Go/TypeScript 型を再生成
 make test      # Go、race detector、Vitest、TypeScript を検証
-make fuzz      # config パーサーのラウンドトリップを 60 秒 fuzz
+make fuzz      # 全 fuzz target を既定 30 秒ずつ実行（FUZZTIME で変更）
 make build     # UI を生成し bin/ssh-ui へ単一バイナリを作成
 ```
 
@@ -104,3 +104,5 @@ make build     # UI を生成し bin/ssh-ui へ単一バイナリを作成
 
 - リクエスト本文には二段の上限があります。middleware の `MaxRequestBodyCeiling`（2 MiB）が全 `/api/` 要求の天井で、各ハンドラーはさらに小さい上限を持ちます。宣言された `Content-Length` が天井を超える要求はハンドラーへ届く前に 413 で拒否し、長さを宣言しない chunked 要求は読み取り自体を天井で打ち切ります。本文を読まないルート（`/api/v1/diagnostics/config` や `/api/v1/keys/{keyId}/trash`）にも同じ天井が掛かるのは前者のためです。
 - 外部コマンドの出力は `platform.MaxCapturedOutput`（64 KiB）で打ち切られます。打ち切られた `ssh -G` 出力は解析せず、部分的な実効値として返しません。認証テストの stderr は `MaxReportedOutput`（8 KiB）までに制限して表示します。
+- `make fuzz` は `FUZZ_TARGETS` に列挙した全 target を順に実行します。`go test -fuzz` は一度に 1 target しか動かせないため、1 行で書くと最初の target しか回りません。target を追加して一覧に加え忘れると `TestMakefileFuzzTargetsCoverEveryFuzzFunction` が失敗します。
+- fuzz の対象は、設定パーサーのラウンドトリップ、Include パターン展開、`known_hosts` リーダー、`ssh -G` 出力パーサー、HTTP リクエストデコーダーの 5 つです。いずれも実 fixture を seed にしています。

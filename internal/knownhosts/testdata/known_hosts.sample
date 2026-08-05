@@ -1,0 +1,11 @@
+# a comment the reader must preserve exactly
+
+203.0.113.10 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGZpeHR1cmVrZXlmaXh0dXJla2V5Zml4dHVyZWtl fixture-one
+[198.51.100.20]:2222 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHNlY29uZGZpeHR1cmVrZXlzZWNvbmRmaXh0dXJl fixture-two
+bastion.example,203.0.113.11 ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBGZpeHR1cmU= fixture-three
+|1|c2FsdHNhbHRzYWx0c2FsdHNhbHQ=|aGFzaGhhc2hoYXNoaGFzaGhhc2g= ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGhhc2hlZGZpeHR1cmVrZXloYXNoZWRmaXh0dXJl
+@revoked 203.0.113.12 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHJldm9rZWRmaXh0dXJla2V5cmV2b2tlZGZpeHR1 fixture-revoked
+@cert-authority *.example ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGNhZml4dHVyZWtleWNhZml4dHVyZWtleWNhZml4 fixture-ca
+
+203.0.113.13 ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDmaWx0dXJl fixture-rsa
+this line has too few fields

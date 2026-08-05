@@ -382,13 +382,23 @@ func (f *fixture) bootstrapSession(bootstrap string) {
 // Adjust is applied last, so a test can make exactly one of them wrong.
 func (f *fixture) do(method, path string, body []byte, adjust ...func(*http.Request)) *http.Response {
 	f.t.Helper()
+	return f.doAs(f.t, f.client, method, path, body, adjust...)
+}
+
+// doAs is do with the reporter named explicitly.
+//
+// A fuzz target needs this: newFixture is given the *testing.F, but calling
+// Helper or Fatal on an F from inside the fuzz function panics, so each
+// execution has to report through the *testing.T it was handed instead.
+func (f *fixture) doAs(t testing.TB, client *http.Client, method, path string, body []byte, adjust ...func(*http.Request)) *http.Response {
+	t.Helper()
 	var reader io.Reader
 	if body != nil {
 		reader = bytes.NewReader(body)
 	}
 	request, err := http.NewRequest(method, f.baseURL+path, reader)
 	if err != nil {
-		f.t.Fatal(err)
+		t.Fatal(err)
 	}
 	request.Host = f.host
 	request.Header.Set("Sec-Fetch-Site", "same-origin")
@@ -400,9 +410,9 @@ func (f *fixture) do(method, path string, body []byte, adjust ...func(*http.Requ
 	for _, apply := range adjust {
 		apply(request)
 	}
-	response, err := f.client.Do(request)
+	response, err := client.Do(request)
 	if err != nil {
-		f.t.Fatalf("%s %s: %v", method, path, err)
+		t.Fatalf("%s %s: %v", method, path, err)
 	}
 	return response
 }
@@ -416,29 +426,7 @@ func (f *fixture) do(method, path string, body []byte, adjust ...func(*http.Requ
 // session requirement would silently be sending one.
 func (f *fixture) doAnonymous(method, path string, body []byte, adjust ...func(*http.Request)) *http.Response {
 	f.t.Helper()
-	var reader io.Reader
-	if body != nil {
-		reader = bytes.NewReader(body)
-	}
-	request, err := http.NewRequest(method, f.baseURL+path, reader)
-	if err != nil {
-		f.t.Fatal(err)
-	}
-	request.Host = f.host
-	request.Header.Set("Sec-Fetch-Site", "same-origin")
-	if method != http.MethodGet && method != http.MethodHead {
-		request.Header.Set("Origin", f.baseURL)
-		request.Header.Set(httpserver.CSRFHeader, f.canaries.CSRF)
-		request.Header.Set("Content-Type", "application/json")
-	}
-	for _, apply := range adjust {
-		apply(request)
-	}
-	response, err := f.anonymous.Do(request)
-	if err != nil {
-		f.t.Fatalf("%s %s: %v", method, path, err)
-	}
-	return response
+	return f.doAs(f.t, f.anonymous, method, path, body, adjust...)
 }
 
 // readBody drains and closes a response, returning its body as text.
