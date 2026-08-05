@@ -111,3 +111,7 @@ make build            # UI を生成し bin/ssh-ui へ単一バイナリを作�
 - `./bin/ssh-ui -open=false` は既定ブラウザを開かず、bootstrap fragment 付き URL を標準出力へ 1 行だけ出します。自動化用の明示的なオプションであり、通常の利用では使いません。token は `open <url>` の argv と同程度の露出であり、それ以上ではありません。
 - 配布物は UI を埋め込んだ単一バイナリです。`otool -L` はシステムライブラリのみを表示し、同梱ランタイムはありません。`make e2e` は毎回ビルドし直した実バイナリを Playwright で駆動するため、埋め込み済み UI が古いままだと E2E が失敗します。
 - `make verify-generated` は `api/openapi.yaml` から Go と TypeScript の型を再生成し、コミット済みの生成物と一致しなければ失敗します。生成物を手で編集してはいけません。
+- 自動テストは実際の `~/.ssh`、Keychain、ssh-agent、Terminal、リモートホストへ一切触れません。実バイナリを起動する試験でも `HOME` は一時ディレクトリです。実際に外部へ影響する操作（実接続、実 `authorized_keys` 変更、`ssh-keyscan`、Keychain、Terminal 起動）は `docs/manual-acceptance.md` の手動試験に分離しています。
+- 設計 §12 の完成条件は `go test ./internal/acceptance -run TestDesignCompletionConditions -v` で一覧できます。各条件について、それを証明するテスト名とコマンド名、そして自動化が届かない範囲を出力します。13 行のうち 7 行が自動テストのみで成立し、5 行は自動化が越えてはならない境界で止まり、1 行は OpenSSH が入っている場合にのみ証明されます。
+- `internal/acceptance` はテストファイルのみで構成され、配布バイナリには含まれません。`TestNoTestOnlyPackageReachesTheShippedBinary` がそれを検査します。
+- ログへの秘密混入検査は `app.Build` へ渡した logger だけを見ています。グローバルの `slog` 既定 logger へ書くと検査を素通りするため、新しいログは必ず注入された logger を使ってください。
