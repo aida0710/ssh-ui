@@ -1,7 +1,8 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ConnectionTree } from "./ConnectionTree";
+import { dragMimeType, type DragPayload } from "./dragdrop";
 import type { HostEntry, Overview } from "../api/config";
 
 // nas sits in connections/home, so its group is "home". Membership is the
@@ -71,7 +72,7 @@ const twoRulesOverview: Overview = {
 
 describe("ConnectionTree", () => {
   it("groups hosts by their primary group and marks favourites", () => {
-    render(<ConnectionTree overview={overview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} />);
+    render(<ConnectionTree overview={overview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />);
 
     expect(screen.getByRole("heading", { name: "home" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /nas/ })).toBeInTheDocument();
@@ -80,7 +81,7 @@ describe("ConnectionTree", () => {
   });
 
   it("shows a wildcard block as a pattern rule rather than a host", () => {
-    render(<ConnectionTree overview={overview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} />);
+    render(<ConnectionTree overview={overview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />);
 
     expect(screen.getByText("Host *")).toBeInTheDocument();
   });
@@ -90,7 +91,7 @@ describe("ConnectionTree", () => {
     const onSelect = vi.fn();
     const onOpenPatternRule = vi.fn();
     render(
-      <ConnectionTree overview={overview} selected={null} onSelect={onSelect} onOpenPatternRule={onOpenPatternRule} />,
+      <ConnectionTree overview={overview} selected={null} onSelect={onSelect} onOpenPatternRule={onOpenPatternRule} onDrop={vi.fn()} />,
     );
 
     const rule = screen.getByRole("button", { name: /Host \*/ });
@@ -104,7 +105,7 @@ describe("ConnectionTree", () => {
 
   it("states plainly that a pattern rule outside ~/.ssh cannot be opened", () => {
     render(
-      <ConnectionTree overview={externalOverview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} />,
+      <ConnectionTree overview={externalOverview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
     );
 
     expect(screen.getByText("Host *")).toBeInTheDocument();
@@ -121,6 +122,7 @@ describe("ConnectionTree", () => {
         selected={{ path: "config", alias: "bastion" }}
         onSelect={vi.fn()}
         onOpenPatternRule={onOpenPatternRule}
+        onDrop={vi.fn()}
       />,
     );
 
@@ -140,7 +142,7 @@ describe("ConnectionTree", () => {
 
   it("switches to the Include file hierarchy", async () => {
     const user = userEvent.setup();
-    render(<ConnectionTree overview={overview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} />);
+    render(<ConnectionTree overview={overview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />);
 
     await user.click(screen.getByRole("button", { name: "Files" }));
 
@@ -149,7 +151,7 @@ describe("ConnectionTree", () => {
 
   it("filters hosts as the user searches and reports an empty result", async () => {
     const user = userEvent.setup();
-    render(<ConnectionTree overview={overview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} />);
+    render(<ConnectionTree overview={overview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />);
 
     await user.type(screen.getByRole("searchbox", { name: "Filter connections" }), "bast");
 
@@ -162,7 +164,7 @@ describe("ConnectionTree", () => {
     const onSelect = vi.fn();
     const onOpenPatternRule = vi.fn();
     render(
-      <ConnectionTree overview={overview} selected={null} onSelect={onSelect} onOpenPatternRule={onOpenPatternRule} />,
+      <ConnectionTree overview={overview} selected={null} onSelect={onSelect} onOpenPatternRule={onOpenPatternRule} onDrop={vi.fn()} />,
     );
 
     await user.click(screen.getByRole("button", { name: /bastion/ }));
@@ -188,7 +190,7 @@ describe("ConnectionTree", () => {
       },
     };
     render(
-      <ConnectionTree overview={decorated} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} />,
+      <ConnectionTree overview={decorated} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
     );
 
     const row = screen.getByRole("button", { name: /nas/ });
@@ -215,7 +217,7 @@ describe("ConnectionTree", () => {
       },
     };
     render(
-      <ConnectionTree overview={ordered} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} />,
+      <ConnectionTree overview={ordered} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
     );
 
     const labels = screen.getAllByRole("button").map((button) => button.textContent ?? "");
@@ -236,7 +238,7 @@ describe("a group that holds nothing", () => {
   // removes the only thing it could be dragged back onto.
   it("still shows its heading", () => {
     render(
-      <ConnectionTree overview={withEmptyGroup} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} />,
+      <ConnectionTree overview={withEmptyGroup} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
     );
 
     expect(screen.getByRole("heading", { name: "work" })).toBeInTheDocument();
@@ -246,10 +248,104 @@ describe("a group that holds nothing", () => {
   it("does not do the same for a file, which is not a place anything can be put", async () => {
     const user = userEvent.setup();
     render(
-      <ConnectionTree overview={withEmptyGroup} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} />,
+      <ConnectionTree overview={withEmptyGroup} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
     );
     await user.click(screen.getByRole("button", { name: "Files" }));
 
     expect(screen.queryByText("No connection is in this group.")).not.toBeInTheDocument();
+  });
+});
+
+// jsdom has no drag implementation, so the transfer is a stub carrying the two
+// things the component touches: the private type and the payload.
+function transfer(payload: DragPayload) {
+  const store = new Map<string, string>([[dragMimeType, JSON.stringify(payload)]]);
+  return {
+    types: [...store.keys()],
+    setData: (type: string, value: string) => void store.set(type, value),
+    getData: (type: string) => store.get(type) ?? "",
+    effectAllowed: "move",
+    dropEffect: "move",
+  };
+}
+
+describe("dragging in the tree", () => {
+  const withGroups: Overview = {
+    ...overview,
+    metadata: { ...overview.metadata, groups: [{ name: "home" }, { name: "work" }] },
+  };
+  const nasPayload: DragPayload = {
+    kind: "connection",
+    path: "connections/home/nas.conf",
+    alias: "nas",
+    group: "home",
+  };
+
+  function renderTree() {
+    const onDrop = vi.fn();
+    render(
+      <ConnectionTree
+        overview={withGroups}
+        selected={null}
+        onSelect={vi.fn()}
+        onOpenPatternRule={vi.fn()}
+        onDrop={onDrop}
+      />,
+    );
+    return onDrop;
+  }
+
+  function drag(source: HTMLElement, target: HTMLElement, payload: DragPayload) {
+    fireEvent.dragStart(source, { dataTransfer: transfer(payload) });
+    fireEvent.dragOver(target, { dataTransfer: transfer(payload) });
+    fireEvent.drop(target, { dataTransfer: transfer(payload) });
+  }
+
+  it("moves a connection onto another group's heading", () => {
+    const onDrop = renderTree();
+    drag(screen.getByRole("button", { name: /nas/ }), screen.getByRole("heading", { name: "work" }), nasPayload);
+
+    expect(onDrop).toHaveBeenCalledWith(nasPayload, "work");
+  });
+
+  it("moves a connection onto the no-group heading", () => {
+    const onDrop = renderTree();
+    drag(screen.getByRole("button", { name: /nas/ }), screen.getByRole("heading", { name: "Ungrouped" }), nasPayload);
+
+    expect(onDrop).toHaveBeenCalledWith(nasPayload, "");
+  });
+
+  it("does nothing for a drop on the group the connection is already in", () => {
+    const onDrop = renderTree();
+    drag(screen.getByRole("button", { name: /nas/ }), screen.getByRole("heading", { name: "home" }), nasPayload);
+
+    expect(onDrop).not.toHaveBeenCalled();
+  });
+
+  it("nests one group inside another", () => {
+    const onDrop = renderTree();
+    const payload: DragPayload = { kind: "group", name: "work" };
+    drag(screen.getByRole("heading", { name: "work" }), screen.getByRole("heading", { name: "home" }), payload);
+
+    expect(onDrop).toHaveBeenCalledWith(payload, "home");
+  });
+
+  it("does nothing while grouping by file, because a file is not a place", async () => {
+    const user = userEvent.setup();
+    const onDrop = renderTree();
+    await user.click(screen.getByRole("button", { name: "Files" }));
+
+    drag(screen.getByRole("button", { name: /nas/ }), screen.getByRole("heading", { name: "connections/home/nas.conf" }), nasPayload);
+
+    expect(onDrop).not.toHaveBeenCalled();
+  });
+
+  // A block with no concrete alias cannot be addressed by the move API, so it
+  // is not a drag source at all.
+  it("does not let a pattern rule be dragged", () => {
+    renderTree();
+    const rule = screen.getByRole("button", { name: /Host \*/ });
+
+    expect(rule).not.toHaveAttribute("draggable", "true");
   });
 });

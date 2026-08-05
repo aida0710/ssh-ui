@@ -1,13 +1,14 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConnectionsPage } from "./ConnectionsPage";
 import { ApiError } from "../api/client";
 import { configApi } from "../api/config";
+import { dragMimeType, type DragPayload } from "./dragdrop";
 
 vi.mock("../api/config", async () => {
   const actual = await vi.importActual<typeof import("../api/config")>("../api/config");
-  return { ...actual, configApi: { overview: vi.fn(), host: vi.fn(), file: vi.fn(), preview: vi.fn(), save: vi.fn() } };
+  return { ...actual, configApi: { overview: vi.fn(), host: vi.fn(), file: vi.fn(), preview: vi.fn(), save: vi.fn(), renameGroup: vi.fn() } };
 });
 
 const overview = {
@@ -311,5 +312,101 @@ describe("taking a connection out of every group", () => {
         }),
       ),
     );
+  });
+});
+
+describe("dropping in the tree", () => {
+  // jsdom has no drag implementation, so the transfer is a stub carrying the
+  // two things the tree touches.
+  function transfer(payload: DragPayload) {
+    const store = new Map<string, string>([[dragMimeType, JSON.stringify(payload)]]);
+    return {
+      types: [...store.keys()],
+      setData: (type: string, value: string) => void store.set(type, value),
+      getData: (type: string) => store.get(type) ?? "",
+      effectAllowed: "move",
+      dropEffect: "move",
+    };
+  }
+
+  const grouped = {
+    ...overview,
+    hosts: [{
+      identity: { path: "connections/home/nas.conf", alias: "nas" },
+      file: { path: "connections/home/nas.conf", absolute: "/home/tester/.ssh/connections/home/nas.conf" },
+      line: 1, patterns: ["nas"], editable: true, group: "home",
+    }],
+    metadata: { schemaVersion: 2, groups: [{ name: "home" }, { name: "work" }, { name: "home/eu" }] },
+  };
+
+  function drag(source: HTMLElement, target: HTMLElement, payload: DragPayload) {
+    fireEvent.dragStart(source, { dataTransfer: transfer(payload) });
+    fireEvent.dragOver(target, { dataTransfer: transfer(payload) });
+    fireEvent.drop(target, { dataTransfer: transfer(payload) });
+  }
+
+  beforeEach(() => {
+    vi.mocked(configApi.overview).mockResolvedValue(grouped as never);
+    vi.mocked(configApi.file).mockResolvedValue({
+      file: { path: "connections/home/nas.conf", absolute: "/x" },
+      contents: "Host nas\n", digest: "d", editable: true, exists: true,
+    } as never);
+    vi.mocked(configApi.save).mockResolvedValue({
+      transactionId: "tx", written: [], preview: { operation: "config.move", diffs: [] },
+    } as never);
+  });
+
+  it("moves a connection into a group", async () => {
+    render(<ConnectionsPage onOpenFile={vi.fn()} />);
+    const row = await screen.findByRole("button", { name: /nas/ });
+
+    drag(row, screen.getByRole("heading", { name: "work" }), {
+      kind: "connection", path: "connections/home/nas.conf", alias: "nas", group: "home",
+    });
+
+    await waitFor(() =>
+      expect(configApi.save).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: "move", alias: "nas", destinationGroup: "work" }),
+      ),
+    );
+  });
+
+  it("moves a connection out of every group by sending it to the entry file", async () => {
+    render(<ConnectionsPage onOpenFile={vi.fn()} />);
+    const row = await screen.findByRole("button", { name: /nas/ });
+
+    drag(row, screen.getByRole("heading", { name: "Ungrouped" }), {
+      kind: "connection", path: "connections/home/nas.conf", alias: "nas", group: "home",
+    });
+
+    await waitFor(() =>
+      expect(configApi.save).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: "move", alias: "nas", destinationPath: "config" }),
+      ),
+    );
+  });
+
+  it("nests a group by renaming it under its new parent", async () => {
+    vi.mocked(configApi.renameGroup).mockResolvedValue({
+      transactionId: "tx", written: [], preview: { operation: "config.group_rename", diffs: [] },
+    } as never);
+    render(<ConnectionsPage onOpenFile={vi.fn()} />);
+    const source = await screen.findByRole("heading", { name: "work" });
+
+    drag(source, screen.getByRole("heading", { name: "home" }), { kind: "group", name: "work" });
+
+    await waitFor(() => expect(configApi.renameGroup).toHaveBeenCalledWith("work", "home/work"));
+  });
+
+  it("takes a nested group back to the top level", async () => {
+    vi.mocked(configApi.renameGroup).mockResolvedValue({
+      transactionId: "tx", written: [], preview: { operation: "config.group_rename", diffs: [] },
+    } as never);
+    render(<ConnectionsPage onOpenFile={vi.fn()} />);
+    const source = await screen.findByRole("heading", { name: "home/eu" });
+
+    drag(source, screen.getByRole("heading", { name: "Ungrouped" }), { kind: "group", name: "home/eu" });
+
+    await waitFor(() => expect(configApi.renameGroup).toHaveBeenCalledWith("home/eu", "eu"));
   });
 });

@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type DragEvent } from "react";
 import type { HostEntry, Overview } from "../api/config";
 import { useTranslate } from "../i18n/context";
+import { canDrop, dragMimeType, type DragPayload } from "./dragdrop";
 
 export type HostSelection = { path: string; alias: string };
 
@@ -13,6 +14,9 @@ type ConnectionTreeProps = {
   // path and line instead; the callback is required so such a row can never be
   // rendered as a control with nothing behind it.
   onOpenPatternRule: (path: string, line: number) => void;
+  // Where a dragged connection or group was dropped. The target is a group
+  // name, or the empty string for the "no group" heading.
+  onDrop: (payload: DragPayload, target: string) => void;
 };
 
 // The ungrouped bucket is keyed by a constant that never reaches the screen:
@@ -32,10 +36,39 @@ function matchesQuery(host: HostEntry, tags: string[], query: string): boolean {
   return tags.some((tag) => tag.toLowerCase().includes(needle));
 }
 
-export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule }: ConnectionTreeProps) {
+export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule, onDrop }: ConnectionTreeProps) {
   const t = useTranslate();
   const [query, setQuery] = useState("");
   const [grouping, setGrouping] = useState<"groups" | "files">("groups");
+  // What is being dragged, held here rather than read back from the event. A
+  // dragover handler may read dataTransfer.types but not getData — the data is
+  // protected until the drop — so a target cannot inspect the drag in order to
+  // decide whether to accept it, and deciding from state is how that is done.
+  // The private type on dataTransfer is then only good for telling one of these
+  // drags from one that began outside the page.
+  const [dragging, setDragging] = useState<DragPayload | null>(null);
+
+  const groupNames = useMemo(
+    () => (overview.metadata.groups ?? []).map((group) => group.name),
+    [overview.metadata.groups],
+  );
+
+  function startDrag(event: DragEvent, payload: DragPayload) {
+    event.dataTransfer.setData(dragMimeType, JSON.stringify(payload));
+    event.dataTransfer.effectAllowed = "move";
+    setDragging(payload);
+  }
+
+  // A drop target exists only while grouping by group. A file is not a place a
+  // connection can be put: the move API takes a group or a path, not a file the
+  // user happened to point at.
+  function accepts(target: string): boolean {
+    return grouping === "groups" && dragging !== null && canDrop(dragging, target, groupNames);
+  }
+
+  function targetOf(title: string): string {
+    return title === ungrouped ? "" : title;
+  }
 
   const metadataByAlias = useMemo(() => {
     const index = new Map<
@@ -142,7 +175,31 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
       {sections.map((section) => (
         section.items.length === 0 && grouping === "files" ? null : (
           <section key={section.title} className="flex flex-col gap-1">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            <h2
+              draggable={grouping === "groups" && section.title !== ungrouped}
+              onDragStart={(event) => {
+                if (grouping !== "groups" || section.title === ungrouped) return;
+                startDrag(event, { kind: "group", name: section.title });
+              }}
+              onDragEnd={() => setDragging(null)}
+              onDragOver={(event) => {
+                if (!accepts(targetOf(section.title))) return;
+                // This call is the whole of what makes a drop possible.
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+              }}
+              onDrop={(event) => {
+                if (dragging === null || !accepts(targetOf(section.title))) return;
+                event.preventDefault();
+                onDrop(dragging, targetOf(section.title));
+                setDragging(null);
+              }}
+              className={`rounded px-1 text-xs font-semibold uppercase tracking-wide ${
+                accepts(targetOf(section.title))
+                  ? "bg-zinc-800 text-zinc-200 outline outline-1 outline-zinc-600"
+                  : "text-zinc-500"
+              }`}
+            >
               {section.title === ungrouped ? t("tree.ungrouped") : section.title}
             </h2>
             {section.items.length === 0 ? (
@@ -186,6 +243,21 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
                       <button
                         type="button"
                         onClick={() => onSelect(item.host)}
+                        // Only a block with a concrete alias is draggable: the
+                        // move API addresses a block by alias, and a pattern
+                        // rule has none. Those rows are rendered by the branch
+                        // above and are left alone.
+                        draggable={grouping === "groups"}
+                        onDragStart={(event) => {
+                          if (grouping !== "groups") return;
+                          startDrag(event, {
+                            kind: "connection",
+                            path: item.host.identity.path,
+                            alias: item.host.identity.alias,
+                            group: item.group,
+                          });
+                        }}
+                        onDragEnd={() => setDragging(null)}
                         aria-current={active ? "true" : undefined}
                         aria-describedby={descriptionId}
                         className={`w-full rounded px-2 py-1 text-left text-sm ${active ? "bg-zinc-800" : "hover:bg-zinc-900"}`}

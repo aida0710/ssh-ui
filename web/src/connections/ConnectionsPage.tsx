@@ -12,6 +12,7 @@ import {
   type SavePreview,
 } from "../api/config";
 import { ConnectionTree, type HostSelection } from "./ConnectionTree";
+import type { DragPayload } from "./dragdrop";
 import { HostDetailPanel } from "./HostDetail";
 import { NoticeList } from "./SavePreview";
 import { OrphanPanel } from "./OrphanPanel";
@@ -178,6 +179,50 @@ export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
     }
   }
 
+  // A drop is one of the moves this page already performs, chosen by what was
+  // dragged. Nothing new reaches the server: a connection is a move, and a
+  // group changing parent is a rename to a new path.
+  //
+  // A dragged connection is not necessarily the selected one, so its file's
+  // bytes are read here rather than taken from the open detail, and submit is
+  // told not to reselect: the user dropped something, they did not ask to open
+  // it.
+  async function onTreeDrop(payload: DragPayload, target: string) {
+    try {
+      if (payload.kind === "group") {
+        const base = payload.name.slice(payload.name.lastIndexOf("/") + 1);
+        const result = await configApi.renameGroup(payload.name, target === "" ? base : `${target}/${base}`);
+        setPreview(result.preview);
+        setProblem(null);
+        await reload();
+        return;
+      }
+      const file = await configApi.file(payload.path);
+      if (target !== "") {
+        await submit({
+          kind: "move",
+          path: payload.path,
+          base: file.contents,
+          alias: payload.alias,
+          destinationGroup: target,
+        }, false);
+        return;
+      }
+      const destination = await configApi.file(entryPath);
+      await submit({
+        kind: "move",
+        path: payload.path,
+        base: file.contents,
+        alias: payload.alias,
+        destinationPath: entryPath,
+        destinationBase: destination.contents,
+      }, false);
+    } catch (error) {
+      setPreview(null);
+      setProblem(toProblem(error));
+    }
+  }
+
   // The comment is written into the configuration file, so it goes through the
   // same base-and-precondition path as every other edit to that file.
   function onComment(comment: string) {
@@ -325,6 +370,7 @@ export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
           selected={selection}
           onSelect={onSelect}
           onOpenPatternRule={onOpenFile}
+          onDrop={(payload, target) => void onTreeDrop(payload, target)}
         />
       </div>
       <div className="flex flex-col gap-4">
