@@ -35,6 +35,7 @@ func (h SyncHandlers) status(c *echo.Context) error {
 		Endpoint:   endpoint,
 		Bucket:     bucket,
 		Synced:     synced,
+		Direction:  api.SyncDirection(h.Service.Direction()),
 	}
 	if synced {
 		response.LastSyncedAt = &at
@@ -69,12 +70,22 @@ func (h SyncHandlers) Configure(c *echo.Context) error {
 	if request.Region != nil && *request.Region != "" {
 		region = *request.Region
 	}
+	direction := remotesync.DirectionBoth
+	if request.Direction != nil {
+		parsed, ok := remotesync.ParseDirection(string(*request.Direction))
+		if !ok {
+			return problem(c, http.StatusBadRequest, "unknown_sync_direction")
+		}
+		direction = parsed
+	}
 
 	credentials := objectstore.Credentials{
 		AccessKeyID:     request.AccessKeyId,
 		SecretAccessKey: request.SecretAccessKey,
 	}
-	config := remotesync.Config{Endpoint: request.Endpoint, Bucket: request.Bucket, Region: region}
+	config := remotesync.Config{
+		Endpoint: request.Endpoint, Bucket: request.Bucket, Region: region, Direction: direction,
+	}
 	h.Service.Configure(config, credentials, &objectstore.Client{
 		Endpoint: config.Endpoint, Bucket: config.Bucket, Region: config.Region, Creds: credentials,
 	})
@@ -170,6 +181,10 @@ func syncProblem(c *echo.Context, err error) error {
 		return problem(c, http.StatusNotFound, "sync_no_snapshot")
 	case errors.Is(err, remotesync.ErrConflicts):
 		return problem(c, http.StatusConflict, "sync_conflicts")
+	case errors.Is(err, remotesync.ErrPushRefused):
+		return problem(c, http.StatusConflict, "sync_push_refused")
+	case errors.Is(err, remotesync.ErrApplyRefused):
+		return problem(c, http.StatusConflict, "sync_apply_refused")
 	case errors.Is(err, envelope.ErrWrongPassphrase):
 		return problem(c, http.StatusForbidden, "wrong_passphrase")
 	case errors.Is(err, envelope.ErrWeakPassphrase):

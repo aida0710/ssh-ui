@@ -85,6 +85,20 @@ type installation struct {
 	service   *remotesync.Service
 	workspace *storage.Workspace
 	home      string
+
+	// What Configure was called with, so a test can change one field of it
+	// without rebuilding the fixture.
+	config remotesync.Config
+	creds  objectstore.Credentials
+	client *objectstore.Client
+}
+
+// direct re-points this installation at the same bucket with a different
+// direction, the way the settings form does.
+func (i installation) direct(direction remotesync.Direction) {
+	config := i.config
+	config.Direction = direction
+	i.service.Configure(config, i.creds, i.client)
 }
 
 func newInstallation(t *testing.T, bucket *fakeBucket, files map[string]string) installation {
@@ -130,16 +144,18 @@ func newInstallation(t *testing.T, bucket *fakeBucket, files map[string]string) 
 
 	server := httptest.NewTLSServer(bucket.handler())
 	t.Cleanup(server.Close)
-	service.Configure(
-		remotesync.Config{Endpoint: server.URL, Bucket: "ssh-ui", Region: "auto"},
-		objectstore.Credentials{AccessKeyID: "AKID", SecretAccessKey: "secret"},
-		&objectstore.Client{
-			HTTP: server.Client(), Endpoint: server.URL, Bucket: "ssh-ui", Region: "auto",
-			Creds: objectstore.Credentials{AccessKeyID: "AKID", SecretAccessKey: "secret"},
-			Now:   func() time.Time { return time.Unix(0, 0).UTC() },
-		},
-	)
-	return installation{service: service, workspace: workspace, home: home}
+	config := remotesync.Config{Endpoint: server.URL, Bucket: "ssh-ui", Region: "auto"}
+	credentials := objectstore.Credentials{AccessKeyID: "AKID", SecretAccessKey: "secret"}
+	client := &objectstore.Client{
+		HTTP: server.Client(), Endpoint: server.URL, Bucket: "ssh-ui", Region: "auto",
+		Creds: credentials,
+		Now:   func() time.Time { return time.Unix(0, 0).UTC() },
+	}
+	service.Configure(config, credentials, client)
+	return installation{
+		service: service, workspace: workspace, home: home,
+		config: config, creds: credentials, client: client,
+	}
 }
 
 func (i installation) read(t *testing.T, name string) string {
@@ -341,5 +357,64 @@ func TestASecondPushFromTheSameMachineSucceeds(t *testing.T) {
 	}
 	if got := other.read(t, "config"); got != "two\n" {
 		t.Errorf("config = %q, want the second push", got)
+	}
+}
+
+func TestAReceiveOnlyMachineWillNotPush(t *testing.T) {
+	bucket := &fakeBucket{}
+	machine := newInstallation(t, bucket, map[string]string{"config": "Host bastion\n"})
+	machine.direct(remotesync.DirectionPull)
+
+	if err := machine.service.Push(context.Background(), syncPassphrase); !errors.Is(err, remotesync.ErrPushRefused) {
+		t.Fatalf("Push = %v, want ErrPushRefused", err)
+	}
+	// Refused before the request, not after it: nothing reached the bucket.
+	if bucket.body != nil {
+		t.Error("the bucket holds an object a receive-only machine pushed")
+	}
+}
+
+func TestASendOnlyMachineWillNotApply(t *testing.T) {
+	bucket := &fakeBucket{}
+	first := newInstallation(t, bucket, map[string]string{"config": "from the other machine\n"})
+	if err := first.service.Push(context.Background(), syncPassphrase); err != nil {
+		t.Fatal(err)
+	}
+
+	second := newInstallation(t, bucket, map[string]string{"config": "what is on this disk\n"})
+	second.direct(remotesync.DirectionPush)
+
+	// The preview still works. A machine that may not apply is still allowed
+	// to know how far behind it is; refusing to look would make the setting a
+	// blindfold rather than a guard.
+	result, err := second.service.Pull(context.Background(), syncPassphrase)
+	if err != nil {
+		t.Fatalf("Pull = %v, want a preview", err)
+	}
+	if len(result.Conflicts) == 0 {
+		t.Fatal("the preview reported no conflict on a file both machines changed")
+	}
+
+	if err := second.service.Apply(result); !errors.Is(err, remotesync.ErrApplyRefused) {
+		t.Fatalf("Apply = %v, want ErrApplyRefused", err)
+	}
+	if got := second.read(t, "config"); got != "what is on this disk\n" {
+		t.Errorf("config = %q; a send-only machine had its file overwritten", got)
+	}
+}
+
+func TestBothIsTheDefaultAndTheEmptyStringMeansIt(t *testing.T) {
+	bucket := &fakeBucket{}
+	machine := newInstallation(t, bucket, map[string]string{"config": "Host bastion\n"})
+	if got := machine.service.Direction(); got != remotesync.DirectionBoth {
+		t.Errorf("Direction() = %q, want both", got)
+	}
+	for _, name := range []string{"", "both", "push", "pull"} {
+		if _, ok := remotesync.ParseDirection(name); !ok {
+			t.Errorf("ParseDirection(%q) refused a name it should accept", name)
+		}
+	}
+	if _, ok := remotesync.ParseDirection("sideways"); ok {
+		t.Error("ParseDirection accepted a name that is not a direction")
 	}
 }

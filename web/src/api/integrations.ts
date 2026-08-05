@@ -16,6 +16,7 @@ export type IssueActionResponse = components["schemas"]["IssueActionResponse"];
 export type PasswordVaultStatus = components["schemas"]["PasswordVaultStatus"];
 export type SyncStatus = components["schemas"]["SyncStatus"];
 export type SyncSettingsRequest = components["schemas"]["SyncSettingsRequest"];
+export type SyncDirection = components["schemas"]["SyncDirection"];
 export type PullResponse = components["schemas"]["PullResponse"];
 
 // The action vocabulary belongs to the server's session package, which owns it
@@ -277,6 +278,12 @@ function validateSyncStatus(value: unknown): SyncStatus {
   asString(record.endpoint);
   asString(record.bucket);
   asBoolean(record.synced);
+  // The direction decides which buttons this panel offers, so a value outside
+  // the three is refused rather than shown as an unknown mode.
+  const direction = asString(record.direction);
+  if (direction !== "both" && direction !== "push" && direction !== "pull") {
+    throw new Error(`unexpected sync direction: ${direction}`);
+  }
   return record as unknown as SyncStatus;
 }
 

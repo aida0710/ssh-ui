@@ -1367,10 +1367,18 @@ components:
         command: { type: string }
         launchable: { type: boolean }
         warning: { type: string }
+    # Which way this machine is allowed to move data. It governs the writes and
+    # nothing else: "push" refuses to apply a snapshot to this disk, "pull"
+    # refuses to write one to the bucket. A preview reads and writes nothing, so
+    # it stays available either way and a machine that may not apply can still
+    # see how far behind it is.
+    SyncDirection:
+      type: string
+      enum: [both, push, pull]
     SyncStatus:
       type: object
       additionalProperties: false
-      required: [configured, endpoint, bucket, synced]
+      required: [configured, endpoint, bucket, synced, direction]
       properties:
         configured: { type: boolean }
         # The endpoint and the bucket are shown back so the user can see what
@@ -1378,6 +1386,7 @@ components:
         endpoint: { type: string }
         bucket: { type: string }
         synced: { type: boolean }
+        direction: { $ref: "#/components/schemas/SyncDirection" }
         lastSyncedAt: { type: string }
         origin: { type: string }
         fileCount: { type: integer }
@@ -1391,6 +1400,7 @@ components:
         region: { type: string, maxLength: 64 }
         accessKeyId: { type: string, minLength: 1, maxLength: 512 }
         secretAccessKey: { type: string, minLength: 1, maxLength: 512 }
+        direction: { $ref: "#/components/schemas/SyncDirection" }
     PullRequest:
       type: object
       additionalProperties: false

@@ -3,6 +3,7 @@ import {
   integrationsApi,
   type IntegrationsApi,
   type PullResponse,
+  type SyncDirection,
   type SyncStatus,
 } from "../api/integrations";
 import { useTranslate } from "../i18n/context";
@@ -30,6 +31,7 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
   const [bucket, setBucket] = useState("");
   const [accessKeyId, setAccessKeyId] = useState("");
   const [secretAccessKey, setSecretAccessKey] = useState("");
+  const [direction, setDirection] = useState<SyncDirection>("both");
   const [passphrase, setPassphrase] = useState("");
   const [preview, setPreview] = useState<PullResponse | null>(null);
   const [notice, setNotice] = useState("");
@@ -119,13 +121,31 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
               className={control}
             />
           </Field>
+          {/*
+            Which way this machine may move data. It governs the two writes: a
+            machine set to send never has another machine's bytes applied to it,
+            and one set to receive never writes to the bucket. The preview stays
+            available either way, so a machine that may not apply can still be
+            told how far behind it is.
+          */}
+          <Field label={t("sync.direction")} hint={t(`sync.direction.${direction}.hint`)}>
+            <select
+              value={direction}
+              onChange={(event) => setDirection(event.target.value as SyncDirection)}
+              className={control}
+            >
+              <option value="both">{t("sync.direction.both")}</option>
+              <option value="push">{t("sync.direction.push")}</option>
+              <option value="pull">{t("sync.direction.pull")}</option>
+            </select>
+          </Field>
         </div>
         <button
           type="button"
           disabled={busy || endpoint === "" || bucket === "" || accessKeyId === "" || secretAccessKey === ""}
           onClick={() =>
             void run(
-              () => api.configureSync({ endpoint, bucket, accessKeyId, secretAccessKey }),
+              () => api.configureSync({ endpoint, bucket, accessKeyId, secretAccessKey, direction }),
               (next) => {
                 setStatus(next);
                 setAccessKeyId("");
@@ -155,10 +175,18 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
             className={control}
           />
         </Field>
+        {status.direction === "both" ? null : (
+          // The refusal is stated where the button is, not only when it is
+          // pressed: a disabled control with no reason beside it reads as a
+          // fault in the application rather than as a setting.
+          <p role="status" className="text-sm text-amber-300">
+            {t(`sync.direction.${status.direction}.active`)}
+          </p>
+        )}
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            disabled={busy || !status.configured || passphrase === ""}
+            disabled={busy || !status.configured || passphrase === "" || status.direction === "pull"}
             onClick={() =>
               void run(
                 () => api.pushSnapshot(passphrase),
@@ -238,7 +266,12 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
           )}
           <button
             type="button"
-            disabled={busy || conflicted || preview.written.length + preview.removed.length === 0}
+            disabled={
+              busy ||
+              conflicted ||
+              status.direction === "push" ||
+              preview.written.length + preview.removed.length === 0
+            }
             onClick={() =>
               void run(
                 () => api.pullSnapshot(passphrase, true),

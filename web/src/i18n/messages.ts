@@ -151,6 +151,17 @@ export const en = {
   "sync.secretAccessKey": "Secret access key",
   "sync.credentialsNote":
     "Held in memory for this run only, never written into ~/.ssh. A snapshot carrying the key to its own bucket would mean anyone who obtained one snapshot could fetch every later one.",
+  "sync.direction": "Direction",
+  "sync.direction.both": "Send and receive",
+  "sync.direction.push": "Send only",
+  "sync.direction.pull": "Receive only",
+  "sync.direction.both.hint": "This machine may push its workspace and apply what another machine pushed.",
+  "sync.direction.push.hint":
+    "This machine pushes only. Nothing another machine pushed will be written here, and checking for changes still works.",
+  "sync.direction.pull.hint":
+    "This machine receives only. Nothing done here will reach the bucket or the other machines.",
+  "sync.direction.push.active": "Set to send only: this workspace can be pushed, and a snapshot cannot be applied to it.",
+  "sync.direction.pull.active": "Set to receive only: a snapshot can be applied here, and this workspace cannot be pushed.",
   "sync.configure": "Use this bucket",
   "sync.configureFailed": "That bucket could not be configured.",
   "sync.snapshotHeading": "Snapshot",
@@ -685,6 +696,16 @@ export const ja: Record<MessageKey, string> = {
   "sync.secretAccessKey": "シークレットアクセスキー",
   "sync.credentialsNote":
     "この起動中だけメモリに保持し、~/.ssh には書き込みません。自分のバケットへの鍵をスナップショットが持っていたら、1 つ入手した相手が以降の全てを取得できてしまいます。",
+  "sync.direction": "同期の方向",
+  "sync.direction.both": "送信と受信",
+  "sync.direction.push": "送信のみ",
+  "sync.direction.pull": "受信のみ",
+  "sync.direction.both.hint": "このマシンは push でき、他のマシンが push したものを適用できます。",
+  "sync.direction.push.hint":
+    "このマシンは push のみです。他のマシンが push したものがここに書き込まれることはありません。変更の確認はできます。",
+  "sync.direction.pull.hint": "このマシンは受信のみです。ここでの操作がバケットや他のマシンに届くことはありません。",
+  "sync.direction.push.active": "送信のみに設定されています。push はできますが、スナップショットの適用はできません。",
+  "sync.direction.pull.active": "受信のみに設定されています。適用はできますが、このワークスペースの push はできません。",
   "sync.configure": "このバケットを使う",
   "sync.configureFailed": "そのバケットを設定できませんでした。",
   "sync.snapshotHeading": "スナップショット",

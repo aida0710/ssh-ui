@@ -35,13 +35,54 @@ var (
 	ErrNoSnapshot = errors.New("the bucket holds no snapshot yet")
 	// ErrConflicts reports that a pull cannot be applied without a decision.
 	ErrConflicts = errors.New("this pull needs a decision on at least one file")
+	// ErrPushRefused reports a push on a machine set to receive only.
+	ErrPushRefused = errors.New("this machine is set to receive only")
+	// ErrApplyRefused reports an apply on a machine set to send only.
+	ErrApplyRefused = errors.New("this machine is set to send only")
 )
+
+// Direction is which way this machine may move data.
+//
+// It governs the two writes and nothing else. A preview reads the bucket and
+// writes nothing, so it stays available in both one-way settings: a laptop that
+// may not apply a snapshot can still be told how far behind it is, which is the
+// difference between a safety setting and a blindfold.
+type Direction string
+
+const (
+	// DirectionBoth is the default: this machine may push and may apply.
+	DirectionBoth Direction = "both"
+	// DirectionPush is for a machine that is the source — a workstation whose
+	// configuration is the one worth keeping. It never applies a snapshot, so
+	// nothing another machine pushed can overwrite what is on this disk.
+	DirectionPush Direction = "push"
+	// DirectionPull is for a machine that is a copy — a shared or temporary
+	// one. It never writes to the bucket, so nothing done here can reach the
+	// other machines.
+	DirectionPull Direction = "pull"
+)
+
+// ParseDirection accepts the three names and treats the empty string as both,
+// so a caller that has never heard of directions behaves as it always did.
+func ParseDirection(name string) (Direction, bool) {
+	switch Direction(name) {
+	case "", DirectionBoth:
+		return DirectionBoth, true
+	case DirectionPush:
+		return DirectionPush, true
+	case DirectionPull:
+		return DirectionPull, true
+	default:
+		return DirectionBoth, false
+	}
+}
 
 // Config is what the user supplies once.
 type Config struct {
-	Endpoint string
-	Bucket   string
-	Region   string
+	Endpoint  string
+	Bucket    string
+	Region    string
+	Direction Direction
 }
 
 // state is this machine's record of the last successful sync.
@@ -107,6 +148,16 @@ func (s *Service) Configured() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.client != nil && s.config.Bucket != "" && s.creds.AccessKeyID != ""
+}
+
+// Direction reports which way this machine may move data.
+func (s *Service) Direction() Direction {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.config.Direction == "" {
+		return DirectionBoth
+	}
+	return s.config.Direction
 }
 
 func (s *Service) store() (*objectstore.Client, error) {
@@ -216,6 +267,9 @@ func (s *Service) walkKeys() ([]string, error) {
 // silently clobber another machine's work — which is what makes the word
 // "automatic" safe to use about this.
 func (s *Service) Push(ctx context.Context, passphrase string) error {
+	if s.Direction() == DirectionPull {
+		return ErrPushRefused
+	}
 	client, err := s.store()
 	if err != nil {
 		return err
@@ -318,6 +372,12 @@ func (s *Service) Pull(ctx context.Context, passphrase string) (PullResult, erro
 // Apply commits a pull. It refuses while any file is in conflict, because
 // applying half of a snapshot produces a workspace that matches neither side.
 func (s *Service) Apply(result PullResult) error {
+	// The direction is checked here rather than in Pull: a preview writes
+	// nothing, so a send-only machine can still be told how far behind it is.
+	// This is the call that would put another machine's bytes on this disk.
+	if s.Direction() == DirectionPush {
+		return ErrApplyRefused
+	}
 	if len(result.Conflicts) > 0 {
 		return ErrConflicts
 	}

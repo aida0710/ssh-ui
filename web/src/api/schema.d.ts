@@ -1088,11 +1088,14 @@ export interface components {
             launchable: boolean;
             warning: string;
         };
+        /** @enum {string} */
+        SyncDirection: "both" | "push" | "pull";
         SyncStatus: {
             configured: boolean;
             endpoint: string;
             bucket: string;
             synced: boolean;
+            direction: components["schemas"]["SyncDirection"];
             lastSyncedAt?: string;
             origin?: string;
             fileCount?: number;
@@ -1103,6 +1106,7 @@ export interface components {
             region?: string;
             accessKeyId: string;
             secretAccessKey: string;
+            direction?: components["schemas"]["SyncDirection"];
         };
         PullRequest: {
             passphrase: string;

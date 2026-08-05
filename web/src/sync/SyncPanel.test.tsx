@@ -8,12 +8,19 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const unconfigured: SyncStatus = { configured: false, endpoint: "", bucket: "", synced: false };
+const unconfigured: SyncStatus = {
+  configured: false,
+  endpoint: "",
+  bucket: "",
+  synced: false,
+  direction: "both",
+};
 const configured: SyncStatus = {
   configured: true,
   endpoint: "https://acc.r2.cloudflarestorage.com",
   bucket: "ssh-ui",
   synced: true,
+  direction: "both",
   lastSyncedAt: "2026-08-05T00:00:00Z",
   fileCount: 7,
 };
@@ -56,6 +63,7 @@ describe("SyncPanel", () => {
         bucket: "ssh-ui",
         accessKeyId: "AKID",
         secretAccessKey: "the-secret",
+        direction: "both",
       }),
     );
     await waitFor(() =>
@@ -119,6 +127,54 @@ describe("SyncPanel", () => {
     await userEvent.click(screen.getByRole("button", { name: "Check for changes" }));
 
     expect(await screen.findByText(/already matches the snapshot/)).toBeInTheDocument();
+  });
+
+  it("sends the chosen direction with the bucket", async () => {
+    const api = buildApi(unconfigured, nothingToDo);
+    render(<SyncPanel api={api} />);
+
+    await userEvent.type(await screen.findByLabelText("Endpoint"), "https://acc.r2.cloudflarestorage.com");
+    await userEvent.type(screen.getByLabelText("Bucket name"), "ssh-ui");
+    await userEvent.type(screen.getByLabelText("Access key ID"), "AKID");
+    await userEvent.type(screen.getByLabelText("Secret access key"), "the-secret");
+    await userEvent.selectOptions(screen.getByLabelText("Direction"), "pull");
+    await userEvent.click(screen.getByRole("button", { name: "Use this bucket" }));
+
+    await waitFor(() =>
+      expect(api.configureSync).toHaveBeenCalledWith(
+        expect.objectContaining({ direction: "pull" }),
+      ),
+    );
+  });
+
+  it("offers no push on a machine set to receive only, and says why", async () => {
+    const api = buildApi({ ...configured, direction: "pull" }, nothingToDo);
+    render(<SyncPanel api={api} />);
+
+    await userEvent.type(await screen.findByLabelText("Snapshot passphrase"), "a passphrase");
+    expect(screen.getByRole("button", { name: "Push this workspace" })).toBeDisabled();
+    // The reason stands beside the control. A disabled button with nothing
+    // next to it reads as a fault rather than as a setting.
+    expect(screen.getByText(/Set to receive only/)).toBeInTheDocument();
+  });
+
+  it("offers no apply on a machine set to send only, but still shows what would change", async () => {
+    const api = buildApi({ ...configured, direction: "push" }, {
+      applied: false,
+      conflicts: [],
+      written: ["config"],
+      removed: [],
+    });
+    render(<SyncPanel api={api} />);
+
+    await userEvent.type(await screen.findByLabelText("Snapshot passphrase"), "a passphrase");
+    await userEvent.click(screen.getByRole("button", { name: "Check for changes" }));
+
+    // Looking is not moving. A machine that may not apply is still allowed to
+    // know how far behind it is.
+    expect(await screen.findByText("config")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Apply the snapshot" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Push this workspace" })).toBeEnabled();
   });
 
   it("reports a refused push instead of claiming success", async () => {
