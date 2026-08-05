@@ -326,6 +326,11 @@ func serviceProblem(c *echo.Context, err error) error {
 		errors.Is(err, application.ErrUnknownEditAction),
 		errors.Is(err, application.ErrDuplicateDestinationAlias):
 		return problemWith(c, http.StatusUnprocessableEntity, problemPayload{Code: "invalid_edit"})
+	case errors.Is(err, application.ErrAliasAlreadyDeclared):
+		// Its own code rather than invalid_edit: nothing about the request is
+		// malformed, and the user needs to be told that the name is taken
+		// rather than that their edit was.
+		return problemWith(c, http.StatusConflict, problemPayload{Code: "alias_already_declared"})
 	default:
 		return problemWith(c, http.StatusInternalServerError, problemPayload{Code: "internal_error"})
 	}

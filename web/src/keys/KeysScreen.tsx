@@ -143,6 +143,14 @@ function relocateStem(item: KeyItem): string {
   return base;
 }
 
+// agentHolds reports whether the agent is currently holding this key, matched
+// by fingerprint because that is the only thing an agent identity and an
+// inventory item have in common: the agent knows nothing about file paths.
+function agentHolds(inventory: KeyInventoryResponse, item: KeyItem): boolean {
+  if (!inventory.agentAvailable || item.fingerprint === "") return false;
+  return inventory.agentIdentities.some((identity) => identity.fingerprint === item.fingerprint);
+}
+
 export function KeysScreen({ api = keysApi, groups = [] }: KeysScreenProps) {
   const t = useTranslate();
   const [state, setState] = useState<ScreenState>("loading");
@@ -249,6 +257,18 @@ export function KeysScreen({ api = keysApi, groups = [] }: KeysScreenProps) {
       setCurrentPassphrase("");
       setNewPassphrase("");
       setFailure(t("keys.passphraseFailed"));
+    }
+  }
+
+  // The agent is asked to give a key back. Nothing is destroyed, so there is no
+  // confirmation: the worst outcome is one more passphrase prompt. The answer
+  // carries what the agent holds afterwards, which is what the screen reloads.
+  async function removeFromAgent(keyId: string) {
+    try {
+      await api.deregisterFromAgent(keyId);
+      await refresh();
+    } catch {
+      setFailure(t("keys.agentRemoveFailed"));
     }
   }
 
@@ -456,6 +476,15 @@ export function KeysScreen({ api = keysApi, groups = [] }: KeysScreenProps) {
                     >
                       {t("keys.addToAgent")}
                     </button>
+                    {agentHolds(inventory, item) && (
+                      <button
+                        type="button"
+                        className={rowAction}
+                        onClick={() => void removeFromAgent(item.id)}
+                      >
+                        {t("keys.removeFromAgent")}
+                      </button>
+                    )}
                     <button type="button" className={rowAction} onClick={() => void moveToTrash(item.id)}>
                       {t("keys.moveToTrash")}
                     </button>

@@ -675,6 +675,27 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "502": { $ref: "#/components/responses/Problem" }
+    delete:
+      # Removing an identity needs no confirmation token: it destroys nothing
+      # and the worst case is that the user is asked for a passphrase again.
+      operationId: deregisterKeyFromAgent
+      parameters:
+        - name: keyId
+          in: path
+          required: true
+          schema: { type: string, minLength: 32, maxLength: 32 }
+      responses:
+        "200":
+          description: Key removed from the ssh-agent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentIdentitiesResponse" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "502": { $ref: "#/components/responses/Problem" }
   /api/v1/keys/{keyId}/trash:
     post:
       operationId: trashKey
@@ -991,6 +1012,16 @@ components:
         fingerprint: { type: string }
         comment: { type: string }
         algorithm: { type: string }
+    AgentIdentitiesResponse:
+      type: object
+      additionalProperties: false
+      required: [id, agentAvailable, identities]
+      properties:
+        id: { type: string }
+        agentAvailable: { type: boolean }
+        identities:
+          type: array
+          items: { $ref: "#/components/schemas/AgentIdentity" }
     KeyInventoryResponse:
       type: object
       additionalProperties: false

@@ -233,8 +233,13 @@ func ProjectHosts(graph *config.Graph, root string) ([]HostEntry, []Notice) {
 		if !entry.File.External {
 			entry.Identity = HostIdentity{Path: entry.File.Path, Alias: alias}
 		}
-		key := entry.File.Absolute + "\x00" + alias
-		if seen[key] {
+		// Keyed on the alias alone, not on the file it sits in. OpenSSH keeps
+		// the first value it reads across the whole Include graph, so the pair
+		// that matters is the one split across two files: each block looks
+		// correct where it sits, and only the reading order says which one the
+		// user actually gets. The walk is in reading order, so the first block
+		// seen is the winner and every later one is shadowed.
+		if seen[alias] {
 			entry.Duplicate = true
 			notices = appendNotice(notices, Notice{
 				Code: NoticeDuplicateAlias, Path: entry.File.Path, Line: entry.Line, Detail: alias,
@@ -243,7 +248,7 @@ func ProjectHosts(graph *config.Graph, root string) ([]HostEntry, []Notice) {
 				Code: NoticeComplexExternalRule, Path: entry.File.Path, Line: entry.Line, Detail: alias,
 			})
 		}
-		seen[key] = true
+		seen[alias] = true
 		hosts = append(hosts, entry)
 		return true
 	})
@@ -295,7 +300,11 @@ func ProjectHostForm(graph *config.Graph, root string, identity HostIdentity) (H
 	// this form does not own, and the Raw editor and the delete path both write
 	// this text back, so including it would let an edit here rewrite or remove
 	// the next connection's description.
+	// It can hold the generated region too, which belongs to no connection: the
+	// Raw editor writes this text back, so showing it here would let an edit to
+	// one host delete every group declaration.
 	end := node.File.CommentRun(block.End)
+	_, end = ClampToRegion(node.File, block.Header, end)
 	for index := block.Start; index < end; index++ {
 		line := node.File.Lines[index]
 		raw.WriteString(line.Render())

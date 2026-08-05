@@ -393,6 +393,19 @@ func (s *Service) planGroupLayout(
 			Code: NoticeGroupDirectoryLeftover, Detail: name, Path: GroupDirectory(name),
 		})
 	}
+	// A delete with no destination lands its connections directly under
+	// connections/, which no Include names. That is the operation working as
+	// designed, and it is also a connection leaving the configuration, so it is
+	// said here — before the save — rather than being left for the user to
+	// notice when something stops resolving.
+	for _, relocation := range connectionMoves {
+		if _, inGroup := GroupOfPath(relocation.to); inGroup {
+			continue
+		}
+		prepared.preview.Notices = appendNotice(prepared.preview.Notices, Notice{
+			Code: NoticeGroupFileUnreached, Path: relocation.to, Detail: relocation.from,
+		})
+	}
 	return prepared, nil
 }
 
@@ -432,14 +445,20 @@ func (s *Service) groupFileMoves(renamed map[string]string, root string, directo
 				// destination, so its files are not moved twice from here.
 				continue
 			}
-			target := entry.Name()
+			// With no destination the file lands directly under its own tree —
+			// connections/ or keys/ — rather than in a group. For a connection
+			// that means nothing reads it, which the preview now says outright.
+			// For a key it means nothing has changed except its directory.
+			//
+			// Both roots are treated the same on purpose. Aiming a key at the
+			// workspace root instead, as this did, gave it the directory ".",
+			// which AbsolutePath refuses because it is the root; the whole
+			// delete then failed with "path is outside the ssh directory", and
+			// a group holding a key could not be deleted at all without naming
+			// somewhere else to put it.
+			target := root + "/" + entry.Name()
 			if destination != "" {
 				target = directoryOf(destination) + "/" + entry.Name()
-			} else if root == ConnectionsDirectory {
-				// An ungrouped connection file has no home that anything reads,
-				// so a delete without a destination leaves it directly under
-				// connections/ where the UI reports it as unreached.
-				target = root + "/" + entry.Name()
 			}
 			moves = append(moves, groupRelocation{from: source + "/" + entry.Name(), to: target})
 		}

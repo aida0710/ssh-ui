@@ -68,6 +68,10 @@ export const en = {
   "notice.group_member_missing": "This group member has no host block in the configuration.",
   "notice.explained_values_only": "These values explain what this engine reads. Run ssh -G from the Diagnostics tab for the authoritative answer.",
   "notice.destination_not_included": "No Include reaches this file yet, so OpenSSH will not read the moved connection until you add one.",
+  "notice.group_file_unreached":
+    "This file sits under connections/ but no Include names it, so OpenSSH never reads it. Move it into a declared group to bring it back.",
+  "notice.group_directory_leftover":
+    "The group's directory is now empty. Nothing reads it and nothing removes it; delete it yourself if you want it gone.",
   "notice.include_no_longer_matches":
     "A pattern that reached this file will not match its new name, so OpenSSH will stop reading it.",
   "notice.include_not_rewritten":
@@ -496,6 +500,8 @@ export const en = {
   "keys.showPrivateKey": "Show private key",
   "keys.changePassphrase": "Change passphrase",
   "keys.addToAgent": "Add to agent",
+  "keys.removeFromAgent": "Remove from agent",
+  "keys.agentRemoveFailed": "The agent would not give this key back. It may already have dropped it, or the public key it is removed by may be gone.",
   "keys.moveToTrash": "Move to trash",
   "keys.publicKeyHeading": "Public key: {path}",
   "keys.publicKeyLabel": "Public key",
@@ -655,6 +661,10 @@ export const ja: Record<MessageKey, string> = {
   "notice.group_member_missing": "このグループのメンバーに対応する Host ブロックが設定にありません。",
   "notice.explained_values_only": "これらの値はこのエンジンが読んだ内容の説明です。権威ある答えは Diagnostics タブの ssh -G で確認してください。",
   "notice.destination_not_included": "このファイルへ届く Include がまだないため、移動した接続を OpenSSH は読みません。Include を追加してください。",
+  "notice.group_file_unreached":
+    "このファイルは connections/ にありますが、どの Include も名指ししていないため OpenSSH は読みません。宣言済みのグループへ移動すると再び読まれます。",
+  "notice.group_directory_leftover":
+    "グループのディレクトリが空になりました。何も読まず、何も削除しません。不要なら手で削除してください。",
   "notice.include_no_longer_matches": "このファイルへ届いていたパターンが新しい名前に一致しないため、OpenSSH は読まなくなります。",
   "notice.include_not_rewritten":
     "このアプリが書き換えない形の Include がこのファイルを指しています。そのまま残したので、手で確認してください。",
@@ -1076,6 +1086,8 @@ export const ja: Record<MessageKey, string> = {
   "keys.showPrivateKey": "秘密鍵を表示",
   "keys.changePassphrase": "パスフレーズを変更",
   "keys.addToAgent": "agent に追加",
+  "keys.removeFromAgent": "agent から削除",
+  "keys.agentRemoveFailed": "agent がこの鍵を手放しませんでした。すでに保持していないか、削除に使う公開鍵が失われている可能性があります。",
   "keys.moveToTrash": "ゴミ箱へ移動",
   "keys.publicKeyHeading": "公開鍵: {path}",
   "keys.publicKeyLabel": "公開鍵",

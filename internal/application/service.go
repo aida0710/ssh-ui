@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -254,6 +255,7 @@ func (s *Service) Overview() (Overview, error) {
 	}
 	reconciled, orphanNotices := ReconcileMetadata(stored, identities)
 	notices = append(notices, orphanNotices...)
+	notices = append(notices, s.unreachedConnectionFiles(graph)...)
 
 	overview := Overview{
 		Entry:    NewFileRef(root, s.entryPath),
@@ -503,6 +505,9 @@ func (s *Service) planFileEdit(graph *config.Graph, request EditRequest) (planne
 				return planned{}, err
 			}
 		case EditRename:
+			if err := refuseTakenAlias(graph, request.Alias, request.NewAlias); err != nil {
+				return planned{}, err
+			}
 			if err := RenameHostAlias(file, block, request.Alias, request.NewAlias); err != nil {
 				return planned{}, err
 			}
@@ -603,9 +608,13 @@ func (s *Service) planFileEdit(graph *config.Graph, request EditRequest) (planne
 //
 // The file keeps its own name and changes directory, so a move between groups
 // is exactly what it looks like in a shell: the same file, somewhere else. The
-// group must already be declared — creating one is its own operation with its
-// own preview, and inferring a group from a move would put an Include in the
-// entry file as a side effect of an unrelated request.
+// name passes through GroupFileName first, because a group is read by one
+// Include pattern and a name that pattern does not match would land the block
+// somewhere OpenSSH never looks.
+//
+// The group must already be declared — creating one is its own operation with
+// its own preview, and inferring a group from a move would put an Include in
+// the entry file as a side effect of an unrelated request.
 func (s *Service) resolveDestination(graph *config.Graph, request EditRequest) (EditRequest, error) {
 	if request.DestinationGroup == "" {
 		return request, nil
@@ -626,9 +635,106 @@ func (s *Service) resolveDestination(graph *config.Graph, request EditRequest) (
 	if !declared {
 		return EditRequest{}, ErrGroupNotDeclared
 	}
-	name := path.Base(filepath.ToSlash(request.Path))
+	name := GroupFileName(path.Base(filepath.ToSlash(request.Path)))
 	request.DestinationPath = GroupDirectory(request.DestinationGroup) + "/" + name
 	return request, nil
+}
+
+// destinationWillBeRead reports whether OpenSSH reads the destination once the
+// move has written it.
+//
+// A file already in the Include graph is read. A file that is not there yet is
+// read when a declared group's Include pattern matches it: the graph's globs
+// were resolved against the disk as it was, and this move is what puts the file
+// on it. Warning about those would attach the notice to every first move into a
+// group, which is exactly how a user learns to click past it.
+func (s *Service) destinationWillBeRead(graph *config.Graph, absolute, relative string) bool {
+	if _, included := graph.Nodes[absolute]; included {
+		return true
+	}
+	destination := filepath.ToSlash(relative)
+	for _, name := range s.declaredGroups(graph) {
+		if matched, err := path.Match(GroupIncludePattern(name), destination); err == nil && matched {
+			return true
+		}
+	}
+	return false
+}
+
+// unreachedConnectionFiles reports every .conf file under connections/ that no
+// Include in the resolved graph reaches.
+//
+// A file there is read by nobody, and looks entirely correct while it is: the
+// blocks parse, the host is spelled right, and `ssh` has simply never heard of
+// it. The group delete puts a file in exactly this position on purpose when it
+// is given no destination, so the promise that it would be reported has to be
+// kept somewhere, and this is the only view every screen already reads.
+//
+// A directory that is not a declared group is walked too, because being
+// undeclared is precisely what makes the files inside it unreachable.
+func (s *Service) unreachedConnectionFiles(graph *config.Graph) []Notice {
+	root := s.workspace.Root()
+	base := filepath.Join(root, ConnectionsDirectory)
+	var notices []Notice
+
+	var walk func(directory string, depth int)
+	walk = func(directory string, depth int) {
+		if depth > MaxGroupSegments {
+			return
+		}
+		entries, err := s.workspace.FileSystem().ReadDir(directory)
+		if err != nil {
+			return
+		}
+		for _, entry := range entries {
+			path := filepath.Join(directory, entry.Name())
+			if entry.IsDir() {
+				walk(path, depth+1)
+				continue
+			}
+			if !strings.HasSuffix(entry.Name(), groupFileSuffix) {
+				continue
+			}
+			if _, reached := graph.Nodes[path]; reached {
+				continue
+			}
+			notices = appendNotice(notices, Notice{
+				Code: NoticeGroupFileUnreached,
+				Path: NewFileRef(root, path).Path,
+			})
+		}
+	}
+	walk(base, 0)
+	return notices
+}
+
+// refuseTakenAlias refuses a rename onto a name another Host block already
+// declares, anywhere the Include graph reaches.
+//
+// The graph is the one resolved before the edit, so the block being renamed
+// still carries its old name and cannot match the new one. A rename to the name
+// it already has is a no-op and is let through rather than refused for
+// colliding with itself.
+//
+// Only a block that names the alias outright counts. A catch-all matches every
+// alias and declares none, so refusing on it would refuse every rename in any
+// configuration that ends with `Host *` — which is most of them.
+func refuseTakenAlias(graph *config.Graph, from, to string) error {
+	if from == to {
+		return nil
+	}
+	var taken error
+	WalkDirectives(graph, func(visit Visit) bool {
+		if visit.Block.Kind != config.BlockHost || visit.Block.Header != visit.Index {
+			return true
+		}
+		if declaresExactly(visit.Block.Patterns, to) {
+			taken = ErrAliasAlreadyDeclared
+			return false
+		}
+		return true
+	})
+	return taken
 }
 
 // declaredGroups reads the group declaration out of the resolved entry file.
@@ -745,7 +851,7 @@ func (s *Service) planMoveHost(graph *config.Graph, request EditRequest) (planne
 		},
 	}
 
-	if _, included := graph.Nodes[destinationAbsolute]; !included {
+	if !s.destinationWillBeRead(graph, destinationAbsolute, request.DestinationPath) {
 		prepared.preview.Notices = appendNotice(prepared.preview.Notices, Notice{
 			Code:   NoticeDestinationNotIncluded,
 			Path:   request.DestinationPath,

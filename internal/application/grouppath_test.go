@@ -2,9 +2,36 @@ package application
 
 import (
 	"errors"
+	"path"
 	"strings"
 	"testing"
 )
+
+// A group is read by one Include line and nothing else, so a file this
+// application puts into a group must have a name that line matches. Deriving a
+// destination name from a source that is not already a .conf file — the entry
+// file "config" above all, which is where every ungrouped connection starts —
+// writes a file OpenSSH never reads.
+func TestGroupFileNameIsAlwaysReadByTheGroupInclude(t *testing.T) {
+	const group = "work"
+	pattern := GroupIncludePattern(group)
+	for _, source := range []string{"config", "10-home.conf", "hosts", "notes.txt", ".conf"} {
+		derived := GroupFileName(source)
+		matched, err := path.Match(pattern, GroupDirectory(group)+"/"+derived)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !matched {
+			t.Errorf("GroupFileName(%q) = %q, which %q does not read", source, derived, pattern)
+		}
+	}
+}
+
+func TestGroupFileNameKeepsANameTheIncludeAlreadyReads(t *testing.T) {
+	if derived := GroupFileName("10-home.conf"); derived != "10-home.conf" {
+		t.Errorf("GroupFileName = %q, want the name unchanged", derived)
+	}
+}
 
 func TestValidateGroupNameRefusesEverythingThatIsNotASafeRelativeDirectory(t *testing.T) {
 	accepted := []string{"work", "work/eu", "a-b_c.d", "Work", "x", strings.Repeat("a", 64)}
