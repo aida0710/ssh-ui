@@ -3,6 +3,18 @@ import { ApiError, type Problem } from "../api/client";
 import { configApi, type GroupMetadata, type Metadata, type Overview, type SavePreview } from "../api/config";
 import { SavePreviewPanel } from "../connections/SavePreview";
 import { formatValues, parseValues } from "../connections/values";
+import {
+  Field,
+  control,
+  dangerAction,
+  fieldLabel,
+  hintText,
+  narrowControl,
+  primaryAction,
+  secondaryAction,
+  sectionCard,
+  sectionHeading,
+} from "../ui/form";
 import { useTranslate } from "../i18n/context";
 
 function toProblem(error: unknown): Problem {
@@ -244,107 +256,138 @@ export function GroupsPanel() {
             style={{ marginInlineStart: `${(depthOf(group.name) - 1) * 1.5}rem` }}
           >
             {/*
+              What the group *is* — its name, its colour, where its files are
+              and who is in it — is the header. Everything that changes it is
+              below a rule. The two used to be one undifferentiated stack of
+              six labelled boxes per group, which for four groups is a page of
+              controls with the facts buried in it.
+
               The heading is still the whole path, so it stays the group's one
               name for a screen reader and for the rename button beside it. Only
               the ancestor part is dimmed, which is what makes the tree readable
               without inventing a second identifier.
             */}
-            <h3 className="text-sm font-medium">
-              {depthOf(group.name) === 1 ? null : (
-                <span className="text-zinc-500">{group.name.slice(0, group.name.lastIndexOf("/") + 1)}</span>
-              )}
-              <span>{group.name.slice(group.name.lastIndexOf("/") + 1)}</span>
-            </h3>
-            <p className="font-mono text-xs text-zinc-400">
-              {t("groups.directories", {
-                connections: `connections/${group.name}`,
-                keys: `keys/${group.name}`,
-              })}
-            </p>
-            <ul className="mt-1 text-xs text-zinc-300">
-              {(group.settings ?? []).map((setting, index) => (
-                <li key={`${setting.keyword}-${index}`}>{`${setting.keyword} ${formatValues(setting.values)}`}</li>
-              ))}
-            </ul>
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h3 className="flex items-baseline gap-2 text-sm font-medium">
+                <span
+                  aria-hidden="true"
+                  className="h-2 w-2 shrink-0 self-center rounded-full"
+                  style={{ backgroundColor: group.colour === undefined || group.colour === "" ? "#3f3f46" : group.colour }}
+                />
+                {depthOf(group.name) === 1 ? null : (
+                  <span className="text-zinc-500">{group.name.slice(0, group.name.lastIndexOf("/") + 1)}</span>
+                )}
+                <span>{group.name.slice(group.name.lastIndexOf("/") + 1)}</span>
+              </h3>
+              <p className="font-mono text-xs text-zinc-500">
+                {t("groups.directories", {
+                  connections: `connections/${group.name}`,
+                  keys: `keys/${group.name}`,
+                })}
+              </p>
+              {/*
+                Colour and display order are how the group looks, not what
+                happens to it, so they sit with the name and leave the strip
+                below to the three actions that rewrite files.
+              */}
+              <div className="ms-auto flex items-end gap-3">
+                <label htmlFor={`group-colour-${group.name}`} className="flex flex-col gap-1">
+                  <span className={fieldLabel}>{t("groups.colour")}</span>
+                  <span className="flex items-center gap-2">
+                    <input
+                      id={`group-colour-${group.name}`}
+                      type="color"
+                      value={group.colour === undefined || group.colour === "" ? "#71717a" : group.colour}
+                      onChange={(event) => updateGroup(group.name, { colour: event.target.value })}
+                      className="h-8 w-12 rounded border border-zinc-700 bg-zinc-900"
+                    />
+                    {group.colour === undefined || group.colour === "" ? null : (
+                      <button
+                        type="button"
+                        onClick={() => updateGroup(group.name, { colour: "" })}
+                        className={secondaryAction}
+                      >
+                        {t("groups.clearColour", { name: group.name })}
+                      </button>
+                    )}
+                  </span>
+                </label>
+                <label htmlFor={`group-order-${group.name}`} className="flex flex-col gap-1">
+                  <span className={fieldLabel}>{t("groups.displayOrder")}</span>
+                  <input
+                    id={`group-order-${group.name}`}
+                    type="number"
+                    value={String(group.order ?? 0)}
+                    onChange={(event) => updateGroup(group.name, { order: Number(event.target.value) || 0 })}
+                    className={`${control} w-20`}
+                  />
+                </label>
+              </div>
+            </div>
             <p className="mt-1 text-xs text-zinc-400">
               {t("groups.members")}{" "}
               <span>{membersOf(group.name).length === 0 ? t("groups.noMembers") : membersOf(group.name).join(", ")}</span>
             </p>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <label htmlFor={`group-colour-${group.name}`} className="text-xs text-zinc-400">
-                {t("groups.colour")}
+            {/*
+              An empty settings list still rendered its <ul>, so every group
+              carried an empty row nobody had asked for.
+            */}
+            {(group.settings ?? []).length === 0 ? null : (
+              <ul className="mt-2 flex flex-col gap-0.5 font-mono text-xs text-zinc-300">
+                {(group.settings ?? []).map((setting, index) => (
+                  <li key={`${setting.keyword}-${index}`}>{`${setting.keyword} ${formatValues(setting.values)}`}</li>
+                ))}
+              </ul>
+            )}
+
+            <div className="mt-3 flex flex-wrap items-end gap-x-4 gap-y-3 border-t border-zinc-800 pt-3">
+              {/*
+                The visible captions are short and the group's name lives in the
+                accessible name instead. Spelled out on screen, four groups
+                repeated "Rename <name> to" and "Move the connections of <name>
+                into" eight times between them, which is most of what made this
+                panel a wall of words. The visible text is still a substring of
+                the accessible name, so the two never disagree.
+              */}
+              <label htmlFor={`group-rename-${group.name}`} className="flex flex-col gap-1">
+                <span className={fieldLabel}>{t("groups.renameShort")}</span>
+                <span className="flex items-end gap-2">
+                  <input
+                    id={`group-rename-${group.name}`}
+                    aria-label={t("groups.renameTo", { name: group.name })}
+                    value={renaming[group.name] ?? ""}
+                    onChange={(event) => setRenaming({ ...renaming, [group.name]: event.target.value })}
+                    className={narrowControl}
+                  />
+                  <button type="button" onClick={() => void renameGroup(group.name)} className={secondaryAction}>
+                    {t("groups.rename", { name: group.name })}
+                  </button>
+                </span>
               </label>
-              <input
-                id={`group-colour-${group.name}`}
-                type="color"
-                value={group.colour === undefined || group.colour === "" ? "#71717a" : group.colour}
-                onChange={(event) => updateGroup(group.name, { colour: event.target.value })}
-                className="h-7 w-12 rounded border border-zinc-700 bg-zinc-900"
-              />
-              {group.colour === undefined || group.colour === "" ? null : (
-                <button
-                  type="button"
-                  onClick={() => updateGroup(group.name, { colour: "" })}
-                  className="rounded border border-zinc-700 px-2 py-1 text-xs"
-                >
-                  {t("groups.clearColour", { name: group.name })}
-                </button>
-              )}
-              <label htmlFor={`group-order-${group.name}`} className="text-xs text-zinc-400">
-                {t("groups.displayOrder")}
+              <label htmlFor={`group-move-${group.name}`} className="flex flex-col gap-1">
+                <span className={fieldLabel}>{t("groups.removeIntoShort")}</span>
+                <span className="flex items-end gap-2">
+                  <select
+                    id={`group-move-${group.name}`}
+                    aria-label={t("groups.removeInto", { name: group.name })}
+                    value={removing[group.name] ?? ""}
+                    onChange={(event) => setRemoving({ ...removing, [group.name]: event.target.value })}
+                    className={`${control} w-56`}
+                  >
+                    <option value="">{t("groups.removeIntoNone")}</option>
+                    {groups
+                      .filter((candidate) => candidate.name !== group.name && !candidate.name.startsWith(`${group.name}/`))
+                      .map((candidate) => (
+                        <option key={candidate.name} value={candidate.name}>
+                          {candidate.name}
+                        </option>
+                      ))}
+                  </select>
+                  <button type="button" onClick={() => void removeGroup(group.name)} className={dangerAction}>
+                    {t("groups.remove", { name: group.name })}
+                  </button>
+                </span>
               </label>
-              <input
-                id={`group-order-${group.name}`}
-                type="number"
-                value={String(group.order ?? 0)}
-                onChange={(event) => updateGroup(group.name, { order: Number(event.target.value) || 0 })}
-                className="w-20 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs"
-              />
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <label htmlFor={`group-rename-${group.name}`} className="text-xs text-zinc-400">
-                {t("groups.renameTo", { name: group.name })}
-              </label>
-              <input
-                id={`group-rename-${group.name}`}
-                value={renaming[group.name] ?? ""}
-                onChange={(event) => setRenaming({ ...renaming, [group.name]: event.target.value })}
-                className="w-40 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs"
-              />
-              <button
-                type="button"
-                onClick={() => void renameGroup(group.name)}
-                className="rounded border border-zinc-700 px-2 py-1 text-xs"
-              >
-                {t("groups.rename", { name: group.name })}
-              </button>
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <label htmlFor={`group-move-${group.name}`} className="text-xs text-zinc-400">
-                {t("groups.removeInto", { name: group.name })}
-              </label>
-              <select
-                id={`group-move-${group.name}`}
-                value={removing[group.name] ?? ""}
-                onChange={(event) => setRemoving({ ...removing, [group.name]: event.target.value })}
-                className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs"
-              >
-                <option value="">{t("groups.removeIntoNone")}</option>
-                {groups
-                  .filter((candidate) => candidate.name !== group.name && !candidate.name.startsWith(`${group.name}/`))
-                  .map((candidate) => (
-                    <option key={candidate.name} value={candidate.name}>
-                      {candidate.name}
-                    </option>
-                  ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => void removeGroup(group.name)}
-                className="rounded border border-zinc-700 px-2 py-1 text-xs"
-              >
-                {t("groups.remove", { name: group.name })}
-              </button>
               {/*
                 Nesting was discoverable only through a sentence about slashes
                 under a text box at the bottom of the page. This puts it where
@@ -354,7 +397,7 @@ export function GroupsPanel() {
               <button
                 type="button"
                 onClick={() => setNewName(`${group.name}/`)}
-                className="rounded border border-zinc-700 px-2 py-1 text-xs"
+                className={secondaryAction}
               >
                 {t("groups.addChild", { name: group.name })}
               </button>
@@ -363,57 +406,67 @@ export function GroupsPanel() {
         ))}
       </ul>
 
-      <section className="flex flex-col gap-2 rounded border border-zinc-800 p-3">
-        <label htmlFor="group-name" className="text-xs text-zinc-400">{t("groups.newName")}</label>
-        <input
-          id="group-name"
-          value={newName}
-          onChange={(event) => setNewName(event.target.value)}
-          className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
-        />
-        <p className="text-xs text-zinc-500">{t("groups.nestingNote")}</p>
-        <button type="button" onClick={addGroup} className="self-start rounded bg-zinc-800 px-3 py-1 text-sm">
+      <section className={sectionCard}>
+        <h3 className={sectionHeading}>{t("groups.addHeading")}</h3>
+        <Field label={t("groups.newName")} hint={t("groups.nestingNote")}>
+          <input
+            id="group-name"
+            value={newName}
+            onChange={(event) => setNewName(event.target.value)}
+            placeholder="work/eu"
+            className={control}
+          />
+        </Field>
+        <button type="button" onClick={addGroup} disabled={newName === ""} className={`self-start ${secondaryAction}`}>
           {t("groups.add")}
         </button>
       </section>
 
-      <section className="flex flex-col gap-2 rounded border border-zinc-800 p-3">
-        <label htmlFor="setting-group" className="text-xs text-zinc-400">{t("groups.group")}</label>
-        <select
-          id="setting-group"
-          value={settingGroup}
-          onChange={(event) => setSettingGroup(event.target.value)}
-          className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
-        >
-          <option value="">{t("groups.chooseGroup")}</option>
-          {groups.map((group) => (
-            <option key={group.name} value={group.name}>{group.name}</option>
-          ))}
-        </select>
-        <label htmlFor="setting-keyword" className="text-xs text-zinc-400">{t("groups.directive")}</label>
-        <input
-          id="setting-keyword"
-          value={settingKeyword}
-          onChange={(event) => setSettingKeyword(event.target.value)}
-          className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
-        />
-        <label htmlFor="setting-value" className="text-xs text-zinc-400">{t("groups.value")}</label>
-        <input
-          id="setting-value"
-          value={settingValue}
-          onChange={(event) => setSettingValue(event.target.value)}
-          className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
-        />
-        <button type="button" onClick={addSetting} className="self-start rounded bg-zinc-800 px-3 py-1 text-sm">
+      <section className={sectionCard}>
+        <h3 className={sectionHeading}>{t("groups.settingHeading")}</h3>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label={t("groups.group")}>
+            <select
+              id="setting-group"
+              value={settingGroup}
+              onChange={(event) => setSettingGroup(event.target.value)}
+              className={control}
+            >
+              <option value="">{t("groups.chooseGroup")}</option>
+              {groups.map((group) => (
+                <option key={group.name} value={group.name}>{group.name}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label={t("groups.directive")}>
+            <input
+              id="setting-keyword"
+              value={settingKeyword}
+              onChange={(event) => setSettingKeyword(event.target.value)}
+              placeholder="ServerAliveInterval"
+              className={control}
+            />
+          </Field>
+          <Field label={t("groups.value")}>
+            <input
+              id="setting-value"
+              value={settingValue}
+              onChange={(event) => setSettingValue(event.target.value)}
+              placeholder="30"
+              className={control}
+            />
+          </Field>
+        </div>
+        <button type="button" onClick={addSetting} className={`self-start ${secondaryAction}`}>
           {t("groups.addSetting")}
         </button>
       </section>
 
       <div className="flex gap-2">
-        <button type="button" onClick={() => void run("preview")} className="rounded border border-zinc-700 px-3 py-1 text-sm">
+        <button type="button" onClick={() => void run("preview")} className={secondaryAction}>
           {t("groups.previewChanges")}
         </button>
-        <button type="button" onClick={() => void run("save")} className="rounded bg-zinc-200 px-3 py-1 text-sm text-zinc-900">
+        <button type="button" onClick={() => void run("save")} className={primaryAction}>
           {t("groups.save")}
         </button>
       </div>

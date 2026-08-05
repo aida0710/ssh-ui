@@ -9,6 +9,16 @@ import {
   type TerminalCommandResponse,
 } from "../api/integrations";
 import { CopyButton } from "../ui/CopyButton";
+import {
+  Field,
+  control,
+  hintText,
+  secondaryAction,
+  sectionCard,
+  sectionHeading,
+  tableHeadCell,
+  tableHeadRow,
+} from "../ui/form";
 import { useTranslate } from "../i18n/context";
 
 type DiagnosticsPanelProps = {
@@ -78,6 +88,35 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
 
   const directives = effective?.executableDirectives ?? [];
 
+  // Every check is one entry here rather than one hand-written button, because
+  // the guard is the point: an alias is required and a second check must not
+  // start while the first is still running. Written out four times, a fifth
+  // check would eventually be added without one of them.
+  const checks: { label: string; start: () => void }[] = [
+    {
+      label: t("diag.explain"),
+      start: () => void run(() => api.effective(alias, false), setEffective, t("diag.explainFailed")),
+    },
+    {
+      label: t("diag.checkReachability"),
+      start: () => void run(() => api.reachability(alias), setReach, t("diag.reachabilityFailed")),
+    },
+    {
+      label: t("diag.testAuthentication"),
+      start: () =>
+        void run(
+          () => api.authentication(alias, directives.some((directive) => !directive.overridable)),
+          setAuth,
+          t("diag.authenticationFailed"),
+        ),
+    },
+    {
+      label: t("diag.terminalCommand"),
+      start: () => void run(() => api.terminalCommand(alias), setTerminal, t("diag.commandFailed")),
+    },
+  ];
+  const blocked = busy || alias === "";
+
   return (
     <section
       aria-label={embedded ? t("diag.forHost", { host: host ?? "" }) : undefined}
@@ -90,85 +129,64 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
         </h2>
       )}
 
-      <p aria-live="polite" className="text-sm text-zinc-400">
-        {busy ? t("diag.running") : t("diag.idle")}
+      <p aria-live="polite" className={hintText}>
+        {busy ? t("diag.running") : alias === "" ? t("diag.needsAlias") : t("diag.idle")}
       </p>
       {error ? (
-        <p role="alert" className="text-sm text-red-400">
+        <p role="alert" className="text-sm text-rose-300">
           {error}
         </p>
       ) : null}
 
       <div className="flex flex-wrap items-end gap-2">
         {embedded ? null : (
-          <label className="flex flex-col gap-1 text-sm">
-            <span>{t("diag.hostAlias")}</span>
-            <input
-              value={typedAlias}
-              onChange={(event) => setTypedAlias(event.target.value)}
-              className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1"
-            />
-          </label>
+          <div className="w-56">
+            <Field label={t("diag.hostAlias")}>
+              <input
+                value={typedAlias}
+                onChange={(event) => setTypedAlias(event.target.value)}
+                placeholder="bastion"
+                className={control}
+              />
+            </Field>
+          </div>
         )}
-        <button
-          type="button"
-          onClick={() => void run(() => api.effective(alias, false), setEffective, t("diag.explainFailed"))}
-          className="rounded border border-zinc-700 px-3 py-1 text-sm"
-        >
-          {t("diag.explain")}
-        </button>
-        <button
-          type="button"
-          onClick={() => void run(() => api.reachability(alias), setReach, t("diag.reachabilityFailed"))}
-          className="rounded border border-zinc-700 px-3 py-1 text-sm"
-        >
-          {t("diag.checkReachability")}
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            void run(
-              () => api.authentication(alias, directives.some((directive) => !directive.overridable)),
-              setAuth,
-              t("diag.authenticationFailed"),
-            )
-          }
-          className="rounded border border-zinc-700 px-3 py-1 text-sm"
-        >
-          {t("diag.testAuthentication")}
-        </button>
-        <button
-          type="button"
-          onClick={() => void run(() => api.terminalCommand(alias), setTerminal, t("diag.commandFailed"))}
-          className="rounded border border-zinc-700 px-3 py-1 text-sm"
-        >
-          {t("diag.terminalCommand")}
-        </button>
+        {checks.map((check) => (
+          <button
+            key={check.label}
+            type="button"
+            onClick={check.start}
+            disabled={blocked}
+            className={secondaryAction}
+          >
+            {check.label}
+          </button>
+        ))}
       </div>
 
       {config ? (
-        <div className="text-sm text-zinc-300">
-          <h3 className="font-medium">{t("diag.configuration")}</h3>
-          <ul>
+        <div className={sectionCard}>
+          <h3 className={sectionHeading}>{t("diag.configuration")}</h3>
+          <ul className="flex flex-col gap-1">
             {config.files.map((file) => (
-              <li key={file.path}>
+              <li key={file.path} className="font-mono text-xs text-zinc-300">
                 {file.path}
-                {file.missing ? t("diag.missingSuffix") : ""}
+                {file.missing ? <span className="text-amber-300">{t("diag.missingSuffix")}</span> : null}
               </li>
             ))}
           </ul>
           {config.diagnostics.length > 0 ? (
-            <ul className="mt-2 flex flex-col gap-1">
+            <ul className="flex flex-col gap-1">
               {config.diagnostics.map((diagnostic, index) => (
                 <li
                   key={`${diagnostic.code}-${index}`}
-                  className={
+                  className={`font-mono text-xs ${
                     diagnostic.severity === "error"
-                      ? "text-red-300"
+                      ? "text-rose-300"
                       : diagnostic.severity === "warning"
                         ? "text-amber-300"
                         : "text-zinc-400"
-                  }
+                  }`}
                 >
                   {`${diagnostic.code} ${diagnostic.path}${diagnostic.line > 0 ? `:${diagnostic.line}` : ""} ${diagnostic.detail}`}
                 </li>
@@ -186,8 +204,8 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
         OpenSSH said about its own refusal is the only thing that explains it.
       */}
       {effective?.failure.failed ? (
-        <div className="rounded border border-red-800 p-3 text-sm">
-          <h3 className="font-medium text-red-300">{t("diag.refused")}</h3>
+        <div className="rounded border border-rose-800 p-3 text-sm">
+          <h3 className="font-medium text-rose-300">{t("diag.refused")}</h3>
           <p className="text-zinc-300">{t("diag.exited", { code: effective.failure.exitCode })}</p>
           {effective.failure.stderr ? (
             <pre className="mt-1 whitespace-pre-wrap break-all text-zinc-400">{effective.failure.stderr}</pre>
@@ -221,10 +239,11 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
           {effective?.requiresConfirmation && !effective.evaluated ? (
             <button
               type="button"
+              disabled={busy}
               onClick={() =>
                 void run(() => api.effective(alias, true), setEffective, t("diag.explainFailed"))
               }
-              className="mt-2 rounded border border-amber-600 px-3 py-1"
+              className="mt-2 rounded border border-amber-600 px-3 py-1.5 text-sm text-amber-200 hover:bg-amber-950 disabled:border-zinc-700 disabled:text-zinc-500"
             >
               {t("diag.runAnyway")}
             </button>
@@ -239,22 +258,43 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
         answer it. The winner is marked rather than being the only row.
       */}
       {effective && effective.sources.length > 0 ? (
-        <table className="text-sm">
-          <caption className="text-left text-zinc-400">{t("diag.sourcesCaption")}</caption>
-          <tbody>
-            {effective.sources.map((source) => (
-              <tr key={`${source.path}:${source.line}:${source.keyword}`} className={source.winner ? "" : "opacity-60"}>
-                <th scope="row" className="pr-3 text-left font-normal text-zinc-400">
-                  {source.keyword}
-                </th>
-                <td className="pr-3">{source.value}</td>
-                <td className="pr-3 text-zinc-500">{`${source.path}:${source.line}`}</td>
-                <td className="pr-3 text-zinc-500">{source.condition}</td>
-                <td className="text-zinc-500">{source.winner ? t("diag.inEffect") : t("diag.superseded")}</td>
+        // Five columns of paths and conditions do not fit a narrow window, and
+        // the page must not be the thing that scrolls sideways.
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            {/*
+              The caption explains the table; it never said what the columns
+              were. A path, a condition and a verdict rendered as three
+              unlabelled greys are not self-describing.
+            */}
+            <caption className={`mb-2 text-left ${hintText}`}>{t("diag.sourcesCaption")}</caption>
+            <thead>
+              <tr className={tableHeadRow}>
+                <th scope="col" className={tableHeadCell}>{t("diag.columnKeyword")}</th>
+                <th scope="col" className={tableHeadCell}>{t("diag.columnValue")}</th>
+                <th scope="col" className={tableHeadCell}>{t("diag.columnWhere")}</th>
+                <th scope="col" className={tableHeadCell}>{t("diag.columnCondition")}</th>
+                <th scope="col" className={tableHeadCell}>{t("diag.columnState")}</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {effective.sources.map((source) => (
+                <tr
+                  key={`${source.path}:${source.line}:${source.keyword}`}
+                  className={`border-b border-zinc-900 ${source.winner ? "" : "opacity-60"}`}
+                >
+                  <th scope="row" className="py-1.5 pr-3 text-left font-normal text-zinc-400">
+                    {source.keyword}
+                  </th>
+                  <td className="py-1.5 pr-3 font-mono text-xs text-zinc-100">{source.value}</td>
+                  <td className="py-1.5 pr-3 font-mono text-xs text-zinc-500">{`${source.path}:${source.line}`}</td>
+                  <td className="py-1.5 pr-3 font-mono text-xs text-zinc-500">{source.condition}</td>
+                  <td className="py-1.5 text-zinc-500">{source.winner ? t("diag.inEffect") : t("diag.superseded")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : null}
 
       {/*
@@ -264,11 +304,11 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
         confident-looking gap in the chain.
       */}
       {effective && effective.route.length > 0 ? (
-        <div className="text-sm">
-          <h3 className="font-medium">{t("diag.route")}</h3>
-          <ol className="mt-1 flex flex-col gap-1">
+        <div className={`${sectionCard} text-sm`}>
+          <h3 className={sectionHeading}>{t("diag.route")}</h3>
+          <ol className="flex flex-col gap-1">
             {effective.route.map((stage) => (
-              <li key={`${stage.order}-${stage.hop}`} style={{ marginLeft: `${stage.depth}rem` }}>
+              <li key={`${stage.order}-${stage.hop}`} style={{ marginInlineStart: `${stage.depth}rem` }}>
                 <span className="text-zinc-100">{stage.hop}</span>
                 {stage.complex ? (
                   <span className="ml-2 text-amber-300">{t("diag.hopComplex")}</span>
@@ -311,36 +351,45 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
       ) : null}
 
       {reach ? (
-        <div className="text-sm">
-          <h3 className="font-medium">{t("diag.reachability")}</h3>
-          <p>
-            {reach.address} — {reach.outcome}
-          </p>
-          <p className="text-zinc-400">{reach.notice}</p>
+        <div className={`${sectionCard} text-sm`}>
+          <h3 className={sectionHeading}>{t("diag.reachability")}</h3>
+          {/*
+            The address and the verdict were one sentence joined by a dash. They
+            are two different facts — where it dialled, and what happened — and
+            the address is the one worth reading in a fixed pitch.
+          */}
+          <p className="font-mono text-xs text-zinc-100">{reach.address}</p>
+          <p className="text-zinc-200">{reach.outcome}</p>
+          <p className={hintText}>{reach.notice}</p>
         </div>
       ) : null}
 
       {auth ? (
-        <div className="text-sm">
-          <h3 className="font-medium">{t("diag.authentication")}</h3>
-          <p>{auth.outcome}</p>
-          {auth.stderr ? <pre className="whitespace-pre-wrap break-all text-zinc-400">{auth.stderr}</pre> : null}
+        <div className={`${sectionCard} text-sm`}>
+          <h3 className={sectionHeading}>{t("diag.authentication")}</h3>
+          <p className="text-zinc-200">{auth.outcome}</p>
+          {auth.stderr ? (
+            <pre className="whitespace-pre-wrap break-all font-mono text-xs text-zinc-400">{auth.stderr}</pre>
+          ) : null}
         </div>
       ) : null}
 
       {terminal ? (
-        <div className="text-sm">
-          <h3 className="font-medium">{t("diag.terminal")}</h3>
-          <pre className="whitespace-pre-wrap break-all text-zinc-100">{terminal.command}</pre>
-          <div className="mt-2 flex items-center gap-2">
+        <div className={`${sectionCard} text-sm`}>
+          <h3 className={sectionHeading}>{t("diag.terminal")}</h3>
+          <pre className="whitespace-pre-wrap break-all rounded bg-zinc-900 p-2 font-mono text-xs text-zinc-100">
+            {terminal.command}
+          </pre>
+          <div className="flex items-center gap-2">
             <CopyButton value={terminal.command} label="copy.command" />
             {terminal.launchable ? (
               <button
                 type="button"
+                disabled={busy}
                 onClick={() =>
                   void run(() => api.terminalLaunch(alias), () => undefined, t("diag.terminalFailed"))
                 }
-                className="rounded border border-zinc-700 px-3 py-1"
+                className={secondaryAction}
               >
                 {t("diag.openInTerminal")}
               </button>

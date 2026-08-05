@@ -15,15 +15,18 @@ export const control =
 // A control that should not stretch: a number, a colour, a short name.
 export const narrowControl = control.replace("w-full", "w-40");
 
+// A button label is a name, not a paragraph. Left to wrap, "Remove office"
+// broke across two lines the moment its row ran out of room and the button grew
+// a second storey. Wrapping the row is right; wrapping the word is not.
 export const primaryAction =
-  "rounded bg-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-white " +
+  "whitespace-nowrap rounded bg-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-white " +
   "disabled:bg-zinc-700 disabled:text-zinc-500";
 
 export const secondaryAction =
-  "rounded border border-zinc-700 px-3 py-1.5 text-sm hover:bg-zinc-800 disabled:text-zinc-600";
+  "whitespace-nowrap rounded border border-zinc-700 px-3 py-1.5 text-sm hover:bg-zinc-800 disabled:text-zinc-600";
 
 export const dangerAction =
-  "rounded border border-rose-700 px-3 py-1.5 text-sm text-rose-300 hover:bg-rose-950";
+  "whitespace-nowrap rounded border border-rose-700 px-3 py-1.5 text-sm text-rose-300 hover:bg-rose-950";
 
 export const fieldLabel = "text-xs font-medium tracking-wide text-zinc-400";
 export const hintText = "text-xs text-zinc-500";
@@ -46,13 +49,20 @@ type FieldProps = {
 // The label element wraps the control rather than pointing at it by id, which
 // is how every form in this application already associated the two, so the
 // accessible name is unchanged and no test selector moves.
+//
+// The hint sits outside that label on purpose. Inside it, a whole sentence of
+// advice became part of the control's accessible name, so a field captioned
+// "New group name" announced itself as "New group name Use a slash to nest:
+// work/eu is a group inside work."
 export function Field({ label, hint, children }: FieldProps) {
   return (
-    <label className="flex flex-col gap-1">
-      <span className={fieldLabel}>{label}</span>
-      {children}
+    <div className="flex flex-col gap-1">
+      <label className="flex flex-col gap-1">
+        <span className={fieldLabel}>{label}</span>
+        {children}
+      </label>
       {hint === undefined ? null : <span className={hintText}>{hint}</span>}
-    </label>
+    </div>
   );
 }
 
