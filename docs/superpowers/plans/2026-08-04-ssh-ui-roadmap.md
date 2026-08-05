@@ -43,6 +43,8 @@ Found while executing subsystem 6 and recorded so a later reader does not mistak
 - **Partial failure is injected, not observed.** The journal and transaction tests simulate a failed staging write or rename. Nothing kills the process between the staging write and the rename, so crash recovery is proven by inference from those tests rather than by observation.
 - **The committed `internal/ui/dist` bundle can go stale.** It is a build artefact under version control, and the copy on `main` predated the Known Hosts and Remote Keys panels, so a binary built from it would have embedded a UI without them. `make e2e` rebuilds before running and would now fail, but `make build` alone will happily embed whatever is committed. Rebuild the bundle in any change that touches `web/src`.
 
+- **Every fixture gave each `Host` block a concrete alias.** A wildcard-only block such as the `Host *` catch-all that almost every real configuration ends with was therefore never exercised at any layer — Go, Vitest or Playwright — and the connections tree shipped rendering it as a button whose click the page silently swallowed. Fixed on `main` by routing a pattern-rule row to the file view at its line. The defect is unremarkable; the blind spot is not. It was found by running the shipped binary against a throwaway home, which no automated test does, and the same shape of gap can hide anywhere a fixture is more regular than a real file. The stale-bundle hazard above bit twice for the same reason: nothing exercised the artefact a user would actually run.
+
 ## Interface limits accepted while closing those gaps
 
 Reported by the agent that built the panels rather than papered over. None is a defect in what was built; each is a consequence of the API shape underneath.
