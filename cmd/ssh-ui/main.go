@@ -4,6 +4,9 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"flag"
+	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"os"
@@ -11,13 +14,30 @@ import (
 	"syscall"
 
 	"ssh-ui/internal/app"
+	"ssh-ui/internal/platform"
 	"ssh-ui/internal/platform/macos"
 	"ssh-ui/internal/ui"
 )
 
 var version = "dev"
 
+// urlPrinter satisfies platform.BrowserLauncher by writing the URL instead of
+// opening it. It exists for automation — the end-to-end suite and the packaging
+// smoke test — which must not hand a live bootstrap token to the user's own
+// browser. The token is no more exposed than it already is in the argv of
+// `open`, and the flag has to be asked for.
+type urlPrinter struct{ out io.Writer }
+
+func (p urlPrinter) Open(_ context.Context, target string) error {
+	_, err := fmt.Fprintln(p.out, target)
+	return err
+}
+
 func main() {
+	openBrowser := flag.Bool("open", true,
+		"open the UI in the default browser; -open=false prints the URL on standard output instead")
+	flag.Parse()
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -40,9 +60,14 @@ func main() {
 	runner := macos.NewOutputRunner()
 	toolchain := macos.NewToolchain()
 
+	var browser platform.BrowserLauncher = macos.NewBrowser(macos.NewExecRunner())
+	if !*openBrowser {
+		browser = urlPrinter{out: os.Stdout}
+	}
+
 	dependencies := app.Dependencies{
 		Random:    rand.Reader,
-		Browser:   macos.NewBrowser(macos.NewExecRunner()),
+		Browser:   browser,
 		Listen:    net.Listen,
 		UI:        assets,
 		Logger:    logger,
