@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { RemoteKeyPanel } from "./RemoteKeyPanel";
 import { ApiError } from "../api/client";
 import type { RemoteKeyPlan, RemoteKeysApi } from "./api";
+import type { KeysApi } from "../keys/api";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -41,6 +42,64 @@ const proxyCommand = {
   overridable: false,
 };
 
+// The inventory the picker reads. It is stubbed in every render so no test in
+// this file reaches the real client, which would try to fetch.
+function buildKeys(overrides: Partial<Pick<KeysApi, "inventory" | "publicKey">> = {}) {
+  return {
+    inventory: vi.fn().mockResolvedValue({
+      items: [
+        {
+          id: "key-pub",
+          relativePath: "id_ed25519.pub",
+          kind: "public_key",
+          container: "",
+          algorithm: "ed25519",
+          keyType: "ssh-ed25519",
+          bits: 256,
+          encrypted: false,
+          fingerprint,
+          comment: "aida@laptop",
+          permission: "0644",
+          permissionRisk: false,
+          sizeBytes: 100,
+          references: [],
+          notes: [],
+        },
+        {
+          id: "key-private",
+          relativePath: "id_ed25519",
+          kind: "private_key",
+          container: "OPENSSH PRIVATE KEY",
+          algorithm: "ed25519",
+          keyType: "ssh-ed25519",
+          bits: 256,
+          encrypted: true,
+          fingerprint,
+          comment: "",
+          permission: "0600",
+          permissionRisk: false,
+          sizeBytes: 400,
+          references: [],
+          notes: [],
+        },
+      ],
+      unreadable: [],
+      agentDelegations: [],
+      unresolvedReferences: [],
+      agentAvailable: false,
+      agentIdentities: [],
+    }),
+    publicKey: vi.fn().mockResolvedValue({
+      id: "key-pub",
+      relativePath: "id_ed25519.pub",
+      publicKey: `${publicKey}\n`,
+      fingerprint,
+      comment: "aida@laptop",
+    }),
+    ...overrides,
+  };
+}
+
 function buildApi(overrides: Partial<RemoteKeysApi> = {}): RemoteKeysApi {
   return {
     plan: vi.fn().mockResolvedValue(plan),
@@ -56,7 +115,7 @@ async function fillForm() {
 }
 
 async function fetchPlan(api: RemoteKeysApi) {
-  render(<RemoteKeyPanel api={api} />);
+  render(<RemoteKeyPanel api={api} keys={buildKeys()} />);
   await fillForm();
   await userEvent.click(screen.getByRole("button", { name: "Show what this would do" }));
   return screen.findByRole("region", { name: "Confirm remote registration" });
@@ -80,7 +139,7 @@ describe("RemoteKeyPanel", () => {
 
   it("keeps the confirm control unavailable until a plan has been fetched", async () => {
     const api = buildApi();
-    render(<RemoteKeyPanel api={api} />);
+    render(<RemoteKeyPanel api={api} keys={buildKeys()} />);
 
     expect(screen.getByRole("button", { name: "Register the key" })).toBeDisabled();
     await fillForm();
@@ -170,7 +229,7 @@ describe("RemoteKeyPanel", () => {
         }),
       ),
     });
-    render(<RemoteKeyPanel api={api} />);
+    render(<RemoteKeyPanel api={api} keys={buildKeys()} />);
     await fillForm();
     await userEvent.click(screen.getByRole("button", { name: "Show what this would do" }));
 
@@ -207,8 +266,57 @@ describe("RemoteKeyPanel", () => {
 
   it("adds no second status region to the shell", async () => {
     const api = buildApi();
-    render(<RemoteKeyPanel api={api} />);
+    render(<RemoteKeyPanel api={api} keys={buildKeys()} />);
 
     expect(screen.queryAllByRole("status")).toHaveLength(0);
+  });
+  it("picks a public key from the inventory instead of asking for it to be typed", async () => {
+    const user = userEvent.setup();
+    const api = buildApi();
+    const keys = buildKeys();
+    render(<RemoteKeyPanel api={api} keys={keys} />);
+
+    // Only public keys are offered. A private key in the same directory must
+    // never be a candidate for something that gets sent to a remote host.
+    const picker = await screen.findByLabelText("Public key from ~/.ssh");
+    expect(within(picker).getByRole("option", { name: /id_ed25519\.pub/ })).toBeInTheDocument();
+    expect(within(picker).queryByRole("option", { name: /id_ed25519 —/ })).not.toBeInTheDocument();
+
+    await user.selectOptions(picker, "key-pub");
+
+    // One choice fills both fields, so the path and the line cannot describe
+    // different keys — which typing them separately allowed.
+    await waitFor(() => expect(screen.getByLabelText("Public key file")).toHaveValue("id_ed25519.pub"));
+    expect(screen.getByLabelText("Public key line")).toHaveValue(publicKey);
+    expect(keys.publicKey).toHaveBeenCalledWith("key-pub");
+    expect(api.plan).not.toHaveBeenCalled();
+  });
+
+  it("withdraws a standing plan when a different key is picked", async () => {
+    const user = userEvent.setup();
+    const api = buildApi();
+    const confirmation = await fetchPlan(api);
+    expect(confirmation).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("Public key from ~/.ssh"), "key-pub");
+
+    await waitFor(() =>
+      expect(screen.queryByRole("region", { name: "Confirm remote registration" })).not.toBeInTheDocument(),
+    );
+    expect(api.register).not.toHaveBeenCalled();
+  });
+
+  it("keeps the typed fields usable when the inventory cannot be read", async () => {
+    const api = buildApi();
+    const keys = buildKeys({ inventory: vi.fn().mockRejectedValue(new Error("api_read_failed")) });
+    render(<RemoteKeyPanel api={api} keys={keys} />);
+
+    await waitFor(() => expect(keys.inventory).toHaveBeenCalled());
+    expect(screen.getByLabelText("Public key file")).toBeEnabled();
+    // A failed inventory read is not an error the user has to act on: typing
+    // the key in was the only way before the picker existed.
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    await fillForm();
+    expect(screen.getByLabelText("Public key line")).toHaveValue(publicKey);
   });
 });

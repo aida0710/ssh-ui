@@ -48,6 +48,7 @@ type KeyService interface {
 	HardwareCommand(algorithm keys.Algorithm, fileName, comment string) ([]string, error)
 	ChangePassphrase(change keys.PassphraseChange) (keys.PassphraseResult, error)
 	Reveal(keyID string) (keys.RevealResult, error)
+	PublicKey(keyID string) (keys.PublicKeyResult, error)
 	Register(ctx context.Context, request keys.RegisterRequest) (keys.RegisterResult, error)
 	Trash(keyID string) (keys.TrashResult, error)
 	ListTrash() ([]keys.TrashEntry, error)
@@ -70,6 +71,7 @@ func registerKeyRoutes(engine *echo.Echo, handlers KeyHandlers) {
 	engine.POST("/api/v1/keys/hardware-command", handlers.HardwareCommand)
 	engine.POST("/api/v1/keys/:keyId/passphrase", handlers.ChangePassphrase)
 	engine.POST("/api/v1/keys/:keyId/reveal", handlers.Reveal)
+	engine.GET("/api/v1/keys/:keyId/public", handlers.PublicKey)
 	engine.POST("/api/v1/keys/:keyId/agent", handlers.Register)
 	engine.POST("/api/v1/keys/:keyId/trash", handlers.Trash)
 	engine.GET("/api/v1/trash", handlers.ListTrash)
@@ -240,6 +242,25 @@ func (h KeyHandlers) Reveal(c *echo.Context) error {
 		Encrypted:     result.Encrypted,
 		Fingerprint:   result.Fingerprint,
 		TransactionId: result.TransactionID,
+	})
+}
+
+// PublicKey answers with the text of one public key or certificate.
+//
+// Unlike Reveal it spends no confirmation and writes no audit note: the service
+// refuses anything that is not a public key or a certificate, so this route
+// cannot return private key material and there is nothing to record.
+func (h KeyHandlers) PublicKey(c *echo.Context) error {
+	result, err := h.Keys.PublicKey(c.Param("keyId"))
+	if err != nil {
+		return keyProblem(c, err)
+	}
+	return c.JSON(http.StatusOK, api.PublicKeyResponse{
+		Id:           result.ID,
+		RelativePath: result.RelativePath,
+		PublicKey:    result.Contents,
+		Fingerprint:  result.Fingerprint,
+		Comment:      result.Comment,
 	})
 }
 

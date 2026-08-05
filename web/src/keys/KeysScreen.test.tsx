@@ -105,6 +105,13 @@ function buildApi(overrides: Partial<KeysApi> = {}): KeysApi {
     }),
     changePassphrase: vi.fn(),
     reveal: vi.fn(),
+    publicKey: vi.fn().mockResolvedValue({
+      id: "key-three",
+      relativePath: "id_work.pub",
+      publicKey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGZpeHR1cmU aida@laptop\n",
+      fingerprint: "SHA256:abcdef",
+      comment: "aida@laptop",
+    }),
     registerWithAgent: vi.fn().mockResolvedValue({
       id: "key-one",
       relativePath: "id_work",
@@ -468,5 +475,55 @@ describe("KeysScreen", () => {
     const identityRow = await screen.findByRole("row", { name: /SHA256:heldbyagent/ });
     expect(within(identityRow).getByText("ED25519 · 256")).toBeInTheDocument();
     expect(screen.getByText(/IdentityAgent SSH_AUTH_SOCK — config:9/)).toBeInTheDocument();
+  });
+  it("shows a public key and copies exactly the text it showed", async () => {
+    const user = userEvent.setup();
+    const inventory = buildInventory();
+    inventory.items = [
+      { ...inventory.items[0]!, id: "key-three", relativePath: "id_work.pub", kind: "public_key" },
+    ];
+    const api = buildApi({ inventory: vi.fn().mockResolvedValue(inventory) });
+    render(<KeysScreen api={api} />);
+
+    const row = await screen.findByRole("row", { name: /id_work\.pub/ });
+    // A public key is not a secret, so this row offers no reveal and no
+    // confirmation — just the key.
+    expect(within(row).queryByRole("button", { name: "Show private key" })).not.toBeInTheDocument();
+    await user.click(within(row).getByRole("button", { name: "Show public key" }));
+
+    const shown = await screen.findByLabelText("Public key");
+    expect(shown).toHaveTextContent("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGZpeHR1cmU aida@laptop");
+    await user.click(screen.getByRole("button", { name: "Copy public key" }));
+
+    // Trailing newline and all: the clipboard gets what the panel displayed.
+    expect(await navigator.clipboard.readText()).toBe(
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGZpeHR1cmU aida@laptop",
+    );
+  });
+
+  it("offers no public key read for a private key", async () => {
+    render(<KeysScreen api={buildApi()} />);
+
+    const row = await screen.findByRole("row", { name: /id_work\b/ });
+    expect(within(row).queryByRole("button", { name: "Show public key" })).not.toBeInTheDocument();
+  });
+
+  it("reports a public key that could not be read", async () => {
+    const user = userEvent.setup();
+    const inventory = buildInventory();
+    inventory.items = [
+      { ...inventory.items[0]!, id: "key-three", relativePath: "id_work.pub", kind: "public_key" },
+    ];
+    const api = buildApi({
+      inventory: vi.fn().mockResolvedValue(inventory),
+      publicKey: vi.fn().mockRejectedValue(new Error("api_read_failed")),
+    });
+    render(<KeysScreen api={api} />);
+
+    const row = await screen.findByRole("row", { name: /id_work\.pub/ });
+    await user.click(within(row).getByRole("button", { name: "Show public key" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("public key could not be read");
+    expect(screen.queryByLabelText("Public key")).not.toBeInTheDocument();
   });
 });

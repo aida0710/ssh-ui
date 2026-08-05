@@ -14,6 +14,7 @@ export type HardwareCommandResponse = components["schemas"]["HardwareCommandResp
 export type ChangePassphraseResponse = components["schemas"]["ChangePassphraseResponse"];
 export type RevealPrivateKeyResponse = components["schemas"]["RevealPrivateKeyResponse"];
 export type RegisterKeyResponse = components["schemas"]["RegisterKeyResponse"];
+export type PublicKeyResponse = components["schemas"]["PublicKeyResponse"];
 export type AgentIdentity = components["schemas"]["AgentIdentity"];
 export type IssueActionResponse = components["schemas"]["IssueActionResponse"];
 export type TrashListResponse = components["schemas"]["TrashListResponse"];
@@ -64,6 +65,7 @@ export type KeysApi = {
   hardwareCommand(input: HardwareCommandInput): Promise<HardwareCommandResponse>;
   changePassphrase(keyId: string, input: PassphraseInput): Promise<ChangePassphraseResponse>;
   reveal(keyId: string): Promise<RevealPrivateKeyResponse>;
+  publicKey(keyId: string): Promise<PublicKeyResponse>;
   registerWithAgent(keyId: string, input: RegisterAgentInput): Promise<RegisterKeyResponse>;
   trash(keyId: string): Promise<TrashKeyResponse>;
   listTrash(): Promise<TrashListResponse>;
@@ -175,6 +177,16 @@ function validateRegister(value: unknown): RegisterKeyResponse {
   return record as unknown as RegisterKeyResponse;
 }
 
+function validatePublicKey(value: unknown): PublicKeyResponse {
+  const record = asRecord(value);
+  asString(record.id);
+  asString(record.relativePath);
+  asString(record.publicKey);
+  asString(record.fingerprint);
+  asString(record.comment);
+  return record as unknown as PublicKeyResponse;
+}
+
 function validateTrashList(value: unknown): TrashListResponse {
   const record = asRecord(value);
   asNumber(record.retentionDays);
@@ -254,6 +266,12 @@ export const keysApi: KeysApi = {
         headers: { "X-SSH-UI-Action": token },
       }),
     );
+  },
+  // A public key is not a secret, so this is an ordinary read: no confirmation,
+  // no no-store, no audit note. The server refuses any entry that is not a
+  // public key or a certificate, which is what keeps that true.
+  async publicKey(keyId) {
+    return validatePublicKey(await apiClient.read(`/api/v1/keys/${encodeURIComponent(keyId)}/public`));
   },
   // The passphrase travels in the request body and no further. The server hands
   // it to ssh-add on standard input, so it reaches neither argv nor the child

@@ -371,6 +371,47 @@ func (service *Service) Reveal(keyID string) (RevealResult, error) {
 	}, nil
 }
 
+// PublicKeyResult is the text of one public key or certificate file.
+type PublicKeyResult struct {
+	ID           string
+	RelativePath string
+	Contents     string
+	Fingerprint  string
+	Comment      string
+}
+
+// PublicKey returns the text of one public key or certificate.
+//
+// This is deliberately not Reveal. A public key is not a secret, so there is no
+// confirmation, no audit note and no Cache-Control dance: those exist because
+// private key material is disclosed, and nothing here discloses any. The kind
+// check is what keeps that true — it accepts only what the scanner classified
+// as a public key or a certificate, so a private key's identifier reaches this
+// function and is refused rather than read. Classification is by content and
+// permissions, not by a .pub suffix, so a private key misnamed id_rsa.pub is
+// refused too.
+func (service *Service) PublicKey(keyID string) (PublicKeyResult, error) {
+	inventory, err := service.Inventory()
+	if err != nil {
+		return PublicKeyResult{}, err
+	}
+	item, ok := inventory.Find(keyID)
+	if !ok || (item.Kind != KindPublicKey && item.Kind != KindCertificate) {
+		return PublicKeyResult{}, ErrUnknownKey
+	}
+	contents, err := service.workspace.FileSystem().ReadFile(service.absolutePath(item.RelativePath))
+	if err != nil {
+		return PublicKeyResult{}, err
+	}
+	return PublicKeyResult{
+		ID:           item.ID,
+		RelativePath: item.RelativePath,
+		Contents:     string(contents),
+		Fingerprint:  item.Fingerprint,
+		Comment:      item.Comment,
+	}, nil
+}
+
 // ConfirmationSubject names the kind of operation a one-time confirmation
 // covers. It is this package's own vocabulary; the HTTP layer maps the session
 // package's action kinds onto it, so the use-case layer needs no dependency on

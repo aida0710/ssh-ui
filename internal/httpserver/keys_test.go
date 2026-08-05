@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -67,6 +68,22 @@ func (stub *stubKeyService) Reveal(keyID string) (keys.RevealResult, error) {
 	}
 	stub.revealCalls++
 	return stub.reveal, nil
+}
+
+// PublicKey answers for the public half only. The stub refuses the private
+// key's identifier the way the real service does, so a handler test that let a
+// private key through this route would fail here rather than pass quietly.
+func (stub *stubKeyService) PublicKey(keyID string) (keys.PublicKeyResult, error) {
+	if keyID != "key-two" {
+		return keys.PublicKeyResult{}, keys.ErrUnknownKey
+	}
+	return keys.PublicKeyResult{
+		ID:           "key-two",
+		RelativePath: "id_work.pub",
+		Contents:     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGZpeHR1cmVrZXlmaXh0dXJla2V5Zml4dHVyZWtl aida@laptop\n",
+		Fingerprint:  "SHA256:abcdef",
+		Comment:      "aida@laptop",
+	}, nil
 }
 
 func (stub *stubKeyService) Register(context.Context, keys.RegisterRequest) (keys.RegisterResult, error) {
@@ -486,5 +503,48 @@ func TestInventoryAndTrashListingsMatchTheGeneratedContract(t *testing.T) {
 	}
 	if trash.Entries[0].DeletedAt != "2026-08-05T09:00:00Z" || !trash.Entries[0].Stale {
 		t.Fatalf("entry = %#v", trash.Entries[0])
+	}
+}
+
+// The public key route is the counterweight to reveal: it is the one key
+// endpoint that discloses nothing, so it is also the one with no confirmation.
+// These tests pin both halves of that — it works without a token, and it
+// refuses anything that is not a public key.
+func TestPublicKeyIsServedWithoutAConfirmation(t *testing.T) {
+	service := newRevealService()
+	engine, _, credentials := newKeyServer(t, service)
+
+	response := sendKeyRequest(t, engine, credentials, http.MethodGet, "/api/v1/keys/key-two/public", nil, "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("public key = %d, want 200: %s", response.Code, response.Body.String())
+	}
+	var body api.PublicKeyResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode public key response: %v", err)
+	}
+	if !strings.HasPrefix(body.PublicKey, "ssh-ed25519 ") {
+		t.Fatalf("public key = %q, want the key line", body.PublicKey)
+	}
+	if body.RelativePath != "id_work.pub" || body.Fingerprint != "SHA256:abcdef" {
+		t.Fatalf("body = %#v", body)
+	}
+	// Nothing about this route is an audit event, so it must not have spent a
+	// reveal either.
+	if service.revealCalls != 0 {
+		t.Fatalf("the public key route reached the reveal path")
+	}
+}
+
+func TestPublicKeyRefusesAnEntryThatIsNotAPublicKey(t *testing.T) {
+	engine, _, credentials := newKeyServer(t, newRevealService())
+
+	// key-one is the private key in this fixture. Asking for its text through
+	// the unconfirmed route must not work, whatever the caller intended.
+	response := sendKeyRequest(t, engine, credentials, http.MethodGet, "/api/v1/keys/key-one/public", nil, "")
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("public key for a private key = %d, want 404: %s", response.Code, response.Body.String())
+	}
+	if strings.Contains(response.Body.String(), "PRIVATE KEY") {
+		t.Fatalf("the refusal carried key material: %s", response.Body.String())
 	}
 }

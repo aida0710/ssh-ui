@@ -76,6 +76,7 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
   const [agentPassphrase, setAgentPassphrase] = useState("");
   const [agentLifetime, setAgentLifetime] = useState(0);
   const [storeInKeychain, setStoreInKeychain] = useState(false);
+  const [publicKeyView, setPublicKeyView] = useState<{ relativePath: string; text: string } | null>(null);
   const [pendingPurge, setPendingPurge] = useState("");
   const [failure, setFailure] = useState("");
 
@@ -187,6 +188,21 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
     }
   }
 
+  // A public key is not a secret, so this is an ordinary read with no
+  // confirmation and no audit note. It is shown before it is copied for the
+  // same reason every other value on this screen is: what goes on the
+  // clipboard should be the thing the user is looking at.
+  async function showPublicKey(item: KeyItem) {
+    setFailure("");
+    try {
+      const response = await api.publicKey(item.id);
+      setPublicKeyView({ relativePath: response.relativePath, text: response.publicKey.trimEnd() });
+    } catch {
+      setPublicKeyView(null);
+      setFailure("The public key could not be read.");
+    }
+  }
+
   async function moveToTrash(keyId: string) {
     setFailure("");
     try {
@@ -284,6 +300,11 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
               </td>
               <td>{item.references.map((reference) => reference.hostPatterns.join(" ")).join(", ")}</td>
               <td>
+                {(item.kind === "public_key" || item.kind === "certificate") && (
+                  <button type="button" onClick={() => void showPublicKey(item)}>
+                    Show public key
+                  </button>
+                )}
                 {item.kind === "private_key" && (
                   <>
                     <button type="button" onClick={() => setRevealing(item)}>
@@ -320,6 +341,23 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
           ))}
         </tbody>
       </table>
+
+      {publicKeyView !== null && (
+        <section aria-labelledby="public-key-heading" className="flex flex-col gap-2 rounded-xl border border-zinc-800 p-4">
+          <h3 id="public-key-heading" className="font-medium">
+            {`Public key: ${publicKeyView.relativePath}`}
+          </h3>
+          <pre aria-label="Public key" className="overflow-x-auto rounded-md bg-zinc-950 p-4 text-xs">
+            {publicKeyView.text}
+          </pre>
+          <div className="flex gap-2">
+            <CopyButton value={publicKeyView.text} label="public key" />
+            <button type="button" onClick={() => setPublicKeyView(null)}>
+              Close
+            </button>
+          </div>
+        </section>
+      )}
 
       {/*
         A file the scanner refused to interpret used to be simply absent from

@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { failureCode } from "../api/client";
+import { keysApi, type KeyItem, type KeysApi } from "../keys/api";
 import {
   remoteKeysApi,
   type RemoteKeyPlan,
@@ -8,7 +9,13 @@ import {
 } from "./api";
 import { CopyButton } from "../ui/CopyButton";
 
-type RemoteKeyPanelProps = { api?: RemoteKeysApi };
+type RemoteKeyPanelProps = {
+  api?: RemoteKeysApi;
+  // The key inventory, so a key can be picked instead of typed. Reading it
+  // starts nothing and contacts nothing; only the plan and the registration
+  // touch the remote host.
+  keys?: Pick<KeysApi, "inventory" | "publicKey">;
+};
 
 const outcomeLabels: Record<string, string> = {
   added: "The key was added to the remote authorized_keys file.",
@@ -32,7 +39,7 @@ const valuesFromLabels: Record<string, string> = {
 // the plan, so the confirmation can never describe something other than what
 // would be sent. A remote this application will not automate gets instructions
 // instead of a button.
-export function RemoteKeyPanel({ api = remoteKeysApi }: RemoteKeyPanelProps) {
+export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKeyPanelProps) {
   const [alias, setAlias] = useState("");
   const [keyPath, setKeyPath] = useState("");
   const [publicKey, setPublicKey] = useState("");
@@ -42,6 +49,24 @@ export function RemoteKeyPanel({ api = remoteKeysApi }: RemoteKeyPanelProps) {
   const [result, setResult] = useState<RemoteKeyRegisterResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [candidates, setCandidates] = useState<KeyItem[]>([]);
+  const [chosen, setChosen] = useState("");
+
+  // A failed inventory read leaves the picker empty and the two fields below
+  // usable. Typing a key in by hand was the only way before this existed, and
+  // it stays the fallback rather than becoming an error.
+  useEffect(() => {
+    let active = true;
+    void keys
+      .inventory()
+      .then((inventory) => {
+        if (active) setCandidates(inventory.items.filter((item) => item.kind === "public_key"));
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [keys]);
 
   // withdraw drops everything the previous plan justified. It runs on every
   // edit, so a confirmation is never left standing for values that changed.
@@ -57,6 +82,23 @@ export function RemoteKeyPanel({ api = remoteKeysApi }: RemoteKeyPanelProps) {
       withdraw();
       apply(value);
     };
+  }
+
+  // Picking fills both fields from one place, so the file path and the key line
+  // cannot describe different keys — which is exactly what typing them
+  // separately allowed. It withdraws any standing plan, like every other edit.
+  async function choose(keyId: string) {
+    withdraw();
+    setChosen(keyId);
+    if (keyId === "") return;
+    try {
+      const key = await keys.publicKey(keyId);
+      setKeyPath(key.relativePath);
+      setPublicKey(key.publicKey.trimEnd());
+      setError("");
+    } catch {
+      setError("That public key could not be read. Nothing was contacted.");
+    }
   }
 
   async function describe() {
@@ -109,6 +151,21 @@ export function RemoteKeyPanel({ api = remoteKeysApi }: RemoteKeyPanelProps) {
 
       <div className="flex flex-col gap-2 text-sm">
         <label className="flex flex-col gap-1">
+          <span>Public key from ~/.ssh</span>
+          <select
+            value={chosen}
+            onChange={(event) => void choose(event.target.value)}
+            className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1"
+          >
+            <option value="">Type one below instead</option>
+            {candidates.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.fingerprint === "" ? item.relativePath : `${item.relativePath} — ${item.fingerprint}`}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1">
           <span>Host alias</span>
           <input
             value={alias}
@@ -120,7 +177,10 @@ export function RemoteKeyPanel({ api = remoteKeysApi }: RemoteKeyPanelProps) {
           <span>Public key file</span>
           <input
             value={keyPath}
-            onChange={(event) => edit(setKeyPath)(event.target.value)}
+            onChange={(event) => {
+              setChosen("");
+              edit(setKeyPath)(event.target.value);
+            }}
             className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1"
           />
         </label>
@@ -128,7 +188,10 @@ export function RemoteKeyPanel({ api = remoteKeysApi }: RemoteKeyPanelProps) {
           <span>Public key line</span>
           <textarea
             value={publicKey}
-            onChange={(event) => edit(setPublicKey)(event.target.value)}
+            onChange={(event) => {
+              setChosen("");
+              edit(setPublicKey)(event.target.value);
+            }}
             rows={3}
             className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 font-mono"
           />
