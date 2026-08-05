@@ -250,6 +250,104 @@ paths:
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+  /api/v1/passwords:
+    get:
+      operationId: getPasswordVault
+      responses:
+        "200":
+          description: Whether a vault exists, whether it is unlocked, and which hosts have a password
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PasswordVaultStatus" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+  /api/v1/passwords/initialise:
+    post:
+      operationId: initialisePasswordVault
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PassphraseRequest" }
+      responses:
+        "200":
+          description: Vault created and unlocked
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PasswordVaultStatus" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/passwords/unlock:
+    post:
+      operationId: unlockPasswordVault
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PassphraseRequest" }
+      responses:
+        "200":
+          description: Vault unlocked for this run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PasswordVaultStatus" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/passwords/lock:
+    post:
+      operationId: lockPasswordVault
+      responses:
+        "200":
+          description: Derived key and every pending askpass token forgotten
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PasswordVaultStatus" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+  /api/v1/passwords/{alias}:
+    put:
+      operationId: storePassword
+      parameters:
+        - name: alias
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 255 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StorePasswordRequest" }
+      responses:
+        "200":
+          description: Password stored
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PasswordVaultStatus" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: forgetPassword
+      parameters:
+        - name: alias
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 255 }
+      responses:
+        "200":
+          description: Password forgotten
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PasswordVaultStatus" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
   /api/v1/keys:
     get:
       operationId: listKeys
@@ -1204,6 +1302,31 @@ components:
         command: { type: string }
         launchable: { type: boolean }
         warning: { type: string }
+    PasswordVaultStatus:
+      type: object
+      additionalProperties: false
+      required: [exists, unlocked, aliases]
+      properties:
+        exists: { type: boolean }
+        unlocked: { type: boolean }
+        # The hosts that have a stored password. The set of names is not a
+        # secret; the values are, and no operation returns one.
+        aliases:
+          type: array
+          items: { type: string }
+        minPassphraseLength: { type: integer }
+    PassphraseRequest:
+      type: object
+      additionalProperties: false
+      required: [passphrase]
+      properties:
+        passphrase: { type: string, minLength: 1, maxLength: 1024 }
+    StorePasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [password]
+      properties:
+        password: { type: string, minLength: 1, maxLength: 1024 }
     TerminalLaunchResponse:
       type: object
       additionalProperties: false

@@ -7,3 +7,13 @@ import "context"
 type TerminalLauncher interface {
 	Launch(ctx context.Context, alias string) error
 }
+
+// PasswordTerminalLauncher opens a session with the askpass helper armed.
+//
+// It is a separate interface rather than a second method on TerminalLauncher
+// because a launcher that cannot do this is still a valid launcher: the
+// feature is optional, and a platform without it should fail to type-assert
+// rather than be forced to implement a method that returns an error.
+type PasswordTerminalLauncher interface {
+	LaunchWithPassword(ctx context.Context, alias, helperPath, endpoint, token string) error
+}

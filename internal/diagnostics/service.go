@@ -258,3 +258,27 @@ func (s *Service) Authenticate(ctx context.Context, alias string, acknowledged b
 	result.Stderr = platform.SanitiseHomePaths(result.Stderr, s.Workspace.Home())
 	return result, nil
 }
+
+// ErrPasswordLaunchUnsupported reports that the configured terminal cannot arm
+// the askpass helper.
+var ErrPasswordLaunchUnsupported = errors.New("this terminal cannot open a session with a stored password")
+
+// LaunchTerminalWithPassword opens the session with the helper armed.
+//
+// The helper path and the endpoint are decided by the caller, which is the
+// only place that knows where this binary is and what address it is serving
+// on. Nothing here reads a password: the token is what the helper presents,
+// and the password never enters this process's request path at all.
+func (s *Service) LaunchTerminalWithPassword(ctx context.Context, alias, helperPath, endpoint, token string) error {
+	if err := platform.ValidateAlias(alias); err != nil {
+		return err
+	}
+	if s.Terminal == nil {
+		return ErrTerminalNotConfigured
+	}
+	launcher, ok := s.Terminal.(platform.PasswordTerminalLauncher)
+	if !ok {
+		return ErrPasswordLaunchUnsupported
+	}
+	return launcher.LaunchWithPassword(ctx, alias, helperPath, endpoint, token)
+}

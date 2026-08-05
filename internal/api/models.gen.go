@@ -580,6 +580,19 @@ type Overview struct {
 	Pending     *[]PendingTransaction `json:"pending,omitempty"`
 }
 
+// PassphraseRequest defines model for PassphraseRequest.
+type PassphraseRequest struct {
+	Passphrase string `json:"passphrase"`
+}
+
+// PasswordVaultStatus defines model for PasswordVaultStatus.
+type PasswordVaultStatus struct {
+	Aliases             []string `json:"aliases"`
+	Exists              bool     `json:"exists"`
+	MinPassphraseLength *int     `json:"minPassphraseLength,omitempty"`
+	Unlocked            bool     `json:"unlocked"`
+}
+
 // PendingTransaction defines model for PendingTransaction.
 type PendingTransaction struct {
 	CanComplete bool     `json:"canComplete"`
@@ -783,6 +796,11 @@ type Source struct {
 	Path      *string `json:"path,omitempty"`
 }
 
+// StorePasswordRequest defines model for StorePasswordRequest.
+type StorePasswordRequest struct {
+	Password string `json:"password"`
+}
+
 // TerminalCommandResponse defines model for TerminalCommandResponse.
 type TerminalCommandResponse struct {
 	Command    string `json:"command"`
@@ -939,6 +957,15 @@ type DeleteKnownHostsJSONRequestBody = KnownHostsDeleteRequest
 
 // ScanKnownHostsJSONRequestBody defines body for ScanKnownHosts for application/json ContentType.
 type ScanKnownHostsJSONRequestBody = KnownHostsScanRequest
+
+// InitialisePasswordVaultJSONRequestBody defines body for InitialisePasswordVault for application/json ContentType.
+type InitialisePasswordVaultJSONRequestBody = PassphraseRequest
+
+// UnlockPasswordVaultJSONRequestBody defines body for UnlockPasswordVault for application/json ContentType.
+type UnlockPasswordVaultJSONRequestBody = PassphraseRequest
+
+// StorePasswordJSONRequestBody defines body for StorePassword for application/json ContentType.
+type StorePasswordJSONRequestBody = StorePasswordRequest
 
 // PlanRemoteKeyRegistrationJSONRequestBody defines body for PlanRemoteKeyRegistration for application/json ContentType.
 type PlanRemoteKeyRegistrationJSONRequestBody = RemoteKeyPlanRequest

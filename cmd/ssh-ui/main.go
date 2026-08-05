@@ -69,6 +69,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	// The askpass helper is this binary. Resolving it once, here, is the only
+	// place that can: nothing inside the application knows where it was
+	// installed. A path that cannot be resolved leaves every terminal launch
+	// on the plain path rather than arming a helper that may not be there.
+	helperPath, err := os.Executable()
+	if err != nil {
+		logger.Warn("resolve this binary; stored passwords will not be offered", "error", err)
+		helperPath = ""
+	}
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		logger.Error("resolve home directory", "error", err)
@@ -98,6 +108,11 @@ func main() {
 		KeyAgent:  macos.NewKeyAgent(runner, toolchain, os.LookupEnv),
 		Terminal:  macos.NewTerminal(runner),
 		Lookup:    os.LookupEnv,
+		// The helper and the server apply the same rule, from the same
+		// function, so the two can never drift into two different answers to
+		// "is this prompt one we will answer".
+		AskpassHelper: helperPath,
+		Answerable:    AnswerablePrompt,
 	}
 	if err := app.Run(ctx, dependencies, version); err != nil && !errors.Is(err, context.Canceled) {
 		logger.Error("ssh-ui stopped", "error", err)

@@ -20,6 +20,7 @@ import (
 	"ssh-ui/internal/diagnostics"
 	"ssh-ui/internal/knownhosts"
 	"ssh-ui/internal/remotekey"
+	"ssh-ui/internal/secret"
 	"ssh-ui/internal/session"
 )
 
@@ -34,6 +35,16 @@ type Options struct {
 	Diagnostics *diagnostics.Service
 	KnownHosts  *knownhosts.Service
 	RemoteKeys  *remotekey.Service
+	// Passwords is the stored-password vault. A nil service leaves every
+	// password route and the askpass endpoint unregistered, which is what the
+	// tests that do not wire it rely on.
+	Passwords *secret.Service
+	// AskpassHelper is the absolute path of this binary, which is the program
+	// OpenSSH runs to obtain a password. Only cmd/ssh-ui can know it.
+	AskpassHelper string
+	// Answerable is the prompt rule, injected so the server and the helper
+	// cannot drift into two different rules.
+	Answerable func(prompt string) bool
 }
 
 var ErrNonLoopbackListener = errors.New("listener must use 127.0.0.1")
@@ -113,7 +124,13 @@ func New(options Options) (*Server, error) {
 		})
 	}
 	if options.Diagnostics != nil {
-		registerDiagnosticsRoutes(e, DiagnosticsHandlers{Service: options.Diagnostics, Actions: actions})
+		registerDiagnosticsRoutes(e, DiagnosticsHandlers{
+			Service:       options.Diagnostics,
+			Actions:       actions,
+			Passwords:     options.Passwords,
+			AskpassHelper: options.AskpassHelper,
+			AskpassURL:    "http://" + host + AskpassPath,
+		})
 	}
 	if options.KnownHosts != nil {
 		registerKnownHostsRoutes(e, KnownHostsHandlers{Service: options.KnownHosts, Actions: actions})
@@ -122,6 +139,9 @@ func New(options Options) (*Server, error) {
 		registerRemoteKeyRoutes(e, RemoteKeyHandlers{
 			Service: options.RemoteKeys, Diagnostics: options.Diagnostics, Actions: actions,
 		})
+	}
+	if options.Passwords != nil {
+		registerPasswordRoutes(e, PasswordHandlers{Service: options.Passwords, Answerable: options.Answerable})
 	}
 	if len(registry) > 0 {
 		registerActionRoutes(e, actions)

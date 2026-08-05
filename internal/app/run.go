@@ -16,6 +16,7 @@ import (
 	"ssh-ui/internal/knownhosts"
 	"ssh-ui/internal/platform"
 	"ssh-ui/internal/remotekey"
+	"ssh-ui/internal/secret"
 	"ssh-ui/internal/session"
 	"ssh-ui/internal/storage"
 )
@@ -43,6 +44,13 @@ type Dependencies struct {
 	// diagnostics service then reports that no terminal is configured rather
 	// than panicking, which is what the tests here rely on.
 	Terminal platform.TerminalLauncher
+	// AskpassHelper is the absolute path of the running binary, which is the
+	// program OpenSSH executes to obtain a stored password. Only cmd/ssh-ui can
+	// know it; an empty path leaves every terminal launch on the plain path.
+	AskpassHelper string
+	// Answerable is the prompt rule the askpass endpoint applies. A nil rule
+	// means no prompt is ever answered, which is the safe default.
+	Answerable func(prompt string) bool
 	// Lookup reads the parent environment so the OpenSSH programs this process
 	// starts receive platform.MinimalEnvironment. Only cmd/ssh-ui may supply
 	// os.LookupEnv; a nil value lets children inherit, which suits a test.
@@ -136,17 +144,25 @@ func Build(dependencies Dependencies, version string) (*httpserver.Server, strin
 		Environment: scanEnvironment,
 	}
 
+	// The stored-password vault shares the configuration transaction manager:
+	// it is one more ordinary managed file under ~/.ssh, so one journal covers
+	// it, and it travels with everything else the workspace holds.
+	passwordService := secret.NewService(workspace, transactions)
+
 	server, err := httpserver.New(httpserver.Options{
-		Listener:    listener,
-		Sessions:    sessions,
-		UI:          dependencies.UI,
-		Version:     version,
-		Logger:      dependencies.Logger,
-		Config:      configService,
-		Keys:        keyService,
-		Diagnostics: diagnosticsService,
-		KnownHosts:  knownHostsService,
-		RemoteKeys:  remoteKeyService,
+		Listener:      listener,
+		Sessions:      sessions,
+		UI:            dependencies.UI,
+		Version:       version,
+		Logger:        dependencies.Logger,
+		Config:        configService,
+		Keys:          keyService,
+		Diagnostics:   diagnosticsService,
+		KnownHosts:    knownHostsService,
+		RemoteKeys:    remoteKeyService,
+		Passwords:     passwordService,
+		AskpassHelper: dependencies.AskpassHelper,
+		Answerable:    dependencies.Answerable,
 	})
 	if err != nil {
 		listener.Close()
