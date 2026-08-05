@@ -98,6 +98,12 @@ func buildHome(t *testing.T, destination target) string {
 		"\tHostName " + destination.host,
 		"\tPort " + destination.port,
 		"\tUser " + destination.user,
+		// Absolute, because OpenSSH expands ~ from the passwd database rather
+		// than from HOME. Setting HOME is enough for a relative Include but
+		// not for this, which is how the first CI run of this suite failed:
+		// ssh never read the configuration at all and tried to resolve the
+		// alias as a hostname.
+		"\tUserKnownHostsFile " + filepath.Join(root, "known_hosts"),
 		// The point is the password path, so the key paths are closed off.
 		"\tPubkeyAuthentication no",
 		"\tPreferredAuthentications password",
@@ -170,7 +176,11 @@ func answerable(prompt string) bool {
 func runSSH(t *testing.T, home, endpoint, token string, arguments ...string) (string, error) {
 	t.Helper()
 	// Exactly what TerminalPasswordScript tells the shell to run.
+	// -F is explicit for the same reason UserKnownHostsFile is: the default
+	// user configuration path comes from the passwd database, not from HOME,
+	// so a test that only set HOME would silently run with no configuration.
 	command := exec.Command("ssh", append([]string{
+		"-F", filepath.Join(home, ".ssh", "config"),
 		"-o", "NumberOfPasswordPrompts=1",
 		"-o", "BatchMode=no",
 		"--", alias,
@@ -230,6 +240,7 @@ func TestTheWrongStoredPasswordFailsOnceRatherThanRepeatedly(t *testing.T) {
 	if err == nil {
 		t.Fatalf("ssh authenticated with the wrong password:\n%s", output)
 	}
+	requireAuthenticationWasAttempted(t, output)
 	if attempts := strings.Count(output, "Permission denied"); attempts > 1 {
 		t.Errorf("the password was offered %d times:\n%s", attempts, output)
 	}
@@ -277,5 +288,30 @@ func TestALockedVaultCannotAnswer(t *testing.T) {
 	output, err := runSSH(t, home, endpoint, token, "true")
 	if err == nil {
 		t.Fatalf("a locked vault still answered:\n%s", output)
+	}
+	requireAuthenticationWasAttempted(t, output)
+}
+
+// requireAuthenticationWasAttempted stops a test passing for the wrong reason.
+//
+// Every negative case here asserts that ssh failed, and ssh fails for many
+// reasons. The first CI run of this suite had two of them passing while ssh was
+// not reaching the server at all — it could not resolve the alias, because it
+// had never read the configuration. A test that cannot tell "the password was
+// refused" from "there was no connection" is not testing the password.
+func requireAuthenticationWasAttempted(t *testing.T, output string) {
+	t.Helper()
+	for _, symptom := range []string{
+		"Could not resolve hostname",
+		"Connection refused",
+		"No route to host",
+		"Host key verification failed",
+	} {
+		if strings.Contains(output, symptom) {
+			t.Fatalf("ssh failed before authentication (%s):\n%s", symptom, output)
+		}
+	}
+	if !strings.Contains(output, "Permission denied") {
+		t.Fatalf("ssh did not report a refused authentication, so it may have failed earlier:\n%s", output)
 	}
 }

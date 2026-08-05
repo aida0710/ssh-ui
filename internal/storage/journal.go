@@ -146,6 +146,44 @@ func (m *Manager) Rollback(identifier string) error {
 			}
 			continue
 		}
+		if entry.action() == actionMakeDir {
+			// A directory that was already there is not this transaction's to
+			// remove. Only one it created is undone, and only if it is still
+			// empty — something may have been written into it since, and
+			// taking that with the rollback would delete what nobody asked to
+			// touch.
+			if entry.HadPrevious {
+				continue
+			}
+			contents, readErr := fileSystem.ReadDir(entry.Path)
+			if errors.Is(readErr, fs.ErrNotExist) {
+				continue
+			}
+			if readErr != nil {
+				return readErr
+			}
+			if len(contents) > 0 {
+				continue
+			}
+			if err := fileSystem.Remove(entry.Path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				return err
+			}
+			if err := fileSystem.SyncDir(filepath.Dir(entry.Path)); err != nil {
+				return err
+			}
+			continue
+		}
+		if entry.action() == actionRemoveDir {
+			// It was empty when it was removed, so recreating it empty
+			// restores exactly what was lost.
+			if err := m.workspace.EnsureDirectory(entry.Path); err != nil {
+				return err
+			}
+			if err := fileSystem.SyncDir(filepath.Dir(entry.Path)); err != nil {
+				return err
+			}
+			continue
+		}
 		if entry.HadPrevious {
 			contents, readErr := fileSystem.ReadFile(entry.Backup)
 			if readErr != nil {

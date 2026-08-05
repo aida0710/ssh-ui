@@ -510,3 +510,124 @@ func TestCommitSkipsTheGenerationalBackupWhenTheCallerOptsOut(t *testing.T) {
 		t.Fatalf("history = %#v", history)
 	}
 }
+
+func TestCommitCreatesADirectoryAndTheFileInsideItInOneTransaction(t *testing.T) {
+	// Before this, a caller had to EnsureDirectory outside the journal and
+	// accept that a crash between the mkdir and the commit left an empty
+	// directory behind.
+	manager, workspace := newTestManager(t)
+	nested := filepath.Join(workspace.Root(), "connections", "work", "eu")
+
+	result, err := manager.Commit(Request{
+		Operation:   "test.directory",
+		Directories: []DirectoryCreate{{Path: nested}},
+		Changes: []Change{{
+			Path:     filepath.Join(nested, "lon.conf"),
+			Contents: []byte("Host lon-1\n"),
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Commit = %v", err)
+	}
+	if result.ID == "" {
+		t.Error("no transaction id")
+	}
+
+	info, err := os.Stat(nested)
+	if err != nil || !info.IsDir() {
+		t.Fatalf("the directory was not created: %v", err)
+	}
+	if info.Mode().Perm() != 0o700 {
+		t.Errorf("mode = %v, want 0700", info.Mode().Perm())
+	}
+	body, err := os.ReadFile(filepath.Join(nested, "lon.conf"))
+	if err != nil || string(body) != "Host lon-1\n" {
+		t.Errorf("file = %q, %v", body, err)
+	}
+}
+
+func TestCommitRemovesAnEmptyDirectoryAndRefusesAFullOne(t *testing.T) {
+	// A recursive delete cannot be rolled back without restoring contents the
+	// transaction never read, so only an empty directory goes.
+	manager, workspace := newTestManager(t)
+	full := filepath.Join(workspace.Root(), "connections", "work")
+	if err := os.MkdirAll(full, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(full, "lon.conf"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := manager.Commit(Request{
+		Operation:         "test.directory",
+		RemoveDirectories: []DirectoryRemoval{{Path: full}},
+	})
+	if !errors.Is(err, ErrDirectoryNotEmpty) {
+		t.Fatalf("removing a full directory = %v, want ErrDirectoryNotEmpty", err)
+	}
+	if _, err := os.Stat(filepath.Join(full, "lon.conf")); err != nil {
+		t.Errorf("the refused removal touched the contents: %v", err)
+	}
+
+	if err := os.Remove(filepath.Join(full, "lon.conf")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.Commit(Request{
+		Operation:         "test.directory",
+		RemoveDirectories: []DirectoryRemoval{{Path: full}},
+	}); err != nil {
+		t.Fatalf("removing an empty directory = %v", err)
+	}
+	if _, err := os.Stat(full); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the directory is still there: %v", err)
+	}
+}
+
+func TestRemovingADirectoryThatIsAlreadyGoneIsNotAnError(t *testing.T) {
+	// It is the state the caller asked for. A group rename that has already
+	// had its leftover cleaned up should not fail the next transaction.
+	manager, workspace := newTestManager(t)
+
+	if _, err := manager.Commit(Request{
+		Operation: "test.directory",
+		Changes: []Change{{
+			Path: filepath.Join(workspace.Root(), "marker"), Contents: []byte("x"),
+		}},
+		RemoveDirectories: []DirectoryRemoval{
+			{Path: filepath.Join(workspace.Root(), "never-existed")},
+		},
+	}); err != nil {
+		t.Fatalf("Commit = %v", err)
+	}
+}
+
+func TestARefusedDirectoryRequestCreatesNothing(t *testing.T) {
+	// The validator runs after the directories are planned and before any of
+	// them is made, so a refused request must leave the disk untouched.
+	manager, workspace := newTestManager(t)
+	manager.Validate = func(Request) error { return errors.New("refused") }
+	nested := filepath.Join(workspace.Root(), "connections", "work")
+
+	if _, err := manager.Commit(Request{
+		Operation:   "test.directory",
+		Directories: []DirectoryCreate{{Path: nested}},
+	}); err == nil {
+		t.Fatal("the validator was ignored")
+	}
+	if _, err := os.Stat(nested); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("a refused request created the directory: %v", err)
+	}
+}
+
+func TestADirectoryOutsideTheWorkspaceIsRefused(t *testing.T) {
+	manager, _ := newTestManager(t)
+
+	for _, path := range []string{"/etc/ssh", "relative/path", "/"} {
+		if _, err := manager.Commit(Request{
+			Operation:   "test.directory",
+			Directories: []DirectoryCreate{{Path: path}},
+		}); err == nil {
+			t.Errorf("creating %q was allowed", path)
+		}
+	}
+}
