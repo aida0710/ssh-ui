@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslate } from "../i18n/context";
 import { ApiError, type Problem } from "../api/client";
 import { configApi, type HistoryEntry, type PendingTransaction } from "../api/config";
 
@@ -9,6 +10,7 @@ function toProblem(error: unknown): Problem {
 }
 
 export function HistoryPanel() {
+  const t = useTranslate();
   const [entries, setEntries] = useState<HistoryEntry[] | null>(null);
   const [pending, setPending] = useState<PendingTransaction[]>([]);
   const [problem, setProblem] = useState<Problem | null>(null);
@@ -57,17 +59,22 @@ export function HistoryPanel() {
   return (
     <div className="flex flex-col gap-4">
       {problem === null ? null : (
-        <p role="alert" className="text-sm text-rose-300">{`The request was rejected (${problem.code}).`}</p>
+        <p role="alert" className="text-sm text-rose-300">{t("history.requestRejected", { code: problem.code })}</p>
       )}
       {message === "" ? null : <p role="status" className="text-sm text-emerald-300">{message}</p>}
 
       {pending.length === 0 ? null : (
         <section aria-labelledby="pending-heading" className="flex flex-col gap-2 rounded border border-amber-700 p-3">
-          <h3 id="pending-heading" className="text-sm font-medium text-amber-300">Interrupted transactions</h3>
+          <h3 id="pending-heading" className="text-sm font-medium text-amber-300">{t("history.interrupted")}</h3>
           {pending.map((item) => (
             <div key={item.id} className="flex flex-col gap-1">
               <p className="text-xs text-zinc-300">
-                {`${item.operation} started ${item.startedAt}: ${item.committed} of ${item.paths.length} files were written.`}
+                {t("history.interruptedDetail", {
+                  operation: item.operation,
+                  startedAt: item.startedAt,
+                  committed: item.committed,
+                  total: item.paths.length,
+                })}
               </p>
               <p className="text-xs text-zinc-400">{item.paths.join(", ")}</p>
               <div className="flex gap-2">
@@ -77,14 +84,14 @@ export function HistoryPanel() {
                   onClick={() => void recover(item.id, "complete")}
                   className="rounded border border-zinc-700 px-2 py-1 text-xs disabled:text-zinc-500"
                 >
-                  Complete
+                  {t("history.complete")}
                 </button>
                 <button
                   type="button"
                   onClick={() => void recover(item.id, "rollback")}
                   className="rounded border border-zinc-700 px-2 py-1 text-xs"
                 >
-                  Roll back
+                  {t("history.rollBack")}
                 </button>
               </div>
             </div>
@@ -93,9 +100,9 @@ export function HistoryPanel() {
       )}
 
       <section aria-labelledby="history-heading" className="flex flex-col gap-2">
-        <h3 id="history-heading" className="text-sm font-medium">Completed changes</h3>
+        <h3 id="history-heading" className="text-sm font-medium">{t("history.completed")}</h3>
         {entries.length === 0 ? (
-          <p className="text-xs text-zinc-500">No change has been made through this application yet.</p>
+          <p className="text-xs text-zinc-500">{t("history.empty")}</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {entries.map((entry) => (
@@ -110,7 +117,7 @@ export function HistoryPanel() {
                       onClick={() => void restore(entry.id, path)}
                       className="rounded border border-zinc-700 px-2 py-1 text-xs"
                     >
-                      {`Restore ${path}`}
+                      {t("history.restorePath", { path })}
                     </button>
                   ))}
                 </div>
@@ -118,10 +125,7 @@ export function HistoryPanel() {
             ))}
           </ul>
         )}
-        <p className="text-xs text-zinc-500">
-          Generation backups are kept in ~/.ssh/ssh-ui/backups and are never deleted automatically. A restore is itself
-          a new transaction, so it can be undone the same way.
-        </p>
+        <p className="text-xs text-zinc-500">{t("history.backupsKept")}</p>
       </section>
     </div>
   );

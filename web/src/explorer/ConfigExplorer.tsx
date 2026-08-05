@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslate } from "../i18n/context";
 import { ApiError, type Problem } from "../api/client";
 import { configApi, type FileContents, type Overview, type SavePreview } from "../api/config";
 import { SavePreviewPanel } from "../connections/SavePreview";
@@ -28,6 +29,7 @@ function lineRange(contents: string, line: number): { start: number; end: number
 }
 
 export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
+  const t = useTranslate();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [file, setFile] = useState<FileContents | null>(null);
   const [draft, setDraft] = useState("");
@@ -69,7 +71,7 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
     const range = lineRange(file.contents, target.line);
     editor.focus();
     editor.setSelectionRange(range.start, range.end);
-    setJump(`Opened ${target.path} at line ${target.line}.`);
+    setJump(t("explorer.opened", { path: target.path, line: target.line }));
   }, [file, target]);
 
   async function open(path: string) {
@@ -124,13 +126,13 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
   }
 
   if (overview === null) {
-    return <p role="status" className="text-sm text-zinc-300">Loading configuration files…</p>;
+    return <p role="status" className="text-sm text-zinc-300">{t("explorer.loading")}</p>;
   }
 
   return (
     <div className="grid grid-cols-[22rem_1fr] gap-6">
       <section aria-labelledby="explorer-heading" className="flex flex-col gap-3">
-        <h3 id="explorer-heading" className="text-sm font-medium">Include hierarchy</h3>
+        <h3 id="explorer-heading" className="text-sm font-medium">{t("explorer.hierarchy")}</h3>
         <ul className="flex flex-col gap-2">
           {overview.files.map((node) => (
             <li key={node.file.absolute} className="rounded border border-zinc-800 p-2">
@@ -138,7 +140,7 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
                 <p className="text-sm text-zinc-400">
                   {node.file.absolute}
                   <span className="block text-xs text-amber-300">
-                    This file is outside ~/.ssh. It is read and shown, never written.
+                    {t("explorer.externalFile")}
                   </span>
                 </p>
               ) : (
@@ -151,7 +153,11 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
                 </button>
               )}
               <p className="text-xs text-zinc-500">
-                {`${node.missing === true ? "missing · " : ""}${node.loads > 1 ? `read ${node.loads} times · ` : ""}${node.editable ? "editable" : "read only"}`}
+                {t("explorer.fileState", {
+                  missing: node.missing === true ? t("explorer.missing") : "",
+                  loads: node.loads > 1 ? t("explorer.readTimes", { count: node.loads }) : "",
+                  editable: node.editable ? t("explorer.editable") : t("explorer.readOnly"),
+                })}
               </p>
               {(node.includes ?? []).map((include) => (
                 <div key={`${node.file.absolute}:${include.line}:${include.pattern}`} className="mt-1 text-xs text-zinc-400">
@@ -173,7 +179,7 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
         </ul>
 
         <div className="flex flex-col gap-1 rounded border border-zinc-800 p-2">
-          <label htmlFor="new-file-path" className="text-xs text-zinc-400">New file path</label>
+          <label htmlFor="new-file-path" className="text-xs text-zinc-400">{t("explorer.newFilePath")}</label>
           <input
             id="new-file-path"
             value={newPath}
@@ -182,18 +188,14 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
             className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
           />
           <button type="button" onClick={() => void createFile()} className="self-start rounded bg-zinc-800 px-2 py-1 text-xs">
-            Create file
+            {t("explorer.createFile")}
           </button>
-          <p className="text-xs text-zinc-500">
-            A new file is only read once an Include in ~/.ssh/config points at it. Add that line in the entry file
-            below. Moving, renaming and deleting files needs journalled delete and rename primitives this version does
-            not have yet.
-          </p>
+          <p className="text-xs text-zinc-500">{t("explorer.newFileNote")}</p>
         </div>
 
-        <h3 className="text-sm font-medium">Diagnostics</h3>
+        <h3 className="text-sm font-medium">{t("explorer.diagnostics")}</h3>
         {overview.diagnostics.length === 0 ? (
-          <p className="text-xs text-zinc-500">No Include problem detected.</p>
+          <p className="text-xs text-zinc-500">{t("explorer.noIncludeProblem")}</p>
         ) : (
           <ul className="flex flex-col gap-1">
             {overview.diagnostics.map((diagnostic, index) => (
@@ -211,11 +213,11 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
       <section className="flex flex-col gap-3">
         <p aria-live="polite" className="text-xs text-zinc-400">{jump}</p>
         {file === null ? (
-          <p role="status" className="text-sm text-zinc-400">Select a file to edit its full text.</p>
+          <p role="status" className="text-sm text-zinc-400">{t("explorer.selectFile")}</p>
         ) : (
           <div className="flex flex-col gap-2">
             <label htmlFor="file-raw" className="text-xs text-zinc-400">
-              {`File text — ${file.file.path ?? file.file.absolute}. Every byte is written back exactly as typed.`}
+              {t("explorer.fileText", { path: file.file.path ?? file.file.absolute })}
             </label>
             <textarea
               id="file-raw"
@@ -229,7 +231,7 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
             />
             <div className="flex gap-2">
               <button type="button" onClick={() => void run("preview")} className="rounded border border-zinc-700 px-3 py-1 text-sm">
-                Preview
+                {t("explorer.preview")}
               </button>
               <button
                 type="button"
@@ -237,7 +239,7 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
                 disabled={!file.editable}
                 className="rounded bg-zinc-200 px-3 py-1 text-sm text-zinc-900 disabled:bg-zinc-700 disabled:text-zinc-400"
               >
-                Save file
+                {t("explorer.saveFile")}
               </button>
             </div>
           </div>

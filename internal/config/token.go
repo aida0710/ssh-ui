@@ -1,6 +1,9 @@
 package config
 
-import "strings"
+import (
+	"errors"
+	"strings"
+)
 
 // Argument is one directive argument together with the exact bytes that
 // produced it. Lead holds the whitespace that precedes the argument so a
@@ -9,6 +12,23 @@ type Argument struct {
 	Lead  string
 	Raw   string
 	Value string
+}
+
+// ErrUnquotableValue reports a value ssh_config cannot represent. OpenSSH has
+// no backslash escape inside a quoted argument, so a value containing a double
+// quote, a newline or a NUL has no spelling and is refused rather than mangled.
+var ErrUnquotableValue = errors.New("value cannot be quoted for an OpenSSH configuration")
+
+// RenderArgument writes one value using OpenSSH's quoting rules.
+func RenderArgument(lead, value string) (Argument, error) {
+	if strings.ContainsAny(value, "\n\r\x00\"") {
+		return Argument{}, ErrUnquotableValue
+	}
+	raw := value
+	if value == "" || strings.ContainsAny(value, " \t") || strings.HasPrefix(value, "#") {
+		raw = `"` + value + `"`
+	}
+	return Argument{Lead: lead, Raw: raw, Value: value}, nil
 }
 
 // splitArguments splits the argument portion of a directive line.

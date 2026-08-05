@@ -190,7 +190,9 @@ test("re-associates a note whose connection is gone, without guessing", async ({
   const panel = page.getByRole("region", { name: "Settings whose connection is gone" });
   await expect(panel).toBeVisible();
   await expect(panel.getByText("retired in config")).toBeVisible();
-  await expect(panel.getByText(/note \u201cthe old builder\u201d/)).toBeVisible();
+  // The note is retired in favour of a configuration comment, so the panel
+  // describes the entry by what it still carries.
+  await expect(panel.getByText(/group work/)).toBeVisible();
 
   await panel.getByLabel("Re-associate retired with").selectOption("config\u0000bastion");
   expect(await clickAndAwait(page, "Re-associate retired", "/api/v1/config/save")).toBe(200);
@@ -204,4 +206,88 @@ test("re-associates a note whose connection is gone, without guessing", async ({
     note: "the old builder",
   });
   expect(saved.hosts[0].orphan).toBeUndefined();
+});
+
+test("writes a comment into the configuration file above the Host line", async ({
+  page,
+  installation,
+}) => {
+  const before = await installation.read("config");
+  await openBastion(page, installation.url);
+
+  await page.getByLabel("Comment").fill("the production bastion\nask infra before changing it");
+  expect(await clickAndAwait(page, "Save comment", "/api/v1/config/save")).toBe(200);
+
+  const after = await installation.read("config");
+  expect(after).toContain("# the production bastion\n# ask infra before changing it\nHost bastion\n");
+
+  // The file's own banner sits above a blank line, so it belongs to the file
+  // and not to the first block. Editing the block must leave it alone.
+  expect(after).toContain("# Managed by hand since 2019. Do not reformat.\n\nInclude conf.d/*.conf");
+  // And every byte the comment did not add is unchanged.
+  expect(after.replace("# the production bastion\n# ask infra before changing it\n", "")).toBe(before);
+});
+
+test("removes the comment lines when the comment is cleared", async ({ page, installation }) => {
+  const before = await installation.read("config");
+  await openBastion(page, installation.url);
+
+  await page.getByLabel("Comment").fill("temporary");
+  expect(await clickAndAwait(page, "Save comment", "/api/v1/config/save")).toBe(200);
+  await expect(page.getByLabel("Comment")).toHaveValue("temporary");
+
+  await page.getByLabel("Comment").fill("");
+  expect(await clickAndAwait(page, "Save comment", "/api/v1/config/save")).toBe(200);
+
+  // Back to the original bytes: adding and removing a comment is a round trip.
+  expect(await installation.read("config")).toBe(before);
+});
+
+// A comment that means something can be mis-attributed. These are the two ways
+// a block leaves a file, and both would otherwise hand its description to
+// whichever connection happened to follow it.
+test("takes a comment with the connection it describes when the block moves", async ({
+  page,
+  installation,
+}) => {
+  await installation.write(
+    "conf.d/10-home.conf",
+    "# the file server\nHost nas\n\tHostName 198.51.100.20\n\n# the printer\nHost printer\n\tHostName 198.51.100.30\n",
+  );
+  await page.goto(installation.url);
+  await openSection(page, "Connections");
+  await page.getByRole("navigation", { name: "Connections" }).getByRole("button", { name: "nas" }).click();
+  await expect(page.getByLabel("Comment")).toHaveValue("the file server");
+
+  await page.getByLabel("Move to file").selectOption("config");
+  expect(await clickAndAwait(page, "Move connection", "/api/v1/config/save")).toBe(200);
+
+  // The comment arrived with the block…
+  expect(await installation.read("config")).toContain("# the file server\nHost nas\n");
+  // …and the printer kept its own rather than inheriting nas's.
+  const source = await installation.read("conf.d/10-home.conf");
+  expect(source).not.toContain("the file server");
+  expect(source).toContain("# the printer\nHost printer\n");
+});
+
+test("takes a comment with the connection when the block is deleted", async ({
+  page,
+  installation,
+}) => {
+  await installation.write(
+    "conf.d/10-home.conf",
+    "# the file server\nHost nas\n\tHostName 198.51.100.20\n\n# the printer\nHost printer\n\tHostName 198.51.100.30\n",
+  );
+  await page.goto(installation.url);
+  await openSection(page, "Connections");
+  await page.getByRole("navigation", { name: "Connections" }).getByRole("button", { name: "nas" }).click();
+
+  await page.getByRole("button", { name: "Delete connection" }).click();
+  expect(await clickAndAwait(page, "Confirm delete", "/api/v1/config/save")).toBe(200);
+
+  const after = await installation.read("conf.d/10-home.conf");
+  // Left behind, "# the file server" would have become the printer's
+  // description — a silent lie about a connection nobody touched.
+  expect(after).not.toContain("the file server");
+  expect(after).toContain("# the printer\nHost printer\n");
 });

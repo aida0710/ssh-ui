@@ -46,6 +46,8 @@ const detail: HostDetail = {
       { line: 5, keyword: "ProxyCommand", values: ["/usr/bin/nc %h %p"], category: "jump", dangerous: true, editable: true },
     ],
     raw: "Host bastion\n\tHostName 203.0.113.10\n",
+    comment: "",
+    commentLines: 0,
     notices: [{ code: "dangerous_directive", path: "config", line: 5, detail: "ProxyCommand" }],
   },
   metadata: { identity: { path: "config", alias: "bastion" }, group: "work", favourite: false },
@@ -72,6 +74,7 @@ function renderPanel(overrides: Partial<Parameters<typeof HostDetailPanel>[0]> =
     onFieldEdits: vi.fn(),
     onBlockRaw: vi.fn(),
     onRename: vi.fn(),
+    onComment: vi.fn(),
     onMetadata: vi.fn(),
     ...overrides,
   };
@@ -234,5 +237,40 @@ describe("HostDetailPanel", () => {
     renderPanel();
 
     expect(screen.queryByRole("button", { name: "Clear colour" })).not.toBeInTheDocument();
+  });
+  it("writes a comment into the configuration rather than into metadata", async () => {
+    const user = userEvent.setup();
+    const handlers = renderPanel();
+
+    await user.type(screen.getByLabelText("Comment"), "the production bastion");
+    await user.click(screen.getByRole("button", { name: "Save comment" }));
+
+    expect(handlers.onComment).toHaveBeenCalledWith("the production bastion");
+    // The comment is a configuration edit, so it must not travel as metadata.
+    expect(handlers.onMetadata).not.toHaveBeenCalled();
+  });
+
+  it("seeds the editor from a legacy note and says the save retires it", () => {
+    renderPanel({
+      detail: { ...detail, metadata: { ...detail.metadata, note: "written before comments existed" } },
+    });
+
+    expect(screen.getByLabelText("Comment")).toHaveValue("written before comments existed");
+    expect(screen.getByText(/retires the note/)).toBeInTheDocument();
+  });
+
+  it("prefers the configuration comment over a stale note", () => {
+    renderPanel({
+      detail: {
+        ...detail,
+        form: { ...detail.form, comment: "in the file" },
+        metadata: { ...detail.metadata, note: "left over" },
+      },
+    });
+
+    // Once the comment exists it is the only source; the note is on its way out
+    // and must never win over what the file says.
+    expect(screen.getByLabelText("Comment")).toHaveValue("in the file");
+    expect(screen.queryByText(/retires the note/)).not.toBeInTheDocument();
   });
 });

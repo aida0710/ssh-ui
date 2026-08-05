@@ -143,3 +143,78 @@ func parseCriteria(values []string) []Criterion {
 	}
 	return criteria
 }
+
+// CommentRun reports the range of comment lines attached to the block whose
+// header is at the given index, as a half-open interval [start, header).
+//
+// The attached comment is the run of contiguous LineComment lines immediately
+// above the header. The run stops at a blank line, a directive, an
+// unstructured line or the start of the file.
+//
+// A blank line separates deliberately. Without that rule a file's own banner —
+// the "# Managed by hand since 2019" that sits at the top above an empty line —
+// would be adopted by whichever Host block happens to come first, and editing
+// that block's comment would rewrite the file's banner. Requiring adjacency is
+// what makes the attachment a property of the text rather than a guess.
+//
+// The returned range is empty (start == header) when no comment is attached.
+func (f *File) CommentRun(header int) (start int) {
+	if header < 0 || header > len(f.Lines) {
+		return header
+	}
+	start = header
+	for start > 0 && f.Lines[start-1].Kind == LineComment {
+		start--
+	}
+	return start
+}
+
+// CommentText returns the attached comment as text, with the leading '#' and a
+// single following space removed from each line.
+//
+// The marker is stripped so the editor shows what the user wrote rather than
+// the syntax carrying it, and re-added on the way back by RenderComment. A
+// comment line that is only "#" becomes an empty line in the text, which is how
+// a deliberate blank line inside a comment block survives the round trip.
+func (f *File) CommentText(header int) string {
+	start := f.CommentRun(header)
+	if start == header {
+		return ""
+	}
+	lines := make([]string, 0, header-start)
+	for _, line := range f.Lines[start:header] {
+		text := strings.TrimLeft(line.Text, " \t")
+		text = strings.TrimSuffix(strings.TrimSuffix(text, "\n"), "\r")
+		text = strings.TrimPrefix(text, "#")
+		lines = append(lines, strings.TrimPrefix(text, " "))
+	}
+	return strings.Join(lines, "\n")
+}
+
+// RenderComment turns comment text back into configuration lines.
+//
+// Every line is prefixed with "# ", including an empty one, which is written as
+// "#" alone rather than "# " so no trailing whitespace is introduced. Text that
+// already begins with '#' is not double-marked: a user who types "## section"
+// means that, and re-marking it would grow a marker on every save.
+func RenderComment(text, indent, ending string) []Line {
+	if text == "" {
+		return nil
+	}
+	parts := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+	lines := make([]Line, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimRight(part, " \t")
+		var body string
+		switch {
+		case trimmed == "":
+			body = "#"
+		case strings.HasPrefix(trimmed, "#"):
+			body = trimmed
+		default:
+			body = "# " + trimmed
+		}
+		lines = append(lines, Line{Kind: LineComment, Text: indent + body + ending})
+	}
+	return lines
+}

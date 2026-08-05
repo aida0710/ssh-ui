@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { RevealDialog } from "./RevealDialog";
 import { CopyButton } from "../ui/CopyButton";
+import { useTranslate, type Translate } from "../i18n/context";
+import type { MessageKey } from "../i18n/messages";
 import {
   keysApi,
   type KeyCertificate,
@@ -8,6 +10,7 @@ import {
   type KeyItem,
   type KeysApi,
   type KeyVariant,
+  type RenameKeyResponse,
   type TrashListResponse,
 } from "./api";
 
@@ -19,44 +22,104 @@ type ScreenState = "loading" | "ready" | "error";
 // whether it is usable: who it names, who it is for, and whether it has run
 // out. An expired certificate that only says "certificate" is indistinguishable
 // from a working one, which is the whole reason design §6.3 classifies them.
-function certificateLines(certificate: KeyCertificate, now: number): { text: string; expired: boolean }[] {
+function certificateLines(
+  certificate: KeyCertificate,
+  now: number,
+  t: Translate,
+): { text: string; expired: boolean }[] {
   const lines: { text: string; expired: boolean }[] = [];
-  if (certificate.keyId !== "") lines.push({ text: `key id ${certificate.keyId}`, expired: false });
+  if (certificate.keyId !== "") lines.push({ text: t("keys.certKeyId", { keyId: certificate.keyId }), expired: false });
   if (certificate.principals.length > 0) {
-    lines.push({ text: `for ${certificate.principals.join(", ")}`, expired: false });
+    lines.push({ text: t("keys.certFor", { principals: certificate.principals.join(", ") }), expired: false });
   } else {
     // A certificate with no principal is valid for every user on the host that
     // trusts its CA. That is a fact about its reach, not a missing field.
-    lines.push({ text: "for any principal", expired: false });
+    lines.push({ text: t("keys.certAnyPrincipal"), expired: false });
   }
   if (certificate.neverExpires) {
-    lines.push({ text: "never expires", expired: false });
+    lines.push({ text: t("keys.certNeverExpires"), expired: false });
   } else {
     const expiry = new Date(certificate.validBefore * 1000);
     const expired = certificate.validBefore * 1000 <= now;
-    lines.push({
-      text: `${expired ? "expired" : "valid until"} ${expiry.toISOString().slice(0, 16).replace("T", " ")}Z`,
-      expired,
-    });
+    const when = `${expiry.toISOString().slice(0, 16).replace("T", " ")}Z`;
+    lines.push({ text: expired ? t("keys.certExpired", { when }) : t("keys.certValidUntil", { when }), expired });
   }
   if (certificate.signedKeyType !== "") {
     lines.push({
-      text: `signs ${certificate.signedKeyType} ${certificate.signedKeyFingerprint}`.trim(),
+      text: t("keys.certSigns", {
+        keyType: certificate.signedKeyType,
+        fingerprint: certificate.signedKeyFingerprint,
+      }).trim(),
       expired: false,
     });
   }
   return lines;
 }
 
-const noteLabels: Record<string, string> = {
-  fingerprint_unavailable: "Fingerprint unavailable",
-  symbolic_link: "Symbolic link, not followed",
-  empty_file: "Empty file",
-  not_regular_file: "Not a regular file",
-  comment_not_preserved: "Comment not preserved",
+// A row's actions were bare buttons in a table with no rules, so they ran
+// together as text and read as prose rather than as controls. The border and
+// these classes are what separate one key from the next.
+const rowAction = "rounded border border-zinc-700 px-2 py-1 text-xs hover:bg-zinc-800 disabled:text-zinc-600";
+const dangerAction = "rounded border border-rose-700 px-2 py-1 text-xs text-rose-300 hover:bg-rose-950";
+
+const noteLabels: Record<string, MessageKey> = {
+  fingerprint_unavailable: "keys.noteFingerprintUnavailable",
+  symbolic_link: "keys.noteSymbolicLink",
+  empty_file: "keys.noteEmptyFile",
+  not_regular_file: "keys.noteNotRegularFile",
+  comment_not_preserved: "keys.noteCommentNotPreserved",
+  keychain_entry_stale: "keys.noteKeychainEntryStale",
 };
 
+// A blocker is a stable code, ':' and the detail it is about. The code decides
+// the sentence and the detail fills it in, so a reason the server adds later
+// still shows the path it names instead of being dropped.
+const blockerLabels: Record<string, MessageKey> = {
+  rename_target_occupied: "keys.renameBlockerTargetOccupied",
+  rename_reference_unresolved: "keys.renameBlockerUnresolved",
+  rename_reference_not_editable: "keys.renameBlockerNotEditable",
+};
+
+function describeBlocker(blocker: string, t: Translate): string {
+  const separator = blocker.indexOf(":");
+  const code = separator < 0 ? blocker : blocker.slice(0, separator);
+  const detail = separator < 0 ? blocker : blocker.slice(separator + 1);
+  return t(blockerLabels[code] ?? "keys.renameBlockerOther", { detail });
+}
+
+// renameable reports whether this application can rename a file without having
+// to decide something the user has not told it.
+//
+// A private key takes its own public key and certificate with it, so it is
+// always renameable. A public key or certificate is renameable only when no
+// private key in the inventory belongs to it: renaming half of a pair would
+// leave two files that OpenSSH still pairs by name and a reader no longer can,
+// so the server refuses it and the button is not offered either.
+function renameable(item: KeyItem, items: KeyItem[]): boolean {
+  if (item.kind === "private_key") return true;
+  if (item.kind !== "public_key" && item.kind !== "certificate") return false;
+  const fingerprint =
+    item.kind === "certificate" && item.certificate !== undefined
+      ? item.certificate.signedKeyFingerprint
+      : item.fingerprint;
+  if (fingerprint === "") return true;
+  return !items.some((candidate) => candidate.kind === "private_key" && candidate.fingerprint === fingerprint);
+}
+
+// renameStem is the part of the name the user is being asked to replace. It
+// mirrors the server's rule, so the field starts at the name the rename would
+// actually change rather than at one the server would refuse.
+function renameStem(item: KeyItem): string {
+  const base = item.relativePath.split("/").pop() ?? item.relativePath;
+  if (item.kind === "private_key") return base;
+  for (const suffix of ["-cert.pub", ".pub"]) {
+    if (base.endsWith(suffix) && base.length > suffix.length) return base.slice(0, -suffix.length);
+  }
+  return base;
+}
+
 export function KeysScreen({ api = keysApi }: KeysScreenProps) {
+  const t = useTranslate();
   const [state, setState] = useState<ScreenState>("loading");
   const [inventory, setInventory] = useState<KeyInventoryResponse | null>(null);
   const [trash, setTrash] = useState<TrashListResponse | null>(null);
@@ -77,6 +140,9 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
   const [agentLifetime, setAgentLifetime] = useState(0);
   const [storeInKeychain, setStoreInKeychain] = useState(false);
   const [publicKeyView, setPublicKeyView] = useState<{ relativePath: string; text: string } | null>(null);
+  const [renaming, setRenaming] = useState<KeyItem | null>(null);
+  const [newName, setNewName] = useState("");
+  const [renamed, setRenamed] = useState<RenameKeyResponse | null>(null);
   const [pendingPurge, setPendingPurge] = useState("");
   const [failure, setFailure] = useState("");
 
@@ -128,7 +194,7 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
       await refresh();
     } catch {
       setPassphrase("");
-      setFailure("The key could not be created. Check the name, the algorithm and the passphrase.");
+      setFailure(t("keys.createFailed"));
     }
   }
 
@@ -154,7 +220,7 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
     } catch {
       setCurrentPassphrase("");
       setNewPassphrase("");
-      setFailure("The passphrase could not be changed. Check the current passphrase and try again.");
+      setFailure(t("keys.passphraseFailed"));
     }
   }
 
@@ -182,9 +248,7 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
       await refresh();
     } catch {
       setAgentPassphrase("");
-      setFailure(
-        "The key could not be added to the agent. Check the passphrase, and that an agent this process can reach is running.",
-      );
+      setFailure(t("keys.agentFailed"));
     }
   }
 
@@ -199,7 +263,29 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
       setPublicKeyView({ relativePath: response.relativePath, text: response.publicKey.trimEnd() });
     } catch {
       setPublicKeyView(null);
-      setFailure("The public key could not be read.");
+      setFailure(t("keys.publicKeyFailed"));
+    }
+  }
+
+  function closeRenameForm() {
+    setNewName("");
+    setRenaming(null);
+  }
+
+  // A blocked rename is not a failure to report and forget: the server wrote
+  // nothing and said why, so the reasons stay on screen and the form stays open
+  // with what the user typed still in it.
+  async function submitRename(item: KeyItem) {
+    setFailure("");
+    setRenamed(null);
+    try {
+      const response = await api.rename(item.id, newName);
+      setRenamed(response);
+      if (response.blockers.length > 0) return;
+      closeRenameForm();
+      await refresh();
+    } catch {
+      setFailure(t("keys.renameFailed"));
     }
   }
 
@@ -209,7 +295,7 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
       await api.trash(keyId);
       await refresh();
     } catch {
-      setFailure("The key could not be moved to the trash.");
+      setFailure(t("keys.trashFailed"));
     }
   }
 
@@ -218,12 +304,12 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
     try {
       const response = await api.restore(entryId);
       if (response.blockers.length > 0) {
-        setFailure(`Restore refused: ${response.blockers.join(", ")}`);
+        setFailure(t("keys.restoreRefused", { blockers: response.blockers.join(", ") }));
         return;
       }
       await refresh();
     } catch {
-      setFailure("The entry could not be restored.");
+      setFailure(t("keys.restoreFailed"));
     }
   }
 
@@ -234,21 +320,21 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
       setPendingPurge("");
       await refresh();
     } catch {
-      setFailure("The entry could not be deleted permanently.");
+      setFailure(t("keys.purgeFailed"));
     }
   }
 
   if (state === "loading") {
-    return <p aria-live="polite">Reading the ssh directory…</p>;
+    return <p aria-live="polite">{t("keys.reading")}</p>;
   }
   if (state === "error" || inventory === null || trash === null) {
-    return <p role="alert">The ssh directory could not be read. Restart ssh-ui and try again.</p>;
+    return <p role="alert">{t("keys.unreadable")}</p>;
   }
 
   return (
     <section aria-labelledby="keys-heading" className="flex flex-col gap-8">
       <h2 id="keys-heading" className="text-lg font-medium">
-        Keys
+        {t("keys.heading")}
       </h2>
       {failure !== "" && (
         <p role="alert" className="rounded-md border border-red-800 p-3 text-sm text-red-300">
@@ -257,27 +343,27 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
       )}
 
       <table className="w-full text-left text-sm">
-        <caption className="sr-only">Files classified by content and permissions</caption>
+        <caption className="sr-only">{t("keys.tableCaption")}</caption>
         <thead>
-          <tr>
-            <th scope="col">File</th>
-            <th scope="col">Kind</th>
-            <th scope="col">Algorithm</th>
-            <th scope="col">Fingerprint</th>
-            <th scope="col">Permissions</th>
-            <th scope="col">Used by</th>
-            <th scope="col">Actions</th>
+          <tr className="border-b border-zinc-700 text-xs uppercase tracking-wide text-zinc-400">
+            <th scope="col">{t("keys.colFile")}</th>
+            <th scope="col">{t("keys.colKind")}</th>
+            <th scope="col">{t("keys.colAlgorithm")}</th>
+            <th scope="col">{t("keys.colFingerprint")}</th>
+            <th scope="col">{t("keys.colPermissions")}</th>
+            <th scope="col">{t("keys.colUsedBy")}</th>
+            <th scope="col">{t("keys.colActions")}</th>
           </tr>
         </thead>
         <tbody>
           {inventory.items.map((item) => (
-            <tr key={item.id}>
-              <td>{item.relativePath}</td>
-              <td>
+            <tr key={item.id} className="border-b border-zinc-800 align-top">
+              <td className="py-2 pr-3 font-mono text-xs">{item.relativePath}</td>
+              <td className="py-2 pr-3">
                 {item.kind}
                 {item.certificate === undefined ? null : (
                   <ul className="text-xs text-zinc-400">
-                    {certificateLines(item.certificate, now).map((line) => (
+                    {certificateLines(item.certificate, now, t).map((line) => (
                       <li key={line.text} className={line.expired ? "text-red-300" : undefined}>
                         {line.text}
                       </li>
@@ -285,43 +371,48 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
                   </ul>
                 )}
               </td>
-              <td>{item.bits > 0 ? `${item.algorithm} · ${item.bits}` : item.algorithm}</td>
-              <td>
+              <td className="py-2 pr-3">{item.bits > 0 ? `${item.algorithm} · ${item.bits}` : item.algorithm}</td>
+              <td className="py-2 pr-3 font-mono text-xs break-all">
                 {item.fingerprint !== "" ? item.fingerprint : null}
                 {item.notes.map((note) => (
                   <span key={note} className="ml-2 text-amber-300">
-                    {noteLabels[note] ?? note}
+                    {note in noteLabels ? t(noteLabels[note]!) : note}
                   </span>
                 ))}
               </td>
-              <td>
+              <td className="py-2 pr-3">
                 {item.permission}
-                {item.permissionRisk && <span className="ml-2 text-red-300">Permissions too open</span>}
+                {item.permissionRisk && <span className="ml-2 text-red-300">{t("keys.permissionRisk")}</span>}
               </td>
-              <td>{item.references.map((reference) => reference.hostPatterns.join(" ")).join(", ")}</td>
-              <td>
+              <td className="py-2 pr-3">
+                {item.references.map((reference) => reference.hostPatterns.join(" ")).join(", ")}
+              </td>
+              <td className="py-2">
+                <div className="flex flex-wrap gap-1">
                 {(item.kind === "public_key" || item.kind === "certificate") && (
-                  <button type="button" onClick={() => void showPublicKey(item)}>
-                    Show public key
+                  <button type="button" className={rowAction} onClick={() => void showPublicKey(item)}>
+                    {t("keys.showPublicKey")}
                   </button>
                 )}
                 {item.kind === "private_key" && (
                   <>
-                    <button type="button" onClick={() => setRevealing(item)}>
-                      Show private key
+                    <button type="button" className={rowAction} onClick={() => setRevealing(item)}>
+                      {t("keys.showPrivateKey")}
                     </button>
                     <button
                       type="button"
+                      className={rowAction}
                       onClick={() => {
                         closePassphraseForm();
                         closeAgentForm();
                         setChangingPassphrase(item);
                       }}
                     >
-                      Change passphrase
+                      {t("keys.changePassphrase")}
                     </button>
                     <button
                       type="button"
+                      className={rowAction}
                       disabled={!inventory.agentAvailable}
                       onClick={() => {
                         closePassphraseForm();
@@ -329,13 +420,29 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
                         setRegistering(item);
                       }}
                     >
-                      Add to agent
+                      {t("keys.addToAgent")}
                     </button>
-                    <button type="button" onClick={() => void moveToTrash(item.id)}>
-                      Move to trash
+                    <button type="button" className={rowAction} onClick={() => void moveToTrash(item.id)}>
+                      {t("keys.moveToTrash")}
                     </button>
                   </>
                 )}
+                {renameable(item, inventory.items) && (
+                  <button
+                    type="button"
+                    className={rowAction}
+                    onClick={() => {
+                      closePassphraseForm();
+                      closeAgentForm();
+                      setRenamed(null);
+                      setNewName(renameStem(item));
+                      setRenaming(item);
+                    }}
+                  >
+                    {t("keys.rename")}
+                  </button>
+                )}
+                </div>
               </td>
             </tr>
           ))}
@@ -345,15 +452,15 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
       {publicKeyView !== null && (
         <section aria-labelledby="public-key-heading" className="flex flex-col gap-2 rounded-xl border border-zinc-800 p-4">
           <h3 id="public-key-heading" className="font-medium">
-            {`Public key: ${publicKeyView.relativePath}`}
+            {t("keys.publicKeyHeading", { path: publicKeyView.relativePath })}
           </h3>
-          <pre aria-label="Public key" className="overflow-x-auto rounded-md bg-zinc-950 p-4 text-xs">
+          <pre aria-label={t("keys.publicKeyLabel")} className="overflow-x-auto rounded-md bg-zinc-950 p-4 text-xs">
             {publicKeyView.text}
           </pre>
           <div className="flex gap-2">
-            <CopyButton value={publicKeyView.text} label="public key" />
+            <CopyButton value={publicKeyView.text} label="copy.publicKey" />
             <button type="button" onClick={() => setPublicKeyView(null)}>
-              Close
+              {t("keys.close")}
             </button>
           </div>
         </section>
@@ -369,14 +476,12 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
       {inventory.unreadable.length > 0 && (
         <section aria-labelledby="unreadable-heading" className="flex flex-col gap-2">
           <h3 id="unreadable-heading" className="font-medium text-amber-300">
-            Files this scan could not classify
+            {t("keys.unreadableHeading")}
           </h3>
-          <p className="text-sm text-zinc-400">
-            These are inside ~/.ssh and are missing from the table above. Nothing was changed about them.
-          </p>
+          <p className="text-sm text-zinc-400">{t("keys.unreadableNote")}</p>
           <ul className="text-sm text-zinc-300">
             {inventory.unreadable.map((file) => (
-              <li key={file.relativePath}>{`${file.relativePath} — ${file.reason}`}</li>
+              <li key={file.relativePath}>{t("keys.unreadableEntry", { path: file.relativePath, reason: file.reason })}</li>
             ))}
           </ul>
         </section>
@@ -385,12 +490,18 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
       {inventory.unresolvedReferences.length > 0 && (
         <section aria-labelledby="unresolved-heading" className="flex flex-col gap-2">
           <h3 id="unresolved-heading" className="font-medium text-amber-300">
-            Configuration entries pointing at a key that is not there
+            {t("keys.unresolvedHeading")}
           </h3>
           <ul className="text-sm text-zinc-300">
             {inventory.unresolvedReferences.map((reference) => (
               <li key={`${reference.configPath}:${reference.line}:${reference.value}`}>
-                {`${reference.directive} ${reference.value} — ${reference.configPath}:${reference.line} (${reference.reason})`}
+                {t("keys.referenceWithReason", {
+                  directive: reference.directive,
+                  value: reference.value,
+                  path: reference.configPath,
+                  line: reference.line,
+                  reason: reference.reason,
+                })}
               </li>
             ))}
           </ul>
@@ -399,27 +510,29 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
 
       <section aria-labelledby="agent-heading" className="flex flex-col gap-2">
         <h3 id="agent-heading" className="font-medium">
-          ssh-agent
+          {t("keys.agentHeading")}
         </h3>
         {inventory.agentAvailable ? (
           inventory.agentIdentities.length === 0 ? (
-            <p className="text-sm text-zinc-400">An agent is reachable and holds no identity yet.</p>
+            <p className="text-sm text-zinc-400">{t("keys.agentEmpty")}</p>
           ) : (
             <table className="w-full text-left text-sm">
-              <caption className="sr-only">Identities the agent currently holds</caption>
+              <caption className="sr-only">{t("keys.agentIdentitiesCaption")}</caption>
               <thead>
-                <tr>
-                  <th scope="col">Algorithm</th>
-                  <th scope="col">Fingerprint</th>
-                  <th scope="col">Comment</th>
+                <tr className="border-b border-zinc-700 text-xs uppercase tracking-wide text-zinc-400">
+                  <th scope="col">{t("keys.colAlgorithm")}</th>
+                  <th scope="col">{t("keys.colFingerprint")}</th>
+                  <th scope="col">{t("keys.colComment")}</th>
                 </tr>
               </thead>
               <tbody>
                 {inventory.agentIdentities.map((identity) => (
-                  <tr key={identity.fingerprint}>
-                    <td>{identity.bits > 0 ? `${identity.algorithm} · ${identity.bits}` : identity.algorithm}</td>
-                    <td>{identity.fingerprint}</td>
-                    <td>{identity.comment}</td>
+                  <tr key={identity.fingerprint} className="border-b border-zinc-800">
+                    <td className="py-2 pr-3">
+                      {identity.bits > 0 ? `${identity.algorithm} · ${identity.bits}` : identity.algorithm}
+                    </td>
+                    <td className="py-2 pr-3 font-mono text-xs break-all">{identity.fingerprint}</td>
+                    <td className="py-2">{identity.comment}</td>
                   </tr>
                 ))}
               </tbody>
@@ -430,19 +543,23 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
           // running" would be a guess: this process may simply not have been
           // given the socket. The message says what is missing, not why.
           <p className="text-sm text-amber-300">
-            No agent is reachable from this process, so registration is unavailable. ssh-add needs both an ssh-add
-            program and an SSH_AUTH_SOCK to talk to.
+            {t("keys.agentUnavailable")}
           </p>
         )}
         {inventory.agentDelegations.length > 0 && (
           <>
             <p className="text-sm text-zinc-400">
-              These configuration entries expect the agent to supply a key rather than naming a file:
+              {t("keys.agentDelegationsNote")}
             </p>
             <ul className="text-sm text-zinc-300">
               {inventory.agentDelegations.map((reference) => (
                 <li key={`${reference.configPath}:${reference.line}`}>
-                  {`${reference.directive} ${reference.value} — ${reference.configPath}:${reference.line}`}
+                  {t("keys.reference", {
+                    directive: reference.directive,
+                    value: reference.value,
+                    path: reference.configPath,
+                    line: reference.line,
+                  })}
                   {reference.hostPatterns.length > 0 ? ` (${reference.hostPatterns.join(" ")})` : ""}
                 </li>
               ))}
@@ -461,19 +578,17 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
           }}
         >
           <h3 id="agent-register-heading" className="font-medium">
-            {`Add to agent: ${registering.relativePath}`}
+            {t("keys.registerHeading", { path: registering.relativePath })}
           </h3>
           <p className="text-sm text-zinc-400">
-            The passphrase is handed to ssh-add on standard input, so it reaches neither the command line nor the
-            child environment. ssh-ui does not store it. The login Keychain is the only place it can outlive this
-            request, and only if you ask for that below.
+            {t("keys.registerNote")}
           </p>
           {registering.encrypted && (
             // "Key passphrase", not "Passphrase": the generation form below has
             // a field of its own, and two controls with one name are two
             // controls a user cannot tell apart.
             <label className="block">
-              Key passphrase
+              {t("keys.keyPassphrase")}
               <input
                 type="password"
                 value={agentPassphrase}
@@ -482,12 +597,12 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
             </label>
           )}
           <label className="block">
-            Lifetime
+            {t("keys.lifetime")}
             <select value={String(agentLifetime)} onChange={(event) => setAgentLifetime(Number(event.target.value))}>
-              <option value="0">Until the agent exits</option>
-              <option value="3600">1 hour</option>
-              <option value="14400">4 hours</option>
-              <option value="43200">12 hours</option>
+              <option value="0">{t("keys.lifetimeForever")}</option>
+              <option value="3600">{t("keys.lifetimeHour")}</option>
+              <option value="14400">{t("keys.lifetimeFourHours")}</option>
+              <option value="43200">{t("keys.lifetimeTwelveHours")}</option>
             </select>
           </label>
           <label className="block">
@@ -496,15 +611,108 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
               checked={storeInKeychain}
               onChange={(event) => setStoreInKeychain(event.target.checked)}
             />
-            Also store the passphrase in the login Keychain, so macOS unlocks this key without asking again
+            {t("keys.storeInKeychain")}
           </label>
           <div className="flex gap-2">
-            <button type="submit">Register with the agent</button>
+            <button type="submit">{t("keys.registerSubmit")}</button>
             <button type="button" onClick={closeAgentForm}>
-              Cancel
+              {t("keys.cancel")}
             </button>
           </div>
         </form>
+      )}
+
+      {renaming !== null && (
+        <form
+          aria-labelledby="rename-heading"
+          className="flex flex-col gap-3 rounded-xl border border-zinc-800 p-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submitRename(renaming);
+          }}
+        >
+          <h3 id="rename-heading" className="font-medium">
+            {t("keys.renameHeading", { path: renaming.relativePath })}
+          </h3>
+          <p className="text-sm text-zinc-400">{t("keys.renameNote")}</p>
+          <label className="block">
+            {t("keys.renameNewName")}
+            <input value={newName} onChange={(event) => setNewName(event.target.value)} />
+          </label>
+          <div className="flex gap-2">
+            <button type="submit">{t("keys.renameSubmit")}</button>
+            <button type="button" onClick={closeRenameForm}>
+              {t("keys.cancel")}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/*
+        What a rename did, or what stopped it. Both are the same list of facts:
+        which files moved, which configuration lines were rewritten, and what
+        this application decided not to touch. A rename that only said "done"
+        would hide the part the user cannot check for themselves.
+      */}
+      {renamed !== null && (
+        <section
+          aria-labelledby="rename-result-heading"
+          className="flex flex-col gap-2 rounded-xl border border-zinc-800 p-4 text-sm"
+        >
+          <h3 id="rename-result-heading" className="font-medium">
+            {renamed.blockers.length > 0
+              ? t("keys.renameRefused")
+              : t("keys.renameDone", { path: renamed.relativePath })}
+          </h3>
+          {renamed.blockers.length > 0 && (
+            <ul role="alert" className="text-amber-300">
+              {renamed.blockers.map((blocker) => (
+                <li key={blocker}>{describeBlocker(blocker, t)}</li>
+              ))}
+            </ul>
+          )}
+          {renamed.files.length > 0 && (
+            <>
+              <h4 className="text-xs uppercase tracking-wide text-zinc-400">{t("keys.renameMoved")}</h4>
+              <ul className="font-mono text-xs text-zinc-300">
+                {renamed.files.map((file) => (
+                  <li key={file.from}>{t("keys.renameFilePair", { from: file.from, to: file.to })}</li>
+                ))}
+              </ul>
+            </>
+          )}
+          {renamed.references.length > 0 && (
+            <>
+              <h4 className="text-xs uppercase tracking-wide text-zinc-400">{t("keys.renameRewritten")}</h4>
+              <ul className="text-xs text-zinc-300">
+                {renamed.references.map((reference) => (
+                  <li key={`${reference.configPath}:${reference.line}:${reference.from}`}>
+                    {t("keys.renameReference", {
+                      directive: reference.directive,
+                      from: reference.from,
+                      to: reference.to,
+                      path: reference.configPath,
+                      line: reference.line,
+                    })}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {renamed.skipped.length > 0 && (
+            <p className="text-zinc-400">{t("keys.renameSkipped", { paths: renamed.skipped.join(", ") })}</p>
+          )}
+          {renamed.notes.map((note) => (
+            <p key={note} className="text-amber-300">
+              {note in noteLabels ? t(noteLabels[note]!) : note}
+            </p>
+          ))}
+          <div>
+            <button type="button" onClick={() => setRenamed(null)}>
+              {t("keys.close")}
+            </button>
+          </div>
+        </section>
       )}
 
       {revealing !== null && (
@@ -526,14 +734,13 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
           }}
         >
           <h3 id="passphrase-heading" className="font-medium">
-            {`Change passphrase: ${changingPassphrase.relativePath}`}
+            {t("keys.passphraseHeading", { path: changingPassphrase.relativePath })}
           </h3>
           <p className="text-sm text-zinc-400">
-            The passphrase is used only for this change. ssh-ui never stores it. Use “Add to agent” with the login
-            Keychain option if you want macOS to remember it.
+            {t("keys.passphraseNote")}
           </p>
           <label className="block">
-            Current passphrase
+            {t("keys.currentPassphrase")}
             <input
               type="password"
               value={currentPassphrase}
@@ -541,7 +748,7 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
             />
           </label>
           <label className="block">
-            New passphrase
+            {t("keys.newPassphrase")}
             <input
               type="password"
               value={newPassphrase}
@@ -558,12 +765,12 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
                 setNewPassphrase("");
               }}
             />
-            Remove the passphrase and leave the key unprotected on disk
+            {t("keys.removePassphrase")}
           </label>
           <div className="flex gap-2">
-            <button type="submit">Save new passphrase</button>
+            <button type="submit">{t("keys.savePassphrase")}</button>
             <button type="button" onClick={closePassphraseForm}>
-              Cancel
+              {t("keys.cancel")}
             </button>
           </div>
         </form>
@@ -576,9 +783,9 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
           void submitGeneration();
         }}
       >
-        <h3 className="font-medium">Create a key</h3>
+        <h3 className="font-medium">{t("keys.createHeading")}</h3>
         <label className="block">
-          Algorithm
+          {t("keys.algorithm")}
           <select value={algorithm} onChange={(event) => setAlgorithm(event.target.value)}>
             {variants.map((variant) => (
               <option key={`${variant.algorithm}-${variant.bits}`} value={variant.algorithm}>
@@ -588,17 +795,17 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
           </select>
         </label>
         <label className="block">
-          File name
+          {t("keys.fileName")}
           <input value={fileName} onChange={(event) => setFileName(event.target.value)} />
         </label>
         <label className="block">
-          Comment
+          {t("keys.comment")}
           <input value={comment} onChange={(event) => setComment(event.target.value)} />
         </label>
         {inProcess && (
           <>
             <label className="block">
-              Passphrase
+              {t("keys.passphrase")}
               <input
                 type="password"
                 value={passphrase}
@@ -615,72 +822,75 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
                   setPassphrase("");
                 }}
               />
-              Create without a passphrase, and accept that anyone who reads the file can use the key
+              {t("keys.createUnencrypted")}
             </label>
           </>
         )}
-        <button type="submit">{inProcess ? "Create key" : "Show Terminal command"}</button>
+        <button type="submit">{inProcess ? t("keys.createSubmit") : t("keys.showTerminalCommand")}</button>
       </form>
 
       {terminalCommand !== null && (
         <div>
           <p className="text-sm text-zinc-300">
-            Hardware-backed keys need your security key, so ssh-ui does not create them. Run this command in
-            Terminal yourself:
+            {t("keys.hardwareNote")}
           </p>
-          <pre aria-label="Terminal command" className="overflow-x-auto rounded-md bg-zinc-950 p-4 text-xs">
+          <pre aria-label={t("copy.terminalCommand")} className="overflow-x-auto rounded-md bg-zinc-950 p-4 text-xs">
             {terminalCommand.join(" ")}
           </pre>
           <div className="mt-2">
-            <CopyButton value={terminalCommand.join(" ")} label="Terminal command" />
+            <CopyButton value={terminalCommand.join(" ")} label="copy.terminalCommand" />
           </div>
         </div>
       )}
 
       <div>
-        <h3 className="font-medium">Trash</h3>
+        <h3 className="font-medium">{t("keys.trashHeading")}</h3>
         <p className="text-sm text-zinc-400">
-          Deleted keys stay here until you remove them. Nothing is ever deleted automatically.
+          {t("keys.trashNote")}
         </p>
         <table className="w-full text-left text-sm">
-          <caption className="sr-only">Soft-deleted keys</caption>
+          <caption className="sr-only">{t("keys.trashCaption")}</caption>
           <thead>
-            <tr>
-              <th scope="col">Files</th>
-              <th scope="col">Age</th>
-              <th scope="col">Status</th>
-              <th scope="col">Actions</th>
+            <tr className="border-b border-zinc-700 text-xs uppercase tracking-wide text-zinc-400">
+              <th scope="col">{t("keys.colFiles")}</th>
+              <th scope="col">{t("keys.colAge")}</th>
+              <th scope="col">{t("keys.colStatus")}</th>
+              <th scope="col">{t("keys.colActions")}</th>
             </tr>
           </thead>
           <tbody>
             {trash.entries.map((entry) => (
-              <tr key={entry.id}>
-                <td>{entry.files.map((file) => file.originalRelativePath).join(", ")}</td>
-                <td>
-                  {entry.stale
-                    ? `${entry.ageDays} days · older than ${trash.retentionDays} days`
-                    : `${entry.ageDays} days`}
+              <tr key={entry.id} className="border-b border-zinc-800 align-top">
+                <td className="py-2 pr-3 font-mono text-xs">
+                  {entry.files.map((file) => file.originalRelativePath).join(", ")}
                 </td>
-                <td>{entry.restorable ? "Restorable" : entry.blockers.join(", ")}</td>
-                <td>
-                  <button type="button" onClick={() => void restore(entry.id)}>
-                    Restore
+                <td className="py-2 pr-3">
+                  {entry.stale
+                    ? t("keys.ageStale", { days: entry.ageDays, retention: trash.retentionDays })
+                    : t("keys.age", { days: entry.ageDays })}
+                </td>
+                <td className="py-2 pr-3">{entry.restorable ? t("keys.restorable") : entry.blockers.join(", ")}</td>
+                <td className="py-2">
+                  <div className="flex flex-wrap items-center gap-1">
+                  <button type="button" className={rowAction} onClick={() => void restore(entry.id)}>
+                    {t("keys.restore")}
                   </button>
                   {pendingPurge === entry.id ? (
                     <>
-                      <span>This cannot be undone. There is no backup of a permanently deleted key.</span>
-                      <button type="button" onClick={() => void purge(entry.id)}>
-                        Confirm permanent delete
+                      <span>{t("keys.purgeWarning")}</span>
+                      <button type="button" className={dangerAction} onClick={() => void purge(entry.id)}>
+                        {t("keys.confirmPurge")}
                       </button>
-                      <button type="button" onClick={() => setPendingPurge("")}>
-                        Cancel
+                      <button type="button" className={rowAction} onClick={() => setPendingPurge("")}>
+                        {t("keys.cancel")}
                       </button>
                     </>
                   ) : (
-                    <button type="button" onClick={() => setPendingPurge(entry.id)}>
-                      Delete permanently
+                    <button type="button" className={dangerAction} onClick={() => setPendingPurge(entry.id)}>
+                      {t("keys.purge")}
                     </button>
                   )}
+                  </div>
                 </td>
               </tr>
             ))}

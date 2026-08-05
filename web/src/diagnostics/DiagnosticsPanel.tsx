@@ -9,6 +9,7 @@ import {
   type TerminalCommandResponse,
 } from "../api/integrations";
 import { CopyButton } from "../ui/CopyButton";
+import { useTranslate } from "../i18n/context";
 
 type DiagnosticsPanelProps = {
   api?: IntegrationsApi;
@@ -24,6 +25,7 @@ type DiagnosticsPanelProps = {
 // panel reads the configuration, which runs nothing; each of the other
 // operations spends a confirmation and may start a process.
 export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPanelProps) {
+  const t = useTranslate();
   const embedded = host !== undefined;
   const [typedAlias, setTypedAlias] = useState("");
   const alias = host ?? typedAlias;
@@ -44,7 +46,7 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
         if (active) setConfig(result);
       })
       .catch(() => {
-        if (active) setError("The configuration could not be read.");
+        if (active) setError(t("diag.configUnreadable"));
       });
     return () => {
       active = false;
@@ -78,18 +80,18 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
 
   return (
     <section
-      aria-label={embedded ? `Diagnostics for ${host}` : undefined}
+      aria-label={embedded ? t("diag.forHost", { host: host ?? "" }) : undefined}
       aria-labelledby={embedded ? undefined : "diagnostics-heading"}
       className="flex flex-col gap-4"
     >
       {embedded ? null : (
         <h2 id="diagnostics-heading" className="font-medium">
-          Diagnostics
+          {t("diag.heading")}
         </h2>
       )}
 
       <p aria-live="polite" className="text-sm text-zinc-400">
-        {busy ? "Running the requested check…" : "No check runs until you start it."}
+        {busy ? t("diag.running") : t("diag.idle")}
       </p>
       {error ? (
         <p role="alert" className="text-sm text-red-400">
@@ -100,7 +102,7 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
       <div className="flex flex-wrap items-end gap-2">
         {embedded ? null : (
           <label className="flex flex-col gap-1 text-sm">
-            <span>Host alias</span>
+            <span>{t("diag.hostAlias")}</span>
             <input
               value={typedAlias}
               onChange={(event) => setTypedAlias(event.target.value)}
@@ -110,17 +112,17 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
         )}
         <button
           type="button"
-          onClick={() => void run(() => api.effective(alias, false), setEffective, "The alias could not be explained.")}
+          onClick={() => void run(() => api.effective(alias, false), setEffective, t("diag.explainFailed"))}
           className="rounded border border-zinc-700 px-3 py-1 text-sm"
         >
-          Explain
+          {t("diag.explain")}
         </button>
         <button
           type="button"
-          onClick={() => void run(() => api.reachability(alias), setReach, "The reachability check could not be run.")}
+          onClick={() => void run(() => api.reachability(alias), setReach, t("diag.reachabilityFailed"))}
           className="rounded border border-zinc-700 px-3 py-1 text-sm"
         >
-          Check reachability
+          {t("diag.checkReachability")}
         </button>
         <button
           type="button"
@@ -128,30 +130,30 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
             void run(
               () => api.authentication(alias, directives.some((directive) => !directive.overridable)),
               setAuth,
-              "The authentication test could not be run.",
+              t("diag.authenticationFailed"),
             )
           }
           className="rounded border border-zinc-700 px-3 py-1 text-sm"
         >
-          Test authentication
+          {t("diag.testAuthentication")}
         </button>
         <button
           type="button"
-          onClick={() => void run(() => api.terminalCommand(alias), setTerminal, "The command could not be built.")}
+          onClick={() => void run(() => api.terminalCommand(alias), setTerminal, t("diag.commandFailed"))}
           className="rounded border border-zinc-700 px-3 py-1 text-sm"
         >
-          Terminal command
+          {t("diag.terminalCommand")}
         </button>
       </div>
 
       {config ? (
         <div className="text-sm text-zinc-300">
-          <h3 className="font-medium">Configuration</h3>
+          <h3 className="font-medium">{t("diag.configuration")}</h3>
           <ul>
             {config.files.map((file) => (
               <li key={file.path}>
                 {file.path}
-                {file.missing ? " (missing)" : ""}
+                {file.missing ? t("diag.missingSuffix") : ""}
               </li>
             ))}
           </ul>
@@ -185,30 +187,32 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
       */}
       {effective?.failure.failed ? (
         <div className="rounded border border-red-800 p-3 text-sm">
-          <h3 className="font-medium text-red-300">OpenSSH refused to explain this alias</h3>
-          <p className="text-zinc-300">{`ssh -G exited with ${effective.failure.exitCode}.`}</p>
+          <h3 className="font-medium text-red-300">{t("diag.refused")}</h3>
+          <p className="text-zinc-300">{t("diag.exited", { code: effective.failure.exitCode })}</p>
           {effective.failure.stderr ? (
             <pre className="mt-1 whitespace-pre-wrap break-all text-zinc-400">{effective.failure.stderr}</pre>
           ) : (
-            <p className="text-zinc-400">It wrote nothing to standard error.</p>
+            <p className="text-zinc-400">{t("diag.noStderr")}</p>
           )}
           {effective.failure.truncated ? (
-            <p className="text-amber-300">
-              This output hit the capture limit and was cut off, so it is not the whole message.
-            </p>
+            <p className="text-amber-300">{t("diag.outputTruncated")}</p>
           ) : null}
         </div>
       ) : null}
 
       {directives.length > 0 ? (
         <div className="rounded border border-amber-700 p-3 text-sm">
-          <h3 className="font-medium text-amber-300">This configuration can run a command</h3>
+          <h3 className="font-medium text-amber-300">{t("diag.canRunCommand")}</h3>
           <p className="text-zinc-300">{effective?.tokenWarning}</p>
           <ul className="mt-2 flex flex-col gap-1">
             {directives.map((directive) => (
               <li key={`${directive.path}:${directive.line}:${directive.keyword}`}>
                 <span className="text-zinc-400">
-                  {directive.keyword} at {directive.path}:{directive.line}
+                  {t("diag.directiveAt", {
+                    keyword: directive.keyword,
+                    path: directive.path,
+                    line: directive.line,
+                  })}
                 </span>
                 <pre className="whitespace-pre-wrap break-all text-zinc-100">{directive.command}</pre>
               </li>
@@ -218,11 +222,11 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
             <button
               type="button"
               onClick={() =>
-                void run(() => api.effective(alias, true), setEffective, "The alias could not be explained.")
+                void run(() => api.effective(alias, true), setEffective, t("diag.explainFailed"))
               }
               className="mt-2 rounded border border-amber-600 px-3 py-1"
             >
-              Run ssh -G anyway
+              {t("diag.runAnyway")}
             </button>
           ) : null}
         </div>
@@ -236,9 +240,7 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
       */}
       {effective && effective.sources.length > 0 ? (
         <table className="text-sm">
-          <caption className="text-left text-zinc-400">
-            Where each value comes from. A line marked “superseded” was read after the winner and had no effect.
-          </caption>
+          <caption className="text-left text-zinc-400">{t("diag.sourcesCaption")}</caption>
           <tbody>
             {effective.sources.map((source) => (
               <tr key={`${source.path}:${source.line}:${source.keyword}`} className={source.winner ? "" : "opacity-60"}>
@@ -248,7 +250,7 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
                 <td className="pr-3">{source.value}</td>
                 <td className="pr-3 text-zinc-500">{`${source.path}:${source.line}`}</td>
                 <td className="pr-3 text-zinc-500">{source.condition}</td>
-                <td className="text-zinc-500">{source.winner ? "in effect" : "superseded"}</td>
+                <td className="text-zinc-500">{source.winner ? t("diag.inEffect") : t("diag.superseded")}</td>
               </tr>
             ))}
           </tbody>
@@ -263,15 +265,13 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
       */}
       {effective && effective.route.length > 0 ? (
         <div className="text-sm">
-          <h3 className="font-medium">Connection route</h3>
+          <h3 className="font-medium">{t("diag.route")}</h3>
           <ol className="mt-1 flex flex-col gap-1">
             {effective.route.map((stage) => (
               <li key={`${stage.order}-${stage.hop}`} style={{ marginLeft: `${stage.depth}rem` }}>
                 <span className="text-zinc-100">{stage.hop}</span>
                 {stage.complex ? (
-                  <span className="ml-2 text-amber-300">
-                    this hop is not a simple alias, so its destination is not resolved here
-                  </span>
+                  <span className="ml-2 text-amber-300">{t("diag.hopComplex")}</span>
                 ) : (
                   <span className="ml-2 text-zinc-400">
                     {`${stage.user === "" ? "" : `${stage.user}@`}${stage.hostname}${
@@ -280,7 +280,7 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
                   </span>
                 )}
                 {stage.parent === "" ? null : (
-                  <span className="ml-2 text-zinc-500">{`reached through ${stage.parent}`}</span>
+                  <span className="ml-2 text-zinc-500">{t("diag.reachedThrough", { parent: stage.parent })}</span>
                 )}
               </li>
             ))}
@@ -295,17 +295,14 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
       */}
       {effective && effective.complexities.length > 0 ? (
         <div className="rounded border border-amber-700 p-3 text-sm">
-          <h3 className="font-medium text-amber-300">These rules are not simple enough to project</h3>
-          <p className="text-zinc-300">
-            ssh-ui shows where each of these comes from and does not guess what it resolves to. `ssh -G` is the
-            authority for them.
-          </p>
+          <h3 className="font-medium text-amber-300">{t("diag.notSimple")}</h3>
+          <p className="text-zinc-300">{t("diag.notSimpleDetail")}</p>
           <ul className="mt-2 flex flex-col gap-1">
             {effective.complexities.map((note, index) => (
               <li key={`${note.code}-${note.path}-${note.line}-${index}`}>
                 <span className="text-zinc-100">{note.code}</span>
                 <span className="ml-2 text-zinc-400">{`${note.path}:${note.line}`}</span>
-                {note.condition === "" ? null : <span className="ml-2 text-zinc-500">{`inside ${note.condition}`}</span>}
+                {note.condition === "" ? null : <span className="ml-2 text-zinc-500">{t("diag.inside", { condition: note.condition })}</span>}
                 {note.detail === "" ? null : <p className="text-zinc-400">{note.detail}</p>}
               </li>
             ))}
@@ -315,7 +312,7 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
 
       {reach ? (
         <div className="text-sm">
-          <h3 className="font-medium">Reachability</h3>
+          <h3 className="font-medium">{t("diag.reachability")}</h3>
           <p>
             {reach.address} — {reach.outcome}
           </p>
@@ -325,7 +322,7 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
 
       {auth ? (
         <div className="text-sm">
-          <h3 className="font-medium">Authentication</h3>
+          <h3 className="font-medium">{t("diag.authentication")}</h3>
           <p>{auth.outcome}</p>
           {auth.stderr ? <pre className="whitespace-pre-wrap break-all text-zinc-400">{auth.stderr}</pre> : null}
         </div>
@@ -333,19 +330,19 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
 
       {terminal ? (
         <div className="text-sm">
-          <h3 className="font-medium">Terminal</h3>
+          <h3 className="font-medium">{t("diag.terminal")}</h3>
           <pre className="whitespace-pre-wrap break-all text-zinc-100">{terminal.command}</pre>
           <div className="mt-2 flex items-center gap-2">
-            <CopyButton value={terminal.command} label="command" />
+            <CopyButton value={terminal.command} label="copy.command" />
             {terminal.launchable ? (
               <button
                 type="button"
                 onClick={() =>
-                  void run(() => api.terminalLaunch(alias), () => undefined, "Terminal could not be opened.")
+                  void run(() => api.terminalLaunch(alias), () => undefined, t("diag.terminalFailed"))
                 }
                 className="rounded border border-zinc-700 px-3 py-1"
               >
-                Open in Terminal
+                {t("diag.openInTerminal")}
               </button>
             ) : null}
           </div>

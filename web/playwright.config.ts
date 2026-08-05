@@ -15,6 +15,11 @@ export default defineConfig({
   reporter: [["list"]],
   use: {
     ...devices["Desktop Chrome"],
+    // The suite selects by English text. The application picks its language
+    // from the browser, so the locale is pinned here rather than left to the
+    // runner: without this, the same specs would pass or fail depending on
+    // the machine they run on.
+    locale: "en-US",
     trace: "off",
     video: "off",
     screenshot: "off",

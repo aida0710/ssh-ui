@@ -39,3 +39,44 @@ describe("removeHostBlock", () => {
     expect(() => removeHostBlock(contents, 2, "Host other\n")).toThrow("block_moved");
   });
 });
+
+// Making a comment mean something created a new way to break a file: a comment
+// left behind by a removed block attaches to whichever block follows it, and
+// silently becomes that connection's description.
+describe("a block's attached comment", () => {
+  const contents =
+    "# the production bastion\n" +
+    "# ask infra first\n" +
+    "Host bastion\n" +
+    "\tPort 2222\n" +
+    "\n" +
+    "Host nas\n" +
+    "\tPort 22\n";
+
+  it("is removed with the block it belongs to", () => {
+    const raw = "Host bastion\n\tPort 2222\n";
+    const after = removeHostBlock(contents, 3, raw, 2);
+
+    expect(after).toBe("\nHost nas\n\tPort 22\n");
+    expect(after).not.toContain("the production bastion");
+  });
+
+  it("is left alone when the block has none", () => {
+    const plain = "Host bastion\n\tPort 2222\nHost nas\n";
+    expect(removeHostBlock(plain, 1, "Host bastion\n\tPort 2222\n", 0)).toBe("Host nas\n");
+  });
+
+  it("is copied with a duplicate, so the copy is explained too", () => {
+    const after = duplicateHostBlock(contents, "Host bastion\n\tPort 2222\n", "bastion", "bastion-copy", 3, 2);
+
+    expect(after).toContain("# the production bastion\n# ask infra first\nHost bastion-copy\n\tPort 2222\n");
+    // The original keeps its own comment.
+    expect(after.match(/the production bastion/g)).toHaveLength(2);
+  });
+
+  it("removes a block that starts the file together with its comment", () => {
+    // lastIndexOf must not walk past the start of the file.
+    const after = removeHostBlock("# only\nHost nas\n", 2, "Host nas\n", 1);
+    expect(after).toBe("");
+  });
+});

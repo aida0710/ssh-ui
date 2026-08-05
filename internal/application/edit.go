@@ -230,19 +230,15 @@ func rebuildLine(line config.Line, keyword string, values []string) (config.Line
 	return rebuilt, nil
 }
 
-// renderArgument writes one value using OpenSSH's quoting rules. OpenSSH has no
-// backslash escape inside a quoted argument, so a value containing a double
-// quote, a newline or a NUL cannot be represented and is refused instead of
-// being mangled.
+// renderArgument writes one value using OpenSSH's quoting rules. The rule is
+// ssh_config syntax, so it lives beside the parser that reads it; this wrapper
+// keeps the package's own error identity for the HTTP problem mapping.
 func renderArgument(lead, value string) (config.Argument, error) {
-	if strings.ContainsAny(value, "\n\r\x00\"") {
+	argument, err := config.RenderArgument(lead, value)
+	if err != nil {
 		return config.Argument{}, ErrUnquotableValue
 	}
-	raw := value
-	if value == "" || strings.ContainsAny(value, " \t") || strings.HasPrefix(value, "#") {
-		raw = `"` + value + `"`
-	}
-	return config.Argument{Lead: lead, Raw: raw, Value: value}, nil
+	return argument, nil
 }
 
 func buildDirectiveLine(indent, keyword string, values []string, ending string) (config.Line, error) {
@@ -403,5 +399,30 @@ func RenameHostAlias(file *config.File, block config.Block, oldAlias, newAlias s
 		return err
 	}
 	file.Lines[block.Header] = rebuilt
+	return nil
+}
+
+// SetHostComment replaces the comment attached to a host block.
+//
+// The attached comment is the run of contiguous comment lines immediately above
+// the Host line, as defined by config.File.CommentRun. Everything outside that
+// run is untouched, which is what keeps a file banner separated by a blank line
+// out of reach of an edit to the first block.
+//
+// The rewritten lines take the Host line's own indentation, so a block indented
+// inside a Match keeps its comment aligned with it.
+func SetHostComment(file *config.File, block config.Block, text string) error {
+	if block.Kind != config.BlockHost || block.Header < 0 || block.Header >= len(file.Lines) {
+		return ErrHostNotFound
+	}
+	start := file.CommentRun(block.Header)
+	indent := file.Lines[block.Header].Indent
+	replacement := config.RenderComment(text, indent, blockEnding(file, block))
+
+	lines := make([]config.Line, 0, len(file.Lines)-(block.Header-start)+len(replacement))
+	lines = append(lines, file.Lines[:start]...)
+	lines = append(lines, replacement...)
+	lines = append(lines, file.Lines[block.Header:]...)
+	file.Lines = lines
 	return nil
 }

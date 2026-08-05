@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { failureCode } from "../api/client";
 import { keysApi, type KeyItem, type KeysApi } from "../keys/api";
+import { useTranslate, type Translate } from "../i18n/context";
+import type { MessageKey } from "../i18n/messages";
 import {
   remoteKeysApi,
   type RemoteKeyPlan,
@@ -17,17 +19,17 @@ type RemoteKeyPanelProps = {
   keys?: Pick<KeysApi, "inventory" | "publicKey">;
 };
 
-const outcomeLabels: Record<string, string> = {
-  added: "The key was added to the remote authorized_keys file.",
-  already_present: "The key was already present; the remote file was left as it was.",
+const outcomeLabels: Record<string, MessageKey> = {
+  added: "rk.added",
+  already_present: "rk.alreadyPresent",
 };
 
 // valuesFromLabels says where the account details in the confirmation came
 // from, because "deploy" means something different if this application read it
 // than if ssh itself reported it.
-const valuesFromLabels: Record<string, string> = {
-  engine: "ssh-ui reading your configuration; ssh was not run",
-  "ssh -G": "ssh -G, which OpenSSH itself resolved",
+const valuesFromLabels: Record<string, MessageKey> = {
+  engine: "rk.valuesFromEngine",
+  "ssh -G": "rk.valuesFromSshG",
 };
 
 // RemoteKeyPanel registers a public key in a remote account's authorized_keys.
@@ -40,6 +42,7 @@ const valuesFromLabels: Record<string, string> = {
 // would be sent. A remote this application will not automate gets instructions
 // instead of a button.
 export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKeyPanelProps) {
+  const t = useTranslate();
   const [alias, setAlias] = useState("");
   const [keyPath, setKeyPath] = useState("");
   const [publicKey, setPublicKey] = useState("");
@@ -97,7 +100,7 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
       setPublicKey(key.publicKey.trimEnd());
       setError("");
     } catch {
-      setError("That public key could not be read. Nothing was contacted.");
+      setError(t("rk.publicKeyUnreadable"));
     }
   }
 
@@ -108,7 +111,7 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
     try {
       setPlan(await api.plan({ alias, keyPath, publicKey }));
     } catch (failure) {
-      setError(describeFailure(failure, "The change could not be described. Nothing was contacted."));
+      setError(describeFailure(failure, t, "rk.planFailed"));
     } finally {
       setBusy(false);
     }
@@ -124,7 +127,7 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
       // An unsupported remote is an answer, not a transport failure: the
       // registration stops being offered and the manual steps take its place.
       if (failureCode(failure) === "unsupported_remote") setUnsupported(true);
-      setError(describeFailure(failure, "The key was not registered. The remote host was left as it was."));
+      setError(describeFailure(failure, t, "rk.registerFailed"));
     } finally {
       setBusy(false);
     }
@@ -137,11 +140,11 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
   return (
     <section aria-labelledby="remote-keys-heading" className="flex flex-col gap-4">
       <h2 id="remote-keys-heading" className="font-medium">
-        Remote Keys
+        {t("rk.heading")}
       </h2>
 
       <p aria-live="polite" className="text-sm text-zinc-400">
-        {busy ? "Waiting for the server…" : "Nothing is sent to the remote host until you confirm it."}
+        {busy ? t("rk.waiting") : t("rk.idle")}
       </p>
       {error ? (
         <p role="alert" className="text-sm text-red-400">
@@ -151,13 +154,13 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
 
       <div className="flex flex-col gap-2 text-sm">
         <label className="flex flex-col gap-1">
-          <span>Public key from ~/.ssh</span>
+          <span>{t("rk.pickFromSsh")}</span>
           <select
             value={chosen}
             onChange={(event) => void choose(event.target.value)}
             className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1"
           >
-            <option value="">Type one below instead</option>
+            <option value="">{t("rk.typeInstead")}</option>
             {candidates.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.fingerprint === "" ? item.relativePath : `${item.relativePath} — ${item.fingerprint}`}
@@ -166,7 +169,7 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
           </select>
         </label>
         <label className="flex flex-col gap-1">
-          <span>Host alias</span>
+          <span>{t("rk.hostAlias")}</span>
           <input
             value={alias}
             onChange={(event) => edit(setAlias)(event.target.value)}
@@ -174,7 +177,7 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span>Public key file</span>
+          <span>{t("rk.publicKeyFile")}</span>
           <input
             value={keyPath}
             onChange={(event) => {
@@ -185,7 +188,7 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span>Public key line</span>
+          <span>{t("rk.publicKeyLine")}</span>
           <textarea
             value={publicKey}
             onChange={(event) => {
@@ -202,7 +205,7 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
             onClick={() => void describe()}
             className="rounded border border-zinc-700 px-3 py-1"
           >
-            Show what this would do
+            {t("rk.showWhatWouldHappen")}
           </button>
           {manual ? null : (
             <button
@@ -211,7 +214,7 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
               onClick={() => void register()}
               className="rounded border border-amber-600 px-3 py-1 disabled:border-zinc-800 disabled:text-zinc-600"
             >
-              Register the key
+              {t("rk.register")}
             </button>
           )}
         </div>
@@ -223,48 +226,50 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
           className="rounded border border-amber-700 p-3 text-sm"
         >
           <h3 id="remote-key-plan-heading" className="font-medium text-amber-300">
-            Confirm remote registration
+            {t("rk.confirmHeading")}
           </h3>
           <dl className="mt-2 grid grid-cols-[12rem_1fr] gap-x-3 gap-y-1">
-            <dt className="text-zinc-400">Alias</dt>
+            <dt className="text-zinc-400">{t("rk.alias")}</dt>
             <dd>{plan.alias}</dd>
-            <dt className="text-zinc-400">Effective user</dt>
-            <dd>{plan.user === "" ? "not set in your configuration; ssh will use your local account" : plan.user}</dd>
-            <dt className="text-zinc-400">Destination</dt>
+            <dt className="text-zinc-400">{t("rk.effectiveUser")}</dt>
+            <dd>{plan.user === "" ? t("rk.noUser") : plan.user}</dd>
+            <dt className="text-zinc-400">{t("rk.destination")}</dt>
             <dd>{`${plan.hostname}:${plan.port}`}</dd>
-            <dt className="text-zinc-400">These values came from</dt>
-            <dd>{valuesFromLabels[plan.valuesFrom] ?? plan.valuesFrom}</dd>
-            <dt className="text-zinc-400">Public key file</dt>
+            <dt className="text-zinc-400">{t("rk.valuesCameFrom")}</dt>
+            <dd>{plan.valuesFrom in valuesFromLabels ? t(valuesFromLabels[plan.valuesFrom]!) : plan.valuesFrom}</dd>
+            <dt className="text-zinc-400">{t("rk.keyFile")}</dt>
             <dd>{plan.keyPath}</dd>
-            <dt className="text-zinc-400">Fingerprint</dt>
+            <dt className="text-zinc-400">{t("rk.fingerprint")}</dt>
             <dd>{plan.fingerprint}</dd>
           </dl>
 
           <p className="mt-3">
-            {`Append one line to ${plan.remotePath} in ${
-              plan.user === "" ? "the remote account" : `${plan.user}'s account`
-            } on ${plan.hostname}, if that exact line is not already there.`}
+            {t("rk.appendTo", {
+              remotePath: plan.remotePath,
+              account: plan.user === "" ? t("rk.theRemoteAccount") : t("rk.usersAccount", { user: plan.user }),
+              hostname: plan.hostname,
+            })}
           </p>
           <pre
-            aria-label="Public key line to append"
+            aria-label={t("rk.keyLineLabel")}
             className="mt-1 overflow-x-auto rounded bg-zinc-950 p-3 text-xs"
           >
             {plan.keyLine}
           </pre>
           <div className="mt-1">
-            <CopyButton value={plan.keyLine} label="key line" />
+            <CopyButton value={plan.keyLine} label="copy.keyLine" />
           </div>
-          <p className="mt-3 text-zinc-400">The remote host runs exactly this, with the key on standard input:</p>
-          <pre aria-label="Remote command" className="mt-1 overflow-x-auto rounded bg-zinc-950 p-3 text-xs">
+          <p className="mt-3 text-zinc-400">{t("rk.remoteRuns")}</p>
+          <pre aria-label={t("rk.remoteCommandLabel")} className="mt-1 overflow-x-auto rounded bg-zinc-950 p-3 text-xs">
             {plan.routine}
           </pre>
           <div className="mt-1">
-            <CopyButton value={plan.routine} label="remote command" />
+            <CopyButton value={plan.routine} label="copy.remoteCommand" />
           </div>
 
           {unavoidable.length > 0 ? (
             <div className="mt-3 rounded border border-amber-700 p-2">
-              <h4 className="font-medium text-amber-300">Connecting to this host runs a command</h4>
+              <h4 className="font-medium text-amber-300">{t("rk.connectingRuns")}</h4>
               <ul className="mt-1 flex flex-col gap-1">
                 {unavoidable.map((directive) => (
                   <li key={`${directive.path}:${directive.line}:${directive.keyword}`}>
@@ -281,7 +286,7 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
                   checked={acknowledged}
                   onChange={(event) => setAcknowledged(event.target.checked)}
                 />
-                <span>I have read this command and accept that connecting runs it</span>
+                <span>{t("rk.acknowledgeRuns")}</span>
               </label>
             </div>
           ) : null}
@@ -289,7 +294,7 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
           {manual ? (
             <div className="mt-3">
               <h4 className="font-medium text-amber-300">
-                ssh-ui will not register a key on this host. Do it yourself:
+                {t("rk.manualHeading")}
               </h4>
               <ol className="mt-1 list-decimal pl-5">
                 {plan.manual.map((step) => (
@@ -303,8 +308,8 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
 
       {result ? (
         <div className="text-sm">
-          <h3 className="font-medium">Result</h3>
-          <p>{outcomeLabels[result.outcome] ?? result.outcome}</p>
+          <h3 className="font-medium">{t("rk.result")}</h3>
+          <p>{result.outcome in outcomeLabels ? t(outcomeLabels[result.outcome]!) : result.outcome}</p>
           {result.stderr ? (
             <pre className="whitespace-pre-wrap break-all text-zinc-400">{result.stderr}</pre>
           ) : null}
@@ -316,7 +321,7 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
 
 // describeFailure quotes the code the server refused with, so the user can look
 // it up rather than guess from a paraphrase.
-function describeFailure(failure: unknown, fallback: string): string {
+function describeFailure(failure: unknown, t: Translate, fallback: MessageKey): string {
   const code = failureCode(failure);
-  return code === "" ? fallback : `${fallback} (${code})`;
+  return code === "" ? t(fallback) : t("rk.withCode", { message: t(fallback), code });
 }

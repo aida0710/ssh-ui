@@ -119,6 +119,7 @@ type DiffLine struct {
 type EditRequest struct {
 	Alias           *string      `json:"alias,omitempty"`
 	Base            *string      `json:"base,omitempty"`
+	Comment         *string      `json:"comment,omitempty"`
 	DestinationBase *string      `json:"destinationBase,omitempty"`
 	DestinationPath *string      `json:"destinationPath,omitempty"`
 	Fields          *[]FieldEdit `json:"fields,omitempty"`
@@ -336,10 +337,15 @@ type HostEntry struct {
 
 // HostForm defines model for HostForm.
 type HostForm struct {
-	Entry   HostEntry   `json:"entry"`
-	Fields  []FormField `json:"fields"`
-	Notices *[]Notice   `json:"notices,omitempty"`
-	Raw     string      `json:"raw"`
+	// Comment The comment lines attached above the Host line, with the '#' markers stripped. Empty when the block has none. ssh_config has no trailing comment syntax, so only whole lines are ever attached.
+	Comment string `json:"comment"`
+
+	// CommentLines How many physical lines the attached comment occupies. A client rewriting the whole file needs the count to include those lines; it cannot be derived from comment, whose markers and indentation were stripped.
+	CommentLines int         `json:"commentLines"`
+	Entry        HostEntry   `json:"entry"`
+	Fields       []FormField `json:"fields"`
+	Notices      *[]Notice   `json:"notices,omitempty"`
+	Raw          string      `json:"raw"`
 }
 
 // HostIdentity defines model for HostIdentity.
@@ -676,6 +682,29 @@ type RemoteKeyRegisterResponse struct {
 	Truncated bool   `json:"truncated"`
 }
 
+// RenameKeyRequest defines model for RenameKeyRequest.
+type RenameKeyRequest struct {
+	NewName string `json:"newName"`
+}
+
+// RenameKeyResponse defines model for RenameKeyResponse.
+type RenameKeyResponse struct {
+	Blockers      []string                `json:"blockers"`
+	Files         []RenamedKeyFile        `json:"files"`
+	Id            string                  `json:"id"`
+	Notes         []string                `json:"notes"`
+	References    []RewrittenKeyReference `json:"references"`
+	RelativePath  string                  `json:"relativePath"`
+	Skipped       []string                `json:"skipped"`
+	TransactionId string                  `json:"transactionId"`
+}
+
+// RenamedKeyFile defines model for RenamedKeyFile.
+type RenamedKeyFile struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
 // RestoreRequest defines model for RestoreRequest.
 type RestoreRequest struct {
 	Path          string `json:"path"`
@@ -698,6 +727,15 @@ type RevealPrivateKeyResponse struct {
 	PrivateKey    string `json:"privateKey"`
 	RelativePath  string `json:"relativePath"`
 	TransactionId string `json:"transactionId"`
+}
+
+// RewrittenKeyReference defines model for RewrittenKeyReference.
+type RewrittenKeyReference struct {
+	ConfigPath string `json:"configPath"`
+	Directive  string `json:"directive"`
+	From       string `json:"from"`
+	Line       int    `json:"line"`
+	To         string `json:"to"`
 }
 
 // SavePreview defines model for SavePreview.
@@ -864,6 +902,9 @@ type BuildHardwareKeyCommandJSONRequestBody = HardwareCommandRequest
 
 // RegisterKeyWithAgentJSONRequestBody defines body for RegisterKeyWithAgent for application/json ContentType.
 type RegisterKeyWithAgentJSONRequestBody = RegisterKeyRequest
+
+// RenameKeyJSONRequestBody defines body for RenameKey for application/json ContentType.
+type RenameKeyJSONRequestBody = RenameKeyRequest
 
 // ChangeKeyPassphraseJSONRequestBody defines body for ChangeKeyPassphrase for application/json ContentType.
 type ChangeKeyPassphraseJSONRequestBody = ChangePassphraseRequest

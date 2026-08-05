@@ -23,9 +23,14 @@ const (
 	maxFieldValues = 64
 	maxValueLength = 1024
 	maxRawLength   = 1 << 20
-	maxGroupCount  = 256
-	maxHostCount   = 4096
-	maxIDLength    = 128
+	// maxCommentLength bounds the comment attached to one Host block. It is far
+	// smaller than a whole file because a comment is prose about one
+	// connection, and the ceiling is what stops a paste of an entire log from
+	// being written into the configuration by accident.
+	maxCommentLength = 4 << 10
+	maxGroupCount    = 256
+	maxHostCount     = 4096
+	maxIDLength      = 128
 )
 
 var (
@@ -125,12 +130,12 @@ func validateIdentifier(value string) error {
 // the application layer.
 func validateEditRequest(request application.EditRequest) error {
 	if len(request.Raw) > maxRawLength || len(request.Base) > maxRawLength ||
-		len(request.DestinationBase) > maxRawLength {
+		len(request.DestinationBase) > maxRawLength || len(request.Comment) > maxCommentLength {
 		return errInvalidEdit
 	}
 	switch request.Kind {
 	case application.EditHostFields, application.EditBlockRaw, application.EditFileRaw,
-		application.EditRename, application.EditMove:
+		application.EditRename, application.EditMove, application.EditComment:
 		if err := validatePathParameter(request.Path); err != nil {
 			return err
 		}
@@ -157,6 +162,18 @@ func validateEditRequest(request application.EditRequest) error {
 			return err
 		}
 		if request.Raw == "" {
+			return errInvalidEdit
+		}
+	case application.EditComment:
+		if err := validateAliasParameter(request.Alias); err != nil {
+			return err
+		}
+		// An empty comment is how a comment is removed, so there is no minimum.
+		// A carriage return is normalised by the renderer; anything else that
+		// would end a line early is refused here, because a newline inside the
+		// text is the only thing that decides how many comment lines are
+		// written and a stray control character must not invent one.
+		if strings.ContainsAny(request.Comment, "\x00\v\f\u0085\u2028\u2029") {
 			return errInvalidEdit
 		}
 	case application.EditFileRaw:

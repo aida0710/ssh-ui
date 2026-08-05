@@ -5,8 +5,22 @@ import { integrationsApi, type IntegrationsApi } from "../api/integrations";
 import { DiagnosticsPanel } from "../diagnostics/DiagnosticsPanel";
 import { formatValues, parseValues } from "./values";
 import { NoticeList, SavePreviewPanel } from "./SavePreview";
+import { useTranslate } from "../i18n/context";
+import type { MessageKey } from "../i18n/messages";
 
 const tabs = ["Basic", "Jump", "Advanced", "Raw", "Effective", "Diagnostics"] as const;
+
+// The tab identifiers stay English: they key the field categories and the
+// rendering switch below, so translating them would make which tab is open
+// depend on the display language.
+const tabLabels: Record<(typeof tabs)[number], MessageKey> = {
+  Basic: "host.tabBasic",
+  Jump: "host.tabJump",
+  Advanced: "host.tabAdvanced",
+  Raw: "host.tabRaw",
+  Effective: "host.tabEffective",
+  Diagnostics: "host.tabDiagnostics",
+};
 type Tab = (typeof tabs)[number];
 
 const categoryForTab: Record<string, string> = { Basic: "basic", Jump: "jump", Advanced: "advanced" };
@@ -19,6 +33,7 @@ type HostDetailPanelProps = {
   onFieldEdits: (edits: FieldEdit[]) => void;
   onBlockRaw: (raw: string) => void;
   onRename: (newAlias: string) => void;
+  onComment: (comment: string) => void;
   onMetadata: (metadata: HostMetadata) => void;
   // The Diagnostics tab runs the same checks as the Diagnostics section, so it
   // consumes the same client. It is a prop only so a test can inject one; the
@@ -38,9 +53,11 @@ export function HostDetailPanel({
   onFieldEdits,
   onBlockRaw,
   onRename,
+  onComment,
   onMetadata,
   integrations = integrationsApi,
 }: HostDetailPanelProps) {
+  const t = useTranslate();
   const [tab, setTab] = useState<Tab>("Basic");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [removed, setRemoved] = useState<number[]>([]);
@@ -49,6 +66,10 @@ export function HostDetailPanel({
   const [newValue, setNewValue] = useState("");
   const [blockRaw, setBlockRaw] = useState(detail.form.raw);
   const [renameTo, setRenameTo] = useState(detail.form.entry.identity.alias);
+  // A legacy note seeds the editor when the block has no comment yet, so the
+  // first save moves it into the configuration instead of leaving the two to
+  // disagree. Once written, the comment is the only source.
+  const [comment, setComment] = useState(detail.form.comment || detail.metadata.note || "");
   const [localError, setLocalError] = useState("");
 
   // Opening a different host, or reloading the same one after a save, discards
@@ -65,7 +86,9 @@ export function HostDetailPanel({
     setNewValue("");
     setBlockRaw(formRaw);
     setRenameTo(identityAlias);
+    setComment(detail.form.comment || detail.metadata.note || "");
     setLocalError("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [identityPath, identityAlias, formRaw]);
 
   const visibleFields = useMemo(
@@ -91,11 +114,11 @@ export function HostDetailPanel({
       }
       edits.push(...additions);
     } catch {
-      setLocalError("A value has an unbalanced quote. OpenSSH has no escape inside quotes, so this cannot be saved.");
+      setLocalError(t("host.unbalancedQuote"));
       return;
     }
     if (edits.length === 0) {
-      setLocalError("Nothing changed yet.");
+      setLocalError(t("host.nothingChanged"));
       return;
     }
     setLocalError("");
@@ -104,13 +127,13 @@ export function HostDetailPanel({
 
   function addDirective() {
     if (newKeyword === "") {
-      setLocalError("A directive needs a keyword.");
+      setLocalError(t("host.needsKeyword"));
       return;
     }
     try {
       setAdditions([...additions, { action: "add", keyword: newKeyword, values: parseValues(newValue) }]);
     } catch {
-      setLocalError("A value has an unbalanced quote. OpenSSH has no escape inside quotes, so this cannot be saved.");
+      setLocalError(t("host.unbalancedQuote"));
       return;
     }
     setNewKeyword("");
@@ -128,7 +151,7 @@ export function HostDetailPanel({
         <NoticeList notices={detail.form.notices ?? []} />
       </header>
 
-      <div role="tablist" aria-label="Host editor" className="flex gap-1 border-b border-zinc-800">
+      <div role="tablist" aria-label={t("host.editorLabel")} className="flex gap-1 border-b border-zinc-800">
         {tabs.map((name) => (
           <button
             key={name}
@@ -138,7 +161,7 @@ export function HostDetailPanel({
             onClick={() => setTab(name)}
             className={`px-3 py-2 text-sm ${tab === name ? "border-b-2 border-zinc-200 text-zinc-100" : "text-zinc-400"}`}
           >
-            {name}
+            {t(tabLabels[name])}
           </button>
         ))}
       </div>
@@ -169,12 +192,12 @@ export function HostDetailPanel({
                   }
                   className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-300"
                 >
-                  {removed.includes(field.line) ? "Keep" : "Remove"}
+                  {removed.includes(field.line) ? t("host.keep") : t("host.remove")}
                 </button>
               </div>
               {field.dangerous === true ? (
                 <p className="text-xs text-amber-300">
-                  {`${field.keyword} can run a command when OpenSSH evaluates this host. It is stored as written and never executed here.`}
+                  {t("host.dangerousField", { keyword: field.keyword })}
                 </p>
               ) : null}
               {field.duplicate === true ? (
@@ -187,14 +210,14 @@ export function HostDetailPanel({
 
           {tab === "Advanced" ? (
             <div className="flex flex-col gap-2 rounded border border-zinc-800 p-3">
-              <label htmlFor="new-directive" className="text-xs text-zinc-400">New directive</label>
+              <label htmlFor="new-directive" className="text-xs text-zinc-400">{t("host.newDirective")}</label>
               <input
                 id="new-directive"
                 value={newKeyword}
                 onChange={(event) => setNewKeyword(event.target.value)}
                 className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
               />
-              <label htmlFor="new-value" className="text-xs text-zinc-400">New value</label>
+              <label htmlFor="new-value" className="text-xs text-zinc-400">{t("host.newValue")}</label>
               <input
                 id="new-value"
                 value={newValue}
@@ -202,7 +225,7 @@ export function HostDetailPanel({
                 className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
               />
               <button type="button" onClick={addDirective} className="self-start rounded bg-zinc-800 px-3 py-1 text-sm">
-                Add directive
+                {t("host.addDirective")}
               </button>
               {additions.length === 0 ? null : (
                 <ul className="text-xs text-zinc-300">
@@ -217,7 +240,7 @@ export function HostDetailPanel({
           ) : null}
 
           <button type="button" onClick={submitFieldEdits} className="self-start rounded bg-zinc-200 px-3 py-1 text-sm text-zinc-900">
-            Save changes
+            {t("host.saveChanges")}
           </button>
         </div>
       ) : null}
@@ -225,7 +248,7 @@ export function HostDetailPanel({
       {tab === "Raw" ? (
         <div className="flex flex-col gap-2">
           <label htmlFor="block-raw" className="text-xs text-zinc-400">
-            Block text. Comments, blank lines and unknown directives are written back exactly as typed.
+            {t("host.blockText")}
           </label>
           <textarea
             id="block-raw"
@@ -236,7 +259,7 @@ export function HostDetailPanel({
             className="rounded border border-zinc-700 bg-zinc-950 p-3 font-mono text-xs"
           />
           <button type="button" onClick={() => onBlockRaw(blockRaw)} className="self-start rounded bg-zinc-200 px-3 py-1 text-sm text-zinc-900">
-            Save block
+            {t("host.saveBlock")}
           </button>
         </div>
       ) : null}
@@ -244,16 +267,14 @@ export function HostDetailPanel({
       {tab === "Effective" ? (
         <div className="flex flex-col gap-2">
           <p role="status" className="text-xs text-amber-300">
-            These are the values this engine reads, with their source. They are not `ssh -G` output: OpenSSH settles
-            some of them only once it knows the destination, and only it evaluates `Match`. Run the authoritative
-            check from the Diagnostics tab.
+            {t("host.effectiveNote")}
           </p>
           <button
             type="button"
             onClick={() => setTab("Diagnostics")}
             className="self-start rounded border border-zinc-700 px-2 py-1 text-xs"
           >
-            Open the Diagnostics tab
+            {t("host.openDiagnostics")}
           </button>
           <ul className="flex flex-col gap-1">
             {detail.effective.entries.map((entry, index) => (
@@ -273,8 +294,7 @@ export function HostDetailPanel({
         // by, so an empty one must not reach the panel from anywhere.
         identityAlias === "" ? (
           <p className="text-sm text-zinc-400">
-            This block matches by pattern and names no destination of its own, so there is nothing to diagnose. Open a
-            connection with a concrete alias instead.
+            {t("host.noDestination")}
           </p>
         ) : (
           <DiagnosticsPanel api={integrations} host={identityAlias} />
@@ -282,15 +302,15 @@ export function HostDetailPanel({
       ) : null}
 
       <section className="flex flex-col gap-2 rounded border border-zinc-800 p-3">
-        <h3 className="text-sm font-medium">Organisation</h3>
-        <label htmlFor="host-group" className="text-xs text-zinc-400">Primary group</label>
+        <h3 className="text-sm font-medium">{t("host.organisation")}</h3>
+        <label htmlFor="host-group" className="text-xs text-zinc-400">{t("host.primaryGroup")}</label>
         <select
           id="host-group"
           value={detail.metadata.group ?? ""}
           onChange={(event) => onMetadata({ ...detail.metadata, group: event.target.value })}
           className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
         >
-          <option value="">None</option>
+          <option value="">{t("host.groupNone")}</option>
           {groups.map((group) => (
             <option key={group.name} value={group.name}>{group.name}</option>
           ))}
@@ -301,16 +321,29 @@ export function HostDetailPanel({
             checked={detail.metadata.favourite === true}
             onChange={(event) => onMetadata({ ...detail.metadata, favourite: event.target.checked })}
           />
-          Favourite
+          {t("host.favourite")}
         </label>
-        <label htmlFor="host-note" className="text-xs text-zinc-400">Note</label>
-        <input
-          id="host-note"
-          value={detail.metadata.note ?? ""}
-          onChange={(event) => onMetadata({ ...detail.metadata, note: event.target.value })}
+        <label htmlFor="host-comment" className="text-xs text-zinc-400">{t("host.comment")}</label>
+        <textarea
+          id="host-comment"
+          value={comment}
+          onChange={(event) => setComment(event.target.value)}
+          rows={3}
           className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
         />
-        <label htmlFor="host-colour" className="text-xs text-zinc-400">Colour</label>
+        <p className="text-xs text-zinc-500">
+          {detail.form.comment === "" && (detail.metadata.note ?? "") !== ""
+            ? t("host.commentFromNote")
+            : t("host.commentNote")}
+        </p>
+        <button
+          type="button"
+          onClick={() => onComment(comment)}
+          className="self-start rounded border border-zinc-700 px-2 py-1 text-xs"
+        >
+          {t("host.saveComment")}
+        </button>
+        <label htmlFor="host-colour" className="text-xs text-zinc-400">{t("host.colour")}</label>
         <div className="flex items-center gap-2">
           <input
             id="host-colour"
@@ -328,12 +361,12 @@ export function HostDetailPanel({
               onClick={() => onMetadata({ ...detail.metadata, colour: "" })}
               className="rounded border border-zinc-700 px-2 py-1 text-xs"
             >
-              Clear colour
+              {t("host.clearColour")}
             </button>
           )}
         </div>
         <label htmlFor="host-order" className="text-xs text-zinc-400">
-          Display order — lower sorts earlier; 0 leaves this host where the file puts it
+          {t("host.displayOrder")}
         </label>
         <input
           id="host-order"
@@ -342,7 +375,7 @@ export function HostDetailPanel({
           onChange={(event) => onMetadata({ ...detail.metadata, order: Number(event.target.value) || 0 })}
           className="w-24 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
         />
-        <label htmlFor="host-tags" className="text-xs text-zinc-400">Tags, comma separated</label>
+        <label htmlFor="host-tags" className="text-xs text-zinc-400">{t("host.tags")}</label>
         <input
           id="host-tags"
           value={(detail.metadata.tags ?? []).join(", ")}
@@ -357,7 +390,7 @@ export function HostDetailPanel({
           }
           className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
         />
-        <label htmlFor="host-rename" className="text-xs text-zinc-400">Rename alias</label>
+        <label htmlFor="host-rename" className="text-xs text-zinc-400">{t("host.renameAlias")}</label>
         <div className="flex gap-2">
           <input
             id="host-rename"
@@ -366,7 +399,7 @@ export function HostDetailPanel({
             className="flex-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
           />
           <button type="button" onClick={() => onRename(renameTo)} className="rounded border border-zinc-700 px-2 py-1 text-xs">
-            Rename
+            {t("host.rename")}
           </button>
         </div>
       </section>

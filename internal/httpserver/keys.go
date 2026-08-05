@@ -49,6 +49,7 @@ type KeyService interface {
 	ChangePassphrase(change keys.PassphraseChange) (keys.PassphraseResult, error)
 	Reveal(keyID string) (keys.RevealResult, error)
 	PublicKey(keyID string) (keys.PublicKeyResult, error)
+	Rename(request keys.RenameRequest) (keys.RenameResult, error)
 	Register(ctx context.Context, request keys.RegisterRequest) (keys.RegisterResult, error)
 	Trash(keyID string) (keys.TrashResult, error)
 	ListTrash() ([]keys.TrashEntry, error)
@@ -72,6 +73,7 @@ func registerKeyRoutes(engine *echo.Echo, handlers KeyHandlers) {
 	engine.POST("/api/v1/keys/:keyId/passphrase", handlers.ChangePassphrase)
 	engine.POST("/api/v1/keys/:keyId/reveal", handlers.Reveal)
 	engine.GET("/api/v1/keys/:keyId/public", handlers.PublicKey)
+	engine.POST("/api/v1/keys/:keyId/name", handlers.Rename)
 	engine.POST("/api/v1/keys/:keyId/agent", handlers.Register)
 	engine.POST("/api/v1/keys/:keyId/trash", handlers.Trash)
 	engine.GET("/api/v1/trash", handlers.ListTrash)
@@ -264,6 +266,38 @@ func (h KeyHandlers) PublicKey(c *echo.Context) error {
 	})
 }
 
+// Rename answers with what the rename moved and rewrote, or with what blocked
+// it.
+//
+// A blocked rename is a 409 carrying the same body as a successful one, so the
+// screen can list the reasons in the place it would have listed the changes.
+// Nothing was written in that case: the blockers are computed before the
+// transaction is built.
+func (h KeyHandlers) Rename(c *echo.Context) error {
+	var body api.RenameKeyRequest
+	if err := decodeBody(c, &body); err != nil {
+		return problem(c, http.StatusBadRequest, "invalid_request")
+	}
+	result, err := h.Keys.Rename(keys.RenameRequest{KeyID: c.Param("keyId"), NewName: body.NewName})
+	response := api.RenameKeyResponse{
+		Id:            result.ID,
+		RelativePath:  result.RelativePath,
+		Files:         renamedFiles(result.Files),
+		References:    rewrittenReferences(result.References),
+		Skipped:       nonNilStrings(result.Skipped),
+		Notes:         nonNilStrings(result.Notes),
+		Blockers:      nonNilStrings(result.Blockers),
+		TransactionId: result.TransactionID,
+	}
+	if errors.Is(err, keys.ErrRenameBlocked) {
+		return c.JSON(http.StatusConflict, response)
+	}
+	if err != nil {
+		return keyProblem(c, err)
+	}
+	return c.JSON(http.StatusOK, response)
+}
+
 func (h KeyHandlers) Register(c *echo.Context) error {
 	var body api.RegisterKeyRequest
 	if err := decodeBody(c, &body); err != nil {
@@ -367,6 +401,12 @@ func keyProblem(c *echo.Context, err error) error {
 		return problem(c, http.StatusBadRequest, "unknown_action_kind")
 	case errors.Is(err, keys.ErrInvalidFileName), errors.Is(err, keys.ErrInvalidComment):
 		return problem(c, http.StatusBadRequest, "invalid_request")
+	case errors.Is(err, keys.ErrRenameUnchanged):
+		return problem(c, http.StatusBadRequest, "name_unchanged")
+	case errors.Is(err, keys.ErrRenameNotSupported):
+		return problem(c, http.StatusUnprocessableEntity, "rename_not_supported")
+	case errors.Is(err, keys.ErrConfigurationChanged):
+		return problem(c, http.StatusConflict, "external_change")
 	case errors.Is(err, keys.ErrUnsupportedAlgorithm), errors.Is(err, keys.ErrUnsupportedBits):
 		return problem(c, http.StatusBadRequest, "unsupported_algorithm")
 	case errors.Is(err, keys.ErrHardwareAlgorithm):
@@ -484,6 +524,28 @@ func referenceList(references []keys.Reference) []api.KeyReference {
 			Condition:    reference.Condition,
 			HostPatterns: nonNilStrings(reference.HostPatterns),
 			Value:        reference.Value,
+		})
+	}
+	return converted
+}
+
+func renamedFiles(files []keys.RenamedFile) []api.RenamedKeyFile {
+	converted := make([]api.RenamedKeyFile, 0, len(files))
+	for _, file := range files {
+		converted = append(converted, api.RenamedKeyFile{From: file.From, To: file.To})
+	}
+	return converted
+}
+
+func rewrittenReferences(references []keys.RewrittenReference) []api.RewrittenKeyReference {
+	converted := make([]api.RewrittenKeyReference, 0, len(references))
+	for _, reference := range references {
+		converted = append(converted, api.RewrittenKeyReference{
+			Directive:  reference.Directive,
+			ConfigPath: reference.ConfigPath,
+			Line:       reference.Line,
+			From:       reference.From,
+			To:         reference.To,
 		})
 	}
 	return converted

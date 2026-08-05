@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslate } from "../i18n/context";
 import { failureCode } from "../api/client";
 import {
   integrationsApi,
@@ -18,6 +19,7 @@ type KnownHostsPanelProps = { api?: IntegrationsApi };
 // costs either a fingerprint the user obtained somewhere else or an explicit
 // acknowledgement that they are trusting a key nobody verified.
 export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps) {
+  const t = useTranslate();
   const [query, setQuery] = useState("");
   const [listing, setListing] = useState<KnownHostsResponse | null>(null);
   const [pending, setPending] = useState<KnownHostEntry | null>(null);
@@ -38,7 +40,7 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
         if (active) setListing(result);
       })
       .catch(() => {
-        if (active) setError("The known_hosts file could not be read.");
+        if (active) setError(t("kh.unreadable"));
       });
     return () => {
       active = false;
@@ -50,7 +52,7 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
     try {
       setListing(await api.knownHosts(next));
     } catch {
-      setError("The known_hosts file could not be read.");
+      setError(t("kh.unreadable"));
     }
   }
 
@@ -62,11 +64,11 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
         [{ line: pending.line, digest: pending.digest }],
         listing.path,
       );
-      setStatus(`Removed one entry in transaction ${result.transactionId}.`);
+      setStatus(t("kh.removed", { id: result.transactionId }));
       setPending(null);
       await search(query);
     } catch {
-      setError("The entry could not be removed. Nothing was changed.");
+      setError(t("kh.removeFailed"));
       setPending(null);
     }
   }
@@ -78,7 +80,7 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
       setNotice(result.notice);
       setCandidates(result.candidates);
     } catch {
-      setError("The host could not be scanned.");
+      setError(t("kh.scanFailed"));
     }
   }
 
@@ -107,10 +109,7 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
     // key that was scanned the user is looking at a different key than the one
     // they were told about, which is shown rather than sent to the server.
     if (typed !== "" && typed !== adding.fingerprint) {
-      setError(
-        `The fingerprint you typed does not match this key. You typed ${typed}; ` +
-          `the scan returned ${adding.fingerprint}. Nothing was added.`,
-      );
+      setError(t("kh.fingerprintMismatch", { typed, scanned: adding.fingerprint }));
       return;
     }
     setError("");
@@ -120,15 +119,15 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
         typed,
         acknowledged,
       );
-      setStatus(`Added ${adding.host} in transaction ${result.transactionId}.`);
+      setStatus(t("kh.added", { host: adding.host, id: result.transactionId }));
       closeAdd();
       await search(query);
     } catch (failure) {
       const code = failureCode(failure);
       setError(
         code === ""
-          ? "The key could not be added. Nothing was changed."
-          : `The key could not be added (${code}). Nothing was changed.`,
+          ? t("kh.addFailed")
+          : t("kh.addFailedCode", { code }),
       );
       closeAdd();
     }
@@ -139,7 +138,7 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
   return (
     <section aria-labelledby="known-hosts-heading" className="flex flex-col gap-4">
       <h2 id="known-hosts-heading" className="font-medium">
-        Known Hosts
+        {t("kh.heading")}
       </h2>
 
       <p aria-live="polite" className="text-sm text-zinc-400">
@@ -152,7 +151,7 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
       ) : null}
 
       <label className="flex flex-col gap-1 text-sm">
-        <span>Search</span>
+        <span>{t("kh.search")}</span>
         <input
           value={query}
           onChange={(event) => {
@@ -169,7 +168,7 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
           <tbody>
             {listing.entries.map((item) => (
               <tr key={`${item.line}-${item.digest}`}>
-                <td className="pr-3">{item.hashed ? "(hashed)" : item.hosts.join(", ")}</td>
+                <td className="pr-3">{item.hashed ? t("kh.hashed") : item.hosts.join(", ")}</td>
                 <td className="pr-3 text-zinc-400">{item.keyType}</td>
                 <td className="pr-3 text-zinc-400">{item.fingerprint}</td>
                 <td>
@@ -178,7 +177,7 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
                     onClick={() => setPending(item)}
                     className="rounded border border-zinc-700 px-2 py-1"
                   >
-                    Delete
+                    {t("kh.delete")}
                   </button>
                 </td>
               </tr>
@@ -190,7 +189,7 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
       {pending ? (
         <div className="rounded border border-red-700 p-3 text-sm">
           <p>
-            Remove line {pending.line} ({pending.fingerprint})? This is journalled and a backup is kept.
+            {t("kh.confirmRemove", { line: pending.line, fingerprint: pending.fingerprint })}
           </p>
           <div className="mt-2 flex gap-2">
             <button
@@ -198,14 +197,14 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
               onClick={() => void confirmDelete()}
               className="rounded border border-red-600 px-3 py-1"
             >
-              Confirm delete
+              {t("kh.confirmDelete")}
             </button>
             <button
               type="button"
               onClick={() => setPending(null)}
               className="rounded border border-zinc-700 px-3 py-1"
             >
-              Cancel
+              {t("kh.cancel")}
             </button>
           </div>
         </div>
@@ -213,7 +212,7 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
 
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-1 text-sm">
-          <span>Host to scan</span>
+          <span>{t("kh.hostToScan")}</span>
           <input
             value={scanHost}
             onChange={(event) => setScanHost(event.target.value)}
@@ -221,14 +220,14 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
           />
         </label>
         <button type="button" onClick={() => void scan()} className="rounded border border-zinc-700 px-3 py-1 text-sm">
-          Scan
+          {t("kh.scan")}
         </button>
       </div>
 
       {notice ? <p className="text-sm text-amber-300">{notice}</p> : null}
       {candidates.length > 0 ? (
         <table className="text-sm">
-          <caption className="text-left text-zinc-400">Scan candidates</caption>
+          <caption className="text-left text-zinc-400">{t("kh.scanCandidates")}</caption>
           <tbody>
             {candidates.map((candidate) => (
               <tr key={`${candidate.host}-${candidate.fingerprint}`}>
@@ -238,14 +237,14 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
                 {/* A scan cannot establish identity, so the label describes how
                     the key was obtained and never repeats a claim of the
                     response. */}
-                <td className="pr-3 text-amber-300">unverified</td>
+                <td className="pr-3 text-amber-300">{t("kh.unverified")}</td>
                 <td>
                   <button
                     type="button"
                     onClick={() => openAdd(candidate)}
                     className="rounded border border-zinc-700 px-2 py-1"
                   >
-                    Add
+                    {t("kh.add")}
                   </button>
                 </td>
               </tr>
@@ -256,17 +255,13 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
 
       {adding ? (
         <div className="rounded border border-amber-700 p-3 text-sm">
-          <h3 className="font-medium text-amber-300">Add an unverified host key</h3>
-          <p className="text-zinc-300">
-            ssh-keyscan returned this key from {adding.host}. Anything answering at that address could have
-            sent it, so ssh-ui will not treat it as this host&apos;s key on its own. Type the fingerprint you
-            obtained through another channel, or acknowledge that you are trusting a key nobody verified.
-          </p>
+          <h3 className="font-medium text-amber-300">{t("kh.addHeading")}</h3>
+          <p className="text-zinc-300">{t("kh.addExplain", { host: adding.host })}</p>
           <p className="text-zinc-400">
             {adding.keyType} · {adding.fingerprint}
           </p>
           <label className="mt-2 flex flex-col gap-1">
-            <span>Fingerprint you obtained through another channel</span>
+            <span>{t("kh.expectedFingerprint")}</span>
             <input
               value={expectedFingerprint}
               onChange={(event) => setExpectedFingerprint(event.target.value)}
@@ -279,7 +274,7 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
               checked={acknowledged}
               onChange={(event) => setAcknowledged(event.target.checked)}
             />
-            <span>I could not verify this key and I accept the risk of trusting it</span>
+            <span>{t("kh.acknowledge")}</span>
           </label>
           <div className="mt-2 flex gap-2">
             <button
@@ -288,10 +283,10 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
               onClick={() => void confirmAdd()}
               className="rounded border border-amber-600 px-3 py-1 disabled:border-zinc-800 disabled:text-zinc-600"
             >
-              Add to known_hosts
+              {t("kh.addToKnownHosts")}
             </button>
             <button type="button" onClick={closeAdd} className="rounded border border-zinc-700 px-3 py-1">
-              Cancel
+              {t("kh.cancel")}
             </button>
           </div>
         </div>

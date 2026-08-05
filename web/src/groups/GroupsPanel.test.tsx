@@ -70,4 +70,67 @@ describe("GroupsPanel", () => {
       }),
     })));
   });
+  it("renames a group and carries its members and children with it", async () => {
+    const user = userEvent.setup();
+    vi.mocked(configApi.overview).mockResolvedValue({
+      ...overview,
+      metadata: {
+        ...overview.metadata,
+        groups: [
+          { name: "company", settings: [{ keyword: "ServerAliveInterval", values: ["30"] }] },
+          { name: "build", parent: "company" },
+        ],
+      },
+    } as never);
+    vi.mocked(configApi.save).mockResolvedValue({ preview: { operation: "config.groups", diffs: [] } } as never);
+    render(<GroupsPanel />);
+
+    await user.type(await screen.findByLabelText("Rename company to"), "corp");
+    await user.click(screen.getByRole("button", { name: "Rename company" }));
+    await user.click(screen.getByRole("button", { name: "Save groups" }));
+
+    await waitFor(() => expect(configApi.save).toHaveBeenCalled());
+    // The mocked client is module-level, so its calls accumulate across tests:
+    // the last one is this test's.
+    const saved = vi.mocked(configApi.save).mock.calls.at(-1)![0] as { metadata: {
+      groups: { name: string; parent?: string }[];
+      hosts: { group?: string }[];
+    } };
+    // The name is the group's only identifier, so all three references move
+    // together: the group itself, the child that names it as a parent, and the
+    // host that names it as its group.
+    expect(saved.metadata.groups.map((group) => group.name)).toEqual(["corp", "build"]);
+    expect(saved.metadata.groups.find((group) => group.name === "build")?.parent).toBe("corp");
+    expect(saved.metadata.hosts.every((host) => host.group !== "company")).toBe(true);
+    expect(saved.metadata.hosts.some((host) => host.group === "corp")).toBe(true);
+  });
+
+  it("refuses a rename onto a group that already exists instead of merging", async () => {
+    const user = userEvent.setup();
+    vi.mocked(configApi.overview).mockResolvedValue({
+      ...overview,
+      metadata: {
+        ...overview.metadata,
+        groups: [{ name: "company" }, { name: "lab" }],
+      },
+    } as never);
+    render(<GroupsPanel />);
+
+    await user.type(await screen.findByLabelText("Rename company to"), "lab");
+    await user.click(screen.getByRole("button", { name: "Rename company" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("lab already exists");
+    // Nothing was staged, so a later save cannot carry the merge through.
+    expect(screen.getByRole("heading", { name: "company" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "lab" })).toBeInTheDocument();
+  });
+
+  it("refuses an empty rename", async () => {
+    const user = userEvent.setup();
+    render(<GroupsPanel />);
+
+    await user.click(await screen.findByRole("button", { name: "Rename company" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("needs a name of its own");
+  });
 });
