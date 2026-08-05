@@ -625,6 +625,21 @@ type PublicKeyResponse struct {
 	RelativePath string `json:"relativePath"`
 }
 
+// PullRequest defines model for PullRequest.
+type PullRequest struct {
+	Apply      *bool  `json:"apply,omitempty"`
+	Passphrase string `json:"passphrase"`
+}
+
+// PullResponse defines model for PullResponse.
+type PullResponse struct {
+	Applied   bool           `json:"applied"`
+	Conflicts []SyncConflict `json:"conflicts"`
+	Origin    *string        `json:"origin,omitempty"`
+	Removed   []string       `json:"removed"`
+	Written   []string       `json:"written"`
+}
+
 // PurgeTrashResponse defines model for PurgeTrashResponse.
 type PurgeTrashResponse struct {
 	EntryId       string   `json:"entryId"`
@@ -801,6 +816,33 @@ type StorePasswordRequest struct {
 	Password string `json:"password"`
 }
 
+// SyncConflict defines model for SyncConflict.
+type SyncConflict struct {
+	ChangedHere  bool   `json:"changedHere"`
+	ChangedThere bool   `json:"changedThere"`
+	Path         string `json:"path"`
+}
+
+// SyncSettingsRequest defines model for SyncSettingsRequest.
+type SyncSettingsRequest struct {
+	AccessKeyId     string  `json:"accessKeyId"`
+	Bucket          string  `json:"bucket"`
+	Endpoint        string  `json:"endpoint"`
+	Region          *string `json:"region,omitempty"`
+	SecretAccessKey string  `json:"secretAccessKey"`
+}
+
+// SyncStatus defines model for SyncStatus.
+type SyncStatus struct {
+	Bucket       string  `json:"bucket"`
+	Configured   bool    `json:"configured"`
+	Endpoint     string  `json:"endpoint"`
+	FileCount    *int    `json:"fileCount,omitempty"`
+	LastSyncedAt *string `json:"lastSyncedAt,omitempty"`
+	Origin       *string `json:"origin,omitempty"`
+	Synced       bool    `json:"synced"`
+}
+
 // TerminalCommandResponse defines model for TerminalCommandResponse.
 type TerminalCommandResponse struct {
 	Command    string `json:"command"`
@@ -972,6 +1014,15 @@ type PlanRemoteKeyRegistrationJSONRequestBody = RemoteKeyPlanRequest
 
 // RegisterRemoteKeyJSONRequestBody defines body for RegisterRemoteKey for application/json ContentType.
 type RegisterRemoteKeyJSONRequestBody = RemoteKeyRegisterRequest
+
+// PullSnapshotJSONRequestBody defines body for PullSnapshot for application/json ContentType.
+type PullSnapshotJSONRequestBody = PullRequest
+
+// PushSnapshotJSONRequestBody defines body for PushSnapshot for application/json ContentType.
+type PushSnapshotJSONRequestBody = PassphraseRequest
+
+// ConfigureSyncJSONRequestBody defines body for ConfigureSync for application/json ContentType.
+type ConfigureSyncJSONRequestBody = SyncSettingsRequest
 
 // GetTerminalCommandJSONRequestBody defines body for GetTerminalCommand for application/json ContentType.
 type GetTerminalCommandJSONRequestBody = AliasRequest

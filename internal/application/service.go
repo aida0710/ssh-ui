@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"path"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 
@@ -1077,4 +1078,39 @@ func (s *Service) Restore(identifier, relative string) (SaveResult, error) {
 			Diffs:     []FileDiff{BuildFileDiff(relative, diskOrNil(current, exists), contents)},
 		},
 	}, nil
+}
+
+// WorkspaceFiles lists every configuration file inside the workspace, by
+// workspace-relative path.
+//
+// It exists for the remote snapshot, which has to know what a configuration is
+// without being able to see the Include graph. Files outside the workspace —
+// /etc/ssh/ssh_config reached by an Include — are excluded: this application
+// never writes outside ~/.ssh, and it must never carry a file it would refuse
+// to write.
+func (s *Service) WorkspaceFiles() ([]string, error) {
+	graph, err := s.resolver.Resolve(s.entryPath)
+	if err != nil {
+		return nil, err
+	}
+	root := s.workspace.Root()
+	seen := map[string]bool{}
+	var relatives []string
+	for _, path := range graph.Order {
+		if !s.workspace.Contains(path) {
+			continue
+		}
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			continue
+		}
+		relative = filepath.ToSlash(relative)
+		if seen[relative] {
+			continue
+		}
+		seen[relative] = true
+		relatives = append(relatives, relative)
+	}
+	sort.Strings(relatives)
+	return relatives, nil
 }

@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/fs"
@@ -16,6 +18,7 @@ import (
 	"ssh-ui/internal/knownhosts"
 	"ssh-ui/internal/platform"
 	"ssh-ui/internal/remotekey"
+	"ssh-ui/internal/remotesync"
 	"ssh-ui/internal/secret"
 	"ssh-ui/internal/session"
 	"ssh-ui/internal/storage"
@@ -149,6 +152,16 @@ func Build(dependencies Dependencies, version string) (*httpserver.Server, strin
 	// it, and it travels with everything else the workspace holds.
 	passwordService := secret.NewService(workspace, transactions)
 
+	// The snapshot needs to know which files are configuration, and that is a
+	// question the Include graph answers. Passing the answer in keeps the
+	// dependency pointing the right way: internal/remotesync imports nothing
+	// of the configuration service.
+	syncService := remotesync.NewService(workspace, transactions,
+		func() ([]string, error) { return configService.WorkspaceFiles() },
+		func() string { return time.Now().UTC().Format(time.RFC3339) },
+		newOrigin(dependencies.Random),
+	)
+
 	server, err := httpserver.New(httpserver.Options{
 		Listener:      listener,
 		Sessions:      sessions,
@@ -161,6 +174,7 @@ func Build(dependencies Dependencies, version string) (*httpserver.Server, strin
 		KnownHosts:    knownHostsService,
 		RemoteKeys:    remoteKeyService,
 		Passwords:     passwordService,
+		Sync:          syncService,
 		AskpassHelper: dependencies.AskpassHelper,
 		Answerable:    dependencies.Answerable,
 	})
@@ -196,5 +210,23 @@ func Run(ctx context.Context, dependencies Dependencies, version string) error {
 	case <-ctx.Done():
 		stopServer()
 		return <-serveErrors
+	}
+}
+
+// newOrigin mints this installation's opaque identifier.
+//
+// It is random and is derived from nothing about the machine. An identifier
+// built from a hostname would put that hostname in an object anyone with the
+// bucket can read, for no benefit beyond what a random string gives.
+func newOrigin(random io.Reader) func() (string, error) {
+	return func() (string, error) {
+		if random == nil {
+			random = rand.Reader
+		}
+		raw := make([]byte, 16)
+		if _, err := io.ReadFull(random, raw); err != nil {
+			return "", err
+		}
+		return hex.EncodeToString(raw), nil
 	}
 }

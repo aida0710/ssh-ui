@@ -56,6 +56,10 @@ function buildApi(overrides: Partial<IntegrationsApi> = {}): IntegrationsApi {
     lockVault: vi.fn().mockResolvedValue({ exists: true, unlocked: false, aliases: [] }),
     storePassword: vi.fn().mockResolvedValue({ exists: true, unlocked: true, aliases: [] }),
     forgetPassword: vi.fn().mockResolvedValue({ exists: true, unlocked: true, aliases: [] }),
+    syncStatus: vi.fn().mockResolvedValue({ configured: false, endpoint: "", bucket: "", synced: false }),
+    configureSync: vi.fn().mockResolvedValue({ configured: true, endpoint: "", bucket: "", synced: false }),
+    pushSnapshot: vi.fn().mockResolvedValue({ configured: true, endpoint: "", bucket: "", synced: true }),
+    pullSnapshot: vi.fn().mockResolvedValue({ applied: false, conflicts: [], written: [], removed: [] }),
     ...overrides,
   };
 }

@@ -20,6 +20,7 @@ import (
 	"ssh-ui/internal/diagnostics"
 	"ssh-ui/internal/knownhosts"
 	"ssh-ui/internal/remotekey"
+	"ssh-ui/internal/remotesync"
 	"ssh-ui/internal/secret"
 	"ssh-ui/internal/session"
 )
@@ -45,6 +46,9 @@ type Options struct {
 	// Answerable is the prompt rule, injected so the server and the helper
 	// cannot drift into two different rules.
 	Answerable func(prompt string) bool
+	// Sync carries the workspace to an object store. A nil service leaves
+	// every sync route unregistered.
+	Sync *remotesync.Service
 }
 
 var ErrNonLoopbackListener = errors.New("listener must use 127.0.0.1")
@@ -142,6 +146,9 @@ func New(options Options) (*Server, error) {
 	}
 	if options.Passwords != nil {
 		registerPasswordRoutes(e, PasswordHandlers{Service: options.Passwords, Answerable: options.Answerable})
+	}
+	if options.Sync != nil {
+		registerSyncRoutes(e, SyncHandlers{Service: options.Sync})
 	}
 	if len(registry) > 0 {
 		registerActionRoutes(e, actions)

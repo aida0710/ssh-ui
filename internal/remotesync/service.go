@@ -430,3 +430,30 @@ func (s *Service) writeState(next state) error {
 	})
 	return err
 }
+
+// Target returns the endpoint and bucket this run points at, for display. The
+// access key and the secret are never returned by anything.
+func (s *Service) Target() (endpoint, bucket string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.config.Endpoint, s.config.Bucket
+}
+
+// LastSync reports what this machine last synced, from the state file.
+func (s *Service) LastSync() (synced bool, at, origin string, files int) {
+	current, err := s.readState()
+	if err != nil || current.ETag == "" || current.Base == nil {
+		return false, "", "", 0
+	}
+	return true, current.Base.CreatedAt, current.Base.Origin, len(current.Base.Files)
+}
+
+// DisplayPath turns an absolute workspace path back into the relative one the
+// rest of this application shows.
+func (s *Service) DisplayPath(absolute string) string {
+	relative, err := filepath.Rel(s.workspace.Root(), absolute)
+	if err != nil {
+		return filepath.Base(absolute)
+	}
+	return filepath.ToSlash(relative)
+}

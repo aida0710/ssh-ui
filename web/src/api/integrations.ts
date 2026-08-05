@@ -14,6 +14,9 @@ export type KnownHostsScanResponse = components["schemas"]["KnownHostsScanRespon
 export type KnownHostCandidate = components["schemas"]["KnownHostCandidate"];
 export type IssueActionResponse = components["schemas"]["IssueActionResponse"];
 export type PasswordVaultStatus = components["schemas"]["PasswordVaultStatus"];
+export type SyncStatus = components["schemas"]["SyncStatus"];
+export type SyncSettingsRequest = components["schemas"]["SyncSettingsRequest"];
+export type PullResponse = components["schemas"]["PullResponse"];
 
 // The action vocabulary belongs to the server's session package, which owns it
 // for every subsystem that confirms an operation. These are its wire values.
@@ -54,6 +57,12 @@ export type IntegrationsApi = {
   lockVault(): Promise<PasswordVaultStatus>;
   storePassword(alias: string, password: string): Promise<PasswordVaultStatus>;
   forgetPassword(alias: string): Promise<PasswordVaultStatus>;
+  // The remote snapshot. No method returns a credential or a file's contents:
+  // the status carries the endpoint and the bucket, and a pull carries paths.
+  syncStatus(): Promise<SyncStatus>;
+  configureSync(settings: SyncSettingsRequest): Promise<SyncStatus>;
+  pushSnapshot(passphrase: string): Promise<SyncStatus>;
+  pullSnapshot(passphrase: string, apply: boolean): Promise<PullResponse>;
 };
 
 // The generated types describe the contract; these guards check the payload the
@@ -262,6 +271,29 @@ function validateVaultStatus(value: unknown): PasswordVaultStatus {
   return record as unknown as PasswordVaultStatus;
 }
 
+function validateSyncStatus(value: unknown): SyncStatus {
+  const record = asRecord(value);
+  asBoolean(record.configured);
+  asString(record.endpoint);
+  asString(record.bucket);
+  asBoolean(record.synced);
+  return record as unknown as SyncStatus;
+}
+
+function validatePullResponse(value: unknown): PullResponse {
+  const record = asRecord(value);
+  asBoolean(record.applied);
+  for (const conflict of asArray(record.conflicts)) {
+    const entry = asRecord(conflict);
+    asString(entry.path);
+    asBoolean(entry.changedHere);
+    asBoolean(entry.changedThere);
+  }
+  for (const path of asArray(record.written)) asString(path);
+  for (const path of asArray(record.removed)) asString(path);
+  return record as unknown as PullResponse;
+}
+
 export const integrationsApi: IntegrationsApi = {
   async configCheck() {
     return validateConfigCheck(await postJSON<unknown>("/api/v1/diagnostics/config", {}));
@@ -314,6 +346,24 @@ export const integrationsApi: IntegrationsApi = {
     return validateVaultStatus(
       await apiClient.mutate<unknown>(`/api/v1/passwords/${encodeURIComponent(alias)}`, { method: "DELETE" }),
     );
+  },
+  async syncStatus() {
+    return validateSyncStatus(await apiClient.read("/api/v1/sync"));
+  },
+  async configureSync(settings) {
+    return validateSyncStatus(
+      await apiClient.mutate<unknown>("/api/v1/sync/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settings),
+      }),
+    );
+  },
+  async pushSnapshot(passphrase) {
+    return validateSyncStatus(await postJSON<unknown>("/api/v1/sync/push", { passphrase }));
+  },
+  async pullSnapshot(passphrase, apply) {
+    return validatePullResponse(await postJSON<unknown>("/api/v1/sync/pull", { passphrase, apply }));
   },
   async knownHosts(query) {
     return validateKnownHosts(await apiClient.read(`/api/v1/known-hosts?query=${encodeURIComponent(query)}`));
