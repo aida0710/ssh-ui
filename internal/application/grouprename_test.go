@@ -229,3 +229,67 @@ func TestGroupOperationsRefuseANameThatIsNotASafeDirectory(t *testing.T) {
 		t.Errorf("nesting a group inside itself was allowed")
 	}
 }
+
+// Deleting a group with no destination leaves its connections directly under
+// connections/, where no Include names them. The operation is deliberate; the
+// silence was not.
+func TestDeleteGroupWarnsThatItsConnectionsWillBeUnreached(t *testing.T) {
+	service, workspace := newTestService(t)
+	declareGroup(t, service, "work")
+	writeGroupFile(t, workspace, "work", "hosts.conf", "Host inwork\n\tUser aida\n")
+
+	result, err := service.DeleteGroup(keyInventory(t, workspace), "work", "")
+	if err != nil {
+		t.Fatalf("DeleteGroup error = %v", err)
+	}
+	found := false
+	for _, notice := range result.Preview.Notices {
+		if notice.Code == NoticeGroupFileUnreached {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("notices = %#v, want group_file_unreached", result.Preview.Notices)
+	}
+}
+
+func TestDeleteGroupIntoAnotherGroupDoesNotWarn(t *testing.T) {
+	service, workspace := newTestService(t)
+	declareGroup(t, service, "work", "keep")
+	writeGroupFile(t, workspace, "work", "hosts.conf", "Host inwork\n\tUser aida\n")
+
+	result, err := service.DeleteGroup(keyInventory(t, workspace), "work", "keep")
+	if err != nil {
+		t.Fatalf("DeleteGroup error = %v", err)
+	}
+	for _, notice := range result.Preview.Notices {
+		if notice.Code == NoticeGroupFileUnreached {
+			t.Errorf("a connection that stayed inside a group was called unreached: %#v", notice)
+		}
+	}
+}
+
+// A group holding a key could not be deleted without naming a destination: the
+// key was aimed at the workspace root, whose directory is ".", and the path
+// helper refuses that because it is the root itself. The refusal arrived as
+// "path is outside the ssh directory", which describes neither the cause nor
+// anything the user did.
+//
+// A key goes where a connection goes: directly under its own tree, keys/ for
+// one and connections/ for the other, so both stay somewhere the inventory and
+// the explorer still see them.
+func TestDeleteGroupHoldingAKeyNeedsNoDestination(t *testing.T) {
+	service, workspace := groupRenameFixture(t)
+
+	if _, err := service.DeleteGroup(keyInventory(t, workspace), "work", ""); err != nil {
+		t.Fatalf("DeleteGroup error = %v", err)
+	}
+	for _, name := range []string{"keys/id_work", "keys/id_work.pub", "connections/web.conf"} {
+		if _, err := os.Lstat(filepath.Join(workspace.Root(), filepath.FromSlash(name))); err != nil {
+			t.Errorf("%s is not there: %v", name, err)
+		}
+	}
+	if _, err := os.Lstat(filepath.Join(workspace.Root(), "id_work")); err == nil {
+		t.Error("the key was left loose in the workspace root")
+	}
+}

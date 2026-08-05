@@ -24,13 +24,15 @@ import (
 // evidence is mutable so a test can simulate the key changing on disk between
 // the moment the user confirmed and the moment the request arrives.
 type stubKeyService struct {
-	inventory   *keys.Inventory
-	reveal      keys.RevealResult
-	evidence    string
-	evidenceErr error
-	revealCalls int
-	purgeCalls  int
-	registerErr error
+	inventory     *keys.Inventory
+	reveal        keys.RevealResult
+	evidence      string
+	evidenceErr   error
+	revealCalls   int
+	purgeCalls    int
+	registerErr   error
+	deregistered  []string
+	deregisterErr error
 }
 
 func (stub *stubKeyService) Inventory() (*keys.Inventory, error) { return stub.inventory, nil }
@@ -84,6 +86,11 @@ func (stub *stubKeyService) PublicKey(keyID string) (keys.PublicKeyResult, error
 		Fingerprint:  "SHA256:abcdef",
 		Comment:      "aida@laptop",
 	}, nil
+}
+
+func (stub *stubKeyService) Deregister(_ context.Context, keyID string) error {
+	stub.deregistered = append(stub.deregistered, keyID)
+	return stub.deregisterErr
 }
 
 func (stub *stubKeyService) Register(context.Context, keys.RegisterRequest) (keys.RegisterResult, error) {
@@ -546,5 +553,41 @@ func TestPublicKeyRefusesAnEntryThatIsNotAPublicKey(t *testing.T) {
 	}
 	if strings.Contains(response.Body.String(), "PRIVATE KEY") {
 		t.Fatalf("the refusal carried key material: %s", response.Body.String())
+	}
+}
+
+// The agent could be given a key and never asked to give it back, so a purged
+// key stayed loaded and usable. Removal needs no confirmation token: it
+// destroys nothing.
+func TestDeregisterRemovesTheKeyFromTheAgentWithoutAToken(t *testing.T) {
+	service := newRevealService()
+	engine, _, credentials := newKeyServer(t, service)
+
+	response := sendKeyRequest(t, engine, credentials, http.MethodDelete,
+		"/api/v1/keys/key-one/agent", nil, "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("deregister = %d, want 200: %s", response.Code, response.Body.String())
+	}
+	if len(service.deregistered) != 1 || service.deregistered[0] != "key-one" {
+		t.Errorf("deregistered = %#v, want the key from the path", service.deregistered)
+	}
+	var answer api.AgentIdentitiesResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &answer); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !answer.AgentAvailable || answer.Id != "key-one" {
+		t.Errorf("answer = %#v, want what the agent holds afterwards", answer)
+	}
+}
+
+func TestDeregisterReportsAnAgentThatIsNotThere(t *testing.T) {
+	service := newRevealService()
+	service.deregisterErr = platform.ErrAgentUnavailable
+	engine, _, credentials := newKeyServer(t, service)
+
+	response := sendKeyRequest(t, engine, credentials, http.MethodDelete,
+		"/api/v1/keys/key-one/agent", nil, "")
+	if response.Code == http.StatusOK {
+		t.Fatalf("deregister with no agent = 200, want a refusal: %s", response.Body.String())
 	}
 }

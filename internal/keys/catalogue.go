@@ -137,7 +137,9 @@ func HardwareCommand(algorithm Algorithm, fileName, comment, sshDirectory string
 	if err := ValidateFileName(fileName); err != nil {
 		return nil, err
 	}
-	if err := ValidateComment(comment); err != nil {
+	// The stricter rule, because this command line is shown for the user to
+	// run: every argument here has to survive being copied into a shell.
+	if err := ValidateHardwareComment(comment); err != nil {
 		return nil, err
 	}
 	if !filepath.IsAbs(sshDirectory) {

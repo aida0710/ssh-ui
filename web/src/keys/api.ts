@@ -14,6 +14,7 @@ export type HardwareCommandResponse = components["schemas"]["HardwareCommandResp
 export type ChangePassphraseResponse = components["schemas"]["ChangePassphraseResponse"];
 export type RevealPrivateKeyResponse = components["schemas"]["RevealPrivateKeyResponse"];
 export type RegisterKeyResponse = components["schemas"]["RegisterKeyResponse"];
+export type AgentIdentitiesResponse = components["schemas"]["AgentIdentitiesResponse"];
 export type PublicKeyResponse = components["schemas"]["PublicKeyResponse"];
 export type RelocateKeyResponse = components["schemas"]["RelocateKeyResponse"];
 export type RelocatedKeyFile = components["schemas"]["RelocatedKeyFile"];
@@ -81,6 +82,9 @@ export type KeysApi = {
   publicKey(keyId: string): Promise<PublicKeyResponse>;
   relocate(keyId: string, change: KeyLocationInput): Promise<RelocateKeyResponse>;
   registerWithAgent(keyId: string, input: RegisterAgentInput): Promise<RegisterKeyResponse>;
+  // Taking a key back out of the agent. It destroys nothing and needs no
+  // confirmation; the cost of being wrong is one more passphrase prompt.
+  deregisterFromAgent(keyId: string): Promise<AgentIdentitiesResponse>;
   trash(keyId: string): Promise<TrashKeyResponse>;
   listTrash(): Promise<TrashListResponse>;
   restore(entryId: string): Promise<RestoreTrashResponse>;
@@ -146,6 +150,14 @@ function validateInventory(value: unknown): KeyInventoryResponse {
   asBoolean(record.agentAvailable);
   validateAgentIdentities(record.agentIdentities);
   return record as unknown as KeyInventoryResponse;
+}
+
+function validateAgentIdentitiesResponse(value: unknown): AgentIdentitiesResponse {
+  const record = asRecord(value);
+  asString(record.id);
+  asBoolean(record.agentAvailable);
+  validateAgentIdentities(record.identities);
+  return record as unknown as AgentIdentitiesResponse;
 }
 
 function validateAlgorithms(value: unknown): KeyAlgorithmsResponse {
@@ -335,6 +347,13 @@ export const keysApi: KeysApi = {
         method: "POST",
         headers: jsonHeaders,
         body: JSON.stringify(input),
+      }),
+    );
+  },
+  async deregisterFromAgent(keyId) {
+    return validateAgentIdentitiesResponse(
+      await apiClient.mutate<unknown>(`/api/v1/keys/${encodeURIComponent(keyId)}/agent`, {
+        method: "DELETE",
       }),
     );
   },

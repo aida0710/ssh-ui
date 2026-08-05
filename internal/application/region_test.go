@@ -44,22 +44,50 @@ func TestPlanRegionEmitsOneIncludePerGroupChildFirst(t *testing.T) {
 	}
 }
 
-func TestPlanRegionPlacesTheRegionBeforeTheFirstCatchAll(t *testing.T) {
-	source := "Host bastion\n\tUser ops\nHost *\n\tServerAliveInterval 30\n"
+// An Include written below a Host line belongs to that block. OpenSSH parses
+// the included file either way — the debug output says "Reading configuration
+// data" for it — but applies its options only when the block matches. Checked
+// against OpenSSH 10.2p1: a top-level Include applies, the same line moved
+// under a Host line does not, and a blank line between them changes nothing.
+//
+// So there is exactly one position where the region declares anything: above
+// every Host and Match line in the entry file. Anywhere else the groups are
+// read when connecting to one unrelated host and at no other time, which is
+// indistinguishable from not being declared.
+func TestPlanRegionPutsTheRegionAboveEveryHostBlock(t *testing.T) {
+	source := "# a banner\n\nHost bastion\n\tUser ops\n\nHost *\n\tServerAliveInterval 30\n"
 	rendered, err := planAndApply(t, source, []string{"work"})
 	if err != nil {
 		t.Fatalf("PlanRegion error = %v", err)
 	}
-	want := "Host bastion\n\tUser ops\n" + strings.Replace(expectedRegion,
-		"Include connections/work/eu/*.conf\nInclude connections/work/*.conf\nInclude connections/home/*.conf\n",
-		"Include connections/work/*.conf\n", 1) + "Host *\n\tServerAliveInterval 30\n"
-	if rendered != want {
-		t.Errorf("rendered =\n%s\nwant\n%s", rendered, want)
+	region := strings.Index(rendered, RegionStartMarker)
+	firstHost := strings.Index(rendered, "Host ")
+	if region < 0 {
+		t.Fatalf("no region was written:\n%s", rendered)
+	}
+	if firstHost < region {
+		t.Errorf("the region sits below a Host line, where its Includes are conditional:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "Host bastion\n\tUser ops\n") || !strings.Contains(rendered, "Host *\n\tServerAliveInterval 30\n") {
+		t.Errorf("the user's own blocks were disturbed:\n%s", rendered)
 	}
 }
 
-func TestPlanRegionAppendsWhenThereIsNoCatchAll(t *testing.T) {
-	source := "Host bastion\n\tUser ops\n"
+// The region goes above the comment attached to the first block, not between
+// the comment and the Host line it describes.
+func TestPlanRegionDoesNotSeparateTheFirstBlockFromItsComment(t *testing.T) {
+	source := "# the bastion, reachable from the office only\nHost bastion\n\tUser ops\n"
+	rendered, err := planAndApply(t, source, []string{"work"})
+	if err != nil {
+		t.Fatalf("PlanRegion error = %v", err)
+	}
+	if !strings.HasSuffix(rendered, source) {
+		t.Errorf("the comment was severed from its block:\n%s", rendered)
+	}
+}
+
+func TestPlanRegionAppendsWhenTheFileDeclaresNoBlockAtAll(t *testing.T) {
+	source := "# personal configuration\nInclude conf.d/*.conf\n"
 	rendered, err := planAndApply(t, source, []string{"work"})
 	if err != nil {
 		t.Fatalf("PlanRegion error = %v", err)
@@ -67,33 +95,35 @@ func TestPlanRegionAppendsWhenThereIsNoCatchAll(t *testing.T) {
 	if !strings.HasPrefix(rendered, source) {
 		t.Errorf("the region did not go at the end:\n%s", rendered)
 	}
+	// With no Host or Match line anywhere, the end of the file is still the
+	// global block, so appending is unconditional.
 	if !strings.HasSuffix(rendered, RegionEndMarker+"\n") {
 		t.Errorf("the region did not close at the end:\n%s", rendered)
 	}
 }
 
-// The catch-all-at-the-top case. Inserting here would put the generated
-// Includes above the user's own concrete blocks, so any alias declared in both
-// places would change winner — silently, in a file the user did not edit.
-func TestPlanRegionRefusesWhenAConcreteHostFollowsTheInsertionPoint(t *testing.T) {
-	source := "Host *\n\tUser ops\nHost bastion\n\tUser root\n"
-	file := config.Parse([]byte(source))
+// A region written where its Include lines are conditional has to be moved, not
+// replaced where it stands. This is the shape every workspace built by an
+// earlier version is in: the region was appended to the end of the entry file,
+// which put it inside the last Host block.
+func TestPlanRegionMovesARegionThatSitsInsideAHostBlock(t *testing.T) {
+	source := "Host bastion\n\tUser ops\n\n" + RegionStartMarker + "\n" +
+		"Include connections/work/*.conf\nInclude groups.ssh-ui.conf\n" + RegionEndMarker + "\n"
 
-	if _, err := PlanRegion(file, []string{"work"}, DefaultGroupsFile); !errors.Is(err, ErrRegionPositionAmbiguous) {
-		t.Fatalf("PlanRegion error = %v, want ErrRegionPositionAmbiguous", err)
-	}
-	if string(file.Render()) != source {
-		t.Errorf("a refused plan changed the file")
-	}
-}
-
-func TestPlanRegionAcceptsAWildcardBlockAfterTheInsertionPoint(t *testing.T) {
-	// A second wildcard block declares no alias of its own, so it cannot be the
-	// "declared in two places" case the refusal is about. Refusing here would
-	// block the feature for a configuration that is not ambiguous at all.
-	source := "Host *\n\tUser ops\nHost *.internal\n\tUser root\n"
-	if _, err := planAndApply(t, source, []string{"work"}); err != nil {
+	rendered, err := planAndApply(t, source, []string{"work"})
+	if err != nil {
 		t.Fatalf("PlanRegion error = %v", err)
+	}
+	region := strings.Index(rendered, RegionStartMarker)
+	firstHost := strings.Index(rendered, "Host ")
+	if region < 0 || firstHost < region {
+		t.Errorf("the region was left where OpenSSH reads it conditionally:\n%s", rendered)
+	}
+	if strings.Count(rendered, RegionStartMarker) != 1 || strings.Count(rendered, RegionEndMarker) != 1 {
+		t.Errorf("the region was duplicated rather than moved:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "Host bastion\n\tUser ops\n") {
+		t.Errorf("the block the region was sitting in was disturbed:\n%s", rendered)
 	}
 }
 
@@ -136,7 +166,9 @@ func TestPlanRegionReplacesAnExistingRegionInPlace(t *testing.T) {
 	if strings.Count(second, RegionStartMarker) != 1 || strings.Count(second, RegionEndMarker) != 1 {
 		t.Errorf("the region was duplicated:\n%s", second)
 	}
-	if !strings.HasPrefix(second, "Host bastion\n\tUser ops\n") || !strings.HasSuffix(second, "Host *\n\tUser me\n") {
+	// The region now leads the file, so what must not change is everything
+	// under it: a replacement rewrites the marked lines and nothing else.
+	if !strings.HasSuffix(second, "Host bastion\n\tUser ops\nHost *\n\tUser me\n") {
 		t.Errorf("bytes outside the region changed:\n%s", second)
 	}
 }

@@ -143,7 +143,13 @@ func (s *Service) Inspect(ctx context.Context, alias string, confirmed bool) (In
 	var opensshError *effective.OpenSSHError
 	switch {
 	case err == nil:
-		inspection.Values = values
+		// ssh reports absolute paths — UserKnownHostsFile and the default
+		// IdentityFile list always, ControlPath and others when they are set —
+		// and every one of them begins with the user's home directory. The
+		// stderr of an authentication test has been shortened since it was
+		// written; these values are the same ssh output going into the same
+		// kind of response, and they were not.
+		inspection.Values = sanitiseValues(values, s.Workspace.Home())
 		inspection.Evaluated = true
 	case errors.Is(err, effective.ErrEvaluationNotConfirmed):
 		// Expected: the caller has not confirmed yet.
@@ -281,4 +287,25 @@ func (s *Service) LaunchTerminalWithPassword(ctx context.Context, alias, helperP
 		return ErrPasswordLaunchUnsupported
 	}
 	return launcher.LaunchWithPassword(ctx, alias, helperPath, endpoint, token)
+}
+
+// sanitiseValues rewrites the home directory to "~" in every value ssh
+// reported. The keyword list is left alone: a keyword is a fixed OpenSSH name
+// and can never contain a path.
+func sanitiseValues(values effective.Values, home string) effective.Values {
+	if home == "" {
+		return values
+	}
+	sanitised := effective.Values{
+		Keywords: values.Keywords,
+		Entries:  make(map[string][]string, len(values.Entries)),
+	}
+	for keyword, entries := range values.Entries {
+		shortened := make([]string, 0, len(entries))
+		for _, entry := range entries {
+			shortened = append(shortened, platform.SanitiseHomePaths(entry, home))
+		}
+		sanitised.Entries[keyword] = shortened
+	}
+	return sanitised
 }

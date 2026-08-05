@@ -19,9 +19,6 @@ const (
 var (
 	// ErrRegionDamaged reports a region with exactly one of its two markers.
 	ErrRegionDamaged = errors.New("the generated group region has only one of its markers")
-	// ErrRegionPositionAmbiguous reports an entry file whose own concrete Host
-	// blocks sit after the position the region would take.
-	ErrRegionPositionAmbiguous = errors.New("inserting the group region here would change which value wins")
 	// ErrRegionIncludeAlreadyPresent reports an Include the user wrote that
 	// already reaches the connections tree or the generated groups file.
 	ErrRegionIncludeAlreadyPresent = errors.New("an existing Include already reaches the generated group files")
@@ -29,20 +26,25 @@ var (
 
 // Notice codes the region planner produces.
 const (
-	NoticeRegionPositionAmbiguous = "include_position_ambiguous"
-	NoticeGroupIncludePresent     = "group_include_already_present"
-	NoticeRegionDamaged           = "generated_region_damaged"
+	NoticeGroupIncludePresent = "group_include_already_present"
+	NoticeRegionDamaged       = "generated_region_damaged"
 )
 
 // RegionPlan describes the edit that installs the region.
 //
 // ReplaceFrom/ReplaceTo is a half-open range of existing lines when a region is
-// already present; otherwise the lines are inserted at InsertAt.
+// already present where it belongs. RemoveFrom/RemoveTo is the same range when
+// the region has to be lifted out and written somewhere else; InsertAt is then
+// an index into the file with that range already gone. Otherwise the lines are
+// inserted at InsertAt.
 type RegionPlan struct {
 	InsertAt    int
 	ReplaceFrom int
 	ReplaceTo   int
 	Replacing   bool
+	RemoveFrom  int
+	RemoveTo    int
+	Removing    bool
 	Lines       []config.Line
 }
 
@@ -78,6 +80,35 @@ func FindRegion(file *config.File) (start, end int, found bool, err error) {
 	}
 }
 
+// ClampToRegion shortens a block's half-open line range so that it stops at the
+// generated region instead of swallowing it.
+//
+// A block's range runs to the next header, and the region is inserted
+// immediately before the first catch-all — so in every entry file that declares
+// a group, the region sits inside the range of the concrete block above it. The
+// region is the file's own structure and belongs to no connection, so every
+// path that treats a block's range as the block's own text has to stop here:
+// otherwise moving or rewriting one unrelated connection carries away the
+// Include lines that declare every group, and the entry file is left with a
+// lone marker that FindRegion then refuses as damaged.
+//
+// The mirror case is clamped too. The run of comments above a header is read as
+// that header's attached comment, so a block written directly under the region
+// would claim the end marker as its own description.
+func ClampToRegion(file *config.File, start, end int) (int, int) {
+	regionStart, regionEnd, found, err := FindRegion(file)
+	if err != nil || !found {
+		return start, end
+	}
+	if regionStart > start && regionStart < end {
+		end = regionStart
+	}
+	if regionEnd >= start && regionEnd < end {
+		start = regionEnd + 1
+	}
+	return start, end
+}
+
 // PlanRegion decides what the region should contain and where it belongs.
 //
 // groups are the declared group names in the order they must be read; the
@@ -105,13 +136,38 @@ func PlanRegion(file *config.File, groups []string, groupsFile string) (RegionPl
 	lines = append(lines, config.Line{Kind: config.LineComment, Text: RegionEndMarker, Ending: ending})
 
 	if found {
-		return RegionPlan{ReplaceFrom: start, ReplaceTo: end + 1, Replacing: true, Lines: lines}, nil
+		if file.Condition(file.BlockAt(start)) == "" {
+			return RegionPlan{ReplaceFrom: start, ReplaceTo: end + 1, Replacing: true, Lines: lines}, nil
+		}
+		// The region sits inside a Host or Match block, where its Include lines
+		// are read only when connecting to that one host. Replacing it where it
+		// stands would keep it there, so it is lifted out and written where it
+		// declares something. The position is computed against the file without
+		// it, both so the index is right and so its own Include lines cannot be
+		// mistaken for ones the user wrote.
+		without := withoutLines(file, start, end+1)
+		insertAt, positionErr := regionPosition(without, groups, groupsFile)
+		if positionErr != nil {
+			return RegionPlan{}, positionErr
+		}
+		return RegionPlan{
+			RemoveFrom: start, RemoveTo: end + 1, Removing: true,
+			InsertAt: insertAt, Lines: lines,
+		}, nil
 	}
 	insertAt, err := regionPosition(file, groups, groupsFile)
 	if err != nil {
 		return RegionPlan{}, err
 	}
 	return RegionPlan{InsertAt: insertAt, Lines: lines}, nil
+}
+
+// withoutLines copies a file with one half-open range removed.
+func withoutLines(file *config.File, from, to int) *config.File {
+	lines := make([]config.Line, 0, len(file.Lines)-(to-from))
+	lines = append(lines, file.Lines[:from]...)
+	lines = append(lines, file.Lines[to:]...)
+	return &config.File{Lines: lines}
 }
 
 func groupPatterns(groups []string) []string {
@@ -122,66 +178,47 @@ func groupPatterns(groups []string) []string {
 	return patterns
 }
 
-// regionPosition computes where a fresh region belongs, and refuses when
-// putting it there would change which value wins.
+// regionPosition computes where the region belongs: above the first Host or
+// Match line, or at the end of a file that has neither.
 //
-// The position is the one this application has always used for the groups
-// Include: before the first Match block or the first Host block whose pattern
-// list contains an exact '*', otherwise at the end of the file. That test is a
-// heuristic and nothing more, which is why it is paired with a refusal: if any
-// concrete Host block follows the computed position, the user's own blocks
-// would end up being read after the generated ones, and an alias declared in
-// both places would change winner. The application does not pick for them.
+// There is no choice to make here. An Include is a directive like any other, so
+// it belongs to the block it is written under, and OpenSSH applies an included
+// file's options only when that block matches. The only lines that are read
+// unconditionally are the ones above the first block header, so that is where a
+// declaration has to go. A previous version put the region before the first
+// catch-all instead, to keep the user's own blocks winning; the price was that
+// the Includes landed inside whatever concrete block preceded the catch-all —
+// or, in a file with no catch-all, inside the last block in the file — and
+// declared the groups to that one host and to nothing else.
+//
+// The consequence is that the group files are read before the entry file's own
+// blocks, so an alias written in both places resolves to the group file. That
+// is not decided here and not guessed at.
+//
+// It is, however, currently under-reported, and this comment should not be read
+// as saying otherwise. Only /api/v1/diagnostics/effective reports a cross-file
+// duplicate today, and it names the losing block rather than both. The
+// connections overview does not: ProjectHosts keys its duplicate check on the
+// file's absolute path, so it only ever fires for two blocks in one file — the
+// case that needs no help. Until that is fixed, a duplicate introduced across
+// two files is silent on the screen where a user would notice it.
+//
+// The insertion point is the start of the first block's comment run, so the
+// region goes above the comment rather than between it and the header it
+// describes.
 func regionPosition(file *config.File, groups []string, groupsFile string) (int, error) {
 	if err := checkExistingIncludes(file, groups, groupsFile); err != nil {
 		return 0, err
 	}
-	insertAt := len(file.Lines)
-	found := false
 	for index, line := range file.Lines {
-		if line.Kind != config.LineDirective || found {
+		if line.Kind != config.LineDirective {
 			continue
 		}
-		if config.EqualKeyword(line.Keyword, "Match") {
-			insertAt, found = index, true
-			continue
-		}
-		if !config.EqualKeyword(line.Keyword, "Host") {
-			continue
-		}
-		for _, pattern := range line.Values() {
-			if pattern == "*" {
-				insertAt, found = index, true
-				break
-			}
+		if config.EqualKeyword(line.Keyword, "Host") || config.EqualKeyword(line.Keyword, "Match") {
+			return file.CommentRun(index), nil
 		}
 	}
-	if !found {
-		return insertAt, nil
-	}
-	for index := insertAt; index < len(file.Lines); index++ {
-		line := file.Lines[index]
-		if line.Kind != config.LineDirective || !config.EqualKeyword(line.Keyword, "Host") {
-			continue
-		}
-		if declaresConcreteAlias(line.Values()) {
-			return 0, ErrRegionPositionAmbiguous
-		}
-	}
-	return insertAt, nil
-}
-
-// declaresConcreteAlias reports whether a Host line names a destination rather
-// than a pattern. A wildcard or negated pattern matches many hosts and cannot
-// be the "one alias declared in two places" the ambiguity check is about.
-func declaresConcreteAlias(patterns []string) bool {
-	for _, pattern := range patterns {
-		if strings.ContainsAny(pattern, "*?!") {
-			continue
-		}
-		return true
-	}
-	return false
+	return len(file.Lines), nil
 }
 
 // checkExistingIncludes refuses when the user already includes the files the
@@ -220,6 +257,13 @@ func checkExistingIncludes(file *config.File, groups []string, groupsFile string
 // ApplyRegion writes the planned lines into the file, changing nothing outside
 // the region.
 func ApplyRegion(file *config.File, plan RegionPlan) error {
+	if plan.Removing {
+		if plan.RemoveFrom < 0 || plan.RemoveTo > len(file.Lines) || plan.RemoveFrom > plan.RemoveTo {
+			return ErrEditLineOutsideBlock
+		}
+		rest := append([]config.Line(nil), file.Lines[plan.RemoveTo:]...)
+		file.Lines = append(file.Lines[:plan.RemoveFrom:plan.RemoveFrom], rest...)
+	}
 	if plan.Replacing {
 		if plan.ReplaceFrom < 0 || plan.ReplaceTo > len(file.Lines) || plan.ReplaceFrom > plan.ReplaceTo {
 			return ErrEditLineOutsideBlock

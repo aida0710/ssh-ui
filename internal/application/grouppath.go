@@ -111,6 +111,27 @@ func GroupKeyDirectory(name string) string { return KeysDirectory + "/" + name }
 // decides precedence, which a glob would leave to lexical accident.
 func GroupIncludePattern(name string) string { return GroupDirectory(name) + "/*.conf" }
 
+// groupFileSuffix is the extension GroupIncludePattern matches. A file inside a
+// group directory whose name does not end in it is not part of the group: the
+// Include line does not name it, so nothing reads it.
+const groupFileSuffix = ".conf"
+
+// GroupFileName turns a source file's base name into one the group's Include
+// reads, by appending the suffix when it is not already there.
+//
+// A move into a group keeps the source file's name so it is the same file in a
+// new place, which is what the operation looks like in a shell. That is only
+// true while the name survives the move. The entry file is called "config" and
+// is where every ungrouped connection starts, so the commonest move of all
+// produced "connections/<group>/config" — a file the group's own Include
+// pattern cannot match, written successfully and then read by nobody.
+func GroupFileName(base string) string {
+	if strings.HasSuffix(base, groupFileSuffix) && base != groupFileSuffix {
+		return base
+	}
+	return base + groupFileSuffix
+}
+
 // GroupOfPath reports the group a configuration file belongs to, by where it
 // sits. A file directly under the connections directory belongs to no group.
 func GroupOfPath(relative string) (name string, inGroup bool) {

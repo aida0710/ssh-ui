@@ -2,6 +2,7 @@ package application
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"ssh-ui/internal/config"
@@ -108,6 +109,68 @@ func TestProjectHostFormKeepsEveryDirectiveIncludingUnknownOnes(t *testing.T) {
 	}
 	if form.Raw != "Host bastion jump.example.com\n\tHostName=203.0.113.10\n\tUser ops\n\tPort 22\n\tProxyJump edge\n\tUnknownFutureDirective yes\n\t# keep this comment\n\tSetEnv EDITOR=vi\n\n" {
 		t.Fatalf("raw block = %q", form.Raw)
+	}
+}
+
+// The Raw editor writes this text back, and a delete is that write with the
+// block removed. Showing the generated region as part of a connection therefore
+// hands the group declarations to whichever edit happens to that connection
+// next: rewriting one loses them, deleting one takes them with it.
+// OpenSSH keeps the first value it reads, across the whole Include graph and
+// not merely within one file. Two files claiming one alias is the case that
+// rule exists for, and the case a reader cannot see by looking at either file:
+// the loser looks perfectly correct where it sits. Keying the check on the
+// file, as it was, only ever caught two blocks a reader could already see side
+// by side.
+func TestProjectHostsFlagsAnAliasDeclaredInAnotherFile(t *testing.T) {
+	graph := newTestGraph(t, map[string]string{
+		"config":              "Include conf.d/*.conf\n\nHost nas\n\tUser aida\n",
+		"conf.d/10-home.conf": "Host nas\n\tUser someone-else\n",
+	})
+
+	hosts, notices := ProjectHosts(graph, testRoot)
+	claiming := []HostEntry{}
+	for _, host := range hosts {
+		if host.Identity.Alias == "nas" {
+			claiming = append(claiming, host)
+		}
+	}
+	if len(claiming) != 2 {
+		t.Fatalf("hosts claiming nas = %d, want 2", len(claiming))
+	}
+	// The Include is read where the line sits, so the included file wins and
+	// the entry file's own block is the one that loses.
+	if claiming[0].Duplicate {
+		t.Errorf("the first block read must not be flagged: %#v", claiming[0])
+	}
+	if !claiming[1].Duplicate {
+		t.Errorf("the shadowed block is not flagged: %#v", claiming[1])
+	}
+	found := false
+	for _, notice := range notices {
+		if notice.Code == NoticeDuplicateAlias && notice.Detail == "nas" {
+			found = true
+			if notice.Path != claiming[1].File.Path {
+				t.Errorf("the notice names %q, want the shadowed block's file %q",
+					notice.Path, claiming[1].File.Path)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("notices = %#v, want a duplicate_alias for nas", notices)
+	}
+}
+
+func TestProjectHostFormRawStopsAtTheGeneratedRegion(t *testing.T) {
+	graph := newTestGraph(t, map[string]string{"config": "Host bastion\n\tUser ops\n\n" +
+		RegionStartMarker + "\nInclude connections/work/*.conf\n" + RegionEndMarker + "\n\nHost *\n\tServerAliveInterval 30\n"})
+
+	form, err := ProjectHostForm(graph, testRoot, HostIdentity{Path: "config", Alias: "bastion"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(form.Raw, RegionStartMarker) || strings.Contains(form.Raw, "Include connections/") {
+		t.Errorf("raw block carried the generated region:\n%s", form.Raw)
 	}
 }
 

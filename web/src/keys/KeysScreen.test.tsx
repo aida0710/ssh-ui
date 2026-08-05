@@ -71,6 +71,18 @@ function inventoryWithAgent(): KeyInventoryResponse {
   return { ...buildInventory(), agentAvailable: true };
 }
 
+// The agent is holding the first key, which is the state in which taking it
+// back out is a thing the user can want.
+function inventoryWithLoadedKey(): KeyInventoryResponse {
+  return {
+    ...buildInventory(),
+    agentAvailable: true,
+    agentIdentities: [
+      { bits: 256, fingerprint: "SHA256:abcdef", comment: "aida@laptop", algorithm: "ED25519" },
+    ],
+  };
+}
+
 function buildApi(overrides: Partial<KeysApi> = {}): KeysApi {
   return {
     inventory: vi.fn().mockResolvedValue(buildInventory()),
@@ -118,6 +130,11 @@ function buildApi(overrides: Partial<KeysApi> = {}): KeysApi {
       fingerprint: "SHA256:abcdef",
       lifetimeSeconds: 0,
       storedInKeychain: false,
+      identities: [],
+    }),
+    deregisterFromAgent: vi.fn().mockResolvedValue({
+      id: "key-one",
+      agentAvailable: true,
       identities: [],
     }),
     relocate: vi.fn().mockResolvedValue({
@@ -679,4 +696,27 @@ describe("KeysScreen", () => {
     await waitFor(() => expect(api.trash).toHaveBeenCalled());
   });
 
+});
+
+describe("taking a key back out of the agent", () => {
+  // A key could be handed to the agent and not taken back, so purging it left
+  // the agent holding material the user had just destroyed, and this screen
+  // could only list it.
+  it("removes the identity the agent is holding for this key", async () => {
+    const api = buildApi({ inventory: vi.fn().mockResolvedValue(inventoryWithLoadedKey()) });
+    render(<KeysScreen api={api} />);
+
+    const workRow = await screen.findByRole("row", { name: /id_work/ });
+    await userEvent.click(within(workRow).getByRole("button", { name: "Remove from agent" }));
+
+    await waitFor(() => expect(api.deregisterFromAgent).toHaveBeenCalledWith("key-one"));
+  });
+
+  it("offers nothing to remove when the agent is not holding this key", async () => {
+    const api = buildApi({ inventory: vi.fn().mockResolvedValue(inventoryWithAgent()) });
+    render(<KeysScreen api={api} />);
+
+    const workRow = await screen.findByRole("row", { name: /id_work/ });
+    expect(within(workRow).queryByRole("button", { name: "Remove from agent" })).not.toBeInTheDocument();
+  });
 });

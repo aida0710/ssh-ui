@@ -24,6 +24,13 @@ func (e SyncDirection) Valid() bool {
 	}
 }
 
+// AgentIdentitiesResponse defines model for AgentIdentitiesResponse.
+type AgentIdentitiesResponse struct {
+	AgentAvailable bool            `json:"agentAvailable"`
+	Id             string          `json:"id"`
+	Identities     []AgentIdentity `json:"identities"`
+}
+
 // AgentIdentity defines model for AgentIdentity.
 type AgentIdentity struct {
 	Algorithm   string `json:"algorithm"`
