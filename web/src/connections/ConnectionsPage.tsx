@@ -33,6 +33,10 @@ type ConnectionsPageProps = {
 export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
   const t = useTranslate();
   const [overview, setOverview] = useState<Overview | null>(null);
+  // Where a connection goes when it belongs to no group. The server reports the
+  // entry file rather than this page assuming it, and "config" is only the
+  // fallback for the moment before the first overview arrives.
+  const entryPath = overview?.entry.path ?? "config";
   const [selection, setSelection] = useState<HostSelection | null>(null);
   const [detail, setDetail] = useState<HostDetail | null>(null);
   const [preview, setPreview] = useState<SavePreview | null>(null);
@@ -141,22 +145,41 @@ export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
     });
   }
 
-  // The comment is written into the configuration file, so it goes through the
-  // same base-and-precondition path as every other edit to that file.
   // Moving a connection into a group is a file move, so the request names the
   // group and the server derives the destination path from it. Sending a path
   // as well would let the two disagree, which the server refuses outright.
-  function onMoveToGroup(group: string) {
+  //
+  // An empty group means "out of every group", which is not a move into a
+  // directory but a move back to the entry file. That form needs the entry
+  // file's bytes, so the destination is held to its own precondition the way a
+  // file-to-file move is.
+  async function onMoveToGroup(group: string) {
     if (detail === null) return;
-    void submit({
-      kind: "move",
-      path: detail.form.entry.file.path ?? "",
-      base: detail.file.contents,
-      alias: detail.form.entry.identity.alias,
-      destinationGroup: group,
-    });
+    const path = detail.form.entry.file.path ?? "";
+    const alias = detail.form.entry.identity.alias;
+    if (group !== "") {
+      void submit({ kind: "move", path, base: detail.file.contents, alias, destinationGroup: group });
+      return;
+    }
+    try {
+      const destination = await configApi.file(entryPath);
+      await submit({
+        kind: "move",
+        path,
+        base: detail.file.contents,
+        alias,
+        destinationPath: entryPath,
+        destinationBase: destination.contents,
+      }, false);
+      setSelection({ path: entryPath, alias });
+      setDetail(await configApi.host(entryPath, alias));
+    } catch (error) {
+      setProblem(toProblem(error));
+    }
   }
 
+  // The comment is written into the configuration file, so it goes through the
+  // same base-and-precondition path as every other edit to that file.
   function onComment(comment: string) {
     if (detail === null || selection === null) return;
     void submit({
@@ -360,7 +383,7 @@ export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
               onBlockRaw={onBlockRaw}
               onRename={onRename}
               onComment={onComment}
-              onMoveToGroup={onMoveToGroup}
+              onMoveToGroup={(group) => void onMoveToGroup(group)}
               onMetadata={onMetadata}
             />
           </>

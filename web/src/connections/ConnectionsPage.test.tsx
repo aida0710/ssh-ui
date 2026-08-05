@@ -278,3 +278,38 @@ describe("ConnectionsPage", () => {
     }));
   });
 });
+
+describe("taking a connection out of every group", () => {
+  const grouped = {
+    ...detail,
+    form: { ...detail.form, entry: { ...detail.form.entry, group: "work" } },
+  };
+
+  it("sends it to the entry file, with that file's own bytes as the precondition", async () => {
+    const user = userEvent.setup();
+    vi.mocked(configApi.host).mockResolvedValue(grouped as never);
+    vi.mocked(configApi.file).mockResolvedValue({
+      file: { path: "config", absolute: "/home/tester/.ssh/config" },
+      contents: "Host other\n", digest: "d", editable: true, exists: true,
+    } as never);
+    vi.mocked(configApi.save).mockResolvedValue({
+      transactionId: "tx", written: [], preview: { operation: "config.move", diffs: [] },
+    } as never);
+
+    render(<ConnectionsPage onOpenFile={vi.fn()} />);
+    await user.click(await screen.findByRole("button", { name: /bastion/ }));
+    await user.selectOptions(await screen.findByLabelText("Primary group"), "");
+    await user.click(screen.getByRole("button", { name: "Move to this group" }));
+
+    await waitFor(() =>
+      expect(configApi.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: "move",
+          alias: "bastion",
+          destinationPath: "config",
+          destinationBase: "Host other\n",
+        }),
+      ),
+    );
+  });
+});

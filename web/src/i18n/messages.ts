@@ -460,6 +460,7 @@ export const en = {
   "host.organisation": "Organisation",
   "host.primaryGroup": "Primary group",
   "host.groupNone": "None",
+  "host.groupNoneMeans": "Choosing none moves the connection back into ~/.ssh/config, at the end of the file.",
   "host.groupIsADirectory":
     "A group is a directory, so changing it moves this connection's file into it. The move, the metadata identity and the Include region are one transaction.",
   "host.moveToGroup": "Move to this group",
@@ -1054,6 +1055,7 @@ export const ja: Record<MessageKey, string> = {
   "host.organisation": "整理",
   "host.primaryGroup": "所属グループ",
   "host.groupNone": "なし",
+  "host.groupNoneMeans": "「なし」を選ぶと接続は ~/.ssh/config の末尾へ戻ります。",
   "host.groupIsADirectory":
     "グループはディレクトリなので、変更するとこの接続のファイルがそこへ移動します。移動、metadata の識別、Include 領域は同一トランザクションです。",
   "host.moveToGroup": "このグループへ移動",
