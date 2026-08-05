@@ -14,8 +14,15 @@ function buildApi(status: PasswordVaultStatus, overrides: Partial<IntegrationsAp
     initialiseVault: vi.fn().mockResolvedValue({ ...status, exists: true, unlocked: true }),
     unlockVault: vi.fn().mockResolvedValue({ ...status, unlocked: true }),
     lockVault: vi.fn().mockResolvedValue({ ...status, unlocked: false }),
+    passwordEligibility: vi.fn().mockResolvedValue({
+      alias: "bastion", storable: true, blockers: [], warnings: [],
+    }),
     storePassword: vi.fn().mockResolvedValue({ ...status, aliases: ["bastion"] }),
     forgetPassword: vi.fn().mockResolvedValue({ ...status, aliases: [] }),
+    // The overrides were declared and never applied, so a test that passed one
+    // was quietly getting the default and proving nothing about the case it
+    // was written for.
+    ...overrides,
   } as unknown as IntegrationsApi;
 }
 
@@ -108,9 +115,41 @@ describe("PasswordPanel", () => {
     await waitFor(() => expect((screen.getByLabelText("Password for nas") as HTMLInputElement).value).toBe(""));
   });
 
-  it("tells the user to add the host key first", async () => {
-    render(<PasswordPanel api={buildApi(unlocked)} alias="bastion" />);
+  it("warns about an unverified host key instead of saying it to every host", async () => {
+    // This used to be prose under the field, shown for every host whether or
+    // not it applied. A warning that is always there is a warning nobody
+    // reads; the server now answers it per host.
+    const api = buildApi(unlocked, {
+      passwordEligibility: vi.fn().mockResolvedValue({
+        alias: "bastion",
+        storable: true,
+        blockers: [],
+        warnings: [{ code: "host_key_unknown", detail: "203.0.113.10" }],
+      }),
+    });
+    render(<PasswordPanel api={api} alias="bastion" />);
 
-    expect(await screen.findByText(/Add this host's key through Known Hosts first/)).toBeInTheDocument();
+    expect(await screen.findByText(/not in known_hosts/)).toBeInTheDocument();
+    // A warning is not a refusal: the user may know the key is about to be
+    // added, so the field still works.
+    expect(screen.getByLabelText("Password for bastion")).toBeEnabled();
+  });
+
+  it("refuses to store a password the host would never be offered", async () => {
+    const api = buildApi(unlocked, {
+      passwordEligibility: vi.fn().mockResolvedValue({
+        alias: "bastion",
+        storable: false,
+        blockers: [{ code: "password_authentication_off", path: "config", line: 4 }],
+        warnings: [],
+      }),
+    });
+    render(<PasswordPanel api={api} alias="bastion" />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/could never be used/);
+    expect(screen.getByText(/PasswordAuthentication is off/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Password for bastion")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Store the password" })).toBeDisabled();
+    expect(api.storePassword).not.toHaveBeenCalled();
   });
 });

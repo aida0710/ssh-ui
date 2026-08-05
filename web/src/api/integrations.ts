@@ -14,6 +14,7 @@ export type KnownHostsScanResponse = components["schemas"]["KnownHostsScanRespon
 export type KnownHostCandidate = components["schemas"]["KnownHostCandidate"];
 export type IssueActionResponse = components["schemas"]["IssueActionResponse"];
 export type PasswordVaultStatus = components["schemas"]["PasswordVaultStatus"];
+export type PasswordEligibility = components["schemas"]["PasswordEligibility"];
 export type SyncStatus = components["schemas"]["SyncStatus"];
 export type SyncSettingsRequest = components["schemas"]["SyncSettingsRequest"];
 export type SyncDirection = components["schemas"]["SyncDirection"];
@@ -56,6 +57,7 @@ export type IntegrationsApi = {
   initialiseVault(passphrase: string): Promise<PasswordVaultStatus>;
   unlockVault(passphrase: string): Promise<PasswordVaultStatus>;
   lockVault(): Promise<PasswordVaultStatus>;
+  passwordEligibility(alias: string): Promise<PasswordEligibility>;
   storePassword(alias: string, password: string): Promise<PasswordVaultStatus>;
   forgetPassword(alias: string): Promise<PasswordVaultStatus>;
   // The remote snapshot. No method returns a credential or a file's contents:
@@ -272,6 +274,16 @@ function validateVaultStatus(value: unknown): PasswordVaultStatus {
   return record as unknown as PasswordVaultStatus;
 }
 
+function validatePasswordEligibility(value: unknown): PasswordEligibility {
+  const record = asRecord(value);
+  asString(record.alias);
+  asBoolean(record.storable);
+  for (const group of [record.blockers, record.warnings]) {
+    for (const notice of asArray(group)) asString(asRecord(notice).code);
+  }
+  return record as unknown as PasswordEligibility;
+}
+
 function validateSyncStatus(value: unknown): SyncStatus {
   const record = asRecord(value);
   asBoolean(record.configured);
@@ -339,6 +351,11 @@ export const integrationsApi: IntegrationsApi = {
   },
   async lockVault() {
     return validateVaultStatus(await postJSON<unknown>("/api/v1/passwords/lock", {}));
+  },
+  async passwordEligibility(alias) {
+    return validatePasswordEligibility(
+      await apiClient.read(`/api/v1/passwords/${encodeURIComponent(alias)}/eligibility`),
+    );
   },
   async storePassword(alias, password) {
     return validateVaultStatus(

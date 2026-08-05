@@ -13,6 +13,8 @@ import (
 
 	"github.com/labstack/echo/v5"
 
+	"ssh-ui/internal/api"
+	"ssh-ui/internal/application"
 	"ssh-ui/internal/secret"
 	"ssh-ui/internal/storage"
 )
@@ -238,5 +240,82 @@ func TestAskpassNeverAnswersWithoutAPromptRule(t *testing.T) {
 		`{"alias":"bastion","prompt":"ops@h's password: "}`, askpassHeaders(token))
 	if response.Code == http.StatusOK {
 		t.Fatalf("a handler with no prompt rule answered: %s", response.Body.String())
+	}
+}
+
+func TestStoreRefusesAPasswordTheHostWouldNeverBeOffered(t *testing.T) {
+	// The interface disables the field, but the interface is replaceable and
+	// this side is not. A blocker means the stored password could never be
+	// used, so storing it would put a secret on disk for nothing.
+	engine, service := passwordEngine(t)
+	if err := service.Initialise(testPassphrase); err != nil {
+		t.Fatal(err)
+	}
+	registerPasswordRoutes(engine, PasswordHandlers{
+		Service:    service,
+		Answerable: func(prompt string) bool { return strings.HasSuffix(prompt, "password: ") },
+		Eligibility: func(alias string) (application.PasswordEligibility, error) {
+			return application.PasswordEligibility{
+				Alias:    alias,
+				Storable: false,
+				Blockers: []application.Notice{{Code: application.BlockerPasswordAuthenticationOff}},
+			}, nil
+		},
+	})
+
+	recorder := send(t, engine, http.MethodPut, "/api/v1/passwords/bastion",
+		`{"password":"hunter2"}`, nil)
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("PUT = %d, want 409: %s", recorder.Code, recorder.Body.String())
+	}
+	var body struct {
+		Code     string   `json:"code"`
+		Blockers []string `json:"blockers"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Code != "password_not_storable" {
+		t.Errorf("code = %q", body.Code)
+	}
+	// The reason travels with the refusal. A bare 409 sends the user looking
+	// at the vault for a decision the configuration made.
+	if len(body.Blockers) != 1 || body.Blockers[0] != application.BlockerPasswordAuthenticationOff {
+		t.Errorf("blockers = %#v", body.Blockers)
+	}
+	// And nothing was stored.
+	if service.Has("bastion") {
+		t.Error("the vault holds a password for a host that refused one")
+	}
+}
+
+func TestEligibilityIsReadableAndCarriesTheWarnings(t *testing.T) {
+	engine, service := passwordEngine(t)
+	if err := service.Initialise(testPassphrase); err != nil {
+		t.Fatal(err)
+	}
+	registerPasswordRoutes(engine, PasswordHandlers{
+		Service: service,
+		Eligibility: func(alias string) (application.PasswordEligibility, error) {
+			return application.PasswordEligibility{
+				Alias: alias, Storable: true,
+				Warnings: []application.Notice{{Code: application.WarnHostKeyUnknown, Detail: "203.0.113.10"}},
+			}, nil
+		},
+	})
+
+	recorder := send(t, engine, http.MethodGet, "/api/v1/passwords/bastion/eligibility", "", nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("GET = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var report api.PasswordEligibility
+	if err := json.Unmarshal(recorder.Body.Bytes(), &report); err != nil {
+		t.Fatal(err)
+	}
+	if !report.Storable || len(report.Warnings) != 1 {
+		t.Fatalf("report = %#v", report)
+	}
+	if report.Warnings[0].Code != application.WarnHostKeyUnknown {
+		t.Errorf("warning = %#v", report.Warnings[0])
 	}
 }

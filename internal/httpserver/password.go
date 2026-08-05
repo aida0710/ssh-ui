@@ -9,6 +9,7 @@ import (
 	"github.com/labstack/echo/v5"
 
 	"ssh-ui/internal/api"
+	"ssh-ui/internal/application"
 	"ssh-ui/internal/platform"
 	"ssh-ui/internal/secret"
 )
@@ -36,6 +37,12 @@ const maxAskpassBody = 8 << 10
 // PasswordHandlers serves the vault and the helper.
 type PasswordHandlers struct {
 	Service *secret.Service
+	// Eligibility answers what stands between an alias and a stored password.
+	// It is injected because the answer comes from the configuration graph and
+	// known_hosts, neither of which the vault knows anything about. A nil
+	// function means nothing is checked, which is what the vault did before
+	// this existed.
+	Eligibility func(alias string) (application.PasswordEligibility, error)
 	// Answerable is the prompt rule. It is injected rather than imported so
 	// that the rule and the helper that also applies it cannot drift into two
 	// different rules without a test noticing.
@@ -47,6 +54,7 @@ func registerPasswordRoutes(engine *echo.Echo, handlers PasswordHandlers) {
 	engine.POST("/api/v1/passwords/initialise", handlers.Initialise)
 	engine.POST("/api/v1/passwords/unlock", handlers.Unlock)
 	engine.POST("/api/v1/passwords/lock", handlers.Lock)
+	engine.GET("/api/v1/passwords/:alias/eligibility", handlers.Eligible)
 	engine.PUT("/api/v1/passwords/:alias", handlers.Store)
 	engine.DELETE("/api/v1/passwords/:alias", handlers.Forget)
 	engine.POST(AskpassPath, handlers.Askpass)
@@ -101,6 +109,66 @@ func (h PasswordHandlers) Lock(c *echo.Context) error {
 	return h.status(c)
 }
 
+// Eligible reports what stands between an alias and a stored password.
+func (h PasswordHandlers) Eligible(c *echo.Context) error {
+	alias := c.Param("alias")
+	if err := platform.ValidateAlias(alias); err != nil {
+		return problem(c, http.StatusBadRequest, "unsafe_alias")
+	}
+	if h.Eligibility == nil {
+		return c.JSON(http.StatusOK, api.PasswordEligibility{
+			Alias: alias, Storable: true,
+			Blockers: []api.Notice{}, Warnings: []api.Notice{},
+		})
+	}
+	report, err := h.Eligibility(alias)
+	if err != nil {
+		return problem(c, http.StatusInternalServerError, "config_unreadable")
+	}
+	return c.JSON(http.StatusOK, describeEligibility(report))
+}
+
+func describeEligibility(report application.PasswordEligibility) api.PasswordEligibility {
+	described := api.PasswordEligibility{
+		Alias:    report.Alias,
+		Storable: report.Storable,
+		Blockers: make([]api.Notice, 0, len(report.Blockers)),
+		Warnings: make([]api.Notice, 0, len(report.Warnings)),
+	}
+	for _, notice := range report.Blockers {
+		described.Blockers = append(described.Blockers, eligibilityNotice(notice))
+	}
+	for _, notice := range report.Warnings {
+		described.Warnings = append(described.Warnings, eligibilityNotice(notice))
+	}
+	if report.HostName != "" {
+		host := report.HostName
+		described.HostName = &host
+	}
+	if report.Port != "" {
+		port := report.Port
+		described.Port = &port
+	}
+	return described
+}
+
+func eligibilityNotice(notice application.Notice) api.Notice {
+	described := api.Notice{Code: notice.Code}
+	if notice.Path != "" {
+		path := notice.Path
+		described.Path = &path
+	}
+	if notice.Line != 0 {
+		line := notice.Line
+		described.Line = &line
+	}
+	if notice.Detail != "" {
+		detail := notice.Detail
+		described.Detail = &detail
+	}
+	return described
+}
+
 func (h PasswordHandlers) Store(c *echo.Context) error {
 	alias := c.Param("alias")
 	if err := platform.ValidateAlias(alias); err != nil {
@@ -109,6 +177,25 @@ func (h PasswordHandlers) Store(c *echo.Context) error {
 	var request api.StorePasswordRequest
 	if err := decodeJSON(c, &request); err != nil {
 		return problem(c, http.StatusBadRequest, "invalid_request")
+	}
+	// A blocker means the stored password could never be offered, so storing
+	// it would put a secret on disk that has no use. Refusing is checked here
+	// rather than only in the interface, because the interface is replaceable
+	// and this side is not.
+	if h.Eligibility != nil {
+		report, err := h.Eligibility(alias)
+		if err != nil {
+			return problem(c, http.StatusInternalServerError, "config_unreadable")
+		}
+		if !report.Storable {
+			blockers := make([]string, 0, len(report.Blockers))
+			for _, notice := range report.Blockers {
+				blockers = append(blockers, notice.Code)
+			}
+			return problemWith(c, http.StatusConflict, problemPayload{
+				Code: "password_not_storable", Blockers: blockers,
+			})
+		}
 	}
 	if err := h.Service.Set(alias, request.Password); err != nil {
 		return passwordProblem(c, err)

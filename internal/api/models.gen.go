@@ -606,6 +606,16 @@ type PassphraseRequest struct {
 	Passphrase string `json:"passphrase"`
 }
 
+// PasswordEligibility defines model for PasswordEligibility.
+type PasswordEligibility struct {
+	Alias    string   `json:"alias"`
+	Blockers []Notice `json:"blockers"`
+	HostName *string  `json:"hostName,omitempty"`
+	Port     *string  `json:"port,omitempty"`
+	Storable bool     `json:"storable"`
+	Warnings []Notice `json:"warnings"`
+}
+
 // PasswordVaultStatus defines model for PasswordVaultStatus.
 type PasswordVaultStatus struct {
 	Aliases             []string `json:"aliases"`
