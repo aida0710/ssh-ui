@@ -668,8 +668,28 @@ func (s *Service) planMoveHost(graph *config.Graph, request EditRequest) (planne
 		return planned{}, err
 	}
 
+	destinationDisk, destinationExists, err := s.readFile(destinationAbsolute)
+	if err != nil {
+		return planned{}, err
+	}
+
 	sourceBase := []byte(request.Base)
 	destinationBase := []byte(request.DestinationBase)
+	// A move that named a group did not name a destination file, so the client
+	// never read one and could not have supplied its bytes. Comparing the file
+	// on disk against that empty base reported every group file that already
+	// held a connection as changed outside the application — so the first
+	// connection into a group worked and every one after it failed, with a
+	// message about an external edit that had not happened.
+	//
+	// The guarantee is unchanged. The precondition below still carries the
+	// digest of what was just read, and storage re-checks it while committing,
+	// so a file that changes between this read and the write still stops the
+	// whole transaction.
+	if request.DestinationGroup != "" && request.DestinationBase == "" {
+		destinationBase = destinationDisk
+	}
+
 	sourceFile := config.Parse(sourceBase)
 	destinationFile := config.Parse(destinationBase)
 	moved, err := MoveHostBlock(sourceFile, destinationFile, request.Alias)
@@ -685,10 +705,6 @@ func (s *Service) planMoveHost(graph *config.Graph, request EditRequest) (planne
 	}
 	if !bytes.Equal(sourceBase, sourceDisk) {
 		return planned{}, &ConflictError{Report: BuildConflictReport(request.Path, sourceBase, sourceDisk, sourceUpdated)}
-	}
-	destinationDisk, destinationExists, err := s.readFile(destinationAbsolute)
-	if err != nil {
-		return planned{}, err
 	}
 	if !bytes.Equal(destinationBase, destinationDisk) {
 		return planned{}, &ConflictError{
