@@ -660,4 +660,23 @@ describe("KeysScreen", () => {
       expect(element.className, `${element.tagName} ${element.getAttribute("value") ?? ""} has no style`).not.toBe("");
     }
   });
+  it("says what a trash move takes with it, and which hosts still name the key", async () => {
+    // One press used to move the key, its public half and nothing else said
+    // so. The row already listed the hosts that name it; the button never
+    // mentioned them, and after the move their IdentityFile lines point at a
+    // file that is not there — which ssh reports and then carries on without.
+    const user = userEvent.setup();
+    const api = buildApi();
+    render(<KeysScreen api={api} />);
+
+    await user.click((await screen.findAllByRole("button", { name: "Move to trash" }))[0]!);
+
+    expect(await screen.findByText(/These files move together/)).toBeInTheDocument();
+    expect(screen.getByText(/Nothing is deleted/)).toBeInTheDocument();
+    expect(api.trash).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Move it to the trash" }));
+    await waitFor(() => expect(api.trash).toHaveBeenCalled());
+  });
+
 });

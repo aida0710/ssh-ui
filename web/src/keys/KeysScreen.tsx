@@ -6,6 +6,7 @@ import {
   CheckboxField,
   Field,
   control,
+  hintText,
   primaryAction,
   secondaryAction,
   sectionCard,
@@ -171,6 +172,7 @@ export function KeysScreen({ api = keysApi, groups = [] }: KeysScreenProps) {
   const [relocated, setRelocated] = useState<RelocateKeyResponse | null>(null);
   const [createGroup, setCreateGroup] = useState("");
   const [pendingPurge, setPendingPurge] = useState("");
+  const [pendingTrash, setPendingTrash] = useState<KeyItem | null>(null);
   const [failure, setFailure] = useState("");
 
   const refresh = useCallback(async () => {
@@ -326,10 +328,23 @@ export function KeysScreen({ api = keysApi, groups = [] }: KeysScreenProps) {
     setFailure("");
     try {
       await api.trash(keyId);
+      setPendingTrash(null);
       await refresh();
     } catch {
       setFailure(t("keys.trashFailed"));
     }
+  }
+
+  // A key is trashed with its whole fingerprint group — the private key and the
+  // public key beside it — and every IdentityFile that named it is left behind
+  // pointing at nothing. The row already showed which hosts those are; the
+  // button never mentioned them, and one press did the whole thing.
+  function trashGroup(item: KeyItem): KeyItem[] {
+    const fingerprint = item.fingerprint;
+    if (fingerprint === "") return [item];
+    return inventory === null
+      ? [item]
+      : inventory.items.filter((candidate) => candidate.fingerprint === fingerprint);
   }
 
   async function restore(entryId: string) {
@@ -456,7 +471,15 @@ export function KeysScreen({ api = keysApi, groups = [] }: KeysScreenProps) {
                     >
                       {t("keys.addToAgent")}
                     </button>
-                    <button type="button" className={rowAction} onClick={() => void moveToTrash(item.id)}>
+                    <button
+                      type="button"
+                      className={rowAction}
+                      onClick={() => {
+                        closePassphraseForm();
+                        closeAgentForm();
+                        setPendingTrash(item);
+                      }}
+                    >
                       {t("keys.moveToTrash")}
                     </button>
                   </>
@@ -491,6 +514,55 @@ export function KeysScreen({ api = keysApi, groups = [] }: KeysScreenProps) {
         </tbody>
       </table>
       </div>
+
+      {pendingTrash !== null && (
+        <section aria-labelledby="trash-confirm-heading" className={sectionCard}>
+          <h3 id="trash-confirm-heading" className={sectionHeading}>
+            {t("keys.trashConfirmHeading", { path: pendingTrash.relativePath })}
+          </h3>
+          {/*
+            Which files go, so a public key disappearing beside the private one
+            is not a surprise. They travel together because they are one key.
+          */}
+          <p className="text-sm text-zinc-200">{t("keys.trashExplain")}</p>
+          <ul className="flex flex-col gap-0.5 font-mono text-xs text-zinc-300">
+            {trashGroup(pendingTrash).map((member) => (
+              <li key={member.id}>{member.relativePath}</li>
+            ))}
+          </ul>
+          {/*
+            The row already listed the hosts that name this key. Saying it here
+            is the difference between a decision and a surprise on the next
+            connection: an IdentityFile pointing at a file that is not there is
+            something ssh reports and then carries on without.
+          */}
+          {pendingTrash.references.length === 0 ? (
+            <p className={hintText}>{t("keys.trashNoReferences")}</p>
+          ) : (
+            <>
+              <p className="text-sm text-amber-300">
+                {t("keys.trashReferences", { count: pendingTrash.references.length })}
+              </p>
+              <ul className="flex flex-col gap-0.5 font-mono text-xs text-amber-200">
+                {pendingTrash.references.map((reference, index) => (
+                  <li key={`${reference.configPath}-${reference.line}-${index}`}>
+                    {`${reference.hostPatterns.join(" ")} — ${reference.configPath}:${reference.line}`}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          <p className={hintText}>{t("keys.trashIsRecoverable")}</p>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className={rowDanger} onClick={() => void moveToTrash(pendingTrash.id)}>
+              {t("keys.trashConfirm")}
+            </button>
+            <button type="button" className={secondaryAction} onClick={() => setPendingTrash(null)}>
+              {t("keys.trashCancel")}
+            </button>
+          </div>
+        </section>
+      )}
 
       {publicKeyView !== null && (
         <section aria-labelledby="public-key-heading" className={sectionCard}>
