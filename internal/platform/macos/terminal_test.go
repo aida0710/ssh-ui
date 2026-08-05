@@ -94,3 +94,69 @@ func TestTerminalReportsAFailedLaunch(t *testing.T) {
 		t.Fatalf("Launch = %v, want *LaunchError", err)
 	}
 }
+
+func TestLaunchWithPasswordPassesEveryValueAsAnArgument(t *testing.T) {
+	// The script is a constant. If a value ever reaches it by concatenation,
+	// an alias or a token becomes an AppleScript expression.
+	runner := &terminalRunner{}
+	terminal := macos.Terminal{Runner: runner, Program: "/usr/bin/osascript"}
+
+	err := terminal.LaunchWithPassword(context.Background(),
+		"bastion", "/Applications/ssh-ui", "http://127.0.0.1:5555/askpass", "one-time-token")
+	if err != nil {
+		t.Fatalf("LaunchWithPassword = %v", err)
+	}
+
+	if len(runner.commands) != 1 {
+		t.Fatalf("commands = %d", len(runner.commands))
+	}
+	command := runner.commands[0]
+	want := []string{"-", "bastion", "/Applications/ssh-ui", "http://127.0.0.1:5555/askpass", "one-time-token"}
+	if !slices.Equal(command.Arguments, want) {
+		t.Errorf("arguments = %#v, want %#v", command.Arguments, want)
+	}
+	if string(command.Stdin) != macos.TerminalPasswordScript {
+		t.Error("the script handed to osascript is not the constant")
+	}
+	for _, value := range want[1:] {
+		if strings.Contains(macos.TerminalPasswordScript, value) {
+			t.Errorf("the script constant contains %q, so it was built by interpolation", value)
+		}
+	}
+}
+
+func TestTerminalPasswordScriptArmsTheHelperAndBoundsThePrompts(t *testing.T) {
+	for _, fragment := range []string{
+		"SSH_ASKPASS=",
+		"SSH_ASKPASS_REQUIRE=force",
+		"SSH_UI_ASKPASS_URL=",
+		"SSH_UI_ASKPASS_TOKEN=",
+		"SSH_UI_ASKPASS_ALIAS=",
+		"NumberOfPasswordPrompts=1",
+	} {
+		if !strings.Contains(macos.TerminalPasswordScript, fragment) {
+			t.Errorf("the script is missing %q", fragment)
+		}
+	}
+	// Every value must be quoted for the shell Terminal runs.
+	if strings.Count(macos.TerminalPasswordScript, "quoted form of") != 5 {
+		t.Errorf("not every value is quoted: %q", macos.TerminalPasswordScript)
+	}
+}
+
+func TestLaunchWithPasswordRefusesARelativeHelperAndAnUnsafeAlias(t *testing.T) {
+	runner := &terminalRunner{}
+	terminal := macos.Terminal{Runner: runner, Program: "/usr/bin/osascript"}
+
+	if err := terminal.LaunchWithPassword(context.Background(),
+		"bastion", "ssh-ui", "http://127.0.0.1:1/askpass", "t"); !errors.Is(err, macos.ErrHelperPathNotAbsolute) {
+		t.Errorf("a relative helper = %v, want ErrHelperPathNotAbsolute", err)
+	}
+	if err := terminal.LaunchWithPassword(context.Background(),
+		"bad alias", "/Applications/ssh-ui", "http://127.0.0.1:1/askpass", "t"); err == nil {
+		t.Error("an unsafe alias was launched")
+	}
+	if len(runner.commands) != 0 {
+		t.Errorf("a refused launch still reached osascript: %#v", runner.commands)
+	}
+}

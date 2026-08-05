@@ -11,6 +11,7 @@ import (
 	"ssh-ui/internal/diagnostics"
 	"ssh-ui/internal/effective"
 	"ssh-ui/internal/platform"
+	"ssh-ui/internal/secret"
 	"ssh-ui/internal/session"
 )
 
@@ -18,6 +19,12 @@ import (
 type DiagnosticsHandlers struct {
 	Service *diagnostics.Service
 	Actions ActionHandlers
+	// Passwords, AskpassHelper and AskpassURL arm the launch for a host that
+	// has a stored password. All three nil or empty means every launch takes
+	// the plain path, which is what a server without a vault does.
+	Passwords     *secret.Service
+	AskpassHelper string
+	AskpassURL    string
 }
 
 func registerDiagnosticsRoutes(engine *echo.Echo, handlers DiagnosticsHandlers) {
@@ -266,6 +273,21 @@ func (h DiagnosticsHandlers) TerminalLaunch(c *echo.Context) error {
 	if allowed, response := h.Actions.consume(c, session.ActionTerminalLaunch, request.Alias); !allowed {
 		return response
 	}
+	// A stored password arms the helper for this one connection. The token is
+	// minted here, after the confirmation was consumed, so a token exists only
+	// for a launch the user has just approved.
+	if h.armed(request.Alias) {
+		token, err := h.Passwords.IssueToken(request.Alias)
+		if err != nil {
+			return problem(c, http.StatusConflict, "vault_locked")
+		}
+		if err := h.Service.LaunchTerminalWithPassword(
+			c.Request().Context(), request.Alias, h.AskpassHelper, h.AskpassURL, token,
+		); err != nil {
+			return problem(c, http.StatusInternalServerError, "terminal_launch_failed")
+		}
+		return c.JSON(http.StatusOK, api.TerminalLaunchResponse{Launched: true})
+	}
 	if err := h.Service.LaunchTerminal(c.Request().Context(), request.Alias); err != nil {
 		return problem(c, http.StatusInternalServerError, "terminal_launch_failed")
 	}
@@ -298,4 +320,17 @@ func severityName(severity config.Severity) string {
 	default:
 		return "info"
 	}
+}
+
+// armed reports whether this launch should carry the askpass helper.
+//
+// Every part has to be present: a vault, an unlocked one, a stored password
+// for this alias, a helper path and an endpoint. A missing piece falls back to
+// the plain launch rather than failing, because a terminal that opens and asks
+// for the password by hand is a working connection.
+func (h DiagnosticsHandlers) armed(alias string) bool {
+	return h.Passwords != nil &&
+		h.AskpassHelper != "" &&
+		h.AskpassURL != "" &&
+		h.Passwords.Has(alias)
 }

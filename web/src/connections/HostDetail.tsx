@@ -3,6 +3,7 @@ import type { FieldEdit, FormField, GroupMetadata, HostDetail, HostMetadata, Sav
 import type { Problem } from "../api/client";
 import { integrationsApi, type IntegrationsApi } from "../api/integrations";
 import { DiagnosticsPanel } from "../diagnostics/DiagnosticsPanel";
+import { PasswordPanel } from "../diagnostics/PasswordPanel";
 import { formatValues, parseValues } from "./values";
 import { NoticeList, SavePreviewPanel } from "./SavePreview";
 import { useTranslate } from "../i18n/context";
@@ -315,7 +316,15 @@ export function HostDetailPanel({
             {t("host.noDestination")}
           </p>
         ) : (
-          <DiagnosticsPanel api={integrations} host={identityAlias} />
+          <div className="flex flex-col gap-4">
+            <DiagnosticsPanel api={integrations} host={identityAlias} />
+            {/*
+              The stored password sits with the checks rather than with the
+              directives, because it is not part of the configuration: this
+              feature writes no ssh_config byte.
+            */}
+            <PasswordPanel api={integrations} alias={identityAlias} />
+          </div>
         )
       ) : null}
 

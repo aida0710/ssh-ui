@@ -8,6 +8,7 @@ import (
 
 	"ssh-ui/internal/config"
 	"ssh-ui/internal/effective"
+	"ssh-ui/internal/platform"
 	"ssh-ui/internal/platform/macos"
 	"ssh-ui/internal/storage"
 )
@@ -135,10 +136,29 @@ func TestProjectionMatchesInstalledOpenSSH(t *testing.T) {
 				t.Fatalf("fixture is not safe for automatic evaluation: %#v", report.Directives)
 			}
 
+			// ssh anchors a relative Include at ~/.ssh — not at the directory
+			// of the file handed to -F — and takes ~ from HOME. Left to
+			// inherit this process's HOME, every Include in a fixture reached
+			// the real user's ~/.ssh, matched nothing, and ssh -G answered
+			// with its built-in defaults: the alias as the hostname, port 22,
+			// the login user. The comparison then measured an empty
+			// configuration against a populated one.
+			//
+			// The fixture home is the child's HOME, which is the same
+			// arrangement the application ships: platform.MinimalEnvironment
+			// over the process's own HOME, whose ~/.ssh/config is the file
+			// being read. The two resolve a relative Include to the same
+			// directory only when that holds.
 			evaluator := effective.Evaluator{
 				Runner:     macos.NewOutputRunner(),
 				Toolchain:  toolchain,
 				ConfigPath: configPath,
+				Environment: platform.MinimalEnvironment(func(name string) (string, bool) {
+					if name == "HOME" {
+						return home, true
+					}
+					return os.LookupEnv(name)
+				}),
 			}
 			values, err := evaluator.Evaluate(context.Background(), report, test.alias, false)
 			if err != nil {

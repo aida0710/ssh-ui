@@ -187,21 +187,21 @@ func (b *syncBuffer) String() string {
 }
 
 type fixture struct {
-	t         testing.TB
-	home      string
-	root      string
-	baseURL   string
-	host      string
-	client *http.Client
+	t       testing.TB
+	home    string
+	root    string
+	baseURL string
+	host    string
+	client  *http.Client
 	// anonymous carries no cookie jar, so a request made through it reaches the
 	// server without a session.
-	anonymous *http.Client
-	server    *httpserver.Server
-	runner    *recordingRunner
-	terminal  *recordingTerminal
-	clock     *testClock
-	logs      *syncBuffer
-	canaries  fixtureCanaries
+	anonymous    *http.Client
+	server       *httpserver.Server
+	runner       *recordingRunner
+	terminal     *recordingTerminal
+	clock        *testClock
+	logs         *syncBuffer
+	canaries     fixtureCanaries
 	sessionID    string
 	cachedKey    string
 	trashCounter atomic.Int64
@@ -252,18 +252,18 @@ func newFixture(t testing.TB) *fixture {
 		t.Fatal(err)
 	}
 	f := &fixture{
-		t:        t,
-		home:     home,
-		root:     root,
-		baseURL:  server.URL(),
-		host:     strings.TrimPrefix(server.URL(), "http://"),
+		t:         t,
+		home:      home,
+		root:      root,
+		baseURL:   server.URL(),
+		host:      strings.TrimPrefix(server.URL(), "http://"),
 		client:    &http.Client{Jar: jar, Timeout: 15 * time.Second},
 		anonymous: &http.Client{Timeout: 15 * time.Second},
 		server:    server,
-		runner:   runner,
-		terminal: terminal,
-		clock:    clock,
-		logs:     logs,
+		runner:    runner,
+		terminal:  terminal,
+		clock:     clock,
+		logs:      logs,
 		canaries: fixtureCanaries{
 			Outside:        strings.TrimSpace(canaryOutsideContents),
 			Passphrase:     canaryPassphrase,

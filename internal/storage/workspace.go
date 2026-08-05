@@ -66,6 +66,18 @@ func (w *Workspace) Contains(candidate string) bool {
 // whose parents are real directories and which is either absent or a regular
 // file. It returns the cleaned path.
 func (w *Workspace) ResolveForWrite(candidate string) (string, error) {
+	return w.ResolveForWriteUnder(candidate, nil)
+}
+
+// ResolveForWriteUnder is ResolveForWrite with a set of directories the caller
+// is about to create in the same transaction.
+//
+// Without it, a request that creates connections/work/ and writes
+// connections/work/lon.conf in one commit is refused: the parent does not
+// exist yet when the request is checked. The alternative — creating the
+// directory before the transaction — is exactly the out-of-journal mkdir this
+// exists to remove.
+func (w *Workspace) ResolveForWriteUnder(candidate string, planned map[string]bool) (string, error) {
 	cleaned := filepath.Clean(candidate)
 	if !filepath.IsAbs(cleaned) || !w.Contains(cleaned) || cleaned == w.root {
 		return "", ErrOutsideWorkspace
@@ -86,6 +98,11 @@ func (w *Workspace) ResolveForWrite(candidate string) (string, error) {
 			if last {
 				return cleaned, nil
 			}
+			if planned[current] {
+				// This transaction creates it, so every remaining segment is
+				// its business too.
+				continue
+			}
 			return "", ErrMissingDirectory
 		case statErr != nil:
 			return "", statErr
@@ -94,6 +111,44 @@ func (w *Workspace) ResolveForWrite(candidate string) (string, error) {
 		case last && !info.Mode().IsRegular():
 			return "", ErrNotRegularFile
 		case !last && !info.IsDir():
+			return "", ErrNotDirectory
+		}
+	}
+	return cleaned, nil
+}
+
+// ResolveDirectory validates that candidate is an absolute path below the root
+// which is either absent or a real directory, and whose existing ancestors are
+// real directories rather than symbolic links.
+//
+// It is ResolveForWrite's sibling for a path that is a directory rather than a
+// file, and it deliberately tolerates a missing parent: a transaction may
+// create connections/work/ and connections/work/eu/ in one request, and the
+// second of those has no parent on disk when the request is being checked.
+func (w *Workspace) ResolveDirectory(candidate string) (string, error) {
+	cleaned := filepath.Clean(candidate)
+	if !filepath.IsAbs(cleaned) || !w.Contains(cleaned) || cleaned == w.root {
+		return "", ErrOutsideWorkspace
+	}
+	relative, err := filepath.Rel(w.root, cleaned)
+	if err != nil {
+		return "", ErrOutsideWorkspace
+	}
+
+	current := w.root
+	for _, segment := range strings.Split(relative, string(filepath.Separator)) {
+		current = filepath.Join(current, segment)
+		info, statErr := w.fileSystem.Lstat(current)
+		switch {
+		case errors.Is(statErr, fs.ErrNotExist):
+			// Everything from here down does not exist yet, which is the
+			// ordinary case for a create.
+			return cleaned, nil
+		case statErr != nil:
+			return "", statErr
+		case info.Mode()&fs.ModeSymlink != 0:
+			return "", ErrSymlinkPath
+		case !info.IsDir():
 			return "", ErrNotDirectory
 		}
 	}

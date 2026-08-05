@@ -250,6 +250,169 @@ paths:
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+  /api/v1/sync:
+    get:
+      operationId: getSyncStatus
+      responses:
+        "200":
+          description: Whether a bucket is configured and what was last synced
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SyncStatus" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+  /api/v1/sync/settings:
+    put:
+      operationId: configureSync
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SyncSettingsRequest" }
+      responses:
+        "200":
+          description: Bucket configured for this run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SyncStatus" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+  /api/v1/sync/push:
+    post:
+      operationId: pushSnapshot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PassphraseRequest" }
+      responses:
+        "200":
+          description: Snapshot written
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SyncStatus" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/sync/pull:
+    post:
+      operationId: pullSnapshot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PullRequest" }
+      responses:
+        "200":
+          description: What applying the snapshot would change, or what it applied
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PullResponse" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/passwords:
+    get:
+      operationId: getPasswordVault
+      responses:
+        "200":
+          description: Whether a vault exists, whether it is unlocked, and which hosts have a password
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PasswordVaultStatus" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+  /api/v1/passwords/initialise:
+    post:
+      operationId: initialisePasswordVault
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PassphraseRequest" }
+      responses:
+        "200":
+          description: Vault created and unlocked
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PasswordVaultStatus" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/passwords/unlock:
+    post:
+      operationId: unlockPasswordVault
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PassphraseRequest" }
+      responses:
+        "200":
+          description: Vault unlocked for this run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PasswordVaultStatus" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/passwords/lock:
+    post:
+      operationId: lockPasswordVault
+      responses:
+        "200":
+          description: Derived key and every pending askpass token forgotten
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PasswordVaultStatus" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+  /api/v1/passwords/{alias}:
+    put:
+      operationId: storePassword
+      parameters:
+        - name: alias
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 255 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StorePasswordRequest" }
+      responses:
+        "200":
+          description: Password stored
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PasswordVaultStatus" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: forgetPassword
+      parameters:
+        - name: alias
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 255 }
+      responses:
+        "200":
+          description: Password forgotten
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PasswordVaultStatus" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
   /api/v1/keys:
     get:
       operationId: listKeys
@@ -1204,6 +1367,101 @@ components:
         command: { type: string }
         launchable: { type: boolean }
         warning: { type: string }
+    # Which way this machine is allowed to move data. It governs the writes and
+    # nothing else: "push" refuses to apply a snapshot to this disk, "pull"
+    # refuses to write one to the bucket. A preview reads and writes nothing, so
+    # it stays available either way and a machine that may not apply can still
+    # see how far behind it is.
+    SyncDirection:
+      type: string
+      enum: [both, push, pull]
+    SyncStatus:
+      type: object
+      additionalProperties: false
+      required: [configured, endpoint, bucket, synced, direction]
+      properties:
+        configured: { type: boolean }
+        # The endpoint and the bucket are shown back so the user can see what
+        # this is pointed at. The access key and the secret never are.
+        endpoint: { type: string }
+        bucket: { type: string }
+        synced: { type: boolean }
+        direction: { $ref: "#/components/schemas/SyncDirection" }
+        lastSyncedAt: { type: string }
+        origin: { type: string }
+        fileCount: { type: integer }
+    SyncSettingsRequest:
+      type: object
+      additionalProperties: false
+      required: [endpoint, bucket, accessKeyId, secretAccessKey]
+      properties:
+        endpoint: { type: string, minLength: 1, maxLength: 2048 }
+        bucket: { type: string, minLength: 1, maxLength: 255 }
+        region: { type: string, maxLength: 64 }
+        accessKeyId: { type: string, minLength: 1, maxLength: 512 }
+        secretAccessKey: { type: string, minLength: 1, maxLength: 512 }
+        direction: { $ref: "#/components/schemas/SyncDirection" }
+    PullRequest:
+      type: object
+      additionalProperties: false
+      required: [passphrase]
+      properties:
+        passphrase: { type: string, minLength: 1, maxLength: 1024 }
+        # A pull previews by default. Applying is a second, deliberate call
+        # with the same passphrase, so the user sees the per-file preview this
+        # application shows before every other write.
+        apply: { type: boolean }
+    SyncConflict:
+      type: object
+      additionalProperties: false
+      required: [path, changedHere, changedThere]
+      properties:
+        path: { type: string }
+        changedHere: { type: boolean }
+        changedThere: { type: boolean }
+    PullResponse:
+      type: object
+      additionalProperties: false
+      required: [applied, conflicts, written, removed]
+      properties:
+        applied: { type: boolean }
+        conflicts:
+          type: array
+          items: { $ref: "#/components/schemas/SyncConflict" }
+        # Paths only. A pull response that carried contents would put a private
+        # key in a response body.
+        written:
+          type: array
+          items: { type: string }
+        removed:
+          type: array
+          items: { type: string }
+        origin: { type: string }
+    PasswordVaultStatus:
+      type: object
+      additionalProperties: false
+      required: [exists, unlocked, aliases]
+      properties:
+        exists: { type: boolean }
+        unlocked: { type: boolean }
+        # The hosts that have a stored password. The set of names is not a
+        # secret; the values are, and no operation returns one.
+        aliases:
+          type: array
+          items: { type: string }
+        minPassphraseLength: { type: integer }
+    PassphraseRequest:
+      type: object
+      additionalProperties: false
+      required: [passphrase]
+      properties:
+        passphrase: { type: string, minLength: 1, maxLength: 1024 }
+    StorePasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [password]
+      properties:
+        password: { type: string, minLength: 1, maxLength: 1024 }
     TerminalLaunchResponse:
       type: object
       additionalProperties: false

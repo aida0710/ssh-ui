@@ -25,19 +25,25 @@ const (
 )
 
 const (
-	actionWrite  = "write"
-	actionMove   = "move"
-	actionRemove = "remove"
-	actionNote   = "note"
+	actionWrite     = "write"
+	actionMove      = "move"
+	actionRemove    = "remove"
+	actionMakeDir   = "mkdir"
+	actionRemoveDir = "rmdir"
+	actionNote      = "note"
 )
 
 var (
-	ErrNoChanges           = errors.New("transaction has no changes")
-	ErrDuplicatePath       = errors.New("transaction contains the same path twice")
+	ErrNoChanges     = errors.New("transaction has no changes")
+	ErrDuplicatePath = errors.New("transaction contains the same path twice")
+	// ErrDirectoryNotEmpty refuses to remove a directory that still holds
+	// something. A recursive delete has no place in a journal: rolling it back
+	// would mean restoring contents this transaction never read.
+	ErrDirectoryNotEmpty   = errors.New("directory is not empty")
 	ErrIrreversibleChange  = errors.New("a committed change that kept no backup cannot be rolled back")
 	ErrMoveTargetExists    = errors.New("move target already exists")
 	ErrMissingSource       = errors.New("file to move or remove does not exist")
-	ErrIrreversibleRemoval = errors.New("a committed removal cannot be rolled back")
+	ErrIrreversibleRemoval = errors.New("a committed removal that kept no backup cannot be rolled back")
 )
 
 // Precondition records the state the caller based its new contents on.
@@ -75,22 +81,56 @@ type Move struct {
 
 // Removal deletes one file.
 //
-// A removal never writes a backup. Its only caller is a permanent delete the
-// user has confirmed twice, and copying key material into the backup directory
-// would defeat that decision. An interrupted removal can therefore be completed
-// but not rolled back, and Rollback says so instead of pretending otherwise.
+// By default it writes no backup, because its first caller is a permanent
+// delete the user has confirmed twice and copying key material into the backup
+// directory would defeat that decision. Such a removal can be completed after
+// an interruption but not rolled back, and Rollback says so instead of
+// pretending otherwise.
+//
+// Backup opts in to the generational copy, for callers deleting something that
+// is not key material — a configuration file the user removed from the
+// explorer. That removal then behaves like every other change this application
+// makes: it is in History and it can be undone.
 type Removal struct {
 	Path         string
 	Precondition Precondition
+	Backup       bool
 }
 
-// Request is one logical edit spanning any number of files. Changes are applied
-// first, then moves, then removals.
+// DirectoryCreate creates one directory and any missing parent below the root.
+//
+// It exists so that arranging files and creating the places they go can be one
+// transaction. Before it, a caller had to EnsureDirectory outside the journal
+// and accept that a crash between the mkdir and the commit left an empty
+// directory behind.
+type DirectoryCreate struct {
+	Path string
+}
+
+// DirectoryRemoval removes one empty directory.
+//
+// Only an empty one: a recursive delete cannot be rolled back without
+// restoring contents the transaction never read, so a caller that wants a tree
+// gone lists its files as Removals and its directories here, deepest first.
+type DirectoryRemoval struct {
+	Path string
+}
+
+// Request is one logical edit spanning any number of files.
+//
+// The order is the only one that can work: directories are created first
+// because a change needs somewhere to go, then changes, moves and removals,
+// and directories are removed last because what emptied them was in this same
+// request.
 type Request struct {
-	Operation string
-	Changes   []Change
-	Moves     []Move
-	Removals  []Removal
+	Operation   string
+	Directories []DirectoryCreate
+	Changes     []Change
+	Moves       []Move
+	Removals    []Removal
+	// RemoveDirectories are applied after everything else, deepest first, and
+	// each must be empty by then.
+	RemoveDirectories []DirectoryRemoval
 }
 
 // Result describes a completed transaction.
@@ -186,12 +226,14 @@ func NewManager(workspace *Workspace, now func() time.Time, random io.Reader) *M
 // so the user can choose between completing and restoring, which is the only
 // honest option when several files are involved.
 func (m *Manager) Commit(request Request) (Result, error) {
-	if len(request.Changes)+len(request.Moves)+len(request.Removals) == 0 {
+	if len(request.Changes)+len(request.Moves)+len(request.Removals)+
+		len(request.Directories)+len(request.RemoveDirectories) == 0 {
 		return Result{}, ErrNoChanges
 	}
 	fileSystem := m.workspace.FileSystem()
 
-	capacity := len(request.Changes) + len(request.Moves) + len(request.Removals)
+	capacity := len(request.Changes) + len(request.Moves) + len(request.Removals) +
+		len(request.Directories) + len(request.RemoveDirectories)
 	entries := make([]journalEntry, 0, capacity)
 	stagedContents := make([][]byte, 0, capacity)
 	previousContents := make([][]byte, 0, capacity)
@@ -206,8 +248,51 @@ func (m *Manager) Commit(request Request) (Result, error) {
 		return nil
 	}
 
+	// planned is every directory this request creates, and each of its
+	// ancestors below the root, so a change written into one of them resolves
+	// even though nothing is on disk yet.
+	planned := map[string]bool{}
+	for _, create := range request.Directories {
+		cleaned, err := m.workspace.ResolveDirectory(create.Path)
+		if err != nil {
+			return Result{}, err
+		}
+		for current := cleaned; m.workspace.Contains(current) && current != m.workspace.Root(); current = filepath.Dir(current) {
+			planned[current] = true
+		}
+	}
+
+	// Directories first: a change needs somewhere to go, and a move needs a
+	// destination that exists.
+	for _, create := range request.Directories {
+		target, err := m.workspace.ResolveDirectory(create.Path)
+		if err != nil {
+			return Result{}, err
+		}
+		if err := claim(target); err != nil {
+			return Result{}, err
+		}
+		// Whether it is already there decides what a rollback does. Removing a
+		// directory this transaction did not create would delete something
+		// nobody asked it to touch.
+		existed := false
+		if _, statErr := fileSystem.Lstat(target); statErr == nil {
+			existed = true
+		} else if !errors.Is(statErr, fs.ErrNotExist) {
+			return Result{}, statErr
+		}
+		entries = append(entries, journalEntry{
+			Action:      actionMakeDir,
+			Path:        target,
+			HadPrevious: existed,
+			Mode:        uint32(DirectoryPermission),
+		})
+		stagedContents = append(stagedContents, nil)
+		previousContents = append(previousContents, nil)
+	}
+
 	for _, change := range request.Changes {
-		target, err := m.workspace.ResolveForWrite(change.Path)
+		target, err := m.workspace.ResolveForWriteUnder(change.Path, planned)
 		if err != nil {
 			return Result{}, err
 		}
@@ -253,7 +338,7 @@ func (m *Manager) Commit(request Request) (Result, error) {
 		if err != nil {
 			return Result{}, err
 		}
-		target, err := m.workspace.ResolveForWrite(move.To)
+		target, err := m.workspace.ResolveForWriteUnder(move.To, planned)
 		if err != nil {
 			return Result{}, err
 		}
@@ -299,17 +384,66 @@ func (m *Manager) Commit(request Request) (Result, error) {
 		if err != nil {
 			return Result{}, err
 		}
+		var previous []byte
+		if removal.Backup {
+			if previous, err = m.workspace.FileSystem().ReadFile(target); err != nil {
+				return Result{}, err
+			}
+		}
 		entries = append(entries, journalEntry{
 			Action:         actionRemove,
 			Path:           target,
+			NoBackup:       !removal.Backup,
 			HadPrevious:    true,
 			Mode:           uint32(mode),
 			Digest:         digest,
 			PreviousDigest: digest,
 		})
 		stagedContents = append(stagedContents, nil)
-		previousContents = append(previousContents, nil)
+		previousContents = append(previousContents, previous)
 		written = append(written, target)
+	}
+
+	// Directory removals last, and each must be empty by the time it runs. The
+	// check here is against the disk as it stands, which is deliberately
+	// conservative: a directory emptied by this very request is still full
+	// now, so a caller removing a tree lists its files as Removals in one
+	// transaction and its directories in the next.
+	for _, removal := range request.RemoveDirectories {
+		target, err := m.workspace.ResolveDirectory(removal.Path)
+		if err != nil {
+			return Result{}, err
+		}
+		if err := claim(target); err != nil {
+			return Result{}, err
+		}
+		info, statErr := fileSystem.Lstat(target)
+		if errors.Is(statErr, fs.ErrNotExist) {
+			// Nothing to do, and not an error: removing a directory that is
+			// already gone is the state the caller asked for.
+			continue
+		}
+		if statErr != nil {
+			return Result{}, statErr
+		}
+		if !info.IsDir() {
+			return Result{}, ErrNotDirectory
+		}
+		contents, err := fileSystem.ReadDir(target)
+		if err != nil {
+			return Result{}, err
+		}
+		if len(contents) > 0 {
+			return Result{}, ErrDirectoryNotEmpty
+		}
+		entries = append(entries, journalEntry{
+			Action:      actionRemoveDir,
+			Path:        target,
+			HadPrevious: true,
+			Mode:        uint32(info.Mode().Perm()),
+		})
+		stagedContents = append(stagedContents, nil)
+		previousContents = append(previousContents, nil)
 	}
 
 	if m.Validate != nil {
@@ -344,13 +478,32 @@ func (m *Manager) Commit(request Request) (Result, error) {
 		return Result{}, err
 	}
 
-	// Copy the previous contents before anything is replaced. Only a
-	// replacement needs a generational backup: a move keeps the single copy of
-	// the file, and a removal is deliberately irreversible. Entries and the
-	// staged and previous slices stay index-aligned throughout Commit.
+	// The directories are made here: after the validator has accepted the
+	// request, so a refused one creates nothing, and before any temporary file
+	// is staged, because a staged file needs its parent to exist. They are
+	// journal entries, so an interrupted commit can be rolled back — which is
+	// the whole reason this is not an EnsureDirectory outside the transaction.
+	for index := range record.Entries {
+		entry := record.Entries[index]
+		if entry.action() != actionMakeDir {
+			continue
+		}
+		if err := m.workspace.EnsureDirectory(entry.Path); err != nil {
+			return Result{}, err
+		}
+	}
+
+	// Copy the previous contents before anything is replaced or unlinked. A
+	// move needs no copy, because it keeps the single copy of the file; a
+	// replacement always needs one, and a removal needs one exactly when its
+	// caller asked for it. Entries and the staged and previous slices stay
+	// index-aligned throughout Commit.
 	for index := range record.Entries {
 		entry := &record.Entries[index]
-		if entry.action() != actionWrite || !entry.HadPrevious || entry.NoBackup {
+		if entry.action() != actionWrite && entry.action() != actionRemove {
+			continue
+		}
+		if !entry.HadPrevious || entry.NoBackup {
 			continue
 		}
 		relative, err := filepath.Rel(m.workspace.Root(), entry.Path)
@@ -415,6 +568,20 @@ func (m *Manager) commitStaged(record *journalRecord, journalPath string) error 
 			}
 		case actionRemove:
 			if err := fileSystem.Remove(entry.Path); err != nil {
+				return err
+			}
+			if err := fileSystem.SyncDir(filepath.Dir(entry.Path)); err != nil {
+				return err
+			}
+		case actionMakeDir:
+			if err := m.workspace.EnsureDirectory(entry.Path); err != nil {
+				return err
+			}
+			if err := fileSystem.SyncDir(filepath.Dir(entry.Path)); err != nil {
+				return err
+			}
+		case actionRemoveDir:
+			if err := fileSystem.Remove(entry.Path); err != nil && !errors.Is(err, fs.ErrNotExist) {
 				return err
 			}
 			if err := fileSystem.SyncDir(filepath.Dir(entry.Path)); err != nil {

@@ -37,6 +37,21 @@ make build            # UI を生成し bin/ssh-ui へ単一バイナリを作�
 
 `./bin/ssh-ui` を起動すると、OS の既定ブラウザで一度限りの bootstrap fragment を持つ URL を開きます。Ctrl-C または SIGTERM で localhost サーバーを停止します。
 
+## CI
+
+`.github/workflows/ci.yml` が push と pull request のたびに上と同じゲートを回します。ジョブは 4 つで、赤くなったチェック名がそのまま壊れた箇所を指します。
+
+| ジョブ | 内容 |
+| --- | --- |
+| Go | `gofmt -l`、`go vet`、`go build`、`go test`、`go test -race` |
+| Web | `npm ci`、`npm run typecheck`、`npm test`、`npm run build` |
+| Generated files | `make verify-generated` |
+| End to end | `make build`、`internal/ui/dist` が最新かの確認、Playwright |
+
+ESLint は導入していません。TypeScript の型検査（`tsc -b` と e2e 用 tsconfig）が web 側の lint を兼ねます。Go 側のスタイルは gofmt が全てです。
+
+`internal/ui/dist` はコミット済みのバンドルをバイナリへ埋め込むため、`web/src` を変えて `make build` を忘れるとクリーンチェックアウトからのビルドが古い UI を配布します。End to end ジョブはビルド後に `git diff --exit-code -- internal/ui/dist` を実行してそれを検出します。
+
 ## セキュリティ境界
 
 - HTTP サーバーは IPv4 の `127.0.0.1` だけに bind します。LAN、Tailnet、コンテナ外部など、ネットワークへ公開して安全な設計ではありません。

@@ -50,6 +50,16 @@ function buildApi(overrides: Partial<IntegrationsApi> = {}): IntegrationsApi {
     deleteKnownHosts: vi.fn().mockResolvedValue({ changed: true, transactionId: "tx" }),
     scanKnownHosts: vi.fn().mockResolvedValue({ notice: "unverified", candidates: [] }),
     addKnownHost: vi.fn().mockResolvedValue({ changed: true, transactionId: "tx" }),
+    passwordVault: vi.fn().mockResolvedValue({ exists: false, unlocked: false, aliases: [] }),
+    initialiseVault: vi.fn().mockResolvedValue({ exists: true, unlocked: true, aliases: [] }),
+    unlockVault: vi.fn().mockResolvedValue({ exists: true, unlocked: true, aliases: [] }),
+    lockVault: vi.fn().mockResolvedValue({ exists: true, unlocked: false, aliases: [] }),
+    storePassword: vi.fn().mockResolvedValue({ exists: true, unlocked: true, aliases: [] }),
+    forgetPassword: vi.fn().mockResolvedValue({ exists: true, unlocked: true, aliases: [] }),
+    syncStatus: vi.fn().mockResolvedValue({ configured: false, endpoint: "", bucket: "", synced: false }),
+    configureSync: vi.fn().mockResolvedValue({ configured: true, endpoint: "", bucket: "", synced: false }),
+    pushSnapshot: vi.fn().mockResolvedValue({ configured: true, endpoint: "", bucket: "", synced: true }),
+    pullSnapshot: vi.fn().mockResolvedValue({ applied: false, conflicts: [], written: [], removed: [] }),
     ...overrides,
   };
 }
@@ -64,6 +74,37 @@ describe("DiagnosticsPanel", () => {
     expect(api.reachability).not.toHaveBeenCalled();
     expect(api.authentication).not.toHaveBeenCalled();
     expect(api.terminalLaunch).not.toHaveBeenCalled();
+  });
+
+  it("offers no check until an alias is typed", async () => {
+    // With an empty box every button was live, and pressing one asked the
+    // server to explain the empty alias.
+    const api = buildApi();
+    render(<DiagnosticsPanel api={api} />);
+
+    expect(screen.getByRole("button", { name: "Explain" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Check reachability" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Test authentication" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Terminal command" })).toBeDisabled();
+
+    await userEvent.type(screen.getByLabelText("Host alias"), "bastion");
+
+    expect(screen.getByRole("button", { name: "Explain" })).toBeEnabled();
+  });
+
+  it("names the columns of the sources table", async () => {
+    // A path, a condition and a verdict rendered as three unlabelled greys are
+    // not self-describing, however good the caption is.
+    const api = buildApi();
+    render(<DiagnosticsPanel api={api} />);
+
+    await userEvent.type(screen.getByLabelText("Host alias"), "bastion");
+    await userEvent.click(screen.getByRole("button", { name: "Explain" }));
+
+    expect(await screen.findByRole("columnheader", { name: "Keyword" })).toBeInTheDocument();
+    for (const column of ["Value", "Read from", "Under", "State"]) {
+      expect(screen.getByRole("columnheader", { name: column })).toBeInTheDocument();
+    }
   });
 
   it("explains an alias and shows where each value came from", async () => {

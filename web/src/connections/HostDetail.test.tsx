@@ -26,6 +26,16 @@ function buildIntegrations(overrides: Partial<IntegrationsApi> = {}): Integratio
     deleteKnownHosts: vi.fn(),
     scanKnownHosts: vi.fn(),
     addKnownHost: vi.fn(),
+    passwordVault: vi.fn().mockResolvedValue({ exists: false, unlocked: false, aliases: [] }),
+    initialiseVault: vi.fn().mockResolvedValue({ exists: true, unlocked: true, aliases: [] }),
+    unlockVault: vi.fn().mockResolvedValue({ exists: true, unlocked: true, aliases: [] }),
+    lockVault: vi.fn().mockResolvedValue({ exists: true, unlocked: false, aliases: [] }),
+    storePassword: vi.fn().mockResolvedValue({ exists: true, unlocked: true, aliases: [] }),
+    forgetPassword: vi.fn().mockResolvedValue({ exists: true, unlocked: true, aliases: [] }),
+    syncStatus: vi.fn().mockResolvedValue({ configured: false, endpoint: "", bucket: "", synced: false }),
+    configureSync: vi.fn().mockResolvedValue({ configured: true, endpoint: "", bucket: "", synced: false }),
+    pushSnapshot: vi.fn().mockResolvedValue({ configured: true, endpoint: "", bucket: "", synced: true }),
+    pullSnapshot: vi.fn().mockResolvedValue({ applied: false, conflicts: [], written: [], removed: [] }),
     ...overrides,
   };
 }

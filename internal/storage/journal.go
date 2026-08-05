@@ -72,7 +72,7 @@ func (m *Manager) Pending() ([]Pending, error) {
 				HasBackup: entry.Backup != "",
 			}
 			switch {
-			case pendingEntry.Committed && pendingEntry.Action == actionRemove:
+			case pendingEntry.Committed && pendingEntry.Action == actionRemove && entry.NoBackup:
 				item.CanRollback = false
 			case pendingEntry.Committed && pendingEntry.Action == actionWrite && entry.HadPrevious && entry.NoBackup:
 				item.CanRollback = false
@@ -123,7 +123,10 @@ func (m *Manager) Rollback(identifier string) error {
 	}
 	for index := 0; index < record.Committed; index++ {
 		entry := record.Entries[index]
-		if entry.action() == actionRemove {
+		// A removal that kept a backup is as reversible as a replacement: the
+		// bytes are in the generational directory and the mode is in the
+		// entry. Only one that deliberately kept none cannot be undone.
+		if entry.action() == actionRemove && entry.NoBackup {
 			return ErrIrreversibleRemoval
 		}
 		if entry.action() == actionWrite && entry.HadPrevious && entry.NoBackup {
@@ -139,6 +142,44 @@ func (m *Manager) Rollback(identifier string) error {
 				return err
 			}
 			if err := fileSystem.SyncDir(filepath.Dir(entry.Target)); err != nil {
+				return err
+			}
+			if err := fileSystem.SyncDir(filepath.Dir(entry.Path)); err != nil {
+				return err
+			}
+			continue
+		}
+		if entry.action() == actionMakeDir {
+			// A directory that was already there is not this transaction's to
+			// remove. Only one it created is undone, and only if it is still
+			// empty — something may have been written into it since, and
+			// taking that with the rollback would delete what nobody asked to
+			// touch.
+			if entry.HadPrevious {
+				continue
+			}
+			contents, readErr := fileSystem.ReadDir(entry.Path)
+			if errors.Is(readErr, fs.ErrNotExist) {
+				continue
+			}
+			if readErr != nil {
+				return readErr
+			}
+			if len(contents) > 0 {
+				continue
+			}
+			if err := fileSystem.Remove(entry.Path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				return err
+			}
+			if err := fileSystem.SyncDir(filepath.Dir(entry.Path)); err != nil {
+				return err
+			}
+			continue
+		}
+		if entry.action() == actionRemoveDir {
+			// It was empty when it was removed, so recreating it empty
+			// restores exactly what was lost.
+			if err := m.workspace.EnsureDirectory(entry.Path); err != nil {
 				return err
 			}
 			if err := fileSystem.SyncDir(filepath.Dir(entry.Path)); err != nil {

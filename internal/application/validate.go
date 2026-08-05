@@ -165,19 +165,34 @@ func unstructuredColumn(text string) int {
 
 // validate is installed as storage.Manager.Validate, so it runs after the
 // preconditions are checked and before anything is journalled, staged or
-// renamed. It parses every new file, proves the parse renders back to the same
-// bytes, refuses newly unparsable lines, and re-resolves the whole Include
-// graph with the pending contents overlaid.
+// renamed. It parses every new configuration file, proves the parse renders
+// back to the same bytes, refuses newly unparsable lines, and re-resolves the
+// whole Include graph with the pending contents overlaid.
+//
+// It validates configuration and nothing else. Files inside the workspace
+// state directory are this application's own — metadata.json, journals,
+// backups, the password vault — and are not ssh_config. Parsing them as though
+// they were is not merely pointless: the password vault is ciphertext, and a
+// blob whose random bytes happen to contain an odd number of quotation marks
+// was rejected as "unbalanced quoting". That is a coin flip on every save, and
+// it is how this was found — an end-to-end test that stored a password passed
+// locally and failed in CI.
 func (s *Service) validate(request storage.Request) error {
 	pending, gone := overlayFor(request)
 
 	metadataPath := filepath.Clean(s.metadata.Path())
+	stateDir := filepath.Clean(s.workspace.StateDir())
 	for _, change := range request.Changes {
 		cleaned := filepath.Clean(change.Path)
 		if cleaned == metadataPath {
 			if _, err := DecodeMetadata(change.Contents); err != nil {
 				return err
 			}
+			continue
+		}
+		// Anything else under ssh-ui/ is application state, never read by
+		// OpenSSH and never part of the Include graph.
+		if isInside(stateDir, cleaned) {
 			continue
 		}
 		parsed := config.Parse(change.Contents)
@@ -210,4 +225,18 @@ func (s *Service) validate(request storage.Request) error {
 		return &GraphError{Diagnostics: introduced}
 	}
 	return nil
+}
+
+// isInside reports whether path is directory itself or below it. It compares
+// cleaned paths component-wise rather than by string prefix, so a sibling
+// named ssh-ui-backup is not mistaken for a child of ssh-ui.
+func isInside(directory, path string) bool {
+	if path == directory {
+		return true
+	}
+	relative, err := filepath.Rel(directory, path)
+	if err != nil {
+		return false
+	}
+	return relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
 }

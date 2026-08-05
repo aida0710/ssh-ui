@@ -55,15 +55,22 @@ export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
     void reload();
   }, [reload]);
 
+  // The dependencies are the two values and not the selection object, because
+  // a save reselects the host it has just written. An equal object with a new
+  // identity re-ran this effect, which fetched a detail submit was already
+  // fetching and, when its answer arrived, discarded the preview the save had
+  // just produced. The diff of what was written was on screen for as long as
+  // one request took and then vanished.
+  const selectedPath = selection === null ? "" : selection.path;
+  const selectedAlias = selection === null ? "" : selection.alias;
   useEffect(() => {
-    if (selection === null) return;
+    if (selectedAlias === "") return;
     let active = true;
     void configApi
-      .host(selection.path, selection.alias)
+      .host(selectedPath, selectedAlias)
       .then((loaded) => {
         if (active) {
           setDetail(loaded);
-          setPreview(null);
           setProblem(null);
         }
       })
@@ -73,7 +80,7 @@ export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
     return () => {
       active = false;
     };
-  }, [selection]);
+  }, [selectedPath, selectedAlias]);
 
   // reselect is false when the edit removed the host that is open, so the page
   // does not immediately ask the server for a block it just deleted.
@@ -100,6 +107,10 @@ export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
   // must never reach the server even if some future caller builds one.
   function onSelect(host: HostEntry) {
     if (host.identity.alias === "") return;
+    // Choosing a different connection discards the last save's diff, because it
+    // describes bytes in a block that is no longer open. A save reselects
+    // through submit rather than here, and keeps its diff on screen.
+    setPreview(null);
     setSelection({ path: host.identity.path, alias: host.identity.alias });
   }
 

@@ -18,6 +18,9 @@ const noticeKeys: Record<string, MessageKey> = {
   group_member_missing: "notice.group_member_missing",
   explained_values_only: "notice.explained_values_only",
   destination_not_included: "notice.destination_not_included",
+  include_no_longer_matches: "notice.include_no_longer_matches",
+  include_not_rewritten: "notice.include_not_rewritten",
+  include_now_unreached: "notice.include_now_unreached",
 };
 
 function DiffView({ lines }: { lines: DiffLine[] }) {

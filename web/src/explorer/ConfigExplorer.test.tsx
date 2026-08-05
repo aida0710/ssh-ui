@@ -58,6 +58,45 @@ describe("ConfigExplorer", () => {
     expect(screen.getByText(/outside ~\/\.ssh/i)).toBeInTheDocument();
   });
 
+  it("marks which file the editor is showing", async () => {
+    const user = userEvent.setup();
+    render(<ConfigExplorer />);
+
+    const target = await screen.findByRole("button", { name: "conf.d/10-home.conf" });
+    expect(target).toHaveAttribute("aria-current", "false");
+
+    await user.click(target);
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "conf.d/10-home.conf" })).toHaveAttribute("aria-current", "true"),
+    );
+    expect(screen.getByRole("button", { name: "config" })).toHaveAttribute("aria-current", "false");
+  });
+
+  it("says when the draft no longer matches what was read", async () => {
+    const user = userEvent.setup();
+    render(<ConfigExplorer />);
+
+    await user.click(await screen.findByRole("button", { name: "conf.d/10-home.conf" }));
+    const editor = await screen.findByLabelText(/File text/);
+    expect(screen.queryByText("Unsaved changes")).not.toBeInTheDocument();
+
+    await user.type(editor, "\tPort 2222\n");
+
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+  });
+
+  it("offers no file creation until a path is typed", async () => {
+    const user = userEvent.setup();
+    render(<ConfigExplorer />);
+
+    expect(await screen.findByRole("button", { name: "Create file" })).toBeDisabled();
+
+    await user.type(screen.getByLabelText("New file path"), "conf.d/30-lab.conf");
+
+    expect(screen.getByRole("button", { name: "Create file" })).toBeEnabled();
+  });
+
   it("edits a whole file and saves it with the loaded base", async () => {
     const user = userEvent.setup();
     vi.mocked(configApi.save).mockResolvedValue({

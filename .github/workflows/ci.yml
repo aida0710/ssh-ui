@@ -1,0 +1,208 @@
+# The acceptance gate, run for every push and every pull request.
+#
+# The jobs are the four commands README.md already documents, split so a red
+# tick names the thing that broke rather than "the build". Nothing here is
+# stricter than what `make test`, `make verify-generated` and `make e2e` do
+# locally: CI is where they are guaranteed to have been run, not a second
+# standard.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# A second push to the same branch supersedes the first; only the tip is worth
+# a runner. `main` is excluded so its history keeps a complete record.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  go:
+    name: Go
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          # The version comes from go.mod so the toolchain can only be changed
+          # in one place.
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      # gofmt is the whole of this project's Go style. `gofmt -l` prints the
+      # files that differ from it and says nothing when there are none, so the
+      # file list is both the failure and its explanation.
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-formatted. Run: gofmt -w ." >&2
+            echo "$unformatted" >&2
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go build
+        run: go build ./...
+
+      - name: go test
+        run: go test ./...
+
+      # The race detector is a separate step because it is the slow one, and a
+      # data race is a different failure from a wrong answer.
+      - name: go test -race
+        run: go test -race ./...
+
+  web:
+    name: Web
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # `npm ci` installs exactly the locked versions and fails if the lockfile
+      # and package.json disagree. This project pins every dependency, so an
+      # unpinned drift should stop the build rather than be installed.
+      - run: npm ci
+
+      # There is no ESLint here; the type checker is the lint. It runs over the
+      # application and over the end-to-end suite, which has its own tsconfig.
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  generated:
+    name: Generated files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --prefix web
+
+      # api/openapi.yaml is the single source for the Go models and the
+      # TypeScript types. This regenerates both and fails on any difference, so
+      # a hand-edited generated file cannot reach main.
+      - name: make verify-generated
+        run: make verify-generated
+
+  integration:
+    name: Integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --prefix web
+
+      # The binary is the askpass helper, so it has to exist before ssh runs.
+      - name: Build the binary
+        run: make build
+
+      # Two servers this suite cannot fake usefully: a real S3 implementation,
+      # because the whole sync design rests on what a real one does with a
+      # conditional PUT, and a real sshd, because whether OpenSSH accepts what
+      # the askpass helper hands it is not something a stub can answer.
+      - name: Start SeaweedFS and sshd
+        run: make integration-up
+
+      - name: Create the bucket
+        # The client deliberately has no CreateBucket: the application never
+        # makes one, so the harness does it instead of widening the client.
+        run: |
+          docker exec ssh-ui-s3 sh -c '
+            mkdir -p /data/buckets/ssh-ui-test' || true
+          curl -sS -X PUT "http://127.0.0.1:8333/ssh-ui-test" \
+            -H "Authorization: none" >/dev/null 2>&1 || true
+
+      - name: Integration tests
+        run: make integration
+
+      - name: Container logs
+        if: failure()
+        run: |
+          docker logs ssh-ui-s3 2>&1 | tail -50
+          docker logs ssh-ui-sshd 2>&1 | tail -50
+
+      - name: Stop the containers
+        if: always()
+        run: make integration-down
+
+  e2e:
+    name: End to end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --prefix web
+
+      - name: Build the binary
+        run: make build
+
+      # The UI is embedded in the binary from a committed bundle, so a change to
+      # web/src that was never rebuilt ships an old interface to anyone who
+      # builds from a clean checkout. `make build` above has just regenerated
+      # it; a difference here means the commit forgot to.
+      - name: The committed bundle matches the sources
+        run: |
+          if ! git diff --exit-code -- internal/ui/dist; then
+            echo "internal/ui/dist is stale. Run: make build, and commit the result." >&2
+            exit 1
+          fi
+
+      # Chromium only. The suite drives the built binary over localhost and
+      # asserts on the bytes it writes, not on how a particular engine paints.
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+        working-directory: web
+
+      - name: Playwright
+        run: npm run e2e --prefix web
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: web/playwright-report
+          retention-days: 7
