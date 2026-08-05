@@ -22,7 +22,13 @@ function toProblem(error: unknown): Problem {
   return { code: "request_failed", message: "request rejected" };
 }
 
-export function ConnectionsPage() {
+type ConnectionsPageProps = {
+  // Opens a configuration file in the file view at a line. The tree needs it
+  // for pattern rules, which have no identity and so no host detail to open.
+  onOpenFile: (path: string, line: number) => void;
+};
+
+export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [selection, setSelection] = useState<HostSelection | null>(null);
   const [detail, setDetail] = useState<HostDetail | null>(null);
@@ -85,6 +91,10 @@ export function ConnectionsPage() {
     }
   }
 
+  // The guard stays: an entry without a concrete alias has no identity, and the
+  // host endpoint answers invalid_request for one. The tree never routes such a
+  // block here, it routes it to the file view, but a selection without an alias
+  // must never reach the server even if some future caller builds one.
   function onSelect(host: HostEntry) {
     if (host.identity.alias === "") return;
     setSelection({ path: host.identity.path, alias: host.identity.alias });
@@ -234,7 +244,12 @@ export function ConnectionsPage() {
         <button type="button" onClick={() => void createHost()} className="rounded bg-zinc-800 px-3 py-1 text-sm">
           Create connection
         </button>
-        <ConnectionTree overview={overview} selected={selection} onSelect={onSelect} />
+        <ConnectionTree
+          overview={overview}
+          selected={selection}
+          onSelect={onSelect}
+          onOpenPatternRule={onOpenFile}
+        />
       </div>
       <div className="flex flex-col gap-4">
         <NoticeList notices={overview.notices} />

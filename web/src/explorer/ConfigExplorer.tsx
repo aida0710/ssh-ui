@@ -1,7 +1,15 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, type Problem } from "../api/client";
 import { configApi, type FileContents, type Overview, type SavePreview } from "../api/config";
 import { SavePreviewPanel } from "../connections/SavePreview";
+
+// FileTarget asks the explorer to open one file and put the caret on one line.
+// The line is 1-based, as every line the API reports is.
+export type FileTarget = { path: string; line: number };
+
+type ConfigExplorerProps = {
+  target?: FileTarget | null;
+};
 
 function toProblem(error: unknown): Problem {
   if (error instanceof ApiError && error.problem !== null) return error.problem;
@@ -9,13 +17,26 @@ function toProblem(error: unknown): Problem {
   return { code: "request_failed", message: "request rejected" };
 }
 
-export function ConfigExplorer() {
+// lineRange is the offset span of a 1-based line inside the file text. A line
+// past the end clamps to the last one, so a stale target still lands somewhere
+// sensible instead of throwing.
+function lineRange(contents: string, line: number): { start: number; end: number } {
+  const lines = contents.split("\n");
+  const index = Math.min(Math.max(line, 1), lines.length) - 1;
+  const start = lines.slice(0, index).reduce((total, text) => total + text.length + 1, 0);
+  return { start, end: start + (lines[index]?.length ?? 0) };
+}
+
+export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [file, setFile] = useState<FileContents | null>(null);
   const [draft, setDraft] = useState("");
   const [preview, setPreview] = useState<SavePreview | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
   const [newPath, setNewPath] = useState("");
+  const [jump, setJump] = useState("");
+  const editorRef = useRef<HTMLTextAreaElement>(null);
+  const jumped = useRef<FileTarget | null>(null);
 
   const reload = useCallback(async () => {
     try {
@@ -28,6 +49,28 @@ export function ConfigExplorer() {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  // A target arrives from another view, so the file it names has to be loaded
+  // here before anything can be shown.
+  useEffect(() => {
+    if (target === null) return;
+    void open(target.path);
+  }, [target]);
+
+  // The caret can only be placed once the loaded file is on screen. Each target
+  // is applied once, so opening the same file by hand afterwards does not drag
+  // the caret back.
+  useEffect(() => {
+    if (target === null || jumped.current === target) return;
+    if (file === null || file.file.path !== target.path) return;
+    const editor = editorRef.current;
+    if (editor === null) return;
+    jumped.current = target;
+    const range = lineRange(file.contents, target.line);
+    editor.focus();
+    editor.setSelectionRange(range.start, range.end);
+    setJump(`Opened ${target.path} at line ${target.line}.`);
+  }, [file, target]);
 
   async function open(path: string) {
     try {
@@ -166,6 +209,7 @@ export function ConfigExplorer() {
       </section>
 
       <section className="flex flex-col gap-3">
+        <p aria-live="polite" className="text-xs text-zinc-400">{jump}</p>
         {file === null ? (
           <p role="status" className="text-sm text-zinc-400">Select a file to edit its full text.</p>
         ) : (
@@ -175,6 +219,7 @@ export function ConfigExplorer() {
             </label>
             <textarea
               id="file-raw"
+              ref={editorRef}
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               rows={24}

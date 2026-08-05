@@ -38,6 +38,9 @@ const detail = {
 };
 
 beforeEach(() => {
+  // The module factory builds these with vi.fn(), which restoreMocks leaves
+  // alone, so their call records have to be cleared per test by hand.
+  vi.clearAllMocks();
   vi.mocked(configApi.overview).mockResolvedValue(overview as never);
   vi.mocked(configApi.host).mockResolvedValue(detail as never);
 });
@@ -49,7 +52,7 @@ describe("ConnectionsPage", () => {
       transactionId: "t1", written: ["config"], preview: { operation: "config.host_fields", diffs: [] },
     } as never);
 
-    render(<ConnectionsPage />);
+    render(<ConnectionsPage onOpenFile={vi.fn()} />);
 
     await user.click(await screen.findByRole("button", { name: /bastion/ }));
     const input = await screen.findByLabelText("Port");
@@ -64,6 +67,31 @@ describe("ConnectionsPage", () => {
       base: "Host bastion\n\tPort 22\n",
       fields: [{ action: "set", line: 2, values: ["2222"] }],
     }));
+    expect(configApi.host).toHaveBeenCalledWith("config", "bastion");
+  });
+
+  it("sends a pattern rule to the file view and never asks for its host detail", async () => {
+    const user = userEvent.setup();
+    const onOpenFile = vi.fn();
+    vi.mocked(configApi.overview).mockResolvedValue({
+      ...overview,
+      hosts: [
+        ...overview.hosts,
+        {
+          identity: { path: "", alias: "" },
+          file: { path: "config", absolute: "/home/tester/.ssh/config" },
+          line: 9, patterns: ["*"], wildcard: true, editable: true,
+        },
+      ],
+    } as never);
+
+    render(<ConnectionsPage onOpenFile={onOpenFile} />);
+
+    await user.click(await screen.findByRole("button", { name: /pattern rule/i }));
+
+    expect(onOpenFile).toHaveBeenCalledWith("config", 9);
+    expect(configApi.host).not.toHaveBeenCalled();
+    expect(screen.getByText("Select a connection to edit it.")).toBeInTheDocument();
   });
 
   it("keeps the edit visible and shows the conflict when the file changed on disk", async () => {
@@ -79,7 +107,7 @@ describe("ConnectionsPage", () => {
       },
     }));
 
-    render(<ConnectionsPage />);
+    render(<ConnectionsPage onOpenFile={vi.fn()} />);
 
     await user.click(await screen.findByRole("button", { name: /bastion/ }));
     const input = await screen.findByLabelText("Port");
@@ -102,7 +130,7 @@ describe("ConnectionsPage", () => {
       contents: "Host bastion\n\tPort 22\n", digest: "digest", editable: true, exists: true,
     } as never);
 
-    render(<ConnectionsPage />);
+    render(<ConnectionsPage onOpenFile={vi.fn()} />);
 
     await user.type(await screen.findByLabelText("New connection alias"), "build01");
     await user.click(screen.getByRole("button", { name: "Create connection" }));
@@ -134,7 +162,7 @@ describe("ConnectionsPage", () => {
       preview: { operation: "config.move", diffs: [] },
     } as never);
 
-    render(<ConnectionsPage />);
+    render(<ConnectionsPage onOpenFile={vi.fn()} />);
 
     await user.click(await screen.findByRole("button", { name: /bastion/ }));
     await user.selectOptions(await screen.findByLabelText("Move to file"), "conf.d/10-home.conf");
@@ -156,7 +184,7 @@ describe("ConnectionsPage", () => {
       transactionId: "t1", written: ["config"], preview: { operation: "config.file_raw", diffs: [] },
     } as never);
 
-    render(<ConnectionsPage />);
+    render(<ConnectionsPage onOpenFile={vi.fn()} />);
 
     await user.click(await screen.findByRole("button", { name: /bastion/ }));
     await user.click(await screen.findByRole("button", { name: "Delete connection" }));

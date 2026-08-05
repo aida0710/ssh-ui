@@ -7,6 +7,11 @@ type ConnectionTreeProps = {
   overview: Overview;
   selected: HostSelection | null;
   onSelect: (host: HostEntry) => void;
+  // A block whose Host line carries no concrete alias has no identity, so the
+  // host endpoint cannot address it. The tree hands it to the file view by
+  // path and line instead; the callback is required so such a row can never be
+  // rendered as a control with nothing behind it.
+  onOpenPatternRule: (path: string, line: number) => void;
 };
 
 const ungrouped = "Ungrouped";
@@ -23,7 +28,7 @@ function matchesQuery(host: HostEntry, tags: string[], query: string): boolean {
   return tags.some((tag) => tag.toLowerCase().includes(needle));
 }
 
-export function ConnectionTree({ overview, selected, onSelect }: ConnectionTreeProps) {
+export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule }: ConnectionTreeProps) {
   const [query, setQuery] = useState("");
   const [grouping, setGrouping] = useState<"groups" | "files">("groups");
 
@@ -113,17 +118,44 @@ export function ConnectionTree({ overview, selected, onSelect }: ConnectionTreeP
                   selected.path === item.host.identity.path &&
                   selected.alias === item.host.identity.alias;
                 const descriptionId = `host-${item.host.file.absolute}-${item.host.line}-description`;
+                // A pattern rule is addressable only by file and line, and only
+                // when its file lives inside the root: a file outside it has no
+                // relative path, so no view of this application can open it.
+                const rulePath = item.host.identity.alias === "" ? item.host.file.path : undefined;
                 return (
                   <li key={`${item.host.file.absolute}:${item.host.line}`}>
-                    <button
-                      type="button"
-                      onClick={() => onSelect(item.host)}
-                      aria-current={active ? "true" : undefined}
-                      aria-describedby={descriptionId}
-                      className={`w-full rounded px-2 py-1 text-left text-sm ${active ? "bg-zinc-800" : "hover:bg-zinc-900"}`}
-                    >
-                      {hostLabel(item.host)}
-                    </button>
+                    {item.host.identity.alias === "" ? (
+                      rulePath === undefined ? (
+                        <p aria-describedby={descriptionId} className="w-full rounded px-2 py-1 text-sm text-zinc-400">
+                          <span className="block">{hostLabel(item.host)}</span>
+                          <span className="block text-xs text-zinc-500">
+                            {`Pattern rule in ${item.host.file.absolute}, a file this editor only reads.`}
+                          </span>
+                        </p>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => onOpenPatternRule(rulePath, item.host.line)}
+                          aria-describedby={descriptionId}
+                          className="w-full rounded px-2 py-1 text-left text-sm hover:bg-zinc-900"
+                        >
+                          <span className="block">{hostLabel(item.host)}</span>
+                          <span className="block text-xs text-zinc-500">
+                            {`Pattern rule — open it in the Config file view (${rulePath}:${item.host.line})`}
+                          </span>
+                        </button>
+                      )
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onSelect(item.host)}
+                        aria-current={active ? "true" : undefined}
+                        aria-describedby={descriptionId}
+                        className={`w-full rounded px-2 py-1 text-left text-sm ${active ? "bg-zinc-800" : "hover:bg-zinc-900"}`}
+                      >
+                        {hostLabel(item.host)}
+                      </button>
+                    )}
                     <span id={descriptionId} className="sr-only">
                       {[
                         item.favourite ? "favourite" : "",

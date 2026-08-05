@@ -80,6 +80,18 @@ describe("ConfigExplorer", () => {
     }));
   });
 
+  it("opens a target file and selects the targeted line", async () => {
+    render(<ConfigExplorer target={{ path: "conf.d/10-home.conf", line: 2 }} />);
+
+    const editor = (await screen.findByLabelText(/File text/)) as HTMLTextAreaElement;
+
+    expect(configApi.file).toHaveBeenCalledWith("conf.d/10-home.conf");
+    await waitFor(() => expect(editor.selectionStart).toBe("Host nas\n".length));
+    expect(editor.selectionEnd).toBe("Host nas\n\tUser aida".length);
+    expect(editor).toHaveFocus();
+    expect(screen.getByText(/conf\.d\/10-home\.conf.*line 2/)).toBeInTheDocument();
+  });
+
   it("creates a new configuration file inside ~/.ssh", async () => {
     const user = userEvent.setup();
     vi.mocked(configApi.save).mockResolvedValue({
