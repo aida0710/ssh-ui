@@ -1,8 +1,34 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { HostDetailPanel } from "./HostDetail";
 import type { HostDetail } from "../api/config";
+import type { IntegrationsApi } from "../api/integrations";
+
+// The Diagnostics tab runs the same checks as the Diagnostics section, so this
+// injects the same client. Every method is a mock: a test that reached the real
+// one would dial a host, and no test in this suite may start a process.
+function buildIntegrations(overrides: Partial<IntegrationsApi> = {}): IntegrationsApi {
+  return {
+    configCheck: vi.fn(),
+    effective: vi.fn(),
+    reachability: vi.fn().mockResolvedValue({
+      address: "203.0.113.10:22",
+      outcome: "reached",
+      elapsedMs: 12,
+      detail: "",
+      notice: "This check dialled the destination directly.",
+    }),
+    authentication: vi.fn(),
+    terminalCommand: vi.fn(),
+    terminalLaunch: vi.fn(),
+    knownHosts: vi.fn(),
+    deleteKnownHosts: vi.fn(),
+    scanKnownHosts: vi.fn(),
+    addKnownHost: vi.fn(),
+    ...overrides,
+  };
+}
 
 const detail: HostDetail = {
   form: {
@@ -134,5 +160,50 @@ describe("HostDetailPanel", () => {
     await user.click(screen.getByRole("button", { name: "Save block" }));
 
     expect(handlers.onBlockRaw).toHaveBeenCalledWith("Host bastion\n\tHostName 203.0.113.10\n");
+  });
+
+  it("sends the Effective tab to the authoritative check rather than describing it", async () => {
+    const user = userEvent.setup();
+    renderPanel({ integrations: buildIntegrations() });
+
+    await user.click(screen.getByRole("tab", { name: "Effective" }));
+    await user.click(screen.getByRole("button", { name: "Open the Diagnostics tab" }));
+
+    expect(screen.getByRole("tab", { name: "Diagnostics" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("region", { name: "Diagnostics for bastion" })).toBeInTheDocument();
+  });
+
+  it("runs the real checks on the Diagnostics tab, against this host and only when asked", async () => {
+    const user = userEvent.setup();
+    const integrations = buildIntegrations();
+    renderPanel({ integrations });
+
+    await user.click(screen.getByRole("tab", { name: "Diagnostics" }));
+
+    // The tab is addressed by the open connection, so it asks for no alias.
+    expect(screen.queryByLabelText("Host alias")).not.toBeInTheDocument();
+    expect(integrations.reachability).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Check reachability" }));
+
+    await waitFor(() => expect(integrations.reachability).toHaveBeenCalledWith("bastion"));
+  });
+
+  it("has nothing to diagnose for a block that names no destination", async () => {
+    const user = userEvent.setup();
+    const patternDetail: HostDetail = {
+      ...detail,
+      form: {
+        ...detail.form,
+        entry: { ...detail.form.entry, identity: { path: "config", alias: "" }, patterns: ["*"] },
+      },
+    };
+    const integrations = buildIntegrations();
+    renderPanel({ detail: patternDetail, integrations });
+
+    await user.click(screen.getByRole("tab", { name: "Diagnostics" }));
+
+    expect(screen.getByText(/names no destination of its own/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Check reachability" })).not.toBeInTheDocument();
   });
 });

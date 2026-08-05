@@ -2,66 +2,78 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { KeysScreen } from "./KeysScreen";
-import type { KeysApi } from "./api";
+import type { KeyInventoryResponse, KeysApi } from "./api";
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
+// A fresh inventory per call, so a test that adjusts one field cannot leak that
+// change into the next test through a shared object.
+function buildInventory(): KeyInventoryResponse {
+  return {
+    items: [
+      {
+        id: "key-one",
+        relativePath: "id_work",
+        kind: "private_key",
+        container: "OPENSSH PRIVATE KEY",
+        algorithm: "ed25519",
+        keyType: "ssh-ed25519",
+        bits: 256,
+        encrypted: true,
+        fingerprint: "SHA256:abcdef",
+        comment: "aida@laptop",
+        permission: "0600",
+        permissionRisk: false,
+        sizeBytes: 444,
+        references: [
+          {
+            directive: "IdentityFile",
+            configPath: "/home/.ssh/config",
+            line: 2,
+            condition: "Host build-*",
+            hostPatterns: ["build-*"],
+            value: "~/.ssh/id_work",
+          },
+        ],
+        notes: [],
+      },
+      {
+        id: "key-two",
+        relativePath: "legacy",
+        kind: "private_key",
+        container: "RSA PRIVATE KEY",
+        algorithm: "rsa",
+        keyType: "ssh-rsa",
+        bits: 2048,
+        encrypted: true,
+        fingerprint: "",
+        comment: "",
+        permission: "0644",
+        permissionRisk: true,
+        sizeBytes: 1700,
+        references: [],
+        notes: ["fingerprint_unavailable"],
+      },
+    ],
+    unreadable: [],
+    agentDelegations: [],
+    unresolvedReferences: [],
+    agentAvailable: false,
+    agentIdentities: [],
+  };
+}
+
+// The default fixture has no agent, because the end-to-end environment has
+// none either: nothing in this suite may reach the developer's own agent.
+function inventoryWithAgent(): KeyInventoryResponse {
+  return { ...buildInventory(), agentAvailable: true };
+}
+
 function buildApi(overrides: Partial<KeysApi> = {}): KeysApi {
   return {
-    inventory: vi.fn().mockResolvedValue({
-      items: [
-        {
-          id: "key-one",
-          relativePath: "id_work",
-          kind: "private_key",
-          container: "OPENSSH PRIVATE KEY",
-          algorithm: "ed25519",
-          keyType: "ssh-ed25519",
-          bits: 256,
-          encrypted: true,
-          fingerprint: "SHA256:abcdef",
-          comment: "aida@laptop",
-          permission: "0600",
-          permissionRisk: false,
-          sizeBytes: 444,
-          references: [
-            {
-              directive: "IdentityFile",
-              configPath: "/home/.ssh/config",
-              line: 2,
-              condition: "Host build-*",
-              hostPatterns: ["build-*"],
-              value: "~/.ssh/id_work",
-            },
-          ],
-          notes: [],
-        },
-        {
-          id: "key-two",
-          relativePath: "legacy",
-          kind: "private_key",
-          container: "RSA PRIVATE KEY",
-          algorithm: "rsa",
-          keyType: "ssh-rsa",
-          bits: 2048,
-          encrypted: true,
-          fingerprint: "",
-          comment: "",
-          permission: "0644",
-          permissionRisk: true,
-          sizeBytes: 1700,
-          references: [],
-          notes: ["fingerprint_unavailable"],
-        },
-      ],
-      unreadable: [],
-      agentDelegations: [],
-      unresolvedReferences: [],
-      agentAvailable: false,
-      agentIdentities: [],
-    }),
+    inventory: vi.fn().mockResolvedValue(buildInventory()),
     algorithms: vi.fn().mockResolvedValue({
       variants: [
         { algorithm: "ed25519", bits: 256, label: "Ed25519", inProcess: true, reason: "" },
@@ -93,6 +105,14 @@ function buildApi(overrides: Partial<KeysApi> = {}): KeysApi {
     }),
     changePassphrase: vi.fn(),
     reveal: vi.fn(),
+    registerWithAgent: vi.fn().mockResolvedValue({
+      id: "key-one",
+      relativePath: "id_work",
+      fingerprint: "SHA256:abcdef",
+      lifetimeSeconds: 0,
+      storedInKeychain: false,
+      identities: [],
+    }),
     trash: vi.fn().mockResolvedValue({ entryId: "entry-1", files: [], skipped: [], transactionId: "tx" }),
     listTrash: vi.fn().mockResolvedValue({
       entries: [
@@ -267,5 +287,101 @@ describe("KeysScreen", () => {
     render(<KeysScreen api={api} />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("could not be read");
+  });
+
+  it("refuses agent registration, and says what is missing, when no agent is reachable", async () => {
+    const api = buildApi();
+    render(<KeysScreen api={api} />);
+
+    const workRow = await screen.findByRole("row", { name: /id_work/ });
+    expect(within(workRow).getByRole("button", { name: "Add to agent" })).toBeDisabled();
+    expect(screen.getByText(/No agent is reachable from this process/)).toBeInTheDocument();
+    expect(api.registerWithAgent).not.toHaveBeenCalled();
+  });
+
+  it("registers a key with the agent, with the lifetime and Keychain choice the user made", async () => {
+    const api = buildApi({ inventory: vi.fn().mockResolvedValue(inventoryWithAgent()) });
+    render(<KeysScreen api={api} />);
+
+    const workRow = await screen.findByRole("row", { name: /id_work/ });
+    await userEvent.click(within(workRow).getByRole("button", { name: "Add to agent" }));
+
+    await userEvent.type(screen.getByLabelText("Key passphrase"), "correct horse");
+    await userEvent.selectOptions(screen.getByLabelText("Lifetime"), "3600");
+    await userEvent.click(screen.getByLabelText(/store the passphrase in the login Keychain/));
+    await userEvent.click(screen.getByRole("button", { name: "Register with the agent" }));
+
+    await waitFor(() =>
+      expect(api.registerWithAgent).toHaveBeenCalledWith("key-one", {
+        passphrase: "correct horse",
+        lifetimeSeconds: 3600,
+        storeInKeychain: true,
+      }),
+    );
+    // The form closes and takes the passphrase with it. A passphrase left in
+    // component state would survive every later render of this screen.
+    await waitFor(() => expect(screen.queryByLabelText("Key passphrase")).not.toBeInTheDocument());
+    expect(document.body).not.toHaveTextContent("correct horse");
+  });
+
+  it("keeps no passphrase after the agent refuses the key", async () => {
+    const api = buildApi({
+      inventory: vi.fn().mockResolvedValue(inventoryWithAgent()),
+      registerWithAgent: vi.fn().mockRejectedValue(new Error("api_mutation_failed")),
+    });
+    render(<KeysScreen api={api} />);
+
+    const workRow = await screen.findByRole("row", { name: /id_work/ });
+    await userEvent.click(within(workRow).getByRole("button", { name: "Add to agent" }));
+    await userEvent.type(screen.getByLabelText("Key passphrase"), "wrong passphrase");
+    await userEvent.click(screen.getByRole("button", { name: "Register with the agent" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("could not be added to the agent");
+    // The form stays open so the user can retry, but the field is empty.
+    expect(screen.getByLabelText("Key passphrase")).toHaveValue("");
+    expect(document.body).not.toHaveTextContent("wrong passphrase");
+  });
+
+  it("asks for no passphrase for a key that is not encrypted", async () => {
+    const inventory = inventoryWithAgent();
+    inventory.items = inventory.items.map((item) => ({ ...item, encrypted: false }));
+    const api = buildApi({ inventory: vi.fn().mockResolvedValue(inventory) });
+    render(<KeysScreen api={api} />);
+
+    const workRow = await screen.findByRole("row", { name: /id_work/ });
+    await userEvent.click(within(workRow).getByRole("button", { name: "Add to agent" }));
+
+    expect(screen.queryByLabelText("Key passphrase")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Register with the agent" }));
+
+    await waitFor(() =>
+      expect(api.registerWithAgent).toHaveBeenCalledWith("key-one", {
+        passphrase: "",
+        lifetimeSeconds: 0,
+        storeInKeychain: false,
+      }),
+    );
+  });
+
+  it("shows what the agent holds and which entries delegate to it", async () => {
+    const inventory = inventoryWithAgent();
+    inventory.agentIdentities = [
+      { bits: 256, fingerprint: "SHA256:heldbyagent", comment: "aida@laptop", algorithm: "ED25519" },
+    ];
+    inventory.agentDelegations = [
+      {
+        directive: "IdentityAgent",
+        configPath: "config",
+        line: 9,
+        condition: "Host deploy",
+        hostPatterns: ["deploy"],
+        value: "SSH_AUTH_SOCK",
+      },
+    ];
+    render(<KeysScreen api={buildApi({ inventory: vi.fn().mockResolvedValue(inventory) })} />);
+
+    const identityRow = await screen.findByRole("row", { name: /SHA256:heldbyagent/ });
+    expect(within(identityRow).getByText("ED25519 · 256")).toBeInTheDocument();
+    expect(screen.getByText(/IdentityAgent SSH_AUTH_SOCK — config:9/)).toBeInTheDocument();
   });
 });

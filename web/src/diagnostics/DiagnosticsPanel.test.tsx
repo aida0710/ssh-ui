@@ -159,4 +159,43 @@ describe("DiagnosticsPanel", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/could not/i);
   });
+
+  it("diagnoses a fixed host without asking for an alias", async () => {
+    const api = buildApi();
+    render(<DiagnosticsPanel api={api} host="bastion" />);
+
+    expect(screen.queryByLabelText("Host alias")).not.toBeInTheDocument();
+    // The file list belongs to the Config section; a fixed host does not read it.
+    expect(api.configCheck).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Check reachability" }));
+
+    await waitFor(() => expect(api.reachability).toHaveBeenCalledWith("bastion"));
+    expect(await screen.findByText(/203\.0\.113\.10:22/)).toBeInTheDocument();
+  });
+
+  it("starts no check of its own when a fixed host is opened", async () => {
+    const api = buildApi();
+    render(<DiagnosticsPanel api={api} host="bastion" />);
+
+    expect(api.effective).not.toHaveBeenCalled();
+    expect(api.reachability).not.toHaveBeenCalled();
+    expect(api.authentication).not.toHaveBeenCalled();
+    expect(api.terminalCommand).not.toHaveBeenCalled();
+    expect(api.terminalLaunch).not.toHaveBeenCalled();
+  });
+
+  it("drops the previous host's results when the fixed host changes", async () => {
+    const api = buildApi();
+    const { rerender } = render(<DiagnosticsPanel api={api} host="bastion" />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Check reachability" }));
+    expect(await screen.findByText(/203\.0\.113\.10:22/)).toBeInTheDocument();
+
+    // A verdict earned by bastion must not sit under nas and read as its own.
+    rerender(<DiagnosticsPanel api={api} host="nas" />);
+
+    await waitFor(() => expect(screen.queryByText(/203\.0\.113\.10:22/)).not.toBeInTheDocument());
+    expect(screen.queryByRole("heading", { name: "Reachability" })).not.toBeInTheDocument();
+  });
 });

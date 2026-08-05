@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FieldEdit, FormField, GroupMetadata, HostDetail, HostMetadata, SavePreview } from "../api/config";
 import type { Problem } from "../api/client";
+import { integrationsApi, type IntegrationsApi } from "../api/integrations";
+import { DiagnosticsPanel } from "../diagnostics/DiagnosticsPanel";
 import { formatValues, parseValues } from "./values";
 import { NoticeList, SavePreviewPanel } from "./SavePreview";
 
@@ -18,6 +20,10 @@ type HostDetailPanelProps = {
   onBlockRaw: (raw: string) => void;
   onRename: (newAlias: string) => void;
   onMetadata: (metadata: HostMetadata) => void;
+  // The Diagnostics tab runs the same checks as the Diagnostics section, so it
+  // consumes the same client. It is a prop only so a test can inject one; the
+  // panel falls back to the real client when it is absent.
+  integrations?: IntegrationsApi;
 };
 
 function fieldKey(field: FormField): string {
@@ -33,6 +39,7 @@ export function HostDetailPanel({
   onBlockRaw,
   onRename,
   onMetadata,
+  integrations = integrationsApi,
 }: HostDetailPanelProps) {
   const [tab, setTab] = useState<Tab>("Basic");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -237,9 +244,17 @@ export function HostDetailPanel({
       {tab === "Effective" ? (
         <div className="flex flex-col gap-2">
           <p role="status" className="text-xs text-amber-300">
-            These are the values this engine reads, with their source. They are not `ssh -G` output; the authoritative
-            check arrives with the diagnostics subsystem.
+            These are the values this engine reads, with their source. They are not `ssh -G` output: OpenSSH settles
+            some of them only once it knows the destination, and only it evaluates `Match`. Run the authoritative
+            check from the Diagnostics tab.
           </p>
+          <button
+            type="button"
+            onClick={() => setTab("Diagnostics")}
+            className="self-start rounded border border-zinc-700 px-2 py-1 text-xs"
+          >
+            Open the Diagnostics tab
+          </button>
           <ul className="flex flex-col gap-1">
             {detail.effective.entries.map((entry, index) => (
               <li key={`${entry.keyword}-${index}`} className="text-xs text-zinc-300">
@@ -252,9 +267,18 @@ export function HostDetailPanel({
       ) : null}
 
       {tab === "Diagnostics" ? (
-        <p role="status" className="text-sm text-zinc-400">
-          Reachability, authentication and `ssh -G` diagnostics arrive with a later subsystem.
-        </p>
+        // A block that matches by pattern names no destination, so there is
+        // nothing to dial, evaluate or open a Terminal for. ConnectionsPage
+        // never routes one here, but an alias is what every check is addressed
+        // by, so an empty one must not reach the panel from anywhere.
+        identityAlias === "" ? (
+          <p className="text-sm text-zinc-400">
+            This block matches by pattern and names no destination of its own, so there is nothing to diagnose. Open a
+            connection with a concrete alias instead.
+          </p>
+        ) : (
+          <DiagnosticsPanel api={integrations} host={identityAlias} />
+        )
       ) : null}
 
       <section className="flex flex-col gap-2 rounded border border-zinc-800 p-3">
