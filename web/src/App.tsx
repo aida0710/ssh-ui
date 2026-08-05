@@ -73,16 +73,36 @@ export function App({ bootstrap, health }: AppProps) {
     );
   }
 
+  // The shell is exactly one viewport tall and never scrolls as a whole: the
+  // header and the primary navigation stay put while a panel scrolls inside
+  // main. A page-level scroll would carry the session status and the section
+  // buttons off screen, which is wrong for a shell whose status line reports
+  // whether the local session is still alive.
+  //
+  // min-h-0 on the body row is what makes that true. A flex child's default
+  // min-height is its content, so without it a tall panel grows the row past
+  // the viewport and the document scrolls again. grid-rows-[minmax(0,1fr)]
+  // does the same for the implicit row, which would otherwise be sized by its
+  // content rather than clamped to the row it was given.
+  //
+  // `relative` on the two scrolling regions is not decoration. The screen
+  // reader descriptions the connection tree writes are `sr-only`, which is
+  // `position: absolute`, and an absolutely positioned element is clipped by
+  // an ancestor's overflow only when that ancestor is its containing block. A
+  // static main is not, so those spans resolved against the initial containing
+  // block, sat at their static offset far below the fold, and stretched the
+  // document's scrolling area — the header scrolled away again while the panel
+  // itself looked correctly clipped.
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <header className="flex items-baseline gap-3 border-b border-zinc-800 px-6 py-4">
+    <div className="flex h-screen flex-col bg-zinc-950 text-zinc-100">
+      <header className="flex shrink-0 items-baseline gap-3 border-b border-zinc-800 px-6 py-4">
         <h1 className="text-xl font-semibold">SSH UI</h1>
         <p role="status" className="text-sm text-zinc-300">
           {state === "ready" ? `Local session active · ${version}` : "Starting secure local session…"}
         </p>
       </header>
-      <div className="grid grid-cols-[15rem_1fr]">
-        <nav aria-label="Primary" className="border-r border-zinc-800 p-4">
+      <div className="grid min-h-0 flex-1 grid-cols-[15rem_1fr] grid-rows-[minmax(0,1fr)]">
+        <nav aria-label="Primary" className="relative overflow-y-auto border-r border-zinc-800 p-4">
           <ul>
             {sections.map((name) => (
               <li key={name}>
@@ -101,7 +121,7 @@ export function App({ bootstrap, health }: AppProps) {
             ))}
           </ul>
         </nav>
-        <main className="p-6">
+        <main className="relative overflow-y-auto p-6">
           {state === "ready" ? (
             <SectionView section={section} fileTarget={fileTarget} onOpenFile={openFile} />
           ) : null}
