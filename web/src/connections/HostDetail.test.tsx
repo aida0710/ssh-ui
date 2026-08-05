@@ -26,6 +26,12 @@ function buildIntegrations(overrides: Partial<IntegrationsApi> = {}): Integratio
     deleteKnownHosts: vi.fn(),
     scanKnownHosts: vi.fn(),
     addKnownHost: vi.fn(),
+    passwordVault: vi.fn().mockResolvedValue({ exists: false, unlocked: false, aliases: [] }),
+    initialiseVault: vi.fn().mockResolvedValue({ exists: true, unlocked: true, aliases: [] }),
+    unlockVault: vi.fn().mockResolvedValue({ exists: true, unlocked: true, aliases: [] }),
+    lockVault: vi.fn().mockResolvedValue({ exists: true, unlocked: false, aliases: [] }),
+    storePassword: vi.fn().mockResolvedValue({ exists: true, unlocked: true, aliases: [] }),
+    forgetPassword: vi.fn().mockResolvedValue({ exists: true, unlocked: true, aliases: [] }),
     ...overrides,
   };
 }

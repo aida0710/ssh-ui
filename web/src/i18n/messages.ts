@@ -108,6 +108,34 @@ export const en = {
   "orphan.reassociate": "Re-associate {alias}",
   "orphan.discard": "Discard {alias} settings",
 
+  "password.heading": "Stored password",
+  "password.loading": "Reading the password vault…",
+  "password.warning":
+    "A stored password is the remote account's own credential, and the same password is often reused elsewhere. A key is stronger. Store one only for a server that will not take a key.",
+  "password.statusFailed": "The password vault could not be read.",
+  "password.noVault":
+    "No vault yet. Choose a passphrase of at least {count} characters. It is never stored: it exists only while ssh-ui is running, and it is what encrypts the file that travels with the rest of your ~/.ssh.",
+  "password.newPassphrase": "New vault passphrase",
+  "password.passphraseLost":
+    "Lose this and every stored password is gone. Nobody can recover it, including this application.",
+  "password.initialise": "Create the vault",
+  "password.initialiseFailed": "The vault could not be created.",
+  "password.locked": "The vault is locked, so this host's password cannot be read or changed yet.",
+  "password.passphrase": "Vault passphrase",
+  "password.unlock": "Unlock",
+  "password.unlockFailed": "That passphrase did not open the vault.",
+  "password.lock": "Lock the vault",
+  "password.lockFailed": "The vault could not be locked.",
+  "password.password": "Password for {alias}",
+  "password.knownHostFirst":
+    "Add this host's key through Known Hosts first. With a stored password armed, ssh asks the helper every question — including the host key one, which it refuses — so a first connection to an unknown host fails on purpose.",
+  "password.store": "Store the password",
+  "password.storeFailed": "The password could not be stored.",
+  "password.stored": "A password is stored for {alias}.",
+  "password.armedNote":
+    "Opening a terminal for this host arms the helper for that one connection. The vault must be unlocked at the time, so a saved password does nothing until the passphrase has been entered once since ssh-ui started.",
+  "password.forget": "Forget the password for {alias}",
+  "password.forgetFailed": "The password could not be removed.",
   "diag.heading": "Diagnostics",
   "diag.configUnreadable": "The configuration could not be read.",
   "diag.running": "Running the requested check…",
@@ -577,6 +605,34 @@ export const ja: Record<MessageKey, string> = {
   "orphan.reassociate": "{alias} を再関連付け",
   "orphan.discard": "{alias} の設定を破棄",
 
+  "password.heading": "保存済みパスワード",
+  "password.loading": "パスワード保管庫を読み込んでいます…",
+  "password.warning":
+    "保存するのはリモートアカウント自身の資格情報で、同じパスワードは他所でも使い回されがちです。鍵のほうが確実に強力です。鍵を受け付けないサーバーにだけ使ってください。",
+  "password.statusFailed": "パスワード保管庫を読み取れませんでした。",
+  "password.noVault":
+    "保管庫はまだありません。{count} 文字以上のパスフレーズを決めてください。保存はされません。ssh-ui の起動中だけ存在し、~/.ssh と一緒に運ばれるファイルを暗号化するのに使われます。",
+  "password.newPassphrase": "保管庫の新しいパスフレーズ",
+  "password.passphraseLost":
+    "これを失うと保存済みパスワードは全て失われます。このアプリを含め、誰も復元できません。",
+  "password.initialise": "保管庫を作成",
+  "password.initialiseFailed": "保管庫を作成できませんでした。",
+  "password.locked": "保管庫がロックされているため、このホストのパスワードはまだ読み書きできません。",
+  "password.passphrase": "保管庫のパスフレーズ",
+  "password.unlock": "アンロック",
+  "password.unlockFailed": "そのパスフレーズでは保管庫を開けませんでした。",
+  "password.lock": "保管庫をロック",
+  "password.lockFailed": "保管庫をロックできませんでした。",
+  "password.password": "{alias} のパスワード",
+  "password.knownHostFirst":
+    "先に Known Hosts でこのホストの鍵を登録してください。保存済みパスワードを使う状態では ssh は全ての質問をヘルパに回します。ホスト鍵の確認も含まれ、ヘルパはそれを拒否するので、未知のホストへの初回接続は意図的に失敗します。",
+  "password.store": "パスワードを保存",
+  "password.storeFailed": "パスワードを保存できませんでした。",
+  "password.stored": "{alias} のパスワードが保存されています。",
+  "password.armedNote":
+    "このホストのターミナルを開くと、その 1 接続分だけヘルパが有効になります。その時点で保管庫がアンロックされている必要があるため、ssh-ui 起動後に一度パスフレーズを入れるまで保存済みパスワードは機能しません。",
+  "password.forget": "{alias} のパスワードを削除",
+  "password.forgetFailed": "パスワードを削除できませんでした。",
   "diag.heading": "診断",
   "diag.configUnreadable": "設定を読み取れませんでした。",
   "diag.running": "要求された検査を実行しています…",

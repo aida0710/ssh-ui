@@ -13,6 +13,7 @@ export type KnownHostsChangeResponse = components["schemas"]["KnownHostsChangeRe
 export type KnownHostsScanResponse = components["schemas"]["KnownHostsScanResponse"];
 export type KnownHostCandidate = components["schemas"]["KnownHostCandidate"];
 export type IssueActionResponse = components["schemas"]["IssueActionResponse"];
+export type PasswordVaultStatus = components["schemas"]["PasswordVaultStatus"];
 
 // The action vocabulary belongs to the server's session package, which owns it
 // for every subsystem that confirms an operation. These are its wire values.
@@ -44,6 +45,15 @@ export type IntegrationsApi = {
     expectedFingerprint: string,
     acknowledged: boolean,
   ): Promise<KnownHostsChangeResponse>;
+  // The vault. No method here ever returns a password: the status carries the
+  // hosts that have one, and the value only ever travels from the browser to
+  // the server, or from the server to the askpass helper.
+  passwordVault(): Promise<PasswordVaultStatus>;
+  initialiseVault(passphrase: string): Promise<PasswordVaultStatus>;
+  unlockVault(passphrase: string): Promise<PasswordVaultStatus>;
+  lockVault(): Promise<PasswordVaultStatus>;
+  storePassword(alias: string, password: string): Promise<PasswordVaultStatus>;
+  forgetPassword(alias: string): Promise<PasswordVaultStatus>;
 };
 
 // The generated types describe the contract; these guards check the payload the
@@ -244,6 +254,14 @@ async function postJSON<T>(path: string, body: unknown, actionToken?: string): P
   return apiClient.mutate<T>(path, { method: "POST", headers, body: JSON.stringify(body) });
 }
 
+function validateVaultStatus(value: unknown): PasswordVaultStatus {
+  const record = asRecord(value);
+  asBoolean(record.exists);
+  asBoolean(record.unlocked);
+  for (const alias of asArray(record.aliases)) asString(alias);
+  return record as unknown as PasswordVaultStatus;
+}
+
 export const integrationsApi: IntegrationsApi = {
   async configCheck() {
     return validateConfigCheck(await postJSON<unknown>("/api/v1/diagnostics/config", {}));
@@ -270,6 +288,32 @@ export const integrationsApi: IntegrationsApi = {
   async terminalLaunch(alias) {
     const token = await issueAction(TERMINAL_LAUNCH_ACTION_KIND, alias);
     return validateTerminalLaunch(await postJSON<unknown>("/api/v1/terminal/launch", { alias }, token));
+  },
+  async passwordVault() {
+    return validateVaultStatus(await apiClient.read("/api/v1/passwords"));
+  },
+  async initialiseVault(passphrase) {
+    return validateVaultStatus(await postJSON<unknown>("/api/v1/passwords/initialise", { passphrase }));
+  },
+  async unlockVault(passphrase) {
+    return validateVaultStatus(await postJSON<unknown>("/api/v1/passwords/unlock", { passphrase }));
+  },
+  async lockVault() {
+    return validateVaultStatus(await postJSON<unknown>("/api/v1/passwords/lock", {}));
+  },
+  async storePassword(alias, password) {
+    return validateVaultStatus(
+      await apiClient.mutate<unknown>(`/api/v1/passwords/${encodeURIComponent(alias)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      }),
+    );
+  },
+  async forgetPassword(alias) {
+    return validateVaultStatus(
+      await apiClient.mutate<unknown>(`/api/v1/passwords/${encodeURIComponent(alias)}`, { method: "DELETE" }),
+    );
   },
   async knownHosts(query) {
     return validateKnownHosts(await apiClient.read(`/api/v1/known-hosts?query=${encodeURIComponent(query)}`));

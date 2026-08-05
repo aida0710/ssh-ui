@@ -51,6 +51,12 @@ function buildApi(overrides: Partial<IntegrationsApi> = {}): IntegrationsApi {
     deleteKnownHosts: vi.fn().mockResolvedValue({ changed: true, transactionId: "tx-1" }),
     scanKnownHosts: vi.fn().mockResolvedValue(scanResult(candidate)),
     addKnownHost: vi.fn().mockResolvedValue({ changed: true, transactionId: "tx-2" }),
+    passwordVault: vi.fn().mockResolvedValue({ exists: false, unlocked: false, aliases: [] }),
+    initialiseVault: vi.fn().mockResolvedValue({ exists: true, unlocked: true, aliases: [] }),
+    unlockVault: vi.fn().mockResolvedValue({ exists: true, unlocked: true, aliases: [] }),
+    lockVault: vi.fn().mockResolvedValue({ exists: true, unlocked: false, aliases: [] }),
+    storePassword: vi.fn().mockResolvedValue({ exists: true, unlocked: true, aliases: [] }),
+    forgetPassword: vi.fn().mockResolvedValue({ exists: true, unlocked: true, aliases: [] }),
     ...overrides,
   };
 }
