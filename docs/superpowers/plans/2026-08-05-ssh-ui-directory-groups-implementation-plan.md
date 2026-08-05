@@ -821,6 +821,30 @@ Tasks affected: Task 7 Step 4's assertion becomes `TestKeyMoveRefusesWhileAnyKey
 
 Risk 2 is fixed on `main` ahead of this plan, because it is a correctness gap in committed code regardless of whether directory groups are built. `overlayLoader` now carries a `gone` set alongside `pending`, `Service.validate` builds both from the whole `storage.Request` through `overlayFor`, and a pending write beats a removal so a move onto an existing path still reads its new contents. `TestOverlayLoaderHidesAMovedSourceFromReadsAndGlobs` fails without it. Tasks that assumed they had to fix this first can consume it.
 
+### Decision 7: ssh-ui is assumed to be the only writer of the managed layout, and the check that catches it being wrong stays
+
+The layout this plan creates — `connections/<group>/`, `keys/<group>/`, the generated `Include` lines — is assumed to be written only by this application. That assumption is what lets the design stop accommodating arbitrary hand-written shapes inside those directories: paths there are absolute because ssh-ui wrote them, the `Include` order is the one ssh-ui emitted, and a group directory contains what ssh-ui put in it.
+
+It also repairs the awkward part of Decision 5. The strict refusal — no key move while any reference is unresolved — reads as harsh only if it is permanent. It is not: **migration is what makes the assumption true.** Migration normalises key references to absolute paths and generates the layout, and from that point every write keeps them absolute. The refusal therefore bites once, before adoption, which is exactly when the configuration is least understood and strictness is most warranted.
+
+What does not change is the precondition and conflict machinery. `~/.ssh` has other writers whether or not the user ever opens an editor: `ssh` appends to `known_hosts`, `ssh-keygen` writes key files, `ssh-copy-id` and dotfile managers drop things in, and a second copy of ssh-ui is a second writer. The SHA-256 precondition and the three-way conflict view are already built and cost one hash per save, so keeping them is not extra work — it is the thing that notices when the assumption is wrong. The assumption is held in the design and verified at runtime, which is the only form of it that stays true.
+
+### Decision 8: a per-host comment is written into the configuration, and it replaces the metadata note
+
+The same argument that motivates directory groups applies to notes: today a note lives only in `~/.ssh/ssh-ui/metadata.json`, so it disappears for anyone who reads the configuration without ssh-ui. A comment line above the `Host` block is plain OpenSSH and survives.
+
+**What is attachable.** `internal/config/line.go` defines `LineComment` as "a line whose first non-whitespace character is `#`", which is the correct reading — `ssh_config` has no trailing-comment syntax, and `Host foo # bar` parses `#` and `bar` as additional patterns. The UI therefore offers whole-line comments only, and must never offer to append a comment to a directive line.
+
+**The attachment rule.** `Block.Header` is the index of the `Host` line and `Block.Start` is `Header+1`, so comments above a block are not part of it today. The comment belonging to a Host block is defined as the run of contiguous `LineComment` lines immediately above its `Host` line, stopping at a blank line, a directive or the start of the file. A blank line separates deliberately: without that rule a file's own header comment would be adopted by whichever Host block happens to be first, and editing the block would rewrite the file's banner.
+
+**Editing.** Saving a comment rewrites exactly those lines — inserting, replacing or deleting them — and nothing else. The existing round-trip proof (`parsed.Render()` must equal the written bytes) already enforces that everything outside the rewritten run is untouched.
+
+**Moving.** The comment travels with its block on a move or a rename. A connection whose comment stayed behind in the old file would be worse than one with no comment, because the stale text would then describe whatever block ends up in that position.
+
+**The note is retired.** Keeping both a comment and a `note` would mean two places for one thing, the user having to remember which they wrote in, and no way for this application to resolve them when both are set and disagree. `metadata.json` keeps only what has no representation in the configuration: colour, tags, favourite and display order. Migration writes each existing note out as a comment above its block and drops the field.
+
+This is independent of the rest of this plan — it needs no directory layout and no file moves — and can ship on its own.
+
 ## Open questions for the author
 
 Four things the settled decisions do not cover. Each is written as a question rather than answered, because each is a judgment call rather than a technical gap.
