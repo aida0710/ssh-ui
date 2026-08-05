@@ -169,13 +169,37 @@ describe("GroupsPanel", () => {
     } as never);
     render(<GroupsPanel />);
 
-    // Removing a group relocates its connections; nothing is deleted, so the
-    // control asks where they go rather than offering to destroy them.
-    await user.selectOptions(await screen.findByLabelText("Move the connections of company into"), "archive");
+    // Removing a group relocates its connections; nothing is deleted. The
+    // destination is asked for inside the removal, after a sentence that says
+    // what removal does, rather than by a select sitting on its own with a
+    // label that never mentioned removal.
+    await user.click(await screen.findByRole("button", { name: "Remove company" }));
+    expect(screen.getByText(/takes away its Include line/)).toBeInTheDocument();
+    expect(screen.getByText(/No configuration file is deleted/)).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Move its connections to"), "archive");
     await user.click(screen.getByRole("button", { name: "Remove company" }));
 
     await waitFor(() => expect(configApi.deleteGroup).toHaveBeenCalledWith("company", "archive"));
   });
+  it("marks a group that is only in the draft, and will not write files for it", async () => {
+    // The panel has two kinds of control and used to show no difference. A
+    // group added here exists only on screen until Save, but it looked exactly
+    // like one with a directory, and offered Rename and Remove — which write
+    // files, for a group that has none.
+    const user = userEvent.setup();
+    render(<GroupsPanel />);
+
+    await user.type(await screen.findByLabelText(/New group name/i), "lab");
+    await user.click(screen.getByRole("button", { name: "Add group" }));
+
+    expect(await screen.findByText("Not saved")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove lab" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Rename lab" })).toBeDisabled();
+    expect(screen.getByText(/no directory yet/)).toBeInTheDocument();
+    // And the page says which half of it needs Save at all.
+    expect(screen.getByText(/until you press Save/)).toBeInTheDocument();
+  });
+
   // The bug: the panel sorted by the rule that decides the Include order —
   // deepest group first — and then indented as though that were a tree. Every
   // child floated above its parent and the parent came last, which reads as

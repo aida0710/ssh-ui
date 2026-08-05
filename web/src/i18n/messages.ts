@@ -362,9 +362,24 @@ export const en = {
   "groups.listLabel": "Groups, parent before child",
   "groups.orderNote":
     "Listed as a tree, parent first. The Include lines are written in the opposite order — deepest group first — because OpenSSH keeps the first value it reads, so a child's setting has to be read before its parent's.",
-  "groups.removeInto": "Move the connections of {name} into",
-  "groups.removeIntoShort": "Move connections to",
+  "groups.removeInto": "Remove {name}",
+  "groups.removeIntoShort": "Move its connections to",
   "groups.removeIntoNone": "No group (connections/ itself)",
+  "groups.removeExplain":
+    "Removing {name} takes away its Include line and its group settings. Its {count} connections have to go somewhere:",
+  "groups.removeExplainEmpty":
+    "Removing {name} takes away its Include line and its group settings. It holds no connections, so nothing moves.",
+  "groups.removeKeepsFiles":
+    "No configuration file is deleted. The change is one transaction, so History can undo it.",
+  "groups.removeConfirm": "Remove {name}",
+  "groups.removeCancel": "Keep it",
+  "groups.unsaved": "Not saved",
+  "groups.unsavedNote":
+    "Colour, display order, a new group and a new setting are on this screen only until you press Save. Rename and Remove are different: they write files the moment you press them.",
+  "groups.savedNote":
+    "This page holds no unwritten changes. Colour, display order, new groups and new settings wait for Save; Rename and Remove write files immediately.",
+  "groups.newGroupNote":
+    "This group has no directory yet. Save creates it. Rename and Remove act on files, so they wait until then.",
   "groups.parent": "Parent group",
   "groups.none": "None",
   "groups.addHeading": "Add a group",
@@ -921,9 +936,23 @@ export const ja: Record<MessageKey, string> = {
   "groups.listLabel": "グループ一覧（親が先）",
   "groups.orderNote":
     "ここでは親が先に来るツリー順で表示しています。Include 行は逆順（深い子グループが先）で書かれます。OpenSSH は最初に読んだ値を採用するため、子の設定を親より先に読ませる必要があるからです。",
-  "groups.removeInto": "{name} の接続先の移動先",
-  "groups.removeIntoShort": "接続先の移動先",
+  "groups.removeInto": "{name} を削除",
+  "groups.removeIntoShort": "中の接続の移動先",
   "groups.removeIntoNone": "グループなし（connections/ 直下）",
+  "groups.removeExplain":
+    "{name} を削除すると、Include 行とグループ設定がなくなります。中の接続 {count} 件はどこかへ移す必要があります。",
+  "groups.removeExplainEmpty":
+    "{name} を削除すると、Include 行とグループ設定がなくなります。中に接続はないので、移動するものはありません。",
+  "groups.removeKeepsFiles": "設定ファイルは 1 つも削除されません。1 トランザクションなので、履歴から元に戻せます。",
+  "groups.removeConfirm": "{name} を削除する",
+  "groups.removeCancel": "やめる",
+  "groups.unsaved": "未保存",
+  "groups.unsavedNote":
+    "色・表示順・追加したグループ・追加した設定は、保存を押すまでこの画面の中だけの変更です。名前の変更と削除だけは別で、押した瞬間にファイルへ書き込みます。",
+  "groups.savedNote":
+    "未保存の変更はありません。色・表示順・グループの追加・設定の追加は保存が必要で、名前の変更と削除は押した時点で書き込みます。",
+  "groups.newGroupNote":
+    "このグループのディレクトリはまだありません。保存すると作られます。名前の変更と削除はファイルへの操作なので、それまで使えません。",
   "groups.parent": "親グループ",
   "groups.none": "なし",
   "groups.addHeading": "グループを追加する",
@@ -992,7 +1021,7 @@ export const ja: Record<MessageKey, string> = {
   "host.primaryGroup": "所属グループ",
   "host.groupNone": "なし",
   "host.groupIsADirectory":
-    "グループはディレクトリなので、変更するとこの接続先のファイルがそこへ移動します。移動、metadata の識別、Include 領域は同一トランザクションです。",
+    "グループはディレクトリなので、変更するとこの接続のファイルがそこへ移動します。移動、metadata の識別、Include 領域は同一トランザクションです。",
   "host.moveToGroup": "このグループへ移動",
   "host.favourite": "お気に入り",
   "host.comment": "コメント",
