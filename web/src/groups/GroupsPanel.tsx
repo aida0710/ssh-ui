@@ -20,6 +20,7 @@ export function GroupsPanel() {
   const [settingGroup, setSettingGroup] = useState("");
   const [settingKeyword, setSettingKeyword] = useState("");
   const [settingValue, setSettingValue] = useState("");
+  const [renaming, setRenaming] = useState<Record<string, string>>({});
   const [localError, setLocalError] = useState("");
 
   const reload = useCallback(async () => {
@@ -87,6 +88,38 @@ export function GroupsPanel() {
     });
     setSettingKeyword("");
     setSettingValue("");
+    setLocalError("");
+  }
+
+  // A group's name is its only identifier: hosts point at it by name and child
+  // groups name it as their parent. Renaming therefore touches three places in
+  // one edit, and doing fewer would strand the members or the children.
+  //
+  // The configuration side needs nothing: groups.ssh-ui.conf is regenerated
+  // from this document on every save, and the name appears there only in a
+  // comment — the Host line lists member aliases, not the group.
+  function renameGroup(from: string, to: string) {
+    const target = to.trim();
+    if (target === "" || target === from) {
+      setLocalError("A renamed group needs a name of its own.");
+      return;
+    }
+    if (groups.some((group) => group.name === target)) {
+      // Renaming onto an existing group would merge two sets of settings and
+      // two sets of members, and nothing here knows which should win.
+      setLocalError(`${target} already exists. Rename it to something else, or remove one of the two.`);
+      return;
+    }
+    setMetadata({
+      ...loaded,
+      groups: (loaded.groups ?? []).map((group) => ({
+        ...group,
+        name: group.name === from ? target : group.name,
+        ...(group.parent === from ? { parent: target } : {}),
+      })),
+      hosts: (loaded.hosts ?? []).map((host) => (host.group === from ? { ...host, group: target } : host)),
+    });
+    setRenaming({ ...renaming, [from]: "" });
     setLocalError("");
   }
 
@@ -165,6 +198,22 @@ export function GroupsPanel() {
                   {`Clear ${group.name} colour`}
                 </button>
               )}
+              <label htmlFor={`group-rename-${group.name}`} className="text-xs text-zinc-400">
+                {`Rename ${group.name} to`}
+              </label>
+              <input
+                id={`group-rename-${group.name}`}
+                value={renaming[group.name] ?? ""}
+                onChange={(event) => setRenaming({ ...renaming, [group.name]: event.target.value })}
+                className="w-40 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs"
+              />
+              <button
+                type="button"
+                onClick={() => renameGroup(group.name, renaming[group.name] ?? "")}
+                className="rounded border border-zinc-700 px-2 py-1 text-xs"
+              >
+                {`Rename ${group.name}`}
+              </button>
               <label htmlFor={`group-order-${group.name}`} className="text-xs text-zinc-400">
                 Display order
               </label>

@@ -6,7 +6,7 @@ import { CopyButton } from "./CopyButton";
 describe("CopyButton", () => {
   it("writes exactly the value it was given", async () => {
     const user = userEvent.setup();
-    render(<CopyButton value="ssh -- bastion" label="command" />);
+    render(<CopyButton value="ssh -- bastion" label="copy.command" />);
 
     await user.click(screen.getByRole("button", { name: "Copy command" }));
 
@@ -20,7 +20,7 @@ describe("CopyButton", () => {
     // reported success anyway would send the user to paste something that is
     // not there.
     vi.spyOn(navigator.clipboard, "writeText").mockRejectedValue(new Error("denied"));
-    render(<CopyButton value="ssh -- bastion" label="command" />);
+    render(<CopyButton value="ssh -- bastion" label="copy.command" />);
 
     await user.click(screen.getByRole("button", { name: "Copy command" }));
 
@@ -30,14 +30,14 @@ describe("CopyButton", () => {
 
   it("stops claiming a copy once the value has changed underneath it", async () => {
     const user = userEvent.setup();
-    const { rerender } = render(<CopyButton value="first" label="command" />);
+    const { rerender } = render(<CopyButton value="first" label="copy.command" />);
 
     await user.click(screen.getByRole("button", { name: "Copy command" }));
     expect(screen.getByText("Copied.")).toBeInTheDocument();
 
     // The clipboard still holds "first". Saying "Copied." next to "second"
     // would tell the user the thing on screen is the thing they can paste.
-    rerender(<CopyButton value="second" label="command" />);
+    rerender(<CopyButton value="second" label="copy.command" />);
 
     expect(screen.queryByText("Copied.")).not.toBeInTheDocument();
     expect(await navigator.clipboard.readText()).toBe("first");
@@ -46,8 +46,8 @@ describe("CopyButton", () => {
   it("names what it copies, so two buttons on one screen are distinguishable", () => {
     render(
       <>
-        <CopyButton value="a" label="key line" />
-        <CopyButton value="b" label="remote command" />
+        <CopyButton value="a" label="copy.keyLine" />
+        <CopyButton value="b" label="copy.remoteCommand" />
       </>,
     );
 

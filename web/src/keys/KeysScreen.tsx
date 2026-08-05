@@ -351,7 +351,7 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
             {publicKeyView.text}
           </pre>
           <div className="flex gap-2">
-            <CopyButton value={publicKeyView.text} label="public key" />
+            <CopyButton value={publicKeyView.text} label="copy.publicKey" />
             <button type="button" onClick={() => setPublicKeyView(null)}>
               Close
             </button>
@@ -632,7 +632,7 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
             {terminalCommand.join(" ")}
           </pre>
           <div className="mt-2">
-            <CopyButton value={terminalCommand.join(" ")} label="Terminal command" />
+            <CopyButton value={terminalCommand.join(" ")} label="copy.terminalCommand" />
           </div>
         </div>
       )}

@@ -9,6 +9,9 @@ import { KeysScreen } from "./keys/KeysScreen";
 import { DiagnosticsPanel } from "./diagnostics/DiagnosticsPanel";
 import { KnownHostsPanel } from "./knownhosts/KnownHostsPanel";
 import { RemoteKeyPanel } from "./remotekeys/RemoteKeyPanel";
+import { LanguageProvider, useLanguage } from "./i18n/context";
+import { locales, type Locale } from "./i18n/locale";
+import type { MessageKey } from "./i18n/messages";
 
 type AppProps = {
   bootstrap: () => Promise<SessionState>;
@@ -28,7 +31,27 @@ const sections = [
 type Section = (typeof sections)[number];
 const enabledSections: Section[] = [...sections];
 
+// The section identifiers stay English and untranslated: they are this
+// component's own routing vocabulary, and translating them would make which
+// panel is open depend on the display language.
+const sectionLabels: Record<Section, MessageKey> = {
+  Connections: "section.connections",
+  Config: "section.config",
+  Groups: "section.groups",
+  Keys: "section.keys",
+  "Known Hosts": "section.knownHosts",
+  "Remote Keys": "section.remoteKeys",
+  Diagnostics: "section.diagnostics",
+  History: "section.history",
+};
+
+const localeLabels: Record<Locale, MessageKey> = {
+  en: "shell.languageEnglish",
+  ja: "shell.languageJapanese",
+};
+
 export function App({ bootstrap, health }: AppProps) {
+  const { t, locale, setLocale } = useLanguage();
   const [state, setState] = useState<"starting" | "ready" | "error">("starting");
   const [version, setVersion] = useState("");
   const [section, setSection] = useState<Section>("Connections");
@@ -67,8 +90,8 @@ export function App({ bootstrap, health }: AppProps) {
   if (state === "error") {
     return (
       <main>
-        <h1>SSH UI</h1>
-        <p role="alert">Secure local session could not be started. Restart ssh-ui and use the newly opened tab.</p>
+        <h1>{t("shell.title")}</h1>
+        <p role="alert">{t("shell.bootstrapFailed")}</p>
       </main>
     );
   }
@@ -96,13 +119,28 @@ export function App({ bootstrap, health }: AppProps) {
   return (
     <div className="flex h-screen flex-col bg-zinc-950 text-zinc-100">
       <header className="flex shrink-0 items-baseline gap-3 border-b border-zinc-800 px-6 py-4">
-        <h1 className="text-xl font-semibold">SSH UI</h1>
+        <h1 className="text-xl font-semibold">{t("shell.title")}</h1>
         <p role="status" className="text-sm text-zinc-300">
-          {state === "ready" ? `Local session active · ${version}` : "Starting secure local session…"}
+          {state === "ready" ? t("shell.active", { version }) : t("shell.starting")}
         </p>
+        <label htmlFor="language" className="ml-auto text-sm text-zinc-400">
+          {t("shell.language")}
+        </label>
+        <select
+          id="language"
+          value={locale}
+          onChange={(event) => setLocale(event.target.value as Locale)}
+          className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
+        >
+          {locales.map((candidate) => (
+            <option key={candidate} value={candidate}>
+              {t(localeLabels[candidate])}
+            </option>
+          ))}
+        </select>
       </header>
       <div className="grid min-h-0 flex-1 grid-cols-[15rem_1fr] grid-rows-[minmax(0,1fr)]">
-        <nav aria-label="Primary" className="relative overflow-y-auto border-r border-zinc-800 p-4">
+        <nav aria-label={t("shell.primaryNavigation")} className="relative overflow-y-auto border-r border-zinc-800 p-4">
           <ul>
             {sections.map((name) => (
               <li key={name}>
@@ -115,7 +153,7 @@ export function App({ bootstrap, health }: AppProps) {
                     enabledSections.includes(name) ? "text-zinc-200 hover:bg-zinc-900" : "text-zinc-500"
                   }`}
                 >
-                  {name}
+                  {t(sectionLabels[name])}
                 </button>
               </li>
             ))}

@@ -336,7 +336,7 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
           <h3 className="font-medium">Terminal</h3>
           <pre className="whitespace-pre-wrap break-all text-zinc-100">{terminal.command}</pre>
           <div className="mt-2 flex items-center gap-2">
-            <CopyButton value={terminal.command} label="command" />
+            <CopyButton value={terminal.command} label="copy.command" />
             {terminal.launchable ? (
               <button
                 type="button"

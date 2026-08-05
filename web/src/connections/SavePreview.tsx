@@ -1,21 +1,23 @@
 import type { ConflictReport, DiffLine, FileDiff, Notice, SavePreview } from "../api/config";
 import type { Problem } from "../api/client";
+import { useTranslate } from "../i18n/context";
+import type { MessageKey } from "../i18n/messages";
 
-const noticeCopy: Record<string, string> = {
-  complex_external_rule: "A wildcard, negation, Match block or duplicate alias makes this value come from a rule this editor will not simplify. The source is shown instead.",
-  duplicate_alias: "Another block declares the same alias. OpenSSH uses the first one it reads.",
-  wildcard_shadow: "A catch-all block can override values for this host.",
-  negated_pattern: "A negated pattern applies here.",
-  unnamed_host_block: "This block has no concrete alias and can only be edited as raw text.",
-  match_block: "A Match block was found. It is never evaluated here because Match exec can run a command.",
-  dangerous_directive: "This directive can run a command. It is saved as written and never executed by this application.",
-  unstructured_line: "This line has unbalanced quoting and is preserved exactly as written.",
-  external_file: "This file is outside ~/.ssh. It is shown but never written.",
-  orphan_metadata: "The host this note belonged to is gone. Re-associate it deliberately.",
-  group_cycle: "This group's parents form a cycle, so it was skipped.",
-  group_member_missing: "This group member has no host block in the configuration.",
-  explained_values_only: "These values explain what this engine reads. The authoritative ssh -G check arrives with the diagnostics subsystem.",
-  destination_not_included: "No Include reaches this file yet, so OpenSSH will not read the moved connection until you add one.",
+const noticeKeys: Record<string, MessageKey> = {
+  complex_external_rule: "notice.complex_external_rule",
+  duplicate_alias: "notice.duplicate_alias",
+  wildcard_shadow: "notice.wildcard_shadow",
+  negated_pattern: "notice.negated_pattern",
+  unnamed_host_block: "notice.unnamed_host_block",
+  match_block: "notice.match_block",
+  dangerous_directive: "notice.dangerous_directive",
+  unstructured_line: "notice.unstructured_line",
+  external_file: "notice.external_file",
+  orphan_metadata: "notice.orphan_metadata",
+  group_cycle: "notice.group_cycle",
+  group_member_missing: "notice.group_member_missing",
+  explained_values_only: "notice.explained_values_only",
+  destination_not_included: "notice.destination_not_included",
 };
 
 function DiffView({ lines }: { lines: DiffLine[] }) {
@@ -36,16 +38,15 @@ function DiffView({ lines }: { lines: DiffLine[] }) {
 }
 
 function FileDiffView({ diff }: { diff: FileDiff }) {
+  const t = useTranslate();
   return (
     <section className="flex flex-col gap-1">
       <h4 className="text-xs font-semibold text-zinc-300">
         {diff.path}
-        {diff.created === true ? " (new file)" : ""}
+        {diff.created === true ? t("preview.newFile") : ""}
       </h4>
       {diff.truncated === true ? (
-        <p className="text-xs text-amber-300">
-          This file is too large for a line-by-line preview, so the whole file is shown as replaced.
-        </p>
+        <p className="text-xs text-amber-300">{t("preview.tooLarge")}</p>
       ) : null}
       <DiffView lines={diff.lines} />
     </section>
@@ -53,12 +54,13 @@ function FileDiffView({ diff }: { diff: FileDiff }) {
 }
 
 export function NoticeList({ notices }: { notices: Notice[] }) {
+  const t = useTranslate();
   if (notices.length === 0) return null;
   return (
     <ul className="flex flex-col gap-1">
       {notices.map((notice, index) => (
         <li key={`${notice.code}-${notice.path ?? ""}-${notice.line ?? 0}-${index}`} className="text-xs text-amber-300">
-          {noticeCopy[notice.code] ?? notice.code}
+          {notice.code in noticeKeys ? t(noticeKeys[notice.code]!) : notice.code}
           {notice.path === undefined ? "" : ` (${notice.path}${notice.line === undefined ? "" : `:${notice.line}`})`}
         </li>
       ))}
@@ -75,19 +77,24 @@ export function SavePreviewPanel({
   conflict: ConflictReport | null;
   problem: Problem | null;
 }) {
+  const t = useTranslate();
   return (
     <section aria-labelledby="preview-heading" className="flex flex-col gap-3 rounded border border-zinc-800 p-4">
-      <h3 id="preview-heading" className="text-sm font-medium">Save preview</h3>
+      <h3 id="preview-heading" className="text-sm font-medium">{t("preview.heading")}</h3>
 
       {problem === null ? null : (
         <p role="alert" className="text-sm text-rose-300">
           {problem.code === "config_syntax_error"
-            ? `Syntax error in ${problem.path ?? "the file"} at line ${problem.line ?? 0}, column ${problem.column ?? 0}. The edit is kept here and was not written.`
+            ? t("preview.syntaxError", {
+                path: problem.path ?? t("preview.theFile"),
+                line: problem.line ?? 0,
+                column: problem.column ?? 0,
+              })
             : problem.code === "config_graph_error"
-              ? "This change would break the Include graph. Nothing was written."
+              ? t("preview.graphError")
               : problem.code === "config_conflict"
-                ? "The file changed outside this application. Nothing was written."
-                : `The request was rejected (${problem.code}). Nothing was written.`}
+                ? t("preview.conflictError")
+                : t("preview.rejected", { code: problem.code })}
         </p>
       )}
 
@@ -103,19 +110,17 @@ export function SavePreviewPanel({
 
       {conflict === null ? null : (
         <div className="flex flex-col gap-2">
-          <h4 className="text-xs font-semibold text-zinc-300">Changed on disk since you loaded it</h4>
+          <h4 className="text-xs font-semibold text-zinc-300">{t("preview.changedOnDisk")}</h4>
           <DiffView lines={conflict.externalChange} />
-          <h4 className="text-xs font-semibold text-zinc-300">Your pending change</h4>
+          <h4 className="text-xs font-semibold text-zinc-300">{t("preview.pendingChange")}</h4>
           <DiffView lines={conflict.localChange} />
-          <p className="text-xs text-zinc-400">
-            Reload the file to merge the two changes by hand. Nothing was written.
-          </p>
+          <p className="text-xs text-zinc-400">{t("preview.mergeByHand")}</p>
         </div>
       )}
 
       {preview === null ? (
         conflict === null && problem === null ? (
-          <p className="text-xs text-zinc-400">Change a value to see exactly what would be written.</p>
+          <p className="text-xs text-zinc-400">{t("preview.nothingYet")}</p>
         ) : null
       ) : (
         <div className="flex flex-col gap-3">
@@ -124,11 +129,13 @@ export function SavePreviewPanel({
           ))}
           {(preview.effective ?? []).map((effective) => (
             <section key={effective.alias} className="flex flex-col gap-1">
-              <h4 className="text-xs font-semibold text-zinc-300">{`Explained values for ${effective.alias}`}</h4>
+              <h4 className="text-xs font-semibold text-zinc-300">{t("preview.explainedFor", { alias: effective.alias })}</h4>
               <ul>
                 {effective.changes.map((change) => (
                   <li key={change.keyword} className="text-xs text-zinc-300">
-                    {`${change.keyword}: ${change.before.join(", ") || "unset"} → ${change.after.join(", ") || "unset"}`}
+                    {`${change.keyword}: ${change.before.join(", ") || t("preview.unset")} → ${
+                      change.after.join(", ") || t("preview.unset")
+                    }`}
                   </li>
                 ))}
               </ul>
