@@ -2,6 +2,7 @@ package application
 
 import (
 	"bytes"
+	"io/fs"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -39,27 +40,48 @@ type ConflictError struct {
 func (e *ConflictError) Error() string { return "external change detected" }
 
 // overlayLoader lets the resolver see the contents a transaction is about to
-// write, including files the transaction creates.
+// write, including files the transaction creates, and lets it stop seeing the
+// files the transaction is about to take away.
+//
+// gone is not an optimisation. A transaction that moves a file writes it at the
+// destination and removes it from the source, so an overlay carrying only
+// pending would resolve the graph against a world where the file exists in both
+// places at once: an Include glob would match twice, a duplicate alias would be
+// reported that will not exist, and a diagnostic the move actually fixes would
+// still look present. The same is true of a removal.
 type overlayLoader struct {
 	base    config.Loader
 	pending map[string][]byte
+	gone    map[string]bool
 }
 
 func (loader overlayLoader) ReadFile(name string) ([]byte, error) {
-	if contents, ok := loader.pending[filepath.Clean(name)]; ok {
+	cleaned := filepath.Clean(name)
+	if contents, ok := loader.pending[cleaned]; ok {
 		return contents, nil
+	}
+	// pending wins over gone, so a transaction that moves a file onto a path it
+	// also removes still reads the new contents rather than reporting nothing.
+	if loader.gone[cleaned] {
+		return nil, fs.ErrNotExist
 	}
 	return loader.base.ReadFile(name)
 }
 
 func (loader overlayLoader) Glob(pattern string) ([]string, error) {
-	matches, err := loader.base.Glob(pattern)
+	found, err := loader.base.Glob(pattern)
 	if err != nil {
 		return nil, err
 	}
-	seen := make(map[string]bool, len(matches))
-	for _, match := range matches {
-		seen[filepath.Clean(match)] = true
+	matches := make([]string, 0, len(found))
+	seen := make(map[string]bool, len(found))
+	for _, match := range found {
+		cleaned := filepath.Clean(match)
+		if loader.gone[cleaned] && loader.pending[cleaned] == nil {
+			continue
+		}
+		matches = append(matches, match)
+		seen[cleaned] = true
 	}
 	for name := range loader.pending {
 		if seen[name] {
@@ -75,6 +97,24 @@ func (loader overlayLoader) Glob(pattern string) ([]string, error) {
 	}
 	sort.Strings(matches)
 	return matches, nil
+}
+
+// overlayFor describes the filesystem a request is about to produce: the
+// contents it writes, and the paths that will no longer be there. A move
+// contributes to both, because its destination arrives and its source leaves.
+func overlayFor(request storage.Request) (map[string][]byte, map[string]bool) {
+	pending := make(map[string][]byte, len(request.Changes)+len(request.Moves))
+	gone := make(map[string]bool, len(request.Moves)+len(request.Removals))
+	for _, change := range request.Changes {
+		pending[filepath.Clean(change.Path)] = change.Contents
+	}
+	for _, move := range request.Moves {
+		gone[filepath.Clean(move.From)] = true
+	}
+	for _, removal := range request.Removals {
+		gone[filepath.Clean(removal.Path)] = true
+	}
+	return pending, gone
 }
 
 // diagnosticKey identifies a diagnostic so a save is blocked only by problems
@@ -129,10 +169,7 @@ func unstructuredColumn(text string) int {
 // bytes, refuses newly unparsable lines, and re-resolves the whole Include
 // graph with the pending contents overlaid.
 func (s *Service) validate(request storage.Request) error {
-	pending := make(map[string][]byte, len(request.Changes))
-	for _, change := range request.Changes {
-		pending[filepath.Clean(change.Path)] = change.Contents
-	}
+	pending, gone := overlayFor(request)
 
 	metadataPath := filepath.Clean(s.metadata.Path())
 	for _, change := range request.Changes {
@@ -157,7 +194,7 @@ func (s *Service) validate(request storage.Request) error {
 	}
 
 	resolver := s.resolver
-	resolver.Loader = overlayLoader{base: s.resolver.Loader, pending: pending}
+	resolver.Loader = overlayLoader{base: s.resolver.Loader, pending: pending, gone: gone}
 	graph, err := resolver.Resolve(s.entryPath)
 	if err != nil {
 		return err

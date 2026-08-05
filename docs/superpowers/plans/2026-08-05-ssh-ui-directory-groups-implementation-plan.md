@@ -797,13 +797,37 @@ Add M6 as described in Task 12 Step 4, and add its row to the 記録 table as �
 
 ---
 
+## Decisions settled after review
+
+Two of the three risks were reviewed and answered. They are recorded here rather than left in "Open questions", which is amended below.
+
+### Decision 5: every key reference this application writes is absolute, and an unresolvable one blocks a move until it is normalised
+
+Open question 2 asked what to do about a directive `keys.expandKeyPath` refuses to resolve. The answer has two halves, and only together do they close it.
+
+**Half one — what this application writes.** Every `IdentityFile` and `CertificateFile` that ssh-ui creates or rewrites is written as an absolute path. A reference written this way always resolves, so it is always indexed, so a later move can always find and rewrite it. This costs nothing and removes the whole class for anything ssh-ui touched.
+
+It does not, and cannot, fix what is already there. `internal/keys/references.go` lines 143-147 explain why, and the reasoning is sound: OpenSSH resolves a relative `IdentityFile` against the working directory of the `ssh` process, which is not knowable when the configuration is edited. `IdentityFile id_work` may or may not name the key being moved, and no amount of care at write time makes an existing line resolvable. The circularity is exact — the move cannot rewrite the reference to an absolute path, because rewriting it would require already knowing it names this key.
+
+**Half two — what the move does about the rest.** The refusal rule changes from candidate (b) to candidate (a): a key move is refused when the graph contains **any** unresolved `IdentityFile` or `CertificateFile`, not only one whose base name matches. The base-name test in Task 7 Step 4 is dropped.
+
+(a) was rejected in the original open question because it "blocks the feature for anyone with a single `%u` in an unrelated file". Half one removes that objection, because the same change adds a way out: a separate, explicit **normalise key paths** operation that rewrites resolvable-by-the-user references to absolute form, with the same line-by-line preview every other write has. The user runs it once, the unresolved set empties, and moves are available. A rule that is strict but has a documented way through is better than a rule that is loose and occasionally silent.
+
+The remaining hole is stated rather than closed: a reference inside a file reached by an `Include` with an unsupported expansion is not in the graph at all, so it is neither resolved nor unresolved — it is invisible. A move must therefore also refuse while any `include_unsupported_expansion` diagnostic exists, which is a graph-level check the engine already produces. What no design can see at all — `ssh -i`, `ssh -F`, git's `core.sshCommand`, a LaunchAgent, `/etc/ssh/ssh_config` — stays a warning, because nothing in a configuration editor can enumerate the readers of a file.
+
+Tasks affected: Task 7 Step 4's assertion becomes `TestKeyMoveRefusesWhileAnyKeyReferenceIsUnresolved`; a new task covers the normalisation operation and the `include_unsupported_expansion` refusal.
+
+### Decision 6: the overlay models moves and removals — done
+
+Risk 2 is fixed on `main` ahead of this plan, because it is a correctness gap in committed code regardless of whether directory groups are built. `overlayLoader` now carries a `gone` set alongside `pending`, `Service.validate` builds both from the whole `storage.Request` through `overlayFor`, and a pending write beats a removal so a move onto an existing path still reads its new contents. `TestOverlayLoaderHidesAMovedSourceFromReadsAndGlobs` fails without it. Tasks that assumed they had to fix this first can consume it.
+
 ## Open questions for the author
 
 Four things the settled decisions do not cover. Each is written as a question rather than answered, because each is a judgment call rather than a technical gap.
 
 1. **Do group *settings* also leave `metadata.json`?** Decision 4 says metadata keeps "colour, tags, note, favourite and display order", which would exclude `GroupMetadata.Settings`. This plan keeps settings in metadata and states the reason: the natural on-disk home would be a per-group settings file inside the group directory, and that file would be picked up by the group's own `Include connections/<group>/*.conf` and read in lexical order among the host files — so the group's shared settings would beat its own hosts' values unless the file were named to sort last, which is a naming trick rather than a design. Keeping the settings in metadata and compiling them into `groups.ssh-ui.conf` after every connections Include preserves the precedence rule exactly. If you meant settings to leave metadata too, the alternative worth considering is a second generated file per group included *after* the region — but that multiplies generated files by the number of groups.
 
-2. **What is the right rule for an unresolvable key reference?** Decision 1 settles the case of a reference in a file outside `~/.ssh` — refuse. It does not settle the case where `keys.expandKeyPath` refuses to resolve a directive at all (`ReasonRelativePath`, `ReasonUnsupportedToken`), because the engine then cannot prove the directive does *not* name the key being moved. Three candidate rules, in decreasing strictness: (a) refuse whenever any unresolved `IdentityFile`/`CertificateFile` exists anywhere in the graph — safe, and blocks the feature for anyone with a single `%u` in an unrelated file; (b) refuse only when an unresolved reference's final path segment equals the moved file's base name — what this plan proposes, catches the common spelling, misses `IdentityFile ../keys/work/id_work` written from an unusual working directory; (c) warn, list them, and let the user confirm. I chose (b) and the plan can be changed to (a) or (c) with one predicate.
+2. ~~**What is the right rule for an unresolvable key reference?**~~ Settled — see Decision 5. Original question: Decision 1 settles the case of a reference in a file outside `~/.ssh` — refuse. It does not settle the case where `keys.expandKeyPath` refuses to resolve a directive at all (`ReasonRelativePath`, `ReasonUnsupportedToken`), because the engine then cannot prove the directive does *not* name the key being moved. Three candidate rules, in decreasing strictness: (a) refuse whenever any unresolved `IdentityFile`/`CertificateFile` exists anywhere in the graph — safe, and blocks the feature for anyone with a single `%u` in an unrelated file; (b) refuse only when an unresolved reference's final path segment equals the moved file's base name — what this plan proposes, catches the common spelling, misses `IdentityFile ../keys/work/id_work` written from an unusual working directory; (c) warn, list them, and let the user confirm. I chose (b) and the plan can be changed to (a) or (c) with one predicate.
 
 3. **Should a journalled directory rename be built now?** This plan renames a group as N file moves, following the precedent `keys.Restore` set, and leaves the empty source directory behind with a `group_directory_leftover` notice. A single `rename(2)` on the directory would be atomic, would leave nothing behind, and would not widen the conflict window with the size of the group. It needs a new journal action, a precondition semantics for a thing that has no digest, and a rollback story — a storage-layer design decision. Building it first would delay this plan; building it later means every rename until then leaves debris.
 
