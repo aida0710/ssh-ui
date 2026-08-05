@@ -15,19 +15,30 @@ var (
 //
 // The removed range is exactly the range the projection shows as the block's
 // raw text: the Host header line through the line before the next Host or Match
-// header, including the trailing comments and blank lines the block owns. A
-// comment written above a header belongs to the block before it and stays put.
+// header, including the blank lines the block owns and the comment attached
+// above it, but not the comment attached to the block that follows.
+//
+// The attached comment travels with the block. Leaving it behind would be worse
+// than losing it: the comment run above a header belongs to the block below it,
+// so a description left in the source file would silently become the
+// description of whatever block follows.
 func ExtractHostBlock(file *config.File, alias string) ([]config.Line, error) {
 	block, ok := FindHostBlock(file, alias)
 	if !ok {
 		return nil, ErrHostNotFound
 	}
-	extracted := make([]config.Line, 0, block.End-block.Header)
-	extracted = append(extracted, file.Lines[block.Header:block.End]...)
+	start := file.CommentRun(block.Header)
+	// A block's range runs to the next header, so its tail holds the comment
+	// that belongs to the block after it. Extracting the whole range would take
+	// the next connection's description away with this one — the mirror image of
+	// leaving this one's behind, and just as wrong.
+	end := file.CommentRun(block.End)
+	extracted := make([]config.Line, 0, end-start)
+	extracted = append(extracted, file.Lines[start:end]...)
 
 	remaining := make([]config.Line, 0, len(file.Lines)-len(extracted))
-	remaining = append(remaining, file.Lines[:block.Header]...)
-	remaining = append(remaining, file.Lines[block.End:]...)
+	remaining = append(remaining, file.Lines[:start]...)
+	remaining = append(remaining, file.Lines[end:]...)
 	file.Lines = remaining
 	return extracted, nil
 }

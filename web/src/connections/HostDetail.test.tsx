@@ -47,6 +47,7 @@ const detail: HostDetail = {
     ],
     raw: "Host bastion\n\tHostName 203.0.113.10\n",
     comment: "",
+    commentLines: 0,
     notices: [{ code: "dangerous_directive", path: "config", line: 5, detail: "ProxyCommand" }],
   },
   metadata: { identity: { path: "config", alias: "bastion" }, group: "work", favourite: false },

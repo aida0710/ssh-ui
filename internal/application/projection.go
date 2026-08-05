@@ -106,8 +106,13 @@ type HostForm struct {
 	Raw    string      `json:"raw"`
 	// Comment is the text of the comment lines attached above the Host line,
 	// with the '#' markers stripped. It is empty when the block has none.
-	Comment string   `json:"comment"`
-	Notices []Notice `json:"notices,omitempty"`
+	Comment string `json:"comment"`
+	// CommentLines is how many physical lines that comment occupies. A client
+	// that rewrites the whole file — deleting or duplicating a block — needs
+	// the count to include them, and cannot derive it from Comment because the
+	// markers and indentation were stripped.
+	CommentLines int      `json:"commentLines"`
+	Notices      []Notice `json:"notices,omitempty"`
 }
 
 // PrimaryAlias returns the first concrete alias of a Host line, which is the
@@ -267,8 +272,9 @@ func ProjectHostForm(graph *config.Graph, root string, identity HostIdentity) (H
 		},
 		// Fields is required by the contract, so it is an empty array rather
 		// than null for a block that declares no directive.
-		Fields:  []FormField{},
-		Comment: node.File.CommentText(block.Header),
+		Fields:       []FormField{},
+		Comment:      node.File.CommentText(block.Header),
+		CommentLines: block.Header - node.File.CommentRun(block.Header),
 	}
 	for _, pattern := range block.Patterns {
 		form.Entry.Patterns = append(form.Entry.Patterns, pattern.Raw)
@@ -279,7 +285,13 @@ func ProjectHostForm(graph *config.Graph, root string, identity HostIdentity) (H
 	keywordSeen := map[string]bool{}
 	var raw strings.Builder
 	raw.WriteString(node.File.Lines[block.Header].Render())
-	for index := block.Start; index < block.End; index++ {
+	// A block's range runs to the next header, so its tail holds the comment
+	// attached to the block that follows. That comment describes a connection
+	// this form does not own, and the Raw editor and the delete path both write
+	// this text back, so including it would let an edit here rewrite or remove
+	// the next connection's description.
+	end := node.File.CommentRun(block.End)
+	for index := block.Start; index < end; index++ {
 		line := node.File.Lines[index]
 		raw.WriteString(line.Render())
 		switch line.Kind {

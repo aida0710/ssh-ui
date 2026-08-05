@@ -179,7 +179,14 @@ export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
         kind: "file_raw",
         path: selection.path,
         base: detail.file.contents,
-        raw: duplicateHostBlock(detail.file.contents, detail.form.raw, selection.alias, `${selection.alias}-copy`),
+        raw: duplicateHostBlock(
+          detail.file.contents,
+          detail.form.raw,
+          selection.alias,
+          `${selection.alias}-copy`,
+          detail.form.entry.line,
+          detail.form.commentLines,
+        ),
       });
       setLocalError("");
     } catch {
@@ -216,7 +223,12 @@ export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
     if (detail === null || selection === null) return;
     let raw: string;
     try {
-      raw = removeHostBlock(detail.file.contents, detail.form.entry.line, detail.form.raw);
+      raw = removeHostBlock(
+        detail.file.contents,
+        detail.form.entry.line,
+        detail.form.raw,
+        detail.form.commentLines,
+      );
     } catch {
       setLocalError(t("conn.blockMoved"));
       return;

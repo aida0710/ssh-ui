@@ -1067,6 +1067,8 @@ export interface components {
             raw: string;
             /** @description The comment lines attached above the Host line, with the '#' markers stripped. Empty when the block has none. ssh_config has no trailing comment syntax, so only whole lines are ever attached. */
             comment: string;
+            /** @description How many physical lines the attached comment occupies. A client rewriting the whole file needs the count to include those lines; it cannot be derived from comment, whose markers and indentation were stripped. */
+            commentLines: number;
             notices?: components["schemas"]["Notice"][];
         };
         Source: {

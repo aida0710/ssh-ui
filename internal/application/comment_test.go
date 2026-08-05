@@ -106,3 +106,52 @@ func TestClearHostNoteDropsAnEntryThatHeldNothingElse(t *testing.T) {
 		t.Fatalf("hosts = %#v, want the empty entry dropped", cleared.Hosts)
 	}
 }
+
+// Making the comment above a header mean something changed what a move must
+// carry. Left behind, the description of the block that departed becomes the
+// description of whichever block follows it in the source file.
+func TestExtractHostBlockTakesTheAttachedCommentWithIt(t *testing.T) {
+	file := config.Parse([]byte(
+		"# the production bastion\n" +
+			"Host bastion\n" +
+			"\tPort 2222\n" +
+			"\n" +
+			"# the file server\n" +
+			"Host nas\n"))
+
+	extracted, err := ExtractHostBlock(file, "bastion")
+	if err != nil {
+		t.Fatalf("ExtractHostBlock error = %v", err)
+	}
+
+	moved := &config.File{Lines: extracted}
+	if got := string(moved.Render()); got != "# the production bastion\nHost bastion\n\tPort 2222\n\n" {
+		t.Fatalf("extracted = %q", got)
+	}
+	remaining := string(file.Render())
+	if strings.Contains(remaining, "the production bastion") {
+		t.Fatalf("the departed block's comment was left behind:\n%s", remaining)
+	}
+	// nas keeps its own, and does not inherit one.
+	if remaining != "# the file server\nHost nas\n" {
+		t.Fatalf("remaining = %q", remaining)
+	}
+}
+
+func TestExtractHostBlockLeavesAFileBannerBehind(t *testing.T) {
+	file := config.Parse([]byte(
+		"# Managed by hand. Do not reformat.\n" +
+			"\n" +
+			"Host bastion\n" +
+			"\tPort 2222\n"))
+
+	if _, err := ExtractHostBlock(file, "bastion"); err != nil {
+		t.Fatalf("ExtractHostBlock error = %v", err)
+	}
+
+	// The banner is separated by a blank line, so it belongs to the file and
+	// stays with it.
+	if got := string(file.Render()); got != "# Managed by hand. Do not reformat.\n\n" {
+		t.Fatalf("remaining = %q", got)
+	}
+}

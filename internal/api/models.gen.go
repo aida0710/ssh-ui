@@ -338,11 +338,14 @@ type HostEntry struct {
 // HostForm defines model for HostForm.
 type HostForm struct {
 	// Comment The comment lines attached above the Host line, with the '#' markers stripped. Empty when the block has none. ssh_config has no trailing comment syntax, so only whole lines are ever attached.
-	Comment string      `json:"comment"`
-	Entry   HostEntry   `json:"entry"`
-	Fields  []FormField `json:"fields"`
-	Notices *[]Notice   `json:"notices,omitempty"`
-	Raw     string      `json:"raw"`
+	Comment string `json:"comment"`
+
+	// CommentLines How many physical lines the attached comment occupies. A client rewriting the whole file needs the count to include those lines; it cannot be derived from comment, whose markers and indentation were stripped.
+	CommentLines int         `json:"commentLines"`
+	Entry        HostEntry   `json:"entry"`
+	Fields       []FormField `json:"fields"`
+	Notices      *[]Notice   `json:"notices,omitempty"`
+	Raw          string      `json:"raw"`
 }
 
 // HostIdentity defines model for HostIdentity.

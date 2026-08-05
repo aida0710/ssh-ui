@@ -1364,7 +1364,7 @@ components:
     HostForm:
       type: object
       additionalProperties: false
-      required: [entry, fields, raw, comment]
+      required: [entry, fields, raw, comment, commentLines]
       properties:
         entry: { $ref: "#/components/schemas/HostEntry" }
         fields: { type: array, items: { $ref: "#/components/schemas/FormField" } }
@@ -1375,6 +1375,13 @@ components:
             The comment lines attached above the Host line, with the '#' markers
             stripped. Empty when the block has none. ssh_config has no trailing
             comment syntax, so only whole lines are ever attached.
+        commentLines:
+          type: integer
+          description: >-
+            How many physical lines the attached comment occupies. A client
+            rewriting the whole file needs the count to include those lines;
+            it cannot be derived from comment, whose markers and indentation
+            were stripped.
         notices: { type: array, items: { $ref: "#/components/schemas/Notice" } }
     Source:
       type: object
