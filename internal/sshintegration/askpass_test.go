@@ -16,11 +16,13 @@ package sshintegration_test
 
 import (
 	"context"
+	"errors"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -83,13 +85,7 @@ func buildHome(t *testing.T, destination target) string {
 		t.Fatal(err)
 	}
 
-	scan := exec.Command("ssh-keyscan", "-p", destination.port, destination.host)
-	scan.Env = []string{"HOME=" + home, "PATH=" + os.Getenv("PATH")}
-	known, err := scan.Output()
-	if err != nil || len(known) == 0 {
-		t.Fatalf("ssh-keyscan produced nothing: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "known_hosts"), known, 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "known_hosts"), hostKeyOf(t, destination), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -114,6 +110,63 @@ func buildHome(t *testing.T, destination target) string {
 		t.Fatal(err)
 	}
 	return home
+}
+
+var (
+	hostKeyMutex sync.Mutex
+	hostKey      []byte
+	hostKeyError error
+	hostKeyKnown bool
+)
+
+// hostKeyOf scans the server's host key once for the whole package.
+//
+// It used to be scanned once per test. Four tests meant four scans on top of
+// the connections the tests themselves make, and in CI the third and fourth
+// came back empty while the first two had just passed: a container sshd limits
+// how many unauthenticated connections it will start at once, and a keyscan is
+// one of those. The key is the same key every time, so scanning it again was
+// never doing anything but spending that budget.
+//
+// The retry is for the same reason rather than for flakiness in general: a
+// refusal here is a "not now", and a second's wait is enough for it to stop
+// being one. When every attempt is refused that is reported, not smoothed over.
+func hostKeyOf(t *testing.T, destination target) []byte {
+	t.Helper()
+	hostKeyMutex.Lock()
+	defer hostKeyMutex.Unlock()
+	if hostKeyKnown {
+		if hostKeyError != nil {
+			t.Fatalf("ssh-keyscan produced nothing: %v", hostKeyError)
+		}
+		return hostKey
+	}
+
+	empty := t.TempDir()
+	for attempt := range 5 {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt) * 500 * time.Millisecond)
+		}
+		scan := exec.Command("ssh-keyscan", "-p", destination.port, destination.host)
+		scan.Env = []string{"HOME=" + empty, "PATH=" + os.Getenv("PATH")}
+		scanned, err := scan.Output()
+		switch {
+		case err != nil:
+			hostKeyError = err
+		case len(scanned) == 0:
+			hostKeyError = errors.New("the scan succeeded but returned no key")
+		default:
+			hostKey, hostKeyError = scanned, nil
+		}
+		if hostKeyError == nil {
+			break
+		}
+	}
+	hostKeyKnown = true
+	if hostKeyError != nil {
+		t.Fatalf("ssh-keyscan produced nothing after 5 attempts: %v", hostKeyError)
+	}
+	return hostKey
 }
 
 // startServer runs the real HTTP server with the real /askpass endpoint.
@@ -269,6 +322,7 @@ func TestASpentTokenDoesNotAuthenticate(t *testing.T) {
 	if err == nil {
 		t.Fatalf("the spent token authenticated a second connection:\n%s", output)
 	}
+	requireAuthenticationWasAttempted(t, output)
 }
 
 func TestALockedVaultCannotAnswer(t *testing.T) {

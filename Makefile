@@ -1,4 +1,4 @@
-.PHONY: generate test build fuzz e2e verify-generated integration integration-up integration-down
+.PHONY: generate test build fuzz e2e verify-generated integration integration-up integration-down integration-sshd-relax
 
 # FUZZTIME is per target. `make fuzz` is a campaign, not a single run, so the
 # default is short enough to be part of an ordinary verification pass; raise it
@@ -76,6 +76,32 @@ integration-up:
 	@echo "waiting for the containers to answer"
 	@for i in $$(seq 1 60); do \
 		curl -s -o /dev/null http://127.0.0.1:$(S3_PORT)/ && break; sleep 1; done
+	@for i in $$(seq 1 60); do \
+		(exec 3<>/dev/tcp/127.0.0.1/$(SSHD_PORT)) 2>/dev/null && break; sleep 1; done
+	@$(MAKE) --no-print-directory integration-sshd-relax
+
+# OpenSSH 10 turns PerSourcePenalties on by default, and this image ships 10.3.
+# A penalty is charged per source address for a connection that disconnects
+# without authenticating (every ssh-keyscan) and for one that fails to
+# authenticate (two of these tests do so on purpose). The whole suite comes from
+# one address within a few seconds, so the penalties accumulate past the
+# threshold and sshd starts refusing connections part way through the run: the
+# first CI run of this suite failed exactly that way, on the third test.
+#
+# A person connecting to their own server does not do this, so the penalty is
+# measuring the harness rather than the product. It is turned off for the
+# container only, and loudly, so a future failure here is not mistaken for one.
+integration-sshd-relax:
+	@docker exec ssh-ui-sshd sh -c ' \
+		configuration=/config/ssh_host_keys/sshd_config; \
+		if [ ! -f "$$configuration" ]; then \
+			echo "$$configuration is not in this image; find where sshd_config lives now" >&2; \
+			exit 1; \
+		fi; \
+		grep -q "^PerSourcePenalties" "$$configuration" || \
+			printf "\nPerSourcePenalties no\n" >> "$$configuration"; \
+		pkill -HUP sshd'
+	@echo "sshd restarted without per-source penalties"
 	@for i in $$(seq 1 60); do \
 		(exec 3<>/dev/tcp/127.0.0.1/$(SSHD_PORT)) 2>/dev/null && break; sleep 1; done
 

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConnectionsPage } from "./ConnectionsPage";
@@ -68,6 +68,86 @@ describe("ConnectionsPage", () => {
       fields: [{ action: "set", line: 2, values: ["2222"] }],
     }));
     expect(configApi.host).toHaveBeenCalledWith("config", "bastion");
+  });
+
+  it("keeps the diff of what was written on screen after the save reloads the host", async () => {
+    // The save reselects the host it wrote. That used to hand the selection
+    // effect a new object with the same two values, so the effect fetched the
+    // detail a second time and, on the answer, cleared the preview: the diff
+    // was visible for exactly as long as one request took. The end-to-end suite
+    // saw it because it happened to look inside that window, and failed in CI
+    // when it did not.
+    const user = userEvent.setup();
+    vi.mocked(configApi.save).mockResolvedValue({
+      transactionId: "t1",
+      written: ["config"],
+      preview: {
+        operation: "config.host_fields",
+        diffs: [{
+          path: "config",
+          lines: [
+            { op: "delete", text: "\tPort 22", oldLine: 2 },
+            { op: "insert", text: "\tPort 2299", newLine: 2 },
+          ],
+        }],
+      },
+    } as never);
+
+    render(<ConnectionsPage onOpenFile={vi.fn()} />);
+
+    await user.click(await screen.findByRole("button", { name: /bastion/ }));
+    const input = await screen.findByLabelText("Port");
+    await user.clear(input);
+    await user.type(input, "2299");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    // Twice in the whole flow: once for the selection, once for the reload the
+    // save performs itself. A third is the duplicate that discarded the diff.
+    await waitFor(() => expect(configApi.host).toHaveBeenCalledTimes(2));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(configApi.host).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole("region", { name: "Save preview" })).toHaveTextContent("Port 2299");
+  });
+
+  it("discards the diff when a different connection is opened", async () => {
+    const user = userEvent.setup();
+    vi.mocked(configApi.overview).mockResolvedValue({
+      ...overview,
+      hosts: [
+        ...overview.hosts,
+        {
+          identity: { path: "config", alias: "nas" },
+          file: { path: "config", absolute: "/home/tester/.ssh/config" },
+          line: 5, patterns: ["nas"], editable: true,
+        },
+      ],
+    } as never);
+    vi.mocked(configApi.save).mockResolvedValue({
+      transactionId: "t1",
+      written: ["config"],
+      preview: {
+        operation: "config.host_fields",
+        diffs: [{ path: "config", lines: [{ op: "insert", text: "\tPort 2299", newLine: 2 }] }],
+      },
+    } as never);
+
+    render(<ConnectionsPage onOpenFile={vi.fn()} />);
+
+    await user.click(await screen.findByRole("button", { name: /bastion/ }));
+    const input = await screen.findByLabelText("Port");
+    await user.clear(input);
+    await user.type(input, "2299");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await screen.findByText(/Port 2299/);
+
+    await user.click(screen.getByRole("button", { name: /nas/ }));
+
+    // The diff describes bytes in a block that is no longer open.
+    await waitFor(() =>
+      expect(screen.getByRole("region", { name: "Save preview" }))
+        .toHaveTextContent("Change a value to see exactly what would be written."));
   });
 
   it("sends a pattern rule to the file view and never asks for its host detail", async () => {
