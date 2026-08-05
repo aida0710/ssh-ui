@@ -95,6 +95,7 @@ export function GroupsPanel() {
   const [settingValue, setSettingValue] = useState("");
   const [renaming, setRenaming] = useState<Record<string, string>>({});
   const [removing, setRemoving] = useState<Record<string, string>>({});
+  const [confirmingRemove, setConfirmingRemove] = useState<Record<string, boolean>>({});
   const [localError, setLocalError] = useState("");
 
   const reload = useCallback(async () => {
@@ -120,6 +121,18 @@ export function GroupsPanel() {
   const loaded: Metadata = metadata;
   const hosts = overview.hosts;
   const groups = treeOrder(loaded.groups ?? []);
+
+  // This panel has two kinds of control and used to show no difference between
+  // them. Colour, display order, a new group and a new setting are edits to a
+  // draft that only reaches the disk on Save; rename and remove write files the
+  // moment they are pressed. So a group could be added, coloured, given
+  // settings, and lost by navigating away — while the Remove button beside it
+  // had already been committing to disk all along.
+  //
+  // The draft is compared against what the server last returned, which is the
+  // only honest source for "this is not written yet".
+  const savedGroups = new Set((overview.metadata.groups ?? []).map((group) => group.name));
+  const unsaved = JSON.stringify(loaded) !== JSON.stringify(overview.metadata);
 
   // Membership is where the file sits, and the projection already read that
   // from the path. Nothing here counts a metadata field.
@@ -210,6 +223,7 @@ export function GroupsPanel() {
   async function removeGroup(name: string) {
     try {
       const result = await configApi.deleteGroup(name, removing[name] ?? "");
+      setConfirmingRemove({ ...confirmingRemove, [name]: false });
       setPreview(result.preview);
       setProblem(null);
       setLocalError("");
@@ -278,6 +292,11 @@ export function GroupsPanel() {
                   <span className="text-zinc-500">{group.name.slice(0, group.name.lastIndexOf("/") + 1)}</span>
                 )}
                 <span>{group.name.slice(group.name.lastIndexOf("/") + 1)}</span>
+                {savedGroups.has(group.name) ? null : (
+                  <span className="rounded border border-amber-700 px-1.5 py-0.5 text-[10px] font-normal text-amber-300">
+                    {t("groups.unsaved")}
+                  </span>
+                )}
               </h3>
               <p className="font-mono text-xs text-zinc-500">
                 {t("groups.directories", {
@@ -359,35 +378,38 @@ export function GroupsPanel() {
                     onChange={(event) => setRenaming({ ...renaming, [group.name]: event.target.value })}
                     className={narrowControl}
                   />
-                  <button type="button" onClick={() => void renameGroup(group.name)} className={secondaryAction}>
+                  <button
+                    type="button"
+                    onClick={() => void renameGroup(group.name)}
+                    disabled={!savedGroups.has(group.name)}
+                    className={secondaryAction}
+                  >
                     {t("groups.rename", { name: group.name })}
                   </button>
                 </span>
               </label>
-              <label htmlFor={`group-move-${group.name}`} className="flex flex-col gap-1">
-                <span className={fieldLabel}>{t("groups.removeIntoShort")}</span>
-                <span className="flex items-end gap-2">
-                  <select
-                    id={`group-move-${group.name}`}
-                    aria-label={t("groups.removeInto", { name: group.name })}
-                    value={removing[group.name] ?? ""}
-                    onChange={(event) => setRemoving({ ...removing, [group.name]: event.target.value })}
-                    className={`${control} w-56`}
-                  >
-                    <option value="">{t("groups.removeIntoNone")}</option>
-                    {groups
-                      .filter((candidate) => candidate.name !== group.name && !candidate.name.startsWith(`${group.name}/`))
-                      .map((candidate) => (
-                        <option key={candidate.name} value={candidate.name}>
-                          {candidate.name}
-                        </option>
-                      ))}
-                  </select>
-                  <button type="button" onClick={() => void removeGroup(group.name)} className={dangerAction}>
-                    {t("groups.remove", { name: group.name })}
-                  </button>
-                </span>
-              </label>
+              {/*
+                The destination used to be a select sitting on its own between
+                the rename button and the remove button, labelled only "Move
+                connections to". Nothing on screen tied it to removal, so it
+                read as a third independent action that silently did nothing —
+                and a user asked, reasonably, what it was for.
+
+                It now lives inside the removal, after a sentence that says what
+                removal actually does: the declaration goes, the connections
+                move, and no file is deleted. The question is asked at the
+                moment it is being answered.
+              */}
+              {confirmingRemove[group.name] !== true ? (
+                <button
+                  type="button"
+                  onClick={() => setConfirmingRemove({ ...confirmingRemove, [group.name]: true })}
+                  disabled={!savedGroups.has(group.name)}
+                  className={secondaryAction}
+                >
+                  {t("groups.remove", { name: group.name })}
+                </button>
+              ) : null}
               {/*
                 Nesting was discoverable only through a sentence about slashes
                 under a text box at the bottom of the page. This puts it where
@@ -402,6 +424,63 @@ export function GroupsPanel() {
                 {t("groups.addChild", { name: group.name })}
               </button>
             </div>
+            {savedGroups.has(group.name) ? null : (
+              <p className="mt-2 text-xs text-amber-300">{t("groups.newGroupNote")}</p>
+            )}
+
+            {confirmingRemove[group.name] !== true ? null : (
+              <div
+                role="group"
+                aria-label={t("groups.removeInto", { name: group.name })}
+                className="mt-3 flex flex-col gap-2 rounded border border-rose-900 bg-rose-950/30 p-3"
+              >
+                <p className="text-sm text-zinc-200">
+                  {membersOf(group.name).length === 0
+                    ? t("groups.removeExplainEmpty", { name: group.name })
+                    : t("groups.removeExplain", { name: group.name, count: membersOf(group.name).length })}
+                </p>
+                {membersOf(group.name).length === 0 ? null : (
+                  <label htmlFor={`group-move-${group.name}`} className="flex flex-col gap-1">
+                    <span className={fieldLabel}>{t("groups.removeIntoShort")}</span>
+                    <select
+                      id={`group-move-${group.name}`}
+                      value={removing[group.name] ?? ""}
+                      onChange={(event) => setRemoving({ ...removing, [group.name]: event.target.value })}
+                      className={`${control} w-56`}
+                    >
+                      <option value="">{t("groups.removeIntoNone")}</option>
+                      {groups
+                        .filter(
+                          (candidate) =>
+                            candidate.name !== group.name && !candidate.name.startsWith(`${group.name}/`),
+                        )
+                        .map((candidate) => (
+                          <option key={candidate.name} value={candidate.name}>
+                            {candidate.name}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                )}
+                {/*
+                  What is not lost matters as much as what is. Saying it here is
+                  the difference between a decision and a dare.
+                */}
+                <p className={hintText}>{t("groups.removeKeepsFiles")}</p>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => void removeGroup(group.name)} className={dangerAction}>
+                    {t("groups.removeConfirm", { name: group.name })}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingRemove({ ...confirmingRemove, [group.name]: false })}
+                    className={secondaryAction}
+                  >
+                    {t("groups.removeCancel")}
+                  </button>
+                </div>
+              </div>
+            )}
           </li>
         ))}
       </ul>
@@ -461,6 +540,14 @@ export function GroupsPanel() {
           {t("groups.addSetting")}
         </button>
       </section>
+
+      {/*
+        Which controls on this page write, and when, was not stated anywhere.
+        It is stated once, here, beside the button that does the writing.
+      */}
+      <p className={unsaved ? "text-sm text-amber-300" : hintText}>
+        {unsaved ? t("groups.unsavedNote") : t("groups.savedNote")}
+      </p>
 
       <div className="flex gap-2">
         <button type="button" onClick={() => void run("preview")} className={secondaryAction}>
