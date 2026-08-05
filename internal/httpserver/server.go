@@ -145,7 +145,20 @@ func New(options Options) (*Server, error) {
 		})
 	}
 	if options.Passwords != nil {
-		registerPasswordRoutes(e, PasswordHandlers{Service: options.Passwords, Answerable: options.Answerable})
+		// The eligibility check reads the configuration graph and known_hosts,
+		// so it comes from the configuration service rather than from the
+		// vault, which knows nothing about either. Without a configuration
+		// service nothing is checked, which is what the vault did before this
+		// existed and what the tests that wire only a vault rely on.
+		var eligibility func(string) (application.PasswordEligibility, error)
+		if options.Config != nil {
+			eligibility = options.Config.PasswordEligibility
+		}
+		registerPasswordRoutes(e, PasswordHandlers{
+			Service:     options.Passwords,
+			Answerable:  options.Answerable,
+			Eligibility: eligibility,
+		})
 	}
 	if options.Sync != nil {
 		registerSyncRoutes(e, SyncHandlers{Service: options.Sync})

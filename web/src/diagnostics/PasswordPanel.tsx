@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { integrationsApi, type IntegrationsApi, type PasswordVaultStatus } from "../api/integrations";
+import {
+  integrationsApi,
+  type IntegrationsApi,
+  type PasswordEligibility,
+  type PasswordVaultStatus,
+} from "../api/integrations";
 import { useTranslate } from "../i18n/context";
+import type { MessageKey } from "../i18n/messages";
 import { Field, control, dangerAction, hintText, primaryAction, secondaryAction, sectionCard, sectionHeading } from "../ui/form";
 
 type PasswordPanelProps = {
@@ -17,9 +23,25 @@ type PasswordPanelProps = {
 // have a password in it. Collapsing those into one state would produce the
 // classic "it says nothing is saved, but something is" confusion, because a
 // locked vault genuinely cannot tell.
+// The codes the server reports, mapped to what they mean for this host. An
+// unknown code is shown as itself rather than swallowed: a rule added on the
+// server and not here should be visible, not invisible.
+const eligibilityKeys: Record<string, MessageKey> = {
+  password_authentication_off: "password.blocker.authenticationOff",
+  alias_not_simple: "password.blocker.aliasNotSimple",
+  identity_file_configured: "password.warn.identityFile",
+  host_key_unknown: "password.warn.hostKeyUnknown",
+  hostname_unresolved: "password.warn.hostNameUnresolved",
+};
+
+function eligibilityText(translate: (key: MessageKey) => string, code: string): string {
+  return code in eligibilityKeys ? translate(eligibilityKeys[code]!) : code;
+}
+
 export function PasswordPanel({ api = integrationsApi, alias }: PasswordPanelProps) {
   const t = useTranslate();
   const [status, setStatus] = useState<PasswordVaultStatus | null>(null);
+  const [eligibility, setEligibility] = useState<PasswordEligibility | null>(null);
   const [passphrase, setPassphrase] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -36,6 +58,28 @@ export function PasswordPanel({ api = integrationsApi, alias }: PasswordPanelPro
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  // What stands between this host and a stored password is read from the
+  // configuration and known_hosts. The panel used to state the host-key
+  // precondition as prose under the field and check nothing, which is a
+  // sentence the user has to verify by hand for every host.
+  useEffect(() => {
+    let active = true;
+    setEligibility(null);
+    void api
+      .passwordEligibility(alias)
+      .then((report) => {
+        if (active) setEligibility(report);
+      })
+      .catch(() => {
+        // A panel that cannot read the configuration says nothing about it
+        // rather than claiming the host is fine.
+        if (active) setEligibility(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [api, alias]);
 
   // Every typed secret is dropped when the host changes. A passphrase left in
   // a field while the user navigates is a secret sitting in the DOM for no
@@ -147,18 +191,42 @@ export function PasswordPanel({ api = integrationsApi, alias }: PasswordPanelPro
         </>
       ) : (
         <>
-          <Field label={t("password.password", { alias })} hint={t("password.knownHostFirst")}>
+          {(eligibility?.blockers ?? []).length === 0 ? null : (
+            <div role="alert" className="flex flex-col gap-1 rounded border border-rose-800 bg-rose-950/30 p-3">
+              <p className="text-sm text-rose-200">{t("password.blocked", { alias })}</p>
+              <ul className="flex flex-col gap-1">
+                {(eligibility?.blockers ?? []).map((notice, index) => (
+                  <li key={`${notice.code}-${index}`} className="text-xs text-rose-300">
+                    {eligibilityText(t, notice.code)}
+                    {notice.path === undefined ? "" : ` (${notice.path}${notice.line === undefined ? "" : `:${notice.line}`})`}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {(eligibility?.warnings ?? []).length === 0 ? null : (
+            <ul className="flex flex-col gap-1">
+              {(eligibility?.warnings ?? []).map((notice, index) => (
+                <li key={`${notice.code}-${index}`} className="text-xs text-amber-300">
+                  {eligibilityText(t, notice.code)}
+                  {notice.detail === undefined ? "" : ` (${notice.detail})`}
+                </li>
+              ))}
+            </ul>
+          )}
+          <Field label={t("password.password", { alias })}>
             <input
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
+              disabled={(eligibility?.blockers ?? []).length > 0}
               className={control}
             />
           </Field>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              disabled={busy || password === ""}
+              disabled={busy || password === "" || (eligibility?.blockers ?? []).length > 0}
               onClick={() => void run(() => api.storePassword(alias, password), t("password.storeFailed"))}
               className={primaryAction}
             >

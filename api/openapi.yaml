@@ -373,6 +373,27 @@ paths:
               schema: { $ref: "#/components/schemas/PasswordVaultStatus" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+  /api/v1/passwords/{alias}/eligibility:
+    get:
+      operationId: getPasswordEligibility
+      # Read-only, and deliberately so: everything it reports is answerable
+      # from the files this application already parses. A check that opened a
+      # connection to decide whether a password may be stored would be a
+      # connection the user did not ask for.
+      parameters:
+        - name: alias
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 255 }
+      responses:
+        "200":
+          description: What stands between this host and a stored password
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PasswordEligibility" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
   /api/v1/passwords/{alias}:
     put:
       operationId: storePassword
@@ -1450,6 +1471,25 @@ components:
           type: array
           items: { type: string }
         minPassphraseLength: { type: integer }
+    # Blockers make a stored password unusable, so storing one is refused.
+    # Warnings are facts the user may know better about — a configured key that
+    # is not authorised on the far side is ordinary — so they are stated and
+    # the decision is left where it belongs.
+    PasswordEligibility:
+      type: object
+      additionalProperties: false
+      required: [alias, storable, blockers, warnings]
+      properties:
+        alias: { type: string }
+        storable: { type: boolean }
+        blockers:
+          type: array
+          items: { $ref: "#/components/schemas/Notice" }
+        warnings:
+          type: array
+          items: { $ref: "#/components/schemas/Notice" }
+        hostName: { type: string }
+        port: { type: string }
     PassphraseRequest:
       type: object
       additionalProperties: false

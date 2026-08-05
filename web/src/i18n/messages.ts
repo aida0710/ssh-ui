@@ -134,8 +134,17 @@ export const en = {
   "password.lock": "Lock the vault",
   "password.lockFailed": "The vault could not be locked.",
   "password.password": "Password for {alias}",
-  "password.knownHostFirst":
-    "Add this host's key through Known Hosts first. With a stored password armed, ssh asks the helper every question — including the host key one, which it refuses — so a first connection to an unknown host fails on purpose.",
+  "password.blocked": "A password stored for {alias} could never be used, so this refuses to store one.",
+  "password.blocker.authenticationOff":
+    "PasswordAuthentication is off for this host, so the client will never offer a password.",
+  "password.blocker.aliasNotSimple":
+    "This is a pattern, not a host. A password belongs to one account on one machine.",
+  "password.warn.identityFile":
+    "A key is already configured for this host. It may still ask for a password, but a password stored for a host that never asks is exposure bought for nothing.",
+  "password.warn.hostKeyUnknown":
+    "This host's key is not in known_hosts. With a stored password armed, ssh asks the helper every question — including the host key one, which it refuses — so the first connection stops there. Add the key through Known Hosts first.",
+  "password.warn.hostNameUnresolved":
+    "No HostName could be attributed for this alias. The password is filed under the alias either way.",
   "password.store": "Store the password",
   "password.storeFailed": "The password could not be stored.",
   "password.stored": "A password is stored for {alias}.",
@@ -710,8 +719,15 @@ export const ja: Record<MessageKey, string> = {
   "password.lock": "保管庫をロック",
   "password.lockFailed": "保管庫をロックできませんでした。",
   "password.password": "{alias} のパスワード",
-  "password.knownHostFirst":
-    "先に Known Hosts でこのホストの鍵を登録してください。保存済みパスワードを使う状態では ssh は全ての質問をヘルパに回します。ホスト鍵の確認も含まれ、ヘルパはそれを拒否するので、未知のホストへの初回接続は意図的に失敗します。",
+  "password.blocked": "{alias} に保存したパスワードは使われることがないため、保存を行いません。",
+  "password.blocker.authenticationOff":
+    "このホストは PasswordAuthentication が no のため、クライアントがパスワードを提示することはありません。",
+  "password.blocker.aliasNotSimple": "これはホストではなくパターンです。パスワードは 1 台の 1 アカウントに属します。",
+  "password.warn.identityFile":
+    "このホストには鍵が設定済みです。それでもパスワードを訊かれることはありますが、訊かれないホストに保存したパスワードは、見返りのない露出です。",
+  "password.warn.hostKeyUnknown":
+    "このホストの鍵が known_hosts にありません。保存済みパスワードを使う状態では ssh は全ての質問をヘルパに回し、ホスト鍵の確認も含まれます。ヘルパはそれを拒否するので、初回接続はそこで止まります。先に Known Hosts で鍵を登録してください。",
+  "password.warn.hostNameUnresolved": "この alias の HostName を特定できませんでした。パスワードは alias に紐づけて保存されます。",
   "password.store": "パスワードを保存",
   "password.storeFailed": "パスワードを保存できませんでした。",
   "password.stored": "{alias} のパスワードが保存されています。",

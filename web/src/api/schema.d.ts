@@ -372,6 +372,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/passwords/{alias}/eligibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getPasswordEligibility"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/passwords/{alias}": {
         parameters: {
             query?: never;
@@ -1129,6 +1145,14 @@ export interface components {
             unlocked: boolean;
             aliases: string[];
             minPassphraseLength?: number;
+        };
+        PasswordEligibility: {
+            alias: string;
+            storable: boolean;
+            blockers: components["schemas"]["Notice"][];
+            warnings: components["schemas"]["Notice"][];
+            hostName?: string;
+            port?: string;
         };
         PassphraseRequest: {
             passphrase: string;
@@ -2081,6 +2105,31 @@ export interface operations {
                     "application/json": components["schemas"]["PasswordVaultStatus"];
                 };
             };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    getPasswordEligibility: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                alias: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What stands between this host and a stored password */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasswordEligibility"];
+                };
+            };
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
         };
