@@ -112,6 +112,55 @@ jobs:
       - name: make verify-generated
         run: make verify-generated
 
+  integration:
+    name: Integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --prefix web
+
+      # The binary is the askpass helper, so it has to exist before ssh runs.
+      - name: Build the binary
+        run: make build
+
+      # Two servers this suite cannot fake usefully: a real S3 implementation,
+      # because the whole sync design rests on what a real one does with a
+      # conditional PUT, and a real sshd, because whether OpenSSH accepts what
+      # the askpass helper hands it is not something a stub can answer.
+      - name: Start SeaweedFS and sshd
+        run: make integration-up
+
+      - name: Create the bucket
+        # The client deliberately has no CreateBucket: the application never
+        # makes one, so the harness does it instead of widening the client.
+        run: |
+          docker exec ssh-ui-s3 sh -c '
+            mkdir -p /data/buckets/ssh-ui-test' || true
+          curl -sS -X PUT "http://127.0.0.1:8333/ssh-ui-test" \
+            -H "Authorization: none" >/dev/null 2>&1 || true
+
+      - name: Integration tests
+        run: make integration
+
+      - name: Container logs
+        if: failure()
+        run: |
+          docker logs ssh-ui-s3 2>&1 | tail -50
+          docker logs ssh-ui-sshd 2>&1 | tail -50
+
+      - name: Stop the containers
+        if: always()
+        run: make integration-down
+
   e2e:
     name: End to end
     runs-on: ubuntu-latest

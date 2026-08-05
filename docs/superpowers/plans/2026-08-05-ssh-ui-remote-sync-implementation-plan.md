@@ -333,7 +333,7 @@ Plus six statements, each with a named test above:
 
 ## Known Limitations
 
-- **Conditional `PUT` on R2 is assumed and must be confirmed** (Task 2). If it turns out to be unavailable, the guarantee in section 3 weakens from a compare-and-swap to a narrow race and the UI must say so.
+- **Conditional `PUT` is confirmed against SeaweedFS, not against R2.** The integration suites in `internal/objectstore` and `internal/remotesync` run against a real S3 implementation and show `If-None-Match: *` and `If-Match` both honoured, with 412 on a stale write. That establishes the client is correct against a server that did not read this repository; it does not establish that Cloudflare behaves the same. Until somebody runs these against a real R2 bucket, the guarantee in section 3 is asserted for R2 and demonstrated only for SeaweedFS.
 - **The whole snapshot is re-uploaded for a one-byte change.** Kilobytes, deliberately traded for atomicity.
 - **Losing the passphrase loses the snapshot.** That is what end-to-end encryption means, and the panel says it in those words.
 - **Anyone holding the bucket credentials holds every private key in ciphertext,** and can attack the passphrase offline for as long as they like. Argon2id raises the cost; it does not remove the exposure. A user who is not comfortable with that should keep keys out of the snapshot — which this design does not currently offer as a switch, and probably should.

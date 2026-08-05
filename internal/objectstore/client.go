@@ -58,10 +58,26 @@ type Client struct {
 	Now    func() time.Time
 }
 
-// ErrInsecureEndpoint refuses a plaintext endpoint. The body is encrypted
-// before it gets here, but the credentials are not, and a signature replayed
-// off the wire is a live request until its clock skew window closes.
-var ErrInsecureEndpoint = errors.New("the object store endpoint must be https")
+// ErrInsecureEndpoint refuses a plaintext endpoint that is not loopback. The
+// body is encrypted before it gets here, but the credentials are not, and a
+// signature replayed off the wire is a live request until its clock skew
+// window closes.
+var ErrInsecureEndpoint = errors.New("the object store endpoint must be https unless it is loopback")
+
+// loopbackHosts may be reached over plain http.
+//
+// This exists so the client can be exercised against a real S3 implementation
+// — SeaweedFS or MinIO on this machine, or a service container in CI — which
+// is the only way to find out what a real server does with a conditional PUT.
+// A loopback connection cannot be observed off the machine, so there is
+// nothing for TLS to protect there; anything else must be https.
+//
+// "localhost" is included because that is how a CI service container is
+// reached. It is a name rather than a literal, so in principle it could
+// resolve elsewhere; the exception is bounded to plaintext transport of a
+// request whose body is already ciphertext, and the alternative is having no
+// integration coverage at all.
+var loopbackHosts = map[string]bool{"127.0.0.1": true, "::1": true, "localhost": true}
 
 func (c Client) now() time.Time {
 	if c.Now == nil {
@@ -83,7 +99,10 @@ func (c Client) objectURL(key string) (string, error) {
 		return "", err
 	}
 	if parsed.Scheme != "https" {
-		return "", ErrInsecureEndpoint
+		host := parsed.Hostname()
+		if parsed.Scheme != "http" || !loopbackHosts[host] {
+			return "", ErrInsecureEndpoint
+		}
 	}
 	parsed.Path = "/" + strings.Trim(c.Bucket, "/") + "/" + strings.TrimPrefix(key, "/")
 	return parsed.String(), nil

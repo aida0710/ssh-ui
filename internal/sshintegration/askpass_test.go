@@ -1,0 +1,281 @@
+// Package sshintegration holds tests that need a real OpenSSH server.
+//
+// Everything here skips unless SSH_UI_TEST_SSH_ADDR names one. `make
+// integration` starts one in a container and sets it; CI does the same.
+//
+// The point is the one thing no fake can establish: that OpenSSH accepts what
+// the askpass helper hands it and authenticates. Everything else in the
+// password feature is covered hermetically — the prompt rule, the token
+// semantics, the refusals — and all of that is a description of what should
+// happen. This is whether it does.
+//
+// Terminal.app is the only production component substituted, and it is
+// substituted by exactly the command its AppleScript would have run. The
+// helper, the endpoint, the vault and the token are the shipped code.
+package sshintegration_test
+
+import (
+	"context"
+	"net"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"crypto/rand"
+
+	"ssh-ui/internal/httpserver"
+	"ssh-ui/internal/secret"
+	"ssh-ui/internal/session"
+	"ssh-ui/internal/storage"
+)
+
+const (
+	addressVariable  = "SSH_UI_TEST_SSH_ADDR"
+	userVariable     = "SSH_UI_TEST_SSH_USER"
+	passwordVariable = "SSH_UI_TEST_SSH_PASSWORD"
+
+	alias      = "integration"
+	passphrase = "correct horse battery staple"
+)
+
+type target struct{ host, port, user, password string }
+
+func requireTarget(t *testing.T) target {
+	t.Helper()
+	address := os.Getenv(addressVariable)
+	if address == "" {
+		t.Skipf("%s is not set; start a server with `make integration` to run this", addressVariable)
+	}
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		t.Fatalf("%s = %q: %v", addressVariable, address, err)
+	}
+	return target{host: host, port: port, user: os.Getenv(userVariable), password: os.Getenv(passwordVariable)}
+}
+
+func helperPath(t *testing.T) string {
+	t.Helper()
+	path, err := filepath.Abs(filepath.Join("..", "..", "bin", "ssh-ui"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("the binary under test is missing; run `make build` first: %v", err)
+	}
+	return path
+}
+
+// buildHome writes a workspace whose only host is the container, with the host
+// key already known.
+//
+// Scanning the key rather than disabling the check is deliberate: the feature
+// refuses to answer the host key question, so a test that turned
+// StrictHostKeyChecking off would be testing a configuration this application
+// never produces.
+func buildHome(t *testing.T, destination target) string {
+	t.Helper()
+	home := t.TempDir()
+	root := filepath.Join(home, ".ssh")
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	scan := exec.Command("ssh-keyscan", "-p", destination.port, destination.host)
+	scan.Env = []string{"HOME=" + home, "PATH=" + os.Getenv("PATH")}
+	known, err := scan.Output()
+	if err != nil || len(known) == 0 {
+		t.Fatalf("ssh-keyscan produced nothing: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "known_hosts"), known, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	configuration := strings.Join([]string{
+		"Host " + alias,
+		"\tHostName " + destination.host,
+		"\tPort " + destination.port,
+		"\tUser " + destination.user,
+		// The point is the password path, so the key paths are closed off.
+		"\tPubkeyAuthentication no",
+		"\tPreferredAuthentications password",
+		"\tStrictHostKeyChecking yes",
+		"",
+	}, "\n")
+	if err := os.WriteFile(filepath.Join(root, "config"), []byte(configuration), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return home
+}
+
+// startServer runs the real HTTP server with the real /askpass endpoint.
+func startServer(t *testing.T, home string) (*secret.Service, string) {
+	t.Helper()
+	workspace, err := storage.NewWorkspace(storage.OSFileSystem{}, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vault := secret.NewService(workspace, storage.NewManager(workspace, time.Now, rand.Reader))
+	if err := vault.Initialise(passphrase); err != nil {
+		t.Fatal(err)
+	}
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessions, _, err := session.NewManager(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server, err := httpserver.New(httpserver.Options{
+		Listener:   listener,
+		Sessions:   sessions,
+		UI:         os.DirFS(home),
+		Version:    "integration",
+		Passwords:  vault,
+		Answerable: answerable,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	serveContext, stop := context.WithCancel(context.Background())
+	go func() { _ = server.Serve(serveContext) }()
+	t.Cleanup(stop)
+	// server.URL() carries the one-time bootstrap fragment; the askpass
+	// endpoint needs the origin only, and must never be handed a session token.
+	origin := server.URL()
+	if index := strings.Index(origin, "#"); index >= 0 {
+		origin = origin[:index]
+	}
+	return vault, strings.TrimSuffix(origin, "/") + httpserver.AskpassPath
+}
+
+// answerable is the production rule, restated here because cmd/ssh-ui is a
+// main package and cannot be imported. A test that used a laxer rule would
+// prove nothing about the shipped one, so this is the same predicate: the
+// prompt ends in OpenSSH's password suffix and mentions nothing else.
+func answerable(prompt string) bool {
+	trimmed := strings.ToLower(strings.TrimRight(prompt, " \t\r\n"))
+	for _, marker := range []string{"passphrase", "continue connecting", "fingerprint", "yes/no"} {
+		if strings.Contains(trimmed, marker) {
+			return false
+		}
+	}
+	return strings.HasSuffix(trimmed, "'s password:")
+}
+
+func runSSH(t *testing.T, home, endpoint, token string, arguments ...string) (string, error) {
+	t.Helper()
+	// Exactly what TerminalPasswordScript tells the shell to run.
+	command := exec.Command("ssh", append([]string{
+		"-o", "NumberOfPasswordPrompts=1",
+		"-o", "BatchMode=no",
+		"--", alias,
+	}, arguments...)...)
+	command.Env = []string{
+		"HOME=" + home,
+		"PATH=" + os.Getenv("PATH"),
+		"SSH_ASKPASS=" + helperPath(t),
+		"SSH_ASKPASS_REQUIRE=force",
+		"SSH_UI_ASKPASS_URL=" + endpoint,
+		"SSH_UI_ASKPASS_TOKEN=" + token,
+		"SSH_UI_ASKPASS_ALIAS=" + alias,
+	}
+	output, err := command.CombinedOutput()
+	return string(output), err
+}
+
+func TestTheHelperAuthenticatesAgainstARealServer(t *testing.T) {
+	destination := requireTarget(t)
+	home := buildHome(t, destination)
+	vault, endpoint := startServer(t, home)
+
+	if err := vault.Set(alias, destination.password); err != nil {
+		t.Fatal(err)
+	}
+	token, err := vault.IssueToken(alias)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	output, err := runSSH(t, home, endpoint, token, "echo", "authenticated-by-askpass")
+	if err != nil {
+		t.Fatalf("ssh = %v\n%s", err, output)
+	}
+	if !strings.Contains(output, "authenticated-by-askpass") {
+		t.Errorf("the remote command did not run:\n%s", output)
+	}
+}
+
+func TestTheWrongStoredPasswordFailsOnceRatherThanRepeatedly(t *testing.T) {
+	// NumberOfPasswordPrompts=1 is in the shipped command because a wrong
+	// stored password offered three times counts towards a lockout on some
+	// servers. This is where that stops being a claim.
+	destination := requireTarget(t)
+	home := buildHome(t, destination)
+	vault, endpoint := startServer(t, home)
+
+	if err := vault.Set(alias, destination.password+"-wrong"); err != nil {
+		t.Fatal(err)
+	}
+	token, err := vault.IssueToken(alias)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	output, err := runSSH(t, home, endpoint, token)
+	if err == nil {
+		t.Fatalf("ssh authenticated with the wrong password:\n%s", output)
+	}
+	if attempts := strings.Count(output, "Permission denied"); attempts > 1 {
+		t.Errorf("the password was offered %d times:\n%s", attempts, output)
+	}
+}
+
+func TestASpentTokenDoesNotAuthenticate(t *testing.T) {
+	// A token is spent by the connection it was made for. If it were not, a
+	// token seen once in a process list would be usable for as long as its two
+	// minutes lasted.
+	destination := requireTarget(t)
+	home := buildHome(t, destination)
+	vault, endpoint := startServer(t, home)
+
+	if err := vault.Set(alias, destination.password); err != nil {
+		t.Fatal(err)
+	}
+	token, err := vault.IssueToken(alias)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if output, err := runSSH(t, home, endpoint, token, "true"); err != nil {
+		t.Fatalf("the first connection = %v\n%s", err, output)
+	}
+
+	output, err := runSSH(t, home, endpoint, token, "true")
+	if err == nil {
+		t.Fatalf("the spent token authenticated a second connection:\n%s", output)
+	}
+}
+
+func TestALockedVaultCannotAnswer(t *testing.T) {
+	destination := requireTarget(t)
+	home := buildHome(t, destination)
+	vault, endpoint := startServer(t, home)
+
+	if err := vault.Set(alias, destination.password); err != nil {
+		t.Fatal(err)
+	}
+	token, err := vault.IssueToken(alias)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vault.Lock()
+
+	output, err := runSSH(t, home, endpoint, token, "true")
+	if err == nil {
+		t.Fatalf("a locked vault still answered:\n%s", output)
+	}
+}
