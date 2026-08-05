@@ -110,3 +110,57 @@ func TestOverlayLoaderPrefersPendingContentsOverARemoval(t *testing.T) {
 		t.Fatalf("contents = %q, want the pending contents", contents)
 	}
 }
+
+// TestValidateLeavesApplicationStateAlone is the regression test for a defect
+// this project's own end-to-end suite found in CI and not locally.
+//
+// The password vault shares this transaction manager, so it passes through
+// this validator. The validator used to parse every change as ssh_config, and
+// a sealed vault is ciphertext: when its random bytes happened to contain an
+// odd number of quotation marks it was refused as "unbalanced quoting". That
+// is a coin flip on every save, which is exactly the shape of a test that
+// passes on one machine and fails on another.
+func TestValidateLeavesApplicationStateAlone(t *testing.T) {
+	service, workspace := newTestService(t)
+	if err := workspace.EnsureDirectory(workspace.StateDir()); err != nil {
+		t.Fatal(err)
+	}
+
+	// One unmatched quotation mark, which is what the ciphertext kept
+	// accidentally producing.
+	ciphertext := []byte("\x91\x2f\"\x00\xd4 not configuration at all\n")
+
+	if _, err := service.manager.Commit(storage.Request{
+		Operation: "secret.vault",
+		Changes: []storage.Change{{
+			Path:       filepath.Join(workspace.StateDir(), "secrets"),
+			Contents:   ciphertext,
+			SkipBackup: true,
+		}},
+	}); err != nil {
+		t.Fatalf("a file under ssh-ui/ was validated as configuration: %v", err)
+	}
+
+	// The same bytes as a real configuration file are still refused, so this
+	// narrows the validator rather than disabling it.
+	if _, err := service.manager.Commit(storage.Request{
+		Operation: "config.file_raw",
+		Changes: []storage.Change{{
+			Path:     filepath.Join(workspace.Root(), "conf.d", "20-bad.conf"),
+			Contents: ciphertext,
+		}},
+	}); err == nil {
+		t.Fatal("unbalanced quoting reached a configuration file")
+	}
+
+	// And a sibling of the state directory is not mistaken for a child of it.
+	if _, err := service.manager.Commit(storage.Request{
+		Operation: "config.file_raw",
+		Changes: []storage.Change{{
+			Path:     filepath.Join(workspace.Root(), "ssh-ui-notes.conf"),
+			Contents: ciphertext,
+		}},
+	}); err == nil {
+		t.Fatal("a sibling of ssh-ui/ escaped validation")
+	}
+}
