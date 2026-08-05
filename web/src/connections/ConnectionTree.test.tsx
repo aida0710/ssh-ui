@@ -4,10 +4,12 @@ import { describe, expect, it, vi } from "vitest";
 import { ConnectionTree } from "./ConnectionTree";
 import type { HostEntry, Overview } from "../api/config";
 
+// nas sits in connections/home, so its group is "home". Membership is the
+// directory, and the projection reports it on the entry rather than in metadata.
 const nas: HostEntry = {
-  identity: { path: "conf.d/10-home.conf", alias: "nas" },
-  file: { path: "conf.d/10-home.conf", absolute: "/home/tester/.ssh/conf.d/10-home.conf" },
-  line: 1, patterns: ["nas"], editable: true,
+  identity: { path: "connections/home/nas.conf", alias: "nas" },
+  file: { path: "connections/home/nas.conf", absolute: "/home/tester/.ssh/connections/home/nas.conf" },
+  line: 1, patterns: ["nas"], editable: true, group: "home",
 };
 
 const bastion: HostEntry = {
@@ -26,13 +28,13 @@ const overview: Overview = {
   entry: { path: "config", absolute: "/home/tester/.ssh/config" },
   files: [
     { file: { path: "config", absolute: "/home/tester/.ssh/config" }, editable: true, loads: 1 },
-    { file: { path: "conf.d/10-home.conf", absolute: "/home/tester/.ssh/conf.d/10-home.conf" }, editable: true, loads: 1 },
+    { file: { path: "connections/home/nas.conf", absolute: "/home/tester/.ssh/connections/home/nas.conf" }, editable: true, loads: 1 },
   ],
   hosts: [nas, bastion, catchAll],
   metadata: {
-    schemaVersion: 1,
+    schemaVersion: 2,
     groups: [{ name: "home" }],
-    hosts: [{ identity: { path: "conf.d/10-home.conf", alias: "nas" }, group: "home", favourite: true }],
+    hosts: [{ identity: { path: "connections/home/nas.conf", alias: "nas" }, favourite: true }],
   },
   diagnostics: [],
   notices: [],
@@ -142,7 +144,7 @@ describe("ConnectionTree", () => {
 
     await user.click(screen.getByRole("button", { name: "Files" }));
 
-    expect(screen.getByRole("heading", { name: "conf.d/10-home.conf" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "connections/home/nas.conf" })).toBeInTheDocument();
   });
 
   it("filters hosts as the user searches and reports an empty result", async () => {
@@ -177,8 +179,7 @@ describe("ConnectionTree", () => {
         ...overview.metadata,
         hosts: [
           {
-            identity: { path: "conf.d/10-home.conf", alias: "nas" },
-            group: "home",
+            identity: { path: "connections/home/nas.conf", alias: "nas" },
             favourite: true,
             colour: "#f97316",
             tags: ["storage", "lan"],
@@ -209,7 +210,7 @@ describe("ConnectionTree", () => {
         groups: [],
         hosts: [
           { identity: { path: "config", alias: "bastion" }, order: 5 },
-          { identity: { path: "conf.d/10-home.conf", alias: "nas" }, order: -1 },
+          { identity: { path: "connections/home/nas.conf", alias: "nas" }, order: -1 },
         ],
       },
     };

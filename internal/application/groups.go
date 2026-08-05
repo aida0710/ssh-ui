@@ -1,116 +1,178 @@
 package application
 
 import (
-	"sort"
 	"strings"
 
 	"ssh-ui/internal/config"
 )
 
-// maxGroupDepth bounds the parent walk so a malformed hierarchy cannot loop.
-const maxGroupDepth = 32
+// Group notice codes.
+const (
+	// NoticeGroupNotDeclared marks a directory under connections/ that no
+	// Include line names. It is not a group: nothing reads it.
+	NoticeGroupNotDeclared = "group_not_declared"
+	// NoticeGroupDirectoryMissing marks a declared group whose directory does
+	// not exist yet.
+	NoticeGroupDirectoryMissing = "group_directory_missing"
+	// NoticeGroupEmpty marks a declared group with no connections in it.
+	NoticeGroupEmpty = "group_empty"
+	// NoticeGroupFileUnreached marks a .conf file sitting directly under
+	// connections/, which belongs to no group and which nothing includes.
+	NoticeGroupFileUnreached = "group_file_unreached"
+)
 
-// GroupDepthOrder sorts groups deepest first, which is the order OpenSSH needs:
-// a child's Host block must be read before its parent's so the child's value is
-// the first value found. Groups in a parent cycle are excluded and reported.
-func GroupDepthOrder(groups []GroupMetadata) ([]GroupMetadata, []Notice) {
-	byName := make(map[string]GroupMetadata, len(groups))
-	for _, group := range groups {
-		byName[group.Name] = group
+// GroupView is one group as the UI sees it: where it lives, whether it is
+// declared, and the presentation metadata attached to its name.
+type GroupView struct {
+	Name             string    `json:"name"`
+	Parent           string    `json:"parent,omitempty"`
+	Directory        string    `json:"directory"`
+	KeyDirectory     string    `json:"keyDirectory"`
+	Colour           string    `json:"colour,omitempty"`
+	Note             string    `json:"note,omitempty"`
+	Order            int       `json:"order,omitempty"`
+	Settings         []Setting `json:"settings,omitempty"`
+	MemberCount      int       `json:"memberCount"`
+	DirectoryPresent bool      `json:"directoryPresent"`
+}
+
+// DeclaredGroups returns the group names the entry file's generated region
+// names, in the order the Include lines appear.
+//
+// The filesystem is not consulted. A directory is a group because a line in
+// ~/.ssh/config says to read it, not because it exists: inferring membership
+// from a directory that happens to be there would silently adopt a layout
+// somebody else built for another purpose.
+func DeclaredGroups(file *config.File) []string {
+	start, end, found, err := FindRegion(file)
+	if err != nil || !found {
+		return nil
 	}
-	depths := make(map[string]int, len(groups))
-	ordered := make([]GroupMetadata, 0, len(groups))
-	var notices []Notice
-	for _, group := range groups {
-		depth, ok := groupDepth(byName, group.Name, map[string]bool{})
-		if !ok {
-			notices = appendNotice(notices, Notice{Code: NoticeGroupCycle, Detail: group.Name})
+	prefix := ConnectionsDirectory + "/"
+	const suffix = "/*.conf"
+	names := make([]string, 0)
+	seen := make(map[string]bool)
+	for index := start; index < end && index < len(file.Lines); index++ {
+		line := file.Lines[index]
+		if line.Kind != config.LineDirective || !config.EqualKeyword(line.Keyword, "Include") {
 			continue
 		}
-		depths[group.Name] = depth
-		ordered = append(ordered, group)
+		for _, value := range line.Values() {
+			if !strings.HasPrefix(value, prefix) || !strings.HasSuffix(value, suffix) {
+				continue
+			}
+			name := strings.TrimSuffix(strings.TrimPrefix(value, prefix), suffix)
+			if ValidateGroupName(name) != nil || seen[name] {
+				continue
+			}
+			seen[name] = true
+			names = append(names, name)
+		}
 	}
-	sort.SliceStable(ordered, func(first, second int) bool {
-		firstDepth, secondDepth := depths[ordered[first].Name], depths[ordered[second].Name]
-		if firstDepth != secondDepth {
-			return firstDepth > secondDepth
-		}
-		if ordered[first].Order != ordered[second].Order {
-			return ordered[first].Order < ordered[second].Order
-		}
-		return ordered[first].Name < ordered[second].Name
-	})
-	return ordered, notices
+	return names
 }
 
-func groupDepth(byName map[string]GroupMetadata, name string, seen map[string]bool) (int, bool) {
-	if seen[name] || len(seen) > maxGroupDepth {
-		return 0, false
+// BuildGroupsView assembles what the Groups screen shows: the declared groups
+// with their presentation metadata and member counts, plus a notice for every
+// way the declaration and the disk disagree.
+//
+// present is the set of directories that exist under connections/, workspace
+// relative and slash separated, as the caller found them.
+func BuildGroupsView(entry *config.File, hosts []HostEntry, metadata Metadata, present []string) ([]GroupView, []Notice) {
+	declared := DeclaredGroups(entry)
+	declaredSet := make(map[string]bool, len(declared))
+	for _, name := range declared {
+		declaredSet[name] = true
 	}
-	group, ok := byName[name]
-	if !ok || group.Parent == "" {
-		return 0, true
+	presentSet := make(map[string]bool, len(present))
+	for _, name := range present {
+		presentSet[name] = true
 	}
-	seen[name] = true
-	parentDepth, ok := groupDepth(byName, group.Parent, seen)
-	if !ok {
-		return 0, false
-	}
-	return parentDepth + 1, true
-}
 
-func isDescendantGroup(byName map[string]GroupMetadata, candidate, ancestor string) bool {
-	current := candidate
-	for depth := 0; depth < maxGroupDepth; depth++ {
-		group, ok := byName[current]
-		if !ok || group.Parent == "" {
-			return false
-		}
-		if group.Parent == ancestor {
-			return true
-		}
-		current = group.Parent
-	}
-	return false
-}
-
-// CompileGroups renders the group hierarchy as ordinary Host blocks. A parent
-// block lists its own members and every member of its descendants, so a child
-// inherits by being named in both blocks while its own block is read first.
-func CompileGroups(metadata Metadata, hosts []HostEntry, ending string) ([]byte, []Notice) {
-	if ending == "" {
-		ending = "\n"
-	}
-	ordered, notices := GroupDepthOrder(metadata.Groups)
 	byName := make(map[string]GroupMetadata, len(metadata.Groups))
+	order := make(map[string]int, len(metadata.Groups))
 	for _, group := range metadata.Groups {
 		byName[group.Name] = group
+		order[group.Name] = group.Order
 	}
-
-	aliasOrder := make([]string, 0, len(hosts))
-	known := make(map[string]bool, len(hosts))
+	members := make(map[string]int, len(declared))
+	var notices []Notice
 	for _, host := range hosts {
-		if host.Identity.IsZero() || known[host.Identity.Alias] {
-			continue
-		}
-		known[host.Identity.Alias] = true
-		aliasOrder = append(aliasOrder, host.Identity.Alias)
-	}
-
-	direct := make(map[string][]string, len(ordered))
-	for _, host := range metadata.Hosts {
 		if host.Group == "" {
 			continue
 		}
-		if !known[host.Identity.Alias] {
-			notices = appendNotice(notices, Notice{
-				Code: NoticeGroupMemberMissing, Path: host.Identity.Path, Detail: host.Identity.Alias,
-			})
-			continue
-		}
-		direct[host.Group] = append(direct[host.Group], host.Identity.Alias)
+		members[host.Group]++
 	}
 
+	views := make([]GroupView, 0, len(declared))
+	for _, name := range GroupNameOrder(declared, order) {
+		stored := byName[name]
+		view := GroupView{
+			Name:             name,
+			Parent:           ParentGroupName(name),
+			Directory:        GroupDirectory(name),
+			KeyDirectory:     GroupKeyDirectory(name),
+			Colour:           stored.Colour,
+			Note:             stored.Note,
+			Order:            stored.Order,
+			Settings:         stored.Settings,
+			MemberCount:      members[name],
+			DirectoryPresent: presentSet[name],
+		}
+		if !view.DirectoryPresent {
+			notices = appendNotice(notices, Notice{Code: NoticeGroupDirectoryMissing, Detail: name, Path: view.Directory})
+		} else if view.MemberCount == 0 {
+			// The include_no_match diagnostic this produces is still reported.
+			// Suppressing a real diagnostic because this application generated
+			// the line that caused it would be the wrong kind of tidy.
+			notices = appendNotice(notices, Notice{Code: NoticeGroupEmpty, Detail: name, Path: view.Directory})
+		}
+		views = append(views, view)
+	}
+	for _, name := range present {
+		if declaredSet[name] {
+			continue
+		}
+		notices = appendNotice(notices, Notice{
+			Code: NoticeGroupNotDeclared, Detail: name, Path: ConnectionsDirectory + "/" + name,
+		})
+	}
+	return views, notices
+}
+
+// CompileGroups renders the group settings as ordinary Host blocks.
+//
+// A parent block lists its own members and every member of its descendants, so
+// a child inherits by being named in both blocks while its own block is read
+// first. declared is the group set in the order the region declares it; the
+// hierarchy comes from the names, because a name that contains its parent
+// cannot disagree with a parent field.
+func CompileGroups(declared []string, metadata Metadata, hosts []HostEntry, ending string) ([]byte, []Notice) {
+	if ending == "" {
+		ending = "\n"
+	}
+	byName := make(map[string]GroupMetadata, len(metadata.Groups))
+	order := make(map[string]int, len(metadata.Groups))
+	for _, group := range metadata.Groups {
+		byName[group.Name] = group
+		order[group.Name] = group.Order
+	}
+
+	aliasOrder := make([]string, 0, len(hosts))
+	direct := make(map[string][]string, len(declared))
+	seen := make(map[string]bool, len(hosts))
+	for _, host := range hosts {
+		if host.Identity.IsZero() || seen[host.Identity.Alias] {
+			continue
+		}
+		seen[host.Identity.Alias] = true
+		aliasOrder = append(aliasOrder, host.Identity.Alias)
+		if host.Group != "" {
+			direct[host.Group] = append(direct[host.Group], host.Identity.Alias)
+		}
+	}
+
+	var notices []Notice
 	var builder strings.Builder
 	for _, comment := range []string{
 		"# Generated by ssh-ui from ~/.ssh/ssh-ui/metadata.json.",
@@ -121,14 +183,15 @@ func CompileGroups(metadata Metadata, hosts []HostEntry, ending string) ([]byte,
 		builder.WriteString(ending)
 	}
 
-	for _, group := range ordered {
-		members := groupMembers(byName, direct, aliasOrder, group.Name)
+	for _, name := range GroupNameOrder(declared, order) {
+		group := byName[name]
+		members := groupMembers(direct, aliasOrder, name)
 		if len(members) == 0 || len(group.Settings) == 0 {
 			continue
 		}
 		header, err := buildLine("", "Host", members, ending)
 		if err != nil {
-			notices = appendNotice(notices, Notice{Code: NoticeGroupMemberMissing, Detail: group.Name})
+			notices = appendNotice(notices, Notice{Code: NoticeGroupMemberMissing, Detail: name})
 			continue
 		}
 		var block strings.Builder
@@ -137,7 +200,7 @@ func CompileGroups(metadata Metadata, hosts []HostEntry, ending string) ([]byte,
 			line, settingErr := buildDirectiveLine("\t", setting.Keyword, setting.Values, ending)
 			if settingErr != nil {
 				notices = appendNotice(notices, Notice{
-					Code: NoticeComplexExternalRule, Detail: group.Name + ": " + setting.Keyword,
+					Code: NoticeComplexExternalRule, Detail: name + ": " + setting.Keyword,
 				})
 				valid = false
 				break
@@ -149,9 +212,9 @@ func CompileGroups(metadata Metadata, hosts []HostEntry, ending string) ([]byte,
 		}
 
 		builder.WriteString(ending)
-		builder.WriteString("# group " + group.Name)
-		if group.Parent != "" {
-			builder.WriteString(" (parent " + group.Parent + ")")
+		builder.WriteString("# group " + name)
+		if parent := ParentGroupName(name); parent != "" {
+			builder.WriteString(" (parent " + parent + ")")
 		}
 		builder.WriteString(ending)
 		builder.WriteString(header.Render())
@@ -160,13 +223,15 @@ func CompileGroups(metadata Metadata, hosts []HostEntry, ending string) ([]byte,
 	return []byte(builder.String()), notices
 }
 
-func groupMembers(byName map[string]GroupMetadata, direct map[string][]string, aliasOrder []string, name string) []string {
+// groupMembers collects a group's own members and those of every group nested
+// inside it, in the order the hosts were projected.
+func groupMembers(direct map[string][]string, aliasOrder []string, name string) []string {
 	collected := make(map[string]bool)
-	for candidate := range byName {
-		if candidate != name && !isDescendantGroup(byName, candidate, name) {
+	for candidate, aliases := range direct {
+		if candidate != name && !strings.HasPrefix(candidate, name+"/") {
 			continue
 		}
-		for _, alias := range direct[candidate] {
+		for _, alias := range aliases {
 			collected[alias] = true
 		}
 	}
@@ -179,49 +244,7 @@ func groupMembers(byName map[string]GroupMetadata, direct map[string][]string, a
 	return members
 }
 
-// PlanGroupInclude decides where the generated groups file must be included.
-//
-// The Include goes after the user's own specific Host blocks and before the
-// first catch-all block, so the priority is host, then child group, then parent
-// group, then global default. An Include naming the file exactly is treated as
-// already present; a glob that happens to match it is not, because guessing
-// which glob covers which file is exactly what this application must not do.
-func PlanGroupInclude(file *config.File, relative string) (int, bool) {
-	insertAt := len(file.Lines)
-	found := false
-	for index, line := range file.Lines {
-		if line.Kind != config.LineDirective {
-			continue
-		}
-		if config.EqualKeyword(line.Keyword, "Include") {
-			for _, value := range line.Values() {
-				if value == relative {
-					return -1, true
-				}
-			}
-			continue
-		}
-		if found {
-			continue
-		}
-		if config.EqualKeyword(line.Keyword, "Match") {
-			insertAt, found = index, true
-			continue
-		}
-		if !config.EqualKeyword(line.Keyword, "Host") {
-			continue
-		}
-		for _, pattern := range line.Values() {
-			if pattern == "*" {
-				insertAt, found = index, true
-				break
-			}
-		}
-	}
-	return insertAt, false
-}
-
-// InsertIncludeLine writes the Include directive at the planned index.
+// InsertIncludeLine writes an Include directive at the given index.
 func InsertIncludeLine(file *config.File, relative string, index int) error {
 	line, err := buildLine("", "Include", []string{relative}, dominantEnding(file))
 	if err != nil {
@@ -233,3 +256,39 @@ func InsertIncludeLine(file *config.File, relative string, index int) error {
 	insertLine(file, index, line)
 	return nil
 }
+
+// declaredGroupSet is the group set a save declares.
+//
+// A group reaches the region because it is already declared there, or because
+// the user made one by giving it presentation or settings in metadata. The
+// filesystem is deliberately not a source: a directory somebody else created
+// under connections/ is reported, never adopted.
+func declaredGroupSet(entry *config.File, metadata Metadata) []string {
+	seen := make(map[string]bool)
+	names := make([]string, 0)
+	add := func(name string) {
+		if name == "" || seen[name] || ValidateGroupName(name) != nil {
+			return
+		}
+		seen[name] = true
+		names = append(names, name)
+	}
+	for _, name := range DeclaredGroups(entry) {
+		add(name)
+	}
+	for _, group := range metadata.Groups {
+		add(group.Name)
+	}
+	order := make(map[string]int, len(metadata.Groups))
+	for _, group := range metadata.Groups {
+		order[group.Name] = group.Order
+	}
+	return GroupNameOrder(names, order)
+}
+
+// NoticeGroupDirectoryCreated marks a group directory this save creates.
+//
+// Directory creation happens outside the journal — Commit resolves a write path
+// against real directories, so the directory has to be there first — which is
+// why it is worth saying out loud rather than leaving as an invisible effect.
+const NoticeGroupDirectoryCreated = "group_directory_created"

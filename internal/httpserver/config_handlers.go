@@ -13,6 +13,22 @@ import (
 // behind the CSRF header enforced by Security.Middleware.
 type ConfigHandlers struct {
 	Service *application.Service
+	// Keys supplies the inventory a group operation needs: renaming a group
+	// moves its keys, which means rewriting every IdentityFile that names them.
+	Keys KeyService
+}
+
+type groupRenameRequest struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
+type groupDeleteRequest struct {
+	Name string `json:"name"`
+	// Destination is the group the connections move into. Empty moves them to
+	// the connections directory itself, where nothing reads them until the user
+	// puts them somewhere; no configuration file is ever deleted.
+	Destination string `json:"destination"`
 }
 
 type historyList struct {
@@ -40,6 +56,8 @@ func registerConfigRoutes(engine *echo.Echo, handlers ConfigHandlers) {
 	engine.GET("/api/v1/config/file", handlers.File)
 	engine.POST("/api/v1/config/preview", handlers.Preview)
 	engine.POST("/api/v1/config/save", handlers.Save)
+	engine.POST("/api/v1/config/groups/rename", handlers.RenameGroup)
+	engine.POST("/api/v1/config/groups/delete", handlers.DeleteGroup)
 	engine.GET("/api/v1/metadata", handlers.Metadata)
 	engine.GET("/api/v1/history", handlers.History)
 	engine.POST("/api/v1/history/restore", handlers.Restore)
@@ -100,6 +118,40 @@ func (h ConfigHandlers) Save(c *echo.Context) error {
 		return serviceProblem(c, err)
 	}
 	result, err := h.Service.Save(request)
+	if err != nil {
+		return serviceProblem(c, err)
+	}
+	return c.JSON(http.StatusOK, result)
+}
+
+// RenameGroup renames a group directory and everything that names it.
+func (h ConfigHandlers) RenameGroup(c *echo.Context) error {
+	var request groupRenameRequest
+	if err := decodeJSON(c, &request); err != nil {
+		return serviceProblem(c, err)
+	}
+	inventory, err := h.Keys.Inventory()
+	if err != nil {
+		return problem(c, http.StatusInternalServerError, "inventory_failed")
+	}
+	result, err := h.Service.RenameGroup(inventory, request.From, request.To)
+	if err != nil {
+		return serviceProblem(c, err)
+	}
+	return c.JSON(http.StatusOK, result)
+}
+
+// DeleteGroup removes a group and relocates its connections.
+func (h ConfigHandlers) DeleteGroup(c *echo.Context) error {
+	var request groupDeleteRequest
+	if err := decodeJSON(c, &request); err != nil {
+		return serviceProblem(c, err)
+	}
+	inventory, err := h.Keys.Inventory()
+	if err != nil {
+		return problem(c, http.StatusInternalServerError, "inventory_failed")
+	}
+	result, err := h.Service.DeleteGroup(inventory, request.Name, request.Destination)
 	if err != nil {
 		return serviceProblem(c, err)
 	}

@@ -341,7 +341,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/keys/{keyId}/name": {
+    "/api/v1/config/groups/rename": {
         parameters: {
             query?: never;
             header?: never;
@@ -350,8 +350,42 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Renames one key inside the directory it already occupies and rewrites every configuration directive that names it, in one transaction. It refuses rather than guesses: a directive whose path cannot be resolved, or which lives in a file outside the workspace, blocks the rename and is reported as a blocker so the user can see what would have been left dangling. */
-        post: operations["renameKey"];
+        /** @description Renames a group directory and everything that names it — every connection file under connections/<old>, every key under keys/<old>, every IdentityFile pointing into it, the generated Include region, the compiled settings file and metadata.json — in one journalled transaction. Nested groups travel with their parent. The emptied source directory is reported and is not removed: storage moves files, not directories. */
+        post: operations["renameGroup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/groups/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Removes a group's declaration and relocates its connections and keys into another group, or to the connections directory itself. No configuration file is ever deleted by this operation. */
+        post: operations["deleteGroup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/keys/{keyId}/location": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Changes a key's name, its group, or both, and rewrites every configuration directive that names it, in one transaction committed through the configuration engine so the rewritten files are re-parsed and re-resolved before anything lands. An absent field is left as it is; an empty group moves the key to the root of ~/.ssh. It refuses rather than guesses: a directive whose path cannot be resolved, one in a file outside the workspace, a destination an Include glob would read as configuration, or a group nothing declares each block the whole transaction and are reported as blockers. */
+        post: operations["relocateKey"];
         delete?: never;
         options?: never;
         head?: never;
@@ -679,6 +713,7 @@ export interface components {
             algorithm: string;
             bits?: number;
             fileName: string;
+            group?: string;
             comment: string;
             passphrase: string;
             unencrypted: boolean;
@@ -694,6 +729,7 @@ export interface components {
             transactionId: string;
         };
         HardwareCommandRequest: {
+            group?: string;
             algorithm: string;
             fileName: string;
             comment: string;
@@ -926,10 +962,19 @@ export interface components {
             fingerprint: string;
             comment: string;
         };
-        RenameKeyRequest: {
-            newName: string;
+        GroupRenameRequest: {
+            from: string;
+            to: string;
         };
-        RenamedKeyFile: {
+        GroupDeleteRequest: {
+            name: string;
+            destination?: string;
+        };
+        RelocateKeyRequest: {
+            newName?: string;
+            group?: string;
+        };
+        RelocatedKeyFile: {
             from: string;
             to: string;
         };
@@ -940,10 +985,11 @@ export interface components {
             from: string;
             to: string;
         };
-        RenameKeyResponse: {
+        RelocateKeyResponse: {
             id: string;
             relativePath: string;
-            files: components["schemas"]["RenamedKeyFile"][];
+            group: string;
+            files: components["schemas"]["RelocatedKeyFile"][];
             references: components["schemas"]["RewrittenKeyReference"][];
             skipped: string[];
             notes: string[];
@@ -1033,6 +1079,7 @@ export interface components {
             negated?: boolean;
             duplicate?: boolean;
             editable: boolean;
+            group?: string;
         };
         IncludeReference: {
             line: number;
@@ -1053,7 +1100,6 @@ export interface components {
         };
         HostMetadata: {
             identity: components["schemas"]["HostIdentity"];
-            group?: string;
             tags?: string[];
             colour?: string;
             note?: string;
@@ -1063,7 +1109,6 @@ export interface components {
         };
         GroupMetadata: {
             name: string;
-            parent?: string;
             colour?: string;
             note?: string;
             order?: number;
@@ -1158,6 +1203,7 @@ export interface components {
             raw?: string;
             comment?: string;
             metadata?: components["schemas"]["Metadata"];
+            destinationGroup?: string;
             destinationPath?: string;
             destinationBase?: string;
         };
@@ -1825,7 +1871,65 @@ export interface operations {
             404: components["responses"]["Problem"];
         };
     };
-    renameKey: {
+    renameGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupRenameRequest"];
+            };
+        };
+        responses: {
+            /** @description Group renamed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    deleteGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Group removed and its connections relocated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    relocateKey: {
         parameters: {
             query?: never;
             header?: never;
@@ -1836,30 +1940,30 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RenameKeyRequest"];
+                "application/json": components["schemas"]["RelocateKeyRequest"];
             };
         };
         responses: {
-            /** @description Key renamed */
+            /** @description Key relocated */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RenameKeyResponse"];
+                    "application/json": components["schemas"]["RelocateKeyResponse"];
                 };
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
-            /** @description The rename was blocked, and nothing was written */
+            /** @description The relocation was blocked, and nothing was written */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RenameKeyResponse"];
+                    "application/json": components["schemas"]["RelocateKeyResponse"];
                 };
             };
             422: components["responses"]["Problem"];

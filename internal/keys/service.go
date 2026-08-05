@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -21,7 +22,13 @@ var (
 	ErrInvalidFileName             = errors.New("file name is not a safe single path segment")
 	ErrInvalidComment              = errors.New("comment contains characters this application will not put in a command line")
 	ErrConflictingPassphraseChoice = errors.New("a passphrase was supplied together with the unencrypted flag")
+	ErrUnknownGroup                = errors.New("no declared group of that name")
 )
+
+// KeysDirectoryName is the directory holding one subdirectory per group. It
+// mirrors the connections directory the configuration engine owns; the name is
+// duplicated rather than imported because the import would run the wrong way.
+const KeysDirectoryName = "keys"
 
 // fileNamePattern accepts one safe path segment. A leading dot, a slash and a
 // '..' segment are all impossible under this pattern, so a request cannot name
@@ -91,27 +98,33 @@ type Service struct {
 	agent        platform.KeyAgent
 	now          func() time.Time
 	random       io.Reader
+	// validateGroup is injected because what a group is belongs to the
+	// configuration engine — a group exists when an Include line declares it —
+	// and this package must not import that engine to ask.
+	validateGroup func(string) error
 }
 
 type ServiceOptions struct {
-	Workspace    *storage.Workspace
-	Transactions *storage.Manager
-	Resolver     config.Resolver
-	Catalogue    CatalogueReader
-	Agent        platform.KeyAgent
-	Now          func() time.Time
-	Random       io.Reader
+	Workspace     *storage.Workspace
+	Transactions  *storage.Manager
+	Resolver      config.Resolver
+	Catalogue     CatalogueReader
+	Agent         platform.KeyAgent
+	Now           func() time.Time
+	Random        io.Reader
+	ValidateGroup func(string) error
 }
 
 func NewService(options ServiceOptions) *Service {
 	return &Service{
-		workspace:    options.Workspace,
-		transactions: options.Transactions,
-		resolver:     options.Resolver,
-		catalogue:    options.Catalogue,
-		agent:        options.Agent,
-		now:          options.Now,
-		random:       options.Random,
+		workspace:     options.Workspace,
+		transactions:  options.Transactions,
+		resolver:      options.Resolver,
+		catalogue:     options.Catalogue,
+		agent:         options.Agent,
+		now:           options.Now,
+		random:        options.Random,
+		validateGroup: options.ValidateGroup,
 	}
 }
 
@@ -144,8 +157,31 @@ func (service *Service) Algorithms(ctx context.Context) Catalogue {
 }
 
 // HardwareCommand returns the ssh-keygen argument list for a hardware method.
-func (service *Service) HardwareCommand(algorithm Algorithm, fileName, comment string) ([]string, error) {
-	return HardwareCommand(algorithm, fileName, comment, service.workspace.Root())
+//
+// The command names the full path under the group, so the command the user runs
+// by hand puts the key exactly where this application would have put it.
+func (service *Service) HardwareCommand(algorithm Algorithm, fileName, group, comment string) ([]string, error) {
+	directory, err := service.groupDirectory(group)
+	if err != nil {
+		return nil, err
+	}
+	return HardwareCommand(algorithm, fileName, comment, service.absolutePath(directory))
+}
+
+// groupDirectory validates a group and returns the workspace-relative directory
+// its keys live in. An empty group is the root of ~/.ssh, where an ungrouped
+// key belongs.
+func (service *Service) groupDirectory(group string) (string, error) {
+	if group == "" {
+		return ".", nil
+	}
+	if service.validateGroup == nil {
+		return "", ErrUnknownGroup
+	}
+	if err := service.validateGroup(group); err != nil {
+		return "", err
+	}
+	return path.Join(KeysDirectoryName, group), nil
 }
 
 // GenerateRequest is one in-process key generation.
@@ -153,9 +189,14 @@ func (service *Service) HardwareCommand(algorithm Algorithm, fileName, comment s
 // Unencrypted must be set explicitly for an empty passphrase, so an accidentally
 // blank field can never silently produce an unprotected key.
 type GenerateRequest struct {
-	Algorithm   Algorithm
-	Bits        int
-	FileName    string
+	Algorithm Algorithm
+	Bits      int
+	FileName  string
+	// Group puts the pair in that group's key directory. It is a separate,
+	// separately validated field rather than part of FileName: concatenating a
+	// caller-supplied group into the name would defeat the single-segment rule
+	// that stops a key being written to "config".
+	Group       string
 	Comment     string
 	Passphrase  []byte
 	Unencrypted bool
@@ -184,6 +225,10 @@ func (service *Service) Generate(request GenerateRequest) (GenerateResult, error
 	if err := ValidateComment(request.Comment); err != nil {
 		return GenerateResult{}, err
 	}
+	directory, err := service.groupDirectory(request.Group)
+	if err != nil {
+		return GenerateResult{}, err
+	}
 	if len(request.Passphrase) == 0 && !request.Unencrypted {
 		return GenerateResult{}, ErrPassphraseRequired
 	}
@@ -209,14 +254,15 @@ func (service *Service) Generate(request GenerateRequest) (GenerateResult, error
 		return GenerateResult{}, err
 	}
 
-	if err := service.workspace.EnsureDirectory(service.workspace.Root()); err != nil {
+	if err := service.workspace.EnsureDirectory(service.absolutePath(directory)); err != nil {
 		return GenerateResult{}, err
 	}
-	publicName := request.FileName + ".pub"
+	privateName := path.Join(directory, request.FileName)
+	publicName := privateName + ".pub"
 	result, err := service.transactions.Commit(storage.Request{
 		Operation: "key.generate",
 		Changes: []storage.Change{
-			{Path: service.absolutePath(request.FileName), Contents: privateContents},
+			{Path: service.absolutePath(privateName), Contents: privateContents},
 			{Path: service.absolutePath(publicName), Contents: publicContents},
 		},
 	})
@@ -224,8 +270,8 @@ func (service *Service) Generate(request GenerateRequest) (GenerateResult, error
 		return GenerateResult{}, err
 	}
 	return GenerateResult{
-		ID:                 ItemID(request.FileName),
-		RelativePath:       request.FileName,
+		ID:                 ItemID(privateName),
+		RelativePath:       privateName,
 		PublicRelativePath: publicName,
 		Fingerprint:        info.Fingerprint,
 		KeyType:            info.KeyType,

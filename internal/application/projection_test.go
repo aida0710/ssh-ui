@@ -189,3 +189,28 @@ func TestNewDiagnosticViewKeepsExternalPathsVisible(t *testing.T) {
 		t.Fatalf("outside view = %#v", outside)
 	}
 }
+
+func TestHostEntryGroupComesFromTheDirectoryNotFromMetadata(t *testing.T) {
+	// The directory is the membership. A metadata entry that disagrees has
+	// nothing to disagree with any more: version 2 dropped the field, and a
+	// host projected from connections/work reports "work" whatever else says.
+	graph := newTestGraph(t, map[string]string{
+		"config":                    "Include connections/work/*.conf\nInclude connections/*.conf\n",
+		"connections/work/web.conf": "Host web-1\n\tHostName 203.0.113.10\n",
+		"connections/loose.conf":    "Host loose\n\tHostName 203.0.113.11\n",
+	})
+	hosts, _ := ProjectHosts(graph, testRoot)
+
+	byAlias := map[string]HostEntry{}
+	for _, host := range hosts {
+		byAlias[host.Identity.Alias] = host
+	}
+	if got := byAlias["web-1"].Group; got != "work" {
+		t.Errorf("web-1 group = %q, want work", got)
+	}
+	// A file directly under connections/ is in no group: nothing declares it
+	// and nothing reads it, so claiming a group for it would be a fiction.
+	if got := byAlias["loose"].Group; got != "" {
+		t.Errorf("loose group = %q, want none", got)
+	}
+}

@@ -10,11 +10,14 @@ import {
   type KeyItem,
   type KeysApi,
   type KeyVariant,
-  type RenameKeyResponse,
+  type RelocateKeyResponse,
   type TrashListResponse,
 } from "./api";
 
-type KeysScreenProps = { api?: KeysApi };
+// groups are the declared group names, supplied by the shell from the overview.
+// The Keys screen never infers them: a directory is a group because a line in
+// ~/.ssh/config says so, and only the configuration engine reads that line.
+type KeysScreenProps = { api?: KeysApi; groups?: string[] };
 
 type ScreenState = "loading" | "ready" | "error";
 
@@ -75,16 +78,19 @@ const noteLabels: Record<string, MessageKey> = {
 // the sentence and the detail fills it in, so a reason the server adds later
 // still shows the path it names instead of being dropped.
 const blockerLabels: Record<string, MessageKey> = {
-  rename_target_occupied: "keys.renameBlockerTargetOccupied",
-  rename_reference_unresolved: "keys.renameBlockerUnresolved",
-  rename_reference_not_editable: "keys.renameBlockerNotEditable",
+  key_destination_occupied: "keys.blockerTargetOccupied",
+  key_reference_unresolved: "keys.blockerUnresolved",
+  key_reference_outside_workspace: "keys.blockerReferenceExternal",
+  key_group_not_declared: "keys.blockerGroupNotDeclared",
+  key_destination_is_config: "keys.blockerDestinationIsConfig",
+  key_in_state_directory: "keys.blockerStateDirectory",
 };
 
 function describeBlocker(blocker: string, t: Translate): string {
   const separator = blocker.indexOf(":");
   const code = separator < 0 ? blocker : blocker.slice(0, separator);
   const detail = separator < 0 ? blocker : blocker.slice(separator + 1);
-  return t(blockerLabels[code] ?? "keys.renameBlockerOther", { detail });
+  return t(blockerLabels[code] ?? "keys.blockerOther", { detail });
 }
 
 // renameable reports whether this application can rename a file without having
@@ -106,10 +112,18 @@ function renameable(item: KeyItem, items: KeyItem[]): boolean {
   return !items.some((candidate) => candidate.kind === "private_key" && candidate.fingerprint === fingerprint);
 }
 
-// renameStem is the part of the name the user is being asked to replace. It
-// mirrors the server's rule, so the field starts at the name the rename would
-// actually change rather than at one the server would refuse.
-function renameStem(item: KeyItem): string {
+// groupOfKeyPath reads a key's group out of where it sits, mirroring the
+// server's rule: keys/<group>/<file>, and nothing else is in a group.
+export function groupOfKeyPath(relativePath: string): string {
+  const segments = relativePath.split("/");
+  if (segments.length < 3 || segments[0] !== "keys") return "";
+  return segments.slice(1, -1).join("/");
+}
+
+// relocateStem is the part of the name the user is being asked to replace. It
+// mirrors the server's rule, so the field starts at the name the relocation
+// would actually change rather than at one the server would refuse.
+function relocateStem(item: KeyItem): string {
   const base = item.relativePath.split("/").pop() ?? item.relativePath;
   if (item.kind === "private_key") return base;
   for (const suffix of ["-cert.pub", ".pub"]) {
@@ -118,7 +132,7 @@ function renameStem(item: KeyItem): string {
   return base;
 }
 
-export function KeysScreen({ api = keysApi }: KeysScreenProps) {
+export function KeysScreen({ api = keysApi, groups = [] }: KeysScreenProps) {
   const t = useTranslate();
   const [state, setState] = useState<ScreenState>("loading");
   const [inventory, setInventory] = useState<KeyInventoryResponse | null>(null);
@@ -140,9 +154,11 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
   const [agentLifetime, setAgentLifetime] = useState(0);
   const [storeInKeychain, setStoreInKeychain] = useState(false);
   const [publicKeyView, setPublicKeyView] = useState<{ relativePath: string; text: string } | null>(null);
-  const [renaming, setRenaming] = useState<KeyItem | null>(null);
+  const [relocating, setRelocating] = useState<KeyItem | null>(null);
   const [newName, setNewName] = useState("");
-  const [renamed, setRenamed] = useState<RenameKeyResponse | null>(null);
+  const [newGroup, setNewGroup] = useState("");
+  const [relocated, setRelocated] = useState<RelocateKeyResponse | null>(null);
+  const [createGroup, setCreateGroup] = useState("");
   const [pendingPurge, setPendingPurge] = useState("");
   const [failure, setFailure] = useState("");
 
@@ -177,7 +193,7 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
     setTerminalCommand(null);
     try {
       if (selected !== undefined && !selected.inProcess) {
-        const response = await api.hardwareCommand({ algorithm, fileName, comment });
+        const response = await api.hardwareCommand({ algorithm, fileName, group: createGroup, comment });
         setTerminalCommand(response.command);
         return;
       }
@@ -185,6 +201,7 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
         algorithm,
         bits: selected?.bits ?? 0,
         fileName,
+        group: createGroup,
         comment,
         passphrase,
         unencrypted,
@@ -267,25 +284,30 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
     }
   }
 
-  function closeRenameForm() {
+  function closeRelocateForm() {
     setNewName("");
-    setRenaming(null);
+    setNewGroup("");
+    setRelocating(null);
   }
 
-  // A blocked rename is not a failure to report and forget: the server wrote
-  // nothing and said why, so the reasons stay on screen and the form stays open
-  // with what the user typed still in it.
-  async function submitRename(item: KeyItem) {
+  // A blocked relocation is not a failure to report and forget: the server
+  // wrote nothing and said why, so the reasons stay on screen and the form
+  // stays open with what the user typed still in it.
+  async function submitRelocation(item: KeyItem) {
     setFailure("");
-    setRenamed(null);
+    setRelocated(null);
     try {
-      const response = await api.rename(item.id, newName);
-      setRenamed(response);
+      const currentGroup = groupOfKeyPath(item.relativePath);
+      const response = await api.relocate(item.id, {
+        ...(newName === relocateStem(item) ? {} : { newName }),
+        ...(newGroup === currentGroup ? {} : { group: newGroup }),
+      });
+      setRelocated(response);
       if (response.blockers.length > 0) return;
-      closeRenameForm();
+      closeRelocateForm();
       await refresh();
     } catch {
-      setFailure(t("keys.renameFailed"));
+      setFailure(t("keys.relocateFailed"));
     }
   }
 
@@ -434,12 +456,13 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
                     onClick={() => {
                       closePassphraseForm();
                       closeAgentForm();
-                      setRenamed(null);
-                      setNewName(renameStem(item));
-                      setRenaming(item);
+                      setRelocated(null);
+                      setNewName(relocateStem(item));
+                      setNewGroup(groupOfKeyPath(item.relativePath));
+                      setRelocating(item);
                     }}
                   >
-                    {t("keys.rename")}
+                    {t("keys.relocate")}
                   </button>
                 )}
                 </div>
@@ -622,26 +645,37 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
         </form>
       )}
 
-      {renaming !== null && (
+      {relocating !== null && (
         <form
-          aria-labelledby="rename-heading"
+          aria-labelledby="relocate-heading"
           className="flex flex-col gap-3 rounded-xl border border-zinc-800 p-4"
           onSubmit={(event) => {
             event.preventDefault();
-            void submitRename(renaming);
+            void submitRelocation(relocating);
           }}
         >
-          <h3 id="rename-heading" className="font-medium">
-            {t("keys.renameHeading", { path: renaming.relativePath })}
+          <h3 id="relocate-heading" className="font-medium">
+            {t("keys.relocateHeading", { path: relocating.relativePath })}
           </h3>
-          <p className="text-sm text-zinc-400">{t("keys.renameNote")}</p>
+          <p className="text-sm text-zinc-400">{t("keys.relocateNote")}</p>
           <label className="block">
-            {t("keys.renameNewName")}
+            {t("keys.relocateNewName")}
             <input value={newName} onChange={(event) => setNewName(event.target.value)} />
           </label>
+          <label className="block">
+            {t("keys.relocateGroup")}
+            <select value={newGroup} onChange={(event) => setNewGroup(event.target.value)}>
+              <option value="">{t("keys.groupNone")}</option>
+              {groups.map((group) => (
+                <option key={group} value={group}>
+                  {group}
+                </option>
+              ))}
+            </select>
+          </label>
           <div className="flex gap-2">
-            <button type="submit">{t("keys.renameSubmit")}</button>
-            <button type="button" onClick={closeRenameForm}>
+            <button type="submit">{t("keys.relocateSubmit")}</button>
+            <button type="button" onClick={closeRelocateForm}>
               {t("keys.cancel")}
             </button>
           </div>
@@ -654,40 +688,40 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
         this application decided not to touch. A rename that only said "done"
         would hide the part the user cannot check for themselves.
       */}
-      {renamed !== null && (
+      {relocated !== null && (
         <section
-          aria-labelledby="rename-result-heading"
+          aria-labelledby="relocate-result-heading"
           className="flex flex-col gap-2 rounded-xl border border-zinc-800 p-4 text-sm"
         >
-          <h3 id="rename-result-heading" className="font-medium">
-            {renamed.blockers.length > 0
-              ? t("keys.renameRefused")
-              : t("keys.renameDone", { path: renamed.relativePath })}
+          <h3 id="relocate-result-heading" className="font-medium">
+            {relocated.blockers.length > 0
+              ? t("keys.relocateRefused")
+              : t("keys.relocateDone", { path: relocated.relativePath })}
           </h3>
-          {renamed.blockers.length > 0 && (
+          {relocated.blockers.length > 0 && (
             <ul role="alert" className="text-amber-300">
-              {renamed.blockers.map((blocker) => (
+              {relocated.blockers.map((blocker) => (
                 <li key={blocker}>{describeBlocker(blocker, t)}</li>
               ))}
             </ul>
           )}
-          {renamed.files.length > 0 && (
+          {relocated.files.length > 0 && (
             <>
-              <h4 className="text-xs uppercase tracking-wide text-zinc-400">{t("keys.renameMoved")}</h4>
+              <h4 className="text-xs uppercase tracking-wide text-zinc-400">{t("keys.relocateMoved")}</h4>
               <ul className="font-mono text-xs text-zinc-300">
-                {renamed.files.map((file) => (
-                  <li key={file.from}>{t("keys.renameFilePair", { from: file.from, to: file.to })}</li>
+                {relocated.files.map((file) => (
+                  <li key={file.from}>{t("keys.relocateFilePair", { from: file.from, to: file.to })}</li>
                 ))}
               </ul>
             </>
           )}
-          {renamed.references.length > 0 && (
+          {relocated.references.length > 0 && (
             <>
-              <h4 className="text-xs uppercase tracking-wide text-zinc-400">{t("keys.renameRewritten")}</h4>
+              <h4 className="text-xs uppercase tracking-wide text-zinc-400">{t("keys.relocateRewritten")}</h4>
               <ul className="text-xs text-zinc-300">
-                {renamed.references.map((reference) => (
+                {relocated.references.map((reference) => (
                   <li key={`${reference.configPath}:${reference.line}:${reference.from}`}>
-                    {t("keys.renameReference", {
+                    {t("keys.relocateReference", {
                       directive: reference.directive,
                       from: reference.from,
                       to: reference.to,
@@ -699,16 +733,16 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
               </ul>
             </>
           )}
-          {renamed.skipped.length > 0 && (
-            <p className="text-zinc-400">{t("keys.renameSkipped", { paths: renamed.skipped.join(", ") })}</p>
+          {relocated.skipped.length > 0 && (
+            <p className="text-zinc-400">{t("keys.relocateSkipped", { paths: relocated.skipped.join(", ") })}</p>
           )}
-          {renamed.notes.map((note) => (
+          {relocated.notes.map((note) => (
             <p key={note} className="text-amber-300">
               {note in noteLabels ? t(noteLabels[note]!) : note}
             </p>
           ))}
           <div>
-            <button type="button" onClick={() => setRenamed(null)}>
+            <button type="button" onClick={() => setRelocated(null)}>
               {t("keys.close")}
             </button>
           </div>
@@ -797,6 +831,17 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
         <label className="block">
           {t("keys.fileName")}
           <input value={fileName} onChange={(event) => setFileName(event.target.value)} />
+        </label>
+        <label className="block">
+          {t("keys.createGroup")}
+          <select value={createGroup} onChange={(event) => setCreateGroup(event.target.value)}>
+            <option value="">{t("keys.groupNone")}</option>
+            {groups.map((group) => (
+              <option key={group} value={group}>
+                {group}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="block">
           {t("keys.comment")}

@@ -132,6 +132,20 @@ export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
 
   // The comment is written into the configuration file, so it goes through the
   // same base-and-precondition path as every other edit to that file.
+  // Moving a connection into a group is a file move, so the request names the
+  // group and the server derives the destination path from it. Sending a path
+  // as well would let the two disagree, which the server refuses outright.
+  function onMoveToGroup(group: string) {
+    if (detail === null) return;
+    void submit({
+      kind: "move",
+      path: detail.form.entry.file.path ?? "",
+      base: detail.file.contents,
+      alias: detail.form.entry.identity.alias,
+      destinationGroup: group,
+    });
+  }
+
   function onComment(comment: string) {
     if (detail === null || selection === null) return;
     void submit({
@@ -335,6 +349,7 @@ export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
               onBlockRaw={onBlockRaw}
               onRename={onRename}
               onComment={onComment}
+              onMoveToGroup={onMoveToGroup}
               onMetadata={onMetadata}
             />
           </>

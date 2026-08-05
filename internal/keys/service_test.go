@@ -786,3 +786,122 @@ func TestPublicKeyRefusesAPrivateKeyWearingAPublicName(t *testing.T) {
 	}
 	t.Fatalf("the decoy file is not in the inventory")
 }
+
+// declaredGroups is the seam the running application fills with the
+// configuration engine's answer. A test supplies its own, so this package
+// proves it asks rather than deciding.
+func declaredGroups(names ...string) func(string) error {
+	allowed := make(map[string]bool, len(names))
+	for _, name := range names {
+		allowed[name] = true
+	}
+	return func(name string) error {
+		if !allowed[name] {
+			return ErrUnknownGroup
+		}
+		return nil
+	}
+}
+
+func newGroupKeyService(t *testing.T, groups ...string) (*Service, *storage.Workspace) {
+	t.Helper()
+	workspace := newTestWorkspace(t)
+	clock := steppingClock(time.Date(2026, 8, 5, 9, 0, 0, 0, time.UTC))
+	service := NewService(ServiceOptions{
+		Workspace:     workspace,
+		Transactions:  storage.NewManager(workspace, clock, rand.Reader),
+		Resolver:      storage.NewResolver(workspace),
+		Catalogue:     newFakeCatalogue(newQueryRunner(), fakeToolchain{}),
+		Now:           clock,
+		Random:        rand.Reader,
+		ValidateGroup: declaredGroups(groups...),
+	})
+	return service, workspace
+}
+
+func TestGenerateWritesIntoTheGroupDirectory(t *testing.T) {
+	service, workspace := newGroupKeyService(t, "work")
+
+	result, err := service.Generate(GenerateRequest{
+		Algorithm:  AlgorithmEd25519,
+		FileName:   "id_work",
+		Group:      "work",
+		Comment:    "aida@laptop",
+		Passphrase: []byte("correct horse"),
+	})
+	if err != nil {
+		t.Fatalf("Generate error = %v", err)
+	}
+	if result.RelativePath != "keys/work/id_work" || result.PublicRelativePath != "keys/work/id_work.pub" {
+		t.Fatalf("result = %#v", result)
+	}
+	for _, name := range []string{"keys/work/id_work", "keys/work/id_work.pub"} {
+		info, statErr := os.Lstat(filepath.Join(workspace.Root(), filepath.FromSlash(name)))
+		if statErr != nil {
+			t.Fatalf("%s missing: %v", name, statErr)
+		}
+		if info.Mode().Perm() != 0o600 {
+			t.Errorf("%s permission = %04o, want 0600", name, info.Mode().Perm())
+		}
+	}
+	// The identifier follows the path, so a key in a group is addressable the
+	// same way as one at the root.
+	if result.ID != ItemID("keys/work/id_work") {
+		t.Errorf("id = %q, want the identifier of its path", result.ID)
+	}
+}
+
+func TestGenerateRefusesAGroupNothingDeclares(t *testing.T) {
+	service, workspace := newGroupKeyService(t, "work")
+
+	if _, err := service.Generate(GenerateRequest{
+		Algorithm:  AlgorithmEd25519,
+		FileName:   "id_work",
+		Group:      "marketing",
+		Passphrase: []byte("correct horse"),
+	}); !errors.Is(err, ErrUnknownGroup) {
+		t.Fatalf("Generate error = %v, want ErrUnknownGroup", err)
+	}
+	// A refusal leaves nothing behind, not even the directory it would need.
+	if _, statErr := os.Lstat(filepath.Join(workspace.Root(), "keys")); !errors.Is(statErr, fs.ErrNotExist) {
+		t.Errorf("a refused generation created the keys directory: %v", statErr)
+	}
+}
+
+func TestGenerateStillRefusesAReservedFileNameInsideAGroup(t *testing.T) {
+	service, _ := newGroupKeyService(t, "work")
+
+	// The reserved-name rule is about names this application depends on, and it
+	// applies at every depth: keys/work/config is still a file called config.
+	for _, name := range []string{"config", "known_hosts", "id_work.pub"} {
+		if _, err := service.Generate(GenerateRequest{
+			Algorithm:  AlgorithmEd25519,
+			FileName:   name,
+			Group:      "work",
+			Passphrase: []byte("correct horse"),
+		}); !errors.Is(err, ErrInvalidFileName) {
+			t.Errorf("Generate(%q) error = %v, want ErrInvalidFileName", name, err)
+		}
+	}
+}
+
+func TestHardwareCommandNamesTheGroupDirectory(t *testing.T) {
+	service, workspace := newGroupKeyService(t, "work")
+
+	command, err := service.HardwareCommand(AlgorithmEd25519SK, "id_yubikey", "work", "aida@laptop")
+	if err != nil {
+		t.Fatalf("HardwareCommand error = %v", err)
+	}
+	// The user runs this by hand, so it has to put the key where this
+	// application would have put it.
+	want := filepath.Join(workspace.Root(), "keys", "work", "id_yubikey")
+	found := false
+	for _, argument := range command {
+		if argument == want {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("command = %#v, want it to name %q", command, want)
+	}
+}

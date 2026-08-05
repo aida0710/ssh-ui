@@ -15,8 +15,8 @@ export type ChangePassphraseResponse = components["schemas"]["ChangePassphraseRe
 export type RevealPrivateKeyResponse = components["schemas"]["RevealPrivateKeyResponse"];
 export type RegisterKeyResponse = components["schemas"]["RegisterKeyResponse"];
 export type PublicKeyResponse = components["schemas"]["PublicKeyResponse"];
-export type RenameKeyResponse = components["schemas"]["RenameKeyResponse"];
-export type RenamedKeyFile = components["schemas"]["RenamedKeyFile"];
+export type RelocateKeyResponse = components["schemas"]["RelocateKeyResponse"];
+export type RelocatedKeyFile = components["schemas"]["RelocatedKeyFile"];
 export type RewrittenKeyReference = components["schemas"]["RewrittenKeyReference"];
 export type AgentIdentity = components["schemas"]["AgentIdentity"];
 export type IssueActionResponse = components["schemas"]["IssueActionResponse"];
@@ -30,9 +30,18 @@ export type PurgeTrashResponse = components["schemas"]["PurgeTrashResponse"];
 export const REVEAL_ACTION_KIND = "private_key.reveal";
 export const PURGE_ACTION_KIND = "trash.purge";
 
+// KeyLocationInput leaves out what it does not change. A name and a group are
+// separate destinations, so a relocation can change either or both, and an
+// empty group is a real answer: the root of ~/.ssh, where an ungrouped key is.
+export type KeyLocationInput = {
+  newName?: string;
+  group?: string;
+};
+
 export type GenerateKeyInput = {
   algorithm: string;
   fileName: string;
+  group: string;
   comment: string;
   passphrase: string;
   unencrypted: boolean;
@@ -42,6 +51,7 @@ export type GenerateKeyInput = {
 export type HardwareCommandInput = {
   algorithm: string;
   fileName: string;
+  group: string;
   comment: string;
 };
 
@@ -69,7 +79,7 @@ export type KeysApi = {
   changePassphrase(keyId: string, input: PassphraseInput): Promise<ChangePassphraseResponse>;
   reveal(keyId: string): Promise<RevealPrivateKeyResponse>;
   publicKey(keyId: string): Promise<PublicKeyResponse>;
-  rename(keyId: string, newName: string): Promise<RenameKeyResponse>;
+  relocate(keyId: string, change: KeyLocationInput): Promise<RelocateKeyResponse>;
   registerWithAgent(keyId: string, input: RegisterAgentInput): Promise<RegisterKeyResponse>;
   trash(keyId: string): Promise<TrashKeyResponse>;
   listTrash(): Promise<TrashListResponse>;
@@ -191,9 +201,10 @@ function validatePublicKey(value: unknown): PublicKeyResponse {
   return record as unknown as PublicKeyResponse;
 }
 
-function validateRename(value: unknown): RenameKeyResponse {
+function validateRelocate(value: unknown): RelocateKeyResponse {
   const record = asRecord(value);
   asString(record.relativePath);
+  asString(record.group);
   for (const file of asArray(record.files)) {
     const entry = asRecord(file);
     asString(entry.from);
@@ -210,7 +221,7 @@ function validateRename(value: unknown): RenameKeyResponse {
   asArray(record.skipped);
   asArray(record.notes);
   asArray(record.blockers);
-  return record as unknown as RenameKeyResponse;
+  return record as unknown as RelocateKeyResponse;
 }
 
 function validateTrashList(value: unknown): TrashListResponse {
@@ -267,6 +278,7 @@ export const keysApi: KeysApi = {
         algorithm: input.algorithm,
         bits: input.bits ?? 0,
         fileName: input.fileName,
+        group: input.group,
         comment: input.comment,
         passphrase: input.passphrase,
         unencrypted: input.unencrypted,
@@ -299,19 +311,19 @@ export const keysApi: KeysApi = {
   async publicKey(keyId) {
     return validatePublicKey(await apiClient.read(`/api/v1/keys/${encodeURIComponent(keyId)}/public`));
   },
-  // A blocked rename answers 409 with the reasons it refused, and nothing was
-  // written. Those reasons are the whole point of the refusal, so they are read
-  // out of the body rather than thrown away as a failed request.
-  async rename(keyId, newName) {
-    const response = await apiClient.send(`/api/v1/keys/${encodeURIComponent(keyId)}/name`, {
+  // A blocked relocation answers 409 with the reasons it refused, and nothing
+  // was written. Those reasons are the whole point of the refusal, so they are
+  // read out of the body rather than thrown away as a failed request.
+  async relocate(keyId, change) {
+    const response = await apiClient.send(`/api/v1/keys/${encodeURIComponent(keyId)}/location`, {
       method: "POST",
       headers: jsonHeaders,
-      body: JSON.stringify({ newName }),
+      body: JSON.stringify(change),
     });
     if (!response.ok && response.status !== 409) {
       throw new Error("api_mutation_failed");
     }
-    return validateRename(await response.json());
+    return validateRelocate(await response.json());
   },
   // The passphrase travels in the request body and no further. The server hands
   // it to ssh-add on standard input, so it reaches neither argv nor the child

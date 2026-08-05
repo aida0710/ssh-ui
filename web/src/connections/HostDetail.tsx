@@ -34,6 +34,10 @@ type HostDetailPanelProps = {
   onBlockRaw: (raw: string) => void;
   onRename: (newAlias: string) => void;
   onComment: (comment: string) => void;
+  // onMoveToGroup relocates the file rather than editing a field: a group is a
+  // directory, so changing it is a move, and the caller sends the group name to
+  // the server which derives the destination path from it.
+  onMoveToGroup: (group: string) => void;
   onMetadata: (metadata: HostMetadata) => void;
   // The Diagnostics tab runs the same checks as the Diagnostics section, so it
   // consumes the same client. It is a prop only so a test can inject one; the
@@ -54,6 +58,7 @@ export function HostDetailPanel({
   onBlockRaw,
   onRename,
   onComment,
+  onMoveToGroup,
   onMetadata,
   integrations = integrationsApi,
 }: HostDetailPanelProps) {
@@ -66,6 +71,10 @@ export function HostDetailPanel({
   const [newValue, setNewValue] = useState("");
   const [blockRaw, setBlockRaw] = useState(detail.form.raw);
   const [renameTo, setRenameTo] = useState(detail.form.entry.identity.alias);
+  // Starts at the group the file is actually in, which the projection read from
+  // its path, so the control shows where the connection is before it offers to
+  // move it.
+  const [moveTo, setMoveTo] = useState(detail.form.entry.group ?? "");
   // A legacy note seeds the editor when the block has no comment yet, so the
   // first save moves it into the configuration instead of leaving the two to
   // disagree. Once written, the comment is the only source.
@@ -304,17 +313,28 @@ export function HostDetailPanel({
       <section className="flex flex-col gap-2 rounded border border-zinc-800 p-3">
         <h3 className="text-sm font-medium">{t("host.organisation")}</h3>
         <label htmlFor="host-group" className="text-xs text-zinc-400">{t("host.primaryGroup")}</label>
-        <select
-          id="host-group"
-          value={detail.metadata.group ?? ""}
-          onChange={(event) => onMetadata({ ...detail.metadata, group: event.target.value })}
-          className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
-        >
-          <option value="">{t("host.groupNone")}</option>
-          {groups.map((group) => (
-            <option key={group.name} value={group.name}>{group.name}</option>
-          ))}
-        </select>
+        <p className="text-xs text-zinc-500">{t("host.groupIsADirectory")}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            id="host-group"
+            value={moveTo}
+            onChange={(event) => setMoveTo(event.target.value)}
+            className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
+          >
+            <option value="">{t("host.groupNone")}</option>
+            {groups.map((group) => (
+              <option key={group.name} value={group.name}>{group.name}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            disabled={moveTo === "" || moveTo === detail.form.entry.group}
+            onClick={() => onMoveToGroup(moveTo)}
+            className="rounded border border-zinc-700 px-2 py-1 text-xs disabled:text-zinc-600"
+          >
+            {t("host.moveToGroup")}
+          </button>
+        </div>
         <label className="flex items-center gap-2 text-xs text-zinc-400">
           <input
             type="checkbox"

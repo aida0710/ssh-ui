@@ -63,10 +63,70 @@ func TestValidateMetadataRefusesKeyMaterialAndUnknownPaths(t *testing.T) {
 		t.Fatalf("path error = %v, want ErrMetadataPath", err)
 	}
 
-	withGroupCycleName := NewMetadata()
-	withGroupCycleName.Groups = []GroupMetadata{{Name: "work", Parent: "work"}}
-	if err := ValidateMetadata(withGroupCycleName); !errors.Is(err, ErrMetadataGroup) {
-		t.Fatalf("self parent error = %v, want ErrMetadataGroup", err)
+	// A group name is a directory path, so a document that names one this
+	// application would refuse to create must not be believed either.
+	for _, name := range []string{"../escape", "", "ssh-ui", "work/"} {
+		withBadGroup := NewMetadata()
+		withBadGroup.Groups = []GroupMetadata{{Name: name}}
+		if err := ValidateMetadata(withBadGroup); !errors.Is(err, ErrMetadataGroup) {
+			t.Errorf("group %q error = %v, want ErrMetadataGroup", name, err)
+		}
+	}
+
+	// Two groups whose names differ only in case are one directory on a default
+	// macOS volume, so the document that declares both is refused.
+	withCaseClash := NewMetadata()
+	withCaseClash.Groups = []GroupMetadata{{Name: "work"}, {Name: "Work"}}
+	if err := ValidateMetadata(withCaseClash); !errors.Is(err, ErrMetadataGroup) {
+		t.Errorf("case clash error = %v, want ErrMetadataGroup", err)
+	}
+}
+
+func TestMetadataCarriesOnlyPresentation(t *testing.T) {
+	metadata := NewMetadata()
+	metadata.Groups = []GroupMetadata{{Name: "work", Colour: "#f97316", Note: "the office", Order: 2}}
+	metadata.Hosts = []HostMetadata{{
+		Identity: HostIdentity{Path: "connections/work/web.conf", Alias: "web-1"},
+		Tags:     []string{"prod"},
+		Colour:   "#22d3ee",
+	}}
+
+	encoded, err := EncodeMetadata(metadata)
+	if err != nil {
+		t.Fatalf("EncodeMetadata error = %v", err)
+	}
+	// Membership is the directory and a note is a comment, so neither has a
+	// key here. Asserting on the bytes is what stops one creeping back.
+	for _, absent := range []string{`"group"`, `"parent"`} {
+		if strings.Contains(string(encoded), absent) {
+			t.Errorf("encoded metadata still carries %s:\n%s", absent, encoded)
+		}
+	}
+	if !strings.Contains(string(encoded), `"schemaVersion": 2`) {
+		t.Errorf("encoded metadata is not version 2:\n%s", encoded)
+	}
+}
+
+func TestDecodeMetadataDropsGroupMembershipFromAnOlderDocument(t *testing.T) {
+	// A version 1 document decodes and simply loses the two fields that no
+	// longer mean anything. The directory is authoritative now, and a v1
+	// document's group names a layout that does not exist on disk yet.
+	const document = `{"schemaVersion":1,"groups":[{"name":"work","parent":"company"}],` +
+		`"hosts":[{"identity":{"path":"config","alias":"bastion"},"group":"work","colour":"#f97316"}]}`
+
+	metadata, err := DecodeMetadata([]byte(document))
+	if err != nil {
+		t.Fatalf("DecodeMetadata error = %v", err)
+	}
+	if len(metadata.Hosts) != 1 || metadata.Hosts[0].Colour != "#f97316" {
+		t.Fatalf("hosts = %#v, want the presentation kept", metadata.Hosts)
+	}
+	encoded, err := EncodeMetadata(metadata)
+	if err != nil {
+		t.Fatalf("EncodeMetadata error = %v", err)
+	}
+	if strings.Contains(string(encoded), "company") {
+		t.Errorf("the parent survived re-encoding:\n%s", encoded)
 	}
 }
 
@@ -84,7 +144,6 @@ func TestMetadataStoreRoundTripsThroughOneTransaction(t *testing.T) {
 	loaded.Groups = []GroupMetadata{{Name: "home", Settings: []Setting{{Keyword: "User", Values: []string{"aida"}}}}}
 	loaded.Hosts = []HostMetadata{{
 		Identity:  HostIdentity{Path: "config", Alias: "bastion"},
-		Group:     "home",
 		Tags:      []string{"personal"},
 		Colour:    "#22d3ee",
 		Note:      "office jump host",

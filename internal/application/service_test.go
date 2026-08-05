@@ -44,6 +44,20 @@ func newTestService(t *testing.T) (*Service, *storage.Workspace) {
 	return NewService(workspace, manager), workspace
 }
 
+// writeGroupFile puts a connection file where its group says it lives.
+func writeGroupFile(t *testing.T, workspace *storage.Workspace, group, name, contents string) string {
+	t.Helper()
+	relative := GroupDirectory(group) + "/" + name
+	absolute := filepath.Join(workspace.Root(), filepath.FromSlash(relative))
+	if err := workspace.EnsureDirectory(filepath.Dir(absolute)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(absolute, []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return relative
+}
+
 func readFile(t *testing.T, workspace *storage.Workspace, relative string) string {
 	t.Helper()
 	contents, err := os.ReadFile(filepath.Join(workspace.Root(), filepath.FromSlash(relative)))
@@ -305,12 +319,19 @@ func TestSaveIsBlockedOnlyByBreakageItIntroduces(t *testing.T) {
 
 func TestSaveGroupsWritesConfigurationAndMetadataInOneTransaction(t *testing.T) {
 	service, workspace := newTestService(t)
+	// Membership is where the file sits, so the host has to sit there — and
+	// only there: two blocks declaring one alias is a different situation with
+	// its own notice. The region this save writes is what makes
+	// connections/home/*.conf read at all.
+	if err := os.Remove(filepath.Join(workspace.Root(), "conf.d", "10-home.conf")); err != nil {
+		t.Fatal(err)
+	}
+	writeGroupFile(t, workspace, "home", "nas.conf", "Host nas\n\tUser aida\t# personal\n")
 	metadata := NewMetadata()
 	metadata.Groups = []GroupMetadata{{
 		Name:     "home",
 		Settings: []Setting{{Keyword: "Port", Values: []string{"2222"}}},
 	}}
-	metadata.Hosts = []HostMetadata{{Identity: HostIdentity{Path: "conf.d/10-home.conf", Alias: "nas"}, Group: "home"}}
 
 	preview, err := service.Preview(EditRequest{Kind: EditGroups, Metadata: &metadata})
 	if err != nil {
@@ -322,7 +343,14 @@ func TestSaveGroupsWritesConfigurationAndMetadataInOneTransaction(t *testing.T) 
 	if len(preview.Effective) != 1 || preview.Effective[0].Alias != "nas" {
 		t.Fatalf("effective preview = %#v", preview.Effective)
 	}
-	if len(preview.Effective[0].Changes) != 1 || preview.Effective[0].Changes[0].Keyword != "Port" {
+	// Two changes, not one: this save is what makes connections/home readable,
+	// so the host's own User arrives at the same moment as the group's Port.
+	// Saying only "Port changed" would hide half of what the save does.
+	changed := map[string]string{}
+	for _, change := range preview.Effective[0].Changes {
+		changed[change.Keyword] = strings.Join(change.After, " ")
+	}
+	if changed["Port"] != "2222" || changed["User"] != "aida" {
 		t.Fatalf("effective changes = %#v", preview.Effective[0].Changes)
 	}
 
@@ -333,8 +361,18 @@ func TestSaveGroupsWritesConfigurationAndMetadataInOneTransaction(t *testing.T) 
 	if !bytes.Contains([]byte(groups), []byte("Host nas\n\tPort 2222\n")) {
 		t.Fatalf("groups file = %q", groups)
 	}
-	if !bytes.Contains([]byte(readFile(t, workspace, "config")), []byte("Include "+DefaultGroupsFile+"\n")) {
-		t.Fatalf("entry config = %q", readFile(t, workspace, "config"))
+	entry := readFile(t, workspace, "config")
+	// One Include per declared group, then the settings file, all inside the
+	// generated region.
+	for _, want := range []string{
+		RegionStartMarker,
+		"Include " + GroupIncludePattern("home") + "\n",
+		"Include " + DefaultGroupsFile + "\n",
+		RegionEndMarker,
+	} {
+		if !bytes.Contains([]byte(entry), []byte(want)) {
+			t.Fatalf("entry config = %q, want it to contain %q", entry, want)
+		}
 	}
 	stored, _, err := service.metadata.Load()
 	if err != nil {
@@ -344,7 +382,7 @@ func TestSaveGroupsWritesConfigurationAndMetadataInOneTransaction(t *testing.T) 
 		t.Fatalf("stored metadata = %#v", stored)
 	}
 
-	detail, err := service.HostDetail("conf.d/10-home.conf", "nas")
+	detail, err := service.HostDetail(GroupDirectory("home")+"/nas.conf", "nas")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -715,5 +753,138 @@ func TestSaveMoveWarnsWhenNoIncludeReachesTheDestination(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("notices = %#v, want a destination_not_included notice", preview.Notices)
+	}
+}
+
+// declareGroup writes the region into the entry file so the group exists.
+// Declaring is what makes a directory a group; the move refuses to do it as a
+// side effect, so a test that moves has to declare first.
+func declareGroup(t *testing.T, service *Service, names ...string) {
+	t.Helper()
+	metadata := NewMetadata()
+	for _, name := range names {
+		metadata.Groups = append(metadata.Groups, GroupMetadata{Name: name})
+	}
+	if _, err := service.Save(EditRequest{Kind: EditGroups, Metadata: &metadata}); err != nil {
+		t.Fatalf("declare %v: %v", names, err)
+	}
+}
+
+func TestMoveHostIntoAGroupDerivesTheDestinationPath(t *testing.T) {
+	service, workspace := newTestService(t)
+	declareGroup(t, service, "work")
+
+	const homeConfig = "Host nas\n\tUser aida\t# personal\n"
+	if _, err := service.Save(EditRequest{
+		Kind:             EditMove,
+		Path:             "conf.d/10-home.conf",
+		Base:             homeConfig,
+		Alias:            "nas",
+		DestinationGroup: "work",
+	}); err != nil {
+		t.Fatalf("Save error = %v", err)
+	}
+
+	// The file keeps its own name and changes directory, which is what a move
+	// between groups is in a shell too.
+	moved := readFile(t, workspace, "connections/work/10-home.conf")
+	if moved != homeConfig {
+		t.Errorf("moved block = %q, want the bytes it had", moved)
+	}
+	if readFile(t, workspace, "conf.d/10-home.conf") != "" {
+		t.Errorf("the source still declares the host")
+	}
+}
+
+func TestMoveHostIntoAGroupUpdatesTheMetadataIdentityInTheSameTransaction(t *testing.T) {
+	service, workspace := newTestService(t)
+	declareGroup(t, service, "work")
+
+	metadata := NewMetadata()
+	metadata.Groups = []GroupMetadata{{Name: "work"}}
+	metadata.Hosts = []HostMetadata{{
+		Identity:  HostIdentity{Path: "conf.d/10-home.conf", Alias: "nas"},
+		Tags:      []string{"personal"},
+		Colour:    "#22d3ee",
+		Favourite: true,
+		Order:     3,
+	}}
+	if _, err := service.Save(EditRequest{Kind: EditMetadata, Metadata: &metadata}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := service.Save(EditRequest{
+		Kind:             EditMove,
+		Path:             "conf.d/10-home.conf",
+		Base:             "Host nas\n\tUser aida\t# personal\n",
+		Alias:            "nas",
+		DestinationGroup: "work",
+	}); err != nil {
+		t.Fatalf("Save error = %v", err)
+	}
+
+	stored, _, err := service.metadata.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stored.Hosts) != 1 {
+		t.Fatalf("hosts = %#v", stored.Hosts)
+	}
+	host := stored.Hosts[0]
+	// The identity changed because the path did, and everything the entry
+	// carried travelled with it rather than being orphaned.
+	if host.Identity.Path != "connections/work/10-home.conf" || host.Orphan {
+		t.Errorf("identity = %#v", host)
+	}
+	if host.Colour != "#22d3ee" || !host.Favourite || host.Order != 3 || len(host.Tags) != 1 {
+		t.Errorf("the entry lost presentation on the way: %#v", host)
+	}
+
+	overview, err := service.Overview()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range overview.Hosts {
+		if entry.Identity.Alias == "nas" && entry.Group != "work" {
+			t.Errorf("projected group = %q, want work", entry.Group)
+		}
+	}
+	_ = workspace
+}
+
+func TestMoveHostIntoAnUndeclaredGroupIsRefusedAndLeavesNoDirectory(t *testing.T) {
+	service, workspace := newTestService(t)
+
+	_, err := service.Save(EditRequest{
+		Kind:             EditMove,
+		Path:             "conf.d/10-home.conf",
+		Base:             "Host nas\n\tUser aida\t# personal\n",
+		Alias:            "nas",
+		DestinationGroup: "marketing",
+	})
+	if !errors.Is(err, ErrGroupNotDeclared) {
+		t.Fatalf("Save error = %v, want ErrGroupNotDeclared", err)
+	}
+	// A refusal must leave nothing behind, not even the directory it would
+	// have needed.
+	if _, statErr := os.Stat(filepath.Join(workspace.Root(), "connections")); !errors.Is(statErr, os.ErrNotExist) {
+		t.Errorf("a refused move created the connections directory: %v", statErr)
+	}
+}
+
+func TestMoveHostRefusesBothADestinationGroupAndAPath(t *testing.T) {
+	service, _ := newTestService(t)
+	declareGroup(t, service, "work")
+
+	_, err := service.Save(EditRequest{
+		Kind:             EditMove,
+		Path:             "conf.d/10-home.conf",
+		Base:             "Host nas\n\tUser aida\t# personal\n",
+		Alias:            "nas",
+		DestinationGroup: "work",
+		DestinationPath:  "conf.d/20-work.conf",
+	})
+	if !errors.Is(err, ErrAmbiguousDestination) {
+		t.Fatalf("Save error = %v, want ErrAmbiguousDestination", err)
 	}
 }

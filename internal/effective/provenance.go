@@ -70,8 +70,16 @@ func (p Projection) Value(keyword string) (Source, bool) {
 	return Source{}, false
 }
 
-// Project walks the Include graph in load order and attributes each keyword to
+// Project walks the configuration in load order and attributes each keyword to
 // the first block that set it, which is what OpenSSH does.
+//
+// Load order is not file order. OpenSSH reads an Include at the point the line
+// sits, so a block written below an Include is read after the whole of the
+// included file — and first value wins, so the included file beats it. Walking
+// the graph file by file would put every block of the entry file ahead of every
+// included one, which reverses exactly the case the generated group region
+// depends on: the Includes sit above the user's catch-all so a group's value
+// beats the default, and file-order attribution would report the default.
 //
 // Match blocks never contribute a value: their criteria depend on state that
 // only exists while connecting. A Match block anywhere in the graph is instead
@@ -84,83 +92,76 @@ func Project(graph *config.Graph, alias string) Projection {
 	}
 	claimed := make(map[string]bool)
 	matchedHostBlocks := 0
+	kind, applies, condition := SourceGlobal, true, ""
 
-	for _, filePath := range graph.Order {
-		node := graph.Nodes[filePath]
-		if node == nil || node.File == nil {
-			continue
+	enterBlock := func(filePath string, file *config.File, block config.Block) {
+		condition = file.Condition(block)
+		kind, applies = blockApplies(block, alias)
+		if block.Kind == config.BlockMatch {
+			projection.Complexities = append(projection.Complexities, Complexity{
+				Code:      ComplexityMatchBlock,
+				Path:      filePath,
+				Line:      block.Header + 1,
+				Condition: condition,
+				Detail:    "Match criteria are evaluated while connecting, so this block may override values shown here",
+			})
+			return
 		}
-		for _, block := range node.File.Blocks() {
-			condition := node.File.Condition(block)
-			if block.Kind == config.BlockMatch {
-				projection.Complexities = append(projection.Complexities, Complexity{
-					Code:      ComplexityMatchBlock,
-					Path:      filePath,
-					Line:      block.Header + 1,
-					Condition: condition,
-					Detail:    "Match criteria are evaluated while connecting, so this block may override values shown here",
-				})
+		if !applies || block.Kind != config.BlockHost {
+			return
+		}
+		matchedHostBlocks++
+		if matchedHostBlocks > 1 {
+			projection.Complexities = append(projection.Complexities, Complexity{
+				Code:      ComplexityDuplicateAlias,
+				Path:      filePath,
+				Line:      block.Header + 1,
+				Condition: condition,
+				Detail:    "more than one Host block claims this alias",
+			})
+		}
+		if kind == SourceWildcard {
+			projection.Complexities = append(projection.Complexities, Complexity{
+				Code:      ComplexityWildcardPattern,
+				Path:      filePath,
+				Line:      block.Header + 1,
+				Condition: condition,
+				Detail:    "this block matched through a wildcard pattern",
+			})
+		}
+		for _, pattern := range block.Patterns {
+			if !pattern.Negated {
 				continue
 			}
-
-			kind, applies := blockApplies(block, alias)
-			if !applies {
-				continue
-			}
-			if block.Kind == config.BlockHost {
-				matchedHostBlocks++
-				if matchedHostBlocks > 1 {
-					projection.Complexities = append(projection.Complexities, Complexity{
-						Code:      ComplexityDuplicateAlias,
-						Path:      filePath,
-						Line:      block.Header + 1,
-						Condition: condition,
-						Detail:    "more than one Host block claims this alias",
-					})
-				}
-				if kind == SourceWildcard {
-					projection.Complexities = append(projection.Complexities, Complexity{
-						Code:      ComplexityWildcardPattern,
-						Path:      filePath,
-						Line:      block.Header + 1,
-						Condition: condition,
-						Detail:    "this block matched through a wildcard pattern",
-					})
-				}
-				for _, pattern := range block.Patterns {
-					if !pattern.Negated {
-						continue
-					}
-					projection.Complexities = append(projection.Complexities, Complexity{
-						Code:      ComplexityNegatedPattern,
-						Path:      filePath,
-						Line:      block.Header + 1,
-						Condition: condition,
-						Detail:    "this block excludes hosts through " + pattern.Raw,
-					})
-					break
-				}
-			}
-
-			for index := block.Start; index < block.End; index++ {
-				line := node.File.Lines[index]
-				if line.Kind != config.LineDirective || config.EqualKeyword(line.Keyword, "Include") {
-					continue
-				}
-				keyword := strings.ToLower(line.Keyword)
-				projection.Sources = append(projection.Sources, Source{
-					Keyword:   line.Keyword,
-					Value:     argumentText(line),
-					Path:      filePath,
-					Line:      index + 1,
-					Condition: condition,
-					Kind:      kind,
-					Winner:    !claimed[keyword],
-				})
-				claimed[keyword] = true
-			}
+			projection.Complexities = append(projection.Complexities, Complexity{
+				Code:      ComplexityNegatedPattern,
+				Path:      filePath,
+				Line:      block.Header + 1,
+				Condition: condition,
+				Detail:    "this block excludes hosts through " + pattern.Raw,
+			})
+			break
 		}
 	}
+
+	directive := func(filePath string, index int, line config.Line) {
+		if !applies {
+			return
+		}
+		keyword := strings.ToLower(line.Keyword)
+		projection.Sources = append(projection.Sources, Source{
+			Keyword:   line.Keyword,
+			Value:     argumentText(line),
+			Path:      filePath,
+			Line:      index + 1,
+			Condition: condition,
+			Kind:      kind,
+			Winner:    !claimed[keyword],
+		})
+		claimed[keyword] = true
+	}
+
+	walkLoadOrder(graph, graph.Root, map[string]bool{}, enterBlock, directive)
 
 	for _, diagnostic := range graph.Diagnostics {
 		if diagnostic.Severity == config.SeverityInfo {
@@ -174,6 +175,53 @@ func Project(graph *config.Graph, alias string) Projection {
 		})
 	}
 	return projection
+}
+
+// walkLoadOrder visits one file's blocks and directives in the order OpenSSH
+// reads them, descending into each Include where its line sits.
+//
+// chain stops a cycle. A file included twice is walked twice, which is what
+// OpenSSH does; the second read contributes nothing because the first value has
+// already been claimed.
+func walkLoadOrder(
+	graph *config.Graph,
+	filePath string,
+	chain map[string]bool,
+	enterBlock func(string, *config.File, config.Block),
+	directive func(string, int, config.Line),
+) {
+	node := graph.Nodes[filePath]
+	if node == nil || node.File == nil || chain[filePath] {
+		return
+	}
+	chain[filePath] = true
+	defer delete(chain, filePath)
+
+	blocks := node.File.Blocks()
+	position := 0
+	enterBlock(filePath, node.File, blocks[0])
+	for index, line := range node.File.Lines {
+		if position+1 < len(blocks) && blocks[position+1].Header == index {
+			position++
+			enterBlock(filePath, node.File, blocks[position])
+			continue
+		}
+		if line.Kind != config.LineDirective {
+			continue
+		}
+		if config.EqualKeyword(line.Keyword, "Include") {
+			for _, edge := range node.Includes {
+				if edge.Line != index+1 {
+					continue
+				}
+				for _, match := range edge.Matches {
+					walkLoadOrder(graph, match, chain, enterBlock, directive)
+				}
+			}
+			continue
+		}
+		directive(filePath, index, line)
+	}
 }
 
 // blockApplies reports whether a block governs alias and how it matched.

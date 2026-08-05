@@ -11,6 +11,28 @@ function toProblem(error: unknown): Problem {
   return { code: "request_failed", message: "request rejected" };
 }
 
+// depthOf counts the directories in a group name. The name carries the
+// hierarchy, so nothing else has to be consulted to draw the tree, and a
+// parent field can never disagree with where the files actually are.
+export function depthOf(name: string): number {
+  return name.split("/").length;
+}
+
+// A group name is a relative directory path, so the panel refuses locally what
+// the server refuses too. Doing it here as well is not duplication for its own
+// sake: it is what lets the panel say which character is wrong before a
+// round trip that would only say "invalid_request".
+const segmentPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+
+export function isValidGroupName(name: string): boolean {
+  const segments = name.split("/");
+  if (segments.length === 0 || segments.length > 6) return false;
+  const reserved = new Set(["ssh-ui", "config", "known_hosts", "authorized_keys", "connections", "keys"]);
+  return segments.every(
+    (segment) => segmentPattern.test(segment) && !reserved.has(segment.toLowerCase()),
+  );
+}
+
 export function GroupsPanel() {
   const t = useTranslate();
   const [overview, setOverview] = useState<Overview | null>(null);
@@ -18,11 +40,11 @@ export function GroupsPanel() {
   const [preview, setPreview] = useState<SavePreview | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
   const [newName, setNewName] = useState("");
-  const [newParent, setNewParent] = useState("");
   const [settingGroup, setSettingGroup] = useState("");
   const [settingKeyword, setSettingKeyword] = useState("");
   const [settingValue, setSettingValue] = useState("");
   const [renaming, setRenaming] = useState<Record<string, string>>({});
+  const [removing, setRemoving] = useState<Record<string, string>>({});
   const [localError, setLocalError] = useState("");
 
   const reload = useCallback(async () => {
@@ -46,25 +68,35 @@ export function GroupsPanel() {
   // Hoisted function declarations do not inherit the narrowing above, so the
   // loaded document is captured once as a non-null const the closures can use.
   const loaded: Metadata = metadata;
-  // Displayed in the order the user gave, with the stored order left alone: a
-  // sort for display must not become an edit to the document being saved.
-  const groups = [...(loaded.groups ?? [])].sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
+  const hosts = overview.hosts;
+  // Deepest first, then by the order the user gave, then by name: the same rule
+  // that decides which Include line comes first, so what the panel shows is the
+  // order OpenSSH will read.
+  const groups = [...(loaded.groups ?? [])].sort((left, right) => {
+    const depth = depthOf(right.name) - depthOf(left.name);
+    if (depth !== 0) return depth;
+    if ((left.order ?? 0) !== (right.order ?? 0)) return (left.order ?? 0) - (right.order ?? 0);
+    return left.name.localeCompare(right.name);
+  });
 
+  // Membership is where the file sits, and the projection already read that
+  // from the path. Nothing here counts a metadata field.
   function membersOf(name: string): string[] {
-    return (loaded.hosts ?? [])
-      .filter((host) => host.group === name)
-      .map((host) => host.identity.alias);
+    return hosts.filter((host) => host.group === name).map((host) => host.identity.alias);
   }
 
   function addGroup() {
-    if (newName === "" || groups.some((group) => group.name === newName)) {
+    if (!isValidGroupName(newName)) {
+      setLocalError(t("groups.invalidName"));
+      return;
+    }
+    if (groups.some((group) => group.name.toLowerCase() === newName.toLowerCase())) {
       setLocalError(t("groups.nameTaken"));
       return;
     }
-    const added: GroupMetadata = newParent === "" ? { name: newName } : { name: newName, parent: newParent };
+    const added: GroupMetadata = { name: newName };
     setMetadata({ ...loaded, groups: [...groups, added] });
     setNewName("");
-    setNewParent("");
     setLocalError("");
   }
 
@@ -93,38 +125,6 @@ export function GroupsPanel() {
     setLocalError("");
   }
 
-  // A group's name is its only identifier: hosts point at it by name and child
-  // groups name it as their parent. Renaming therefore touches three places in
-  // one edit, and doing fewer would strand the members or the children.
-  //
-  // The configuration side needs nothing: groups.ssh-ui.conf is regenerated
-  // from this document on every save, and the name appears there only in a
-  // comment — the Host line lists member aliases, not the group.
-  function renameGroup(from: string, to: string) {
-    const target = to.trim();
-    if (target === "" || target === from) {
-      setLocalError(t("groups.renameNeedsName"));
-      return;
-    }
-    if (groups.some((group) => group.name === target)) {
-      // Renaming onto an existing group would merge two sets of settings and
-      // two sets of members, and nothing here knows which should win.
-      setLocalError(t("groups.renameCollides", { name: target }));
-      return;
-    }
-    setMetadata({
-      ...loaded,
-      groups: (loaded.groups ?? []).map((group) => ({
-        ...group,
-        name: group.name === from ? target : group.name,
-        ...(group.parent === from ? { parent: target } : {}),
-      })),
-      hosts: (loaded.hosts ?? []).map((host) => (host.group === from ? { ...host, group: target } : host)),
-    });
-    setRenaming({ ...renaming, [from]: "" });
-    setLocalError("");
-  }
-
   function updateGroup(name: string, change: Partial<GroupMetadata>) {
     setMetadata({
       ...loaded,
@@ -132,12 +132,50 @@ export function GroupsPanel() {
     });
   }
 
-  function removeGroup(name: string) {
-    setMetadata({
-      ...loaded,
-      groups: groups.filter((group) => group.name !== name && group.parent !== name),
-      hosts: (loaded.hosts ?? []).map((host) => (host.group === name ? { ...host, group: "" } : host)),
-    });
+  // A group is a directory, so renaming it is N file moves plus the Include
+  // region plus every IdentityFile naming its keys — one transaction the client
+  // cannot assemble. It is a server operation, applied immediately, not an edit
+  // to the document this panel holds.
+  async function renameGroup(from: string) {
+    const target = (renaming[from] ?? "").trim();
+    if (target === "" || target === from) {
+      setLocalError(t("groups.renameNeedsName"));
+      return;
+    }
+    if (!isValidGroupName(target)) {
+      setLocalError(t("groups.invalidName"));
+      return;
+    }
+    if (groups.some((group) => group.name === target)) {
+      // Renaming onto an existing group would merge two sets of settings, and
+      // nothing here knows which should win. The server refuses it too.
+      setLocalError(t("groups.renameCollides", { name: target }));
+      return;
+    }
+    try {
+      const result = await configApi.renameGroup(from, target);
+      setPreview(result.preview);
+      setProblem(null);
+      setLocalError("");
+      setRenaming({ ...renaming, [from]: "" });
+      await reload();
+    } catch (error) {
+      setPreview(null);
+      setProblem(toProblem(error));
+    }
+  }
+
+  async function removeGroup(name: string) {
+    try {
+      const result = await configApi.deleteGroup(name, removing[name] ?? "");
+      setPreview(result.preview);
+      setProblem(null);
+      setLocalError("");
+      await reload();
+    } catch (error) {
+      setPreview(null);
+      setProblem(toProblem(error));
+    }
   }
 
   async function run(action: "preview" | "save") {
@@ -160,17 +198,27 @@ export function GroupsPanel() {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-xs text-zinc-400">
+        {t("groups.directoryNote", { connections: "connections", keys: "keys" })}
+      </p>
+      <p className="text-xs text-zinc-400">
         {t("groups.compileNote", { file: loaded.groupsFile ?? "groups.ssh-ui.conf" })}
       </p>
       {localError === "" ? null : <p role="alert" className="text-sm text-rose-300">{localError}</p>}
 
       <ul className="flex flex-col gap-3">
         {groups.map((group) => (
-          <li key={group.name} className="rounded border border-zinc-800 p-3">
+          <li
+            key={group.name}
+            className="rounded border border-zinc-800 p-3"
+            style={{ marginInlineStart: `${(depthOf(group.name) - 1) * 1.5}rem` }}
+          >
             <h3 className="text-sm font-medium">{group.name}</h3>
-            {group.parent === undefined ? null : (
-              <p className="text-xs text-zinc-400">{t("groups.inheritsFrom", { parent: group.parent })}</p>
-            )}
+            <p className="font-mono text-xs text-zinc-400">
+              {t("groups.directories", {
+                connections: `connections/${group.name}`,
+                keys: `keys/${group.name}`,
+              })}
+            </p>
             <ul className="mt-1 text-xs text-zinc-300">
               {(group.settings ?? []).map((setting, index) => (
                 <li key={`${setting.keyword}-${index}`}>{`${setting.keyword} ${formatValues(setting.values)}`}</li>
@@ -200,22 +248,6 @@ export function GroupsPanel() {
                   {t("groups.clearColour", { name: group.name })}
                 </button>
               )}
-              <label htmlFor={`group-rename-${group.name}`} className="text-xs text-zinc-400">
-                {t("groups.renameTo", { name: group.name })}
-              </label>
-              <input
-                id={`group-rename-${group.name}`}
-                value={renaming[group.name] ?? ""}
-                onChange={(event) => setRenaming({ ...renaming, [group.name]: event.target.value })}
-                className="w-40 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs"
-              />
-              <button
-                type="button"
-                onClick={() => renameGroup(group.name, renaming[group.name] ?? "")}
-                className="rounded border border-zinc-700 px-2 py-1 text-xs"
-              >
-                {t("groups.rename", { name: group.name })}
-              </button>
               <label htmlFor={`group-order-${group.name}`} className="text-xs text-zinc-400">
                 {t("groups.displayOrder")}
               </label>
@@ -227,13 +259,51 @@ export function GroupsPanel() {
                 className="w-20 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs"
               />
             </div>
-            <button
-              type="button"
-              onClick={() => removeGroup(group.name)}
-              className="mt-2 rounded border border-zinc-700 px-2 py-1 text-xs"
-            >
-              {t("groups.remove", { name: group.name })}
-            </button>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <label htmlFor={`group-rename-${group.name}`} className="text-xs text-zinc-400">
+                {t("groups.renameTo", { name: group.name })}
+              </label>
+              <input
+                id={`group-rename-${group.name}`}
+                value={renaming[group.name] ?? ""}
+                onChange={(event) => setRenaming({ ...renaming, [group.name]: event.target.value })}
+                className="w-40 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs"
+              />
+              <button
+                type="button"
+                onClick={() => void renameGroup(group.name)}
+                className="rounded border border-zinc-700 px-2 py-1 text-xs"
+              >
+                {t("groups.rename", { name: group.name })}
+              </button>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <label htmlFor={`group-move-${group.name}`} className="text-xs text-zinc-400">
+                {t("groups.removeInto", { name: group.name })}
+              </label>
+              <select
+                id={`group-move-${group.name}`}
+                value={removing[group.name] ?? ""}
+                onChange={(event) => setRemoving({ ...removing, [group.name]: event.target.value })}
+                className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs"
+              >
+                <option value="">{t("groups.removeIntoNone")}</option>
+                {groups
+                  .filter((candidate) => candidate.name !== group.name && !candidate.name.startsWith(`${group.name}/`))
+                  .map((candidate) => (
+                    <option key={candidate.name} value={candidate.name}>
+                      {candidate.name}
+                    </option>
+                  ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => void removeGroup(group.name)}
+                className="rounded border border-zinc-700 px-2 py-1 text-xs"
+              >
+                {t("groups.remove", { name: group.name })}
+              </button>
+            </div>
           </li>
         ))}
       </ul>
@@ -246,18 +316,7 @@ export function GroupsPanel() {
           onChange={(event) => setNewName(event.target.value)}
           className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
         />
-        <label htmlFor="group-parent" className="text-xs text-zinc-400">{t("groups.parent")}</label>
-        <select
-          id="group-parent"
-          value={newParent}
-          onChange={(event) => setNewParent(event.target.value)}
-          className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
-        >
-          <option value="">{t("groups.none")}</option>
-          {groups.map((group) => (
-            <option key={group.name} value={group.name}>{group.name}</option>
-          ))}
-        </select>
+        <p className="text-xs text-zinc-500">{t("groups.nestingNote")}</p>
         <button type="button" onClick={addGroup} className="self-start rounded bg-zinc-800 px-3 py-1 text-sm">
           {t("groups.add")}
         </button>
