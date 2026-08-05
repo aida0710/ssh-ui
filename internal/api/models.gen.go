@@ -682,6 +682,29 @@ type RemoteKeyRegisterResponse struct {
 	Truncated bool   `json:"truncated"`
 }
 
+// RenameKeyRequest defines model for RenameKeyRequest.
+type RenameKeyRequest struct {
+	NewName string `json:"newName"`
+}
+
+// RenameKeyResponse defines model for RenameKeyResponse.
+type RenameKeyResponse struct {
+	Blockers      []string                `json:"blockers"`
+	Files         []RenamedKeyFile        `json:"files"`
+	Id            string                  `json:"id"`
+	Notes         []string                `json:"notes"`
+	References    []RewrittenKeyReference `json:"references"`
+	RelativePath  string                  `json:"relativePath"`
+	Skipped       []string                `json:"skipped"`
+	TransactionId string                  `json:"transactionId"`
+}
+
+// RenamedKeyFile defines model for RenamedKeyFile.
+type RenamedKeyFile struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
 // RestoreRequest defines model for RestoreRequest.
 type RestoreRequest struct {
 	Path          string `json:"path"`
@@ -704,6 +727,15 @@ type RevealPrivateKeyResponse struct {
 	PrivateKey    string `json:"privateKey"`
 	RelativePath  string `json:"relativePath"`
 	TransactionId string `json:"transactionId"`
+}
+
+// RewrittenKeyReference defines model for RewrittenKeyReference.
+type RewrittenKeyReference struct {
+	ConfigPath string `json:"configPath"`
+	Directive  string `json:"directive"`
+	From       string `json:"from"`
+	Line       int    `json:"line"`
+	To         string `json:"to"`
 }
 
 // SavePreview defines model for SavePreview.
@@ -870,6 +902,9 @@ type BuildHardwareKeyCommandJSONRequestBody = HardwareCommandRequest
 
 // RegisterKeyWithAgentJSONRequestBody defines body for RegisterKeyWithAgent for application/json ContentType.
 type RegisterKeyWithAgentJSONRequestBody = RegisterKeyRequest
+
+// RenameKeyJSONRequestBody defines body for RenameKey for application/json ContentType.
+type RenameKeyJSONRequestBody = RenameKeyRequest
 
 // ChangeKeyPassphraseJSONRequestBody defines body for ChangeKeyPassphrase for application/json ContentType.
 type ChangeKeyPassphraseJSONRequestBody = ChangePassphraseRequest

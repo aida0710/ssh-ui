@@ -341,6 +341,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/keys/{keyId}/name": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Renames one key inside the directory it already occupies and rewrites every configuration directive that names it, in one transaction. It refuses rather than guesses: a directive whose path cannot be resolved, or which lives in a file outside the workspace, blocks the rename and is reported as a blocker so the user can see what would have been left dangling. */
+        post: operations["renameKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/keys/{keyId}/agent": {
         parameters: {
             query?: never;
@@ -908,6 +925,30 @@ export interface components {
             publicKey: string;
             fingerprint: string;
             comment: string;
+        };
+        RenameKeyRequest: {
+            newName: string;
+        };
+        RenamedKeyFile: {
+            from: string;
+            to: string;
+        };
+        RewrittenKeyReference: {
+            directive: string;
+            configPath: string;
+            line: number;
+            from: string;
+            to: string;
+        };
+        RenameKeyResponse: {
+            id: string;
+            relativePath: string;
+            files: components["schemas"]["RenamedKeyFile"][];
+            references: components["schemas"]["RewrittenKeyReference"][];
+            skipped: string[];
+            notes: string[];
+            blockers: string[];
+            transactionId: string;
         };
         RegisterKeyRequest: {
             passphrase: string;
@@ -1782,6 +1823,46 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    renameKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                keyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description Key renamed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenameKeyResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description The rename was blocked, and nothing was written */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenameKeyResponse"];
+                };
+            };
+            422: components["responses"]["Problem"];
         };
     };
     registerKeyWithAgent: {

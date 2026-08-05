@@ -10,6 +10,7 @@ import {
   type KeyItem,
   type KeysApi,
   type KeyVariant,
+  type RenameKeyResponse,
   type TrashListResponse,
 } from "./api";
 
@@ -67,7 +68,55 @@ const noteLabels: Record<string, MessageKey> = {
   empty_file: "keys.noteEmptyFile",
   not_regular_file: "keys.noteNotRegularFile",
   comment_not_preserved: "keys.noteCommentNotPreserved",
+  keychain_entry_stale: "keys.noteKeychainEntryStale",
 };
+
+// A blocker is a stable code, ':' and the detail it is about. The code decides
+// the sentence and the detail fills it in, so a reason the server adds later
+// still shows the path it names instead of being dropped.
+const blockerLabels: Record<string, MessageKey> = {
+  rename_target_occupied: "keys.renameBlockerTargetOccupied",
+  rename_reference_unresolved: "keys.renameBlockerUnresolved",
+  rename_reference_not_editable: "keys.renameBlockerNotEditable",
+};
+
+function describeBlocker(blocker: string, t: Translate): string {
+  const separator = blocker.indexOf(":");
+  const code = separator < 0 ? blocker : blocker.slice(0, separator);
+  const detail = separator < 0 ? blocker : blocker.slice(separator + 1);
+  return t(blockerLabels[code] ?? "keys.renameBlockerOther", { detail });
+}
+
+// renameable reports whether this application can rename a file without having
+// to decide something the user has not told it.
+//
+// A private key takes its own public key and certificate with it, so it is
+// always renameable. A public key or certificate is renameable only when no
+// private key in the inventory belongs to it: renaming half of a pair would
+// leave two files that OpenSSH still pairs by name and a reader no longer can,
+// so the server refuses it and the button is not offered either.
+function renameable(item: KeyItem, items: KeyItem[]): boolean {
+  if (item.kind === "private_key") return true;
+  if (item.kind !== "public_key" && item.kind !== "certificate") return false;
+  const fingerprint =
+    item.kind === "certificate" && item.certificate !== undefined
+      ? item.certificate.signedKeyFingerprint
+      : item.fingerprint;
+  if (fingerprint === "") return true;
+  return !items.some((candidate) => candidate.kind === "private_key" && candidate.fingerprint === fingerprint);
+}
+
+// renameStem is the part of the name the user is being asked to replace. It
+// mirrors the server's rule, so the field starts at the name the rename would
+// actually change rather than at one the server would refuse.
+function renameStem(item: KeyItem): string {
+  const base = item.relativePath.split("/").pop() ?? item.relativePath;
+  if (item.kind === "private_key") return base;
+  for (const suffix of ["-cert.pub", ".pub"]) {
+    if (base.endsWith(suffix) && base.length > suffix.length) return base.slice(0, -suffix.length);
+  }
+  return base;
+}
 
 export function KeysScreen({ api = keysApi }: KeysScreenProps) {
   const t = useTranslate();
@@ -91,6 +140,9 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
   const [agentLifetime, setAgentLifetime] = useState(0);
   const [storeInKeychain, setStoreInKeychain] = useState(false);
   const [publicKeyView, setPublicKeyView] = useState<{ relativePath: string; text: string } | null>(null);
+  const [renaming, setRenaming] = useState<KeyItem | null>(null);
+  const [newName, setNewName] = useState("");
+  const [renamed, setRenamed] = useState<RenameKeyResponse | null>(null);
   const [pendingPurge, setPendingPurge] = useState("");
   const [failure, setFailure] = useState("");
 
@@ -212,6 +264,28 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
     } catch {
       setPublicKeyView(null);
       setFailure(t("keys.publicKeyFailed"));
+    }
+  }
+
+  function closeRenameForm() {
+    setNewName("");
+    setRenaming(null);
+  }
+
+  // A blocked rename is not a failure to report and forget: the server wrote
+  // nothing and said why, so the reasons stay on screen and the form stays open
+  // with what the user typed still in it.
+  async function submitRename(item: KeyItem) {
+    setFailure("");
+    setRenamed(null);
+    try {
+      const response = await api.rename(item.id, newName);
+      setRenamed(response);
+      if (response.blockers.length > 0) return;
+      closeRenameForm();
+      await refresh();
+    } catch {
+      setFailure(t("keys.renameFailed"));
     }
   }
 
@@ -352,6 +426,21 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
                       {t("keys.moveToTrash")}
                     </button>
                   </>
+                )}
+                {renameable(item, inventory.items) && (
+                  <button
+                    type="button"
+                    className={rowAction}
+                    onClick={() => {
+                      closePassphraseForm();
+                      closeAgentForm();
+                      setRenamed(null);
+                      setNewName(renameStem(item));
+                      setRenaming(item);
+                    }}
+                  >
+                    {t("keys.rename")}
+                  </button>
                 )}
                 </div>
               </td>
@@ -531,6 +620,99 @@ export function KeysScreen({ api = keysApi }: KeysScreenProps) {
             </button>
           </div>
         </form>
+      )}
+
+      {renaming !== null && (
+        <form
+          aria-labelledby="rename-heading"
+          className="flex flex-col gap-3 rounded-xl border border-zinc-800 p-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submitRename(renaming);
+          }}
+        >
+          <h3 id="rename-heading" className="font-medium">
+            {t("keys.renameHeading", { path: renaming.relativePath })}
+          </h3>
+          <p className="text-sm text-zinc-400">{t("keys.renameNote")}</p>
+          <label className="block">
+            {t("keys.renameNewName")}
+            <input value={newName} onChange={(event) => setNewName(event.target.value)} />
+          </label>
+          <div className="flex gap-2">
+            <button type="submit">{t("keys.renameSubmit")}</button>
+            <button type="button" onClick={closeRenameForm}>
+              {t("keys.cancel")}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/*
+        What a rename did, or what stopped it. Both are the same list of facts:
+        which files moved, which configuration lines were rewritten, and what
+        this application decided not to touch. A rename that only said "done"
+        would hide the part the user cannot check for themselves.
+      */}
+      {renamed !== null && (
+        <section
+          aria-labelledby="rename-result-heading"
+          className="flex flex-col gap-2 rounded-xl border border-zinc-800 p-4 text-sm"
+        >
+          <h3 id="rename-result-heading" className="font-medium">
+            {renamed.blockers.length > 0
+              ? t("keys.renameRefused")
+              : t("keys.renameDone", { path: renamed.relativePath })}
+          </h3>
+          {renamed.blockers.length > 0 && (
+            <ul role="alert" className="text-amber-300">
+              {renamed.blockers.map((blocker) => (
+                <li key={blocker}>{describeBlocker(blocker, t)}</li>
+              ))}
+            </ul>
+          )}
+          {renamed.files.length > 0 && (
+            <>
+              <h4 className="text-xs uppercase tracking-wide text-zinc-400">{t("keys.renameMoved")}</h4>
+              <ul className="font-mono text-xs text-zinc-300">
+                {renamed.files.map((file) => (
+                  <li key={file.from}>{t("keys.renameFilePair", { from: file.from, to: file.to })}</li>
+                ))}
+              </ul>
+            </>
+          )}
+          {renamed.references.length > 0 && (
+            <>
+              <h4 className="text-xs uppercase tracking-wide text-zinc-400">{t("keys.renameRewritten")}</h4>
+              <ul className="text-xs text-zinc-300">
+                {renamed.references.map((reference) => (
+                  <li key={`${reference.configPath}:${reference.line}:${reference.from}`}>
+                    {t("keys.renameReference", {
+                      directive: reference.directive,
+                      from: reference.from,
+                      to: reference.to,
+                      path: reference.configPath,
+                      line: reference.line,
+                    })}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {renamed.skipped.length > 0 && (
+            <p className="text-zinc-400">{t("keys.renameSkipped", { paths: renamed.skipped.join(", ") })}</p>
+          )}
+          {renamed.notes.map((note) => (
+            <p key={note} className="text-amber-300">
+              {note in noteLabels ? t(noteLabels[note]!) : note}
+            </p>
+          ))}
+          <div>
+            <button type="button" onClick={() => setRenamed(null)}>
+              {t("keys.close")}
+            </button>
+          </div>
+        </section>
       )}
 
       {revealing !== null && (

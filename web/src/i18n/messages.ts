@@ -422,6 +422,27 @@ export const en = {
   "keys.reference": "{directive} {value} — {path}:{line}",
   "keys.referenceWithReason": "{directive} {value} — {path}:{line} ({reason})",
   "keys.unreadableEntry": "{path} — {reason}",
+
+  "keys.rename": "Rename",
+  "keys.renameHeading": "Rename: {path}",
+  "keys.renameNote":
+    "The key keeps its directory; only the name changes. Every IdentityFile and CertificateFile that names it is rewritten in the same transaction, so nothing is left pointing at the old name.",
+  "keys.renameNewName": "New name",
+  "keys.renameSubmit": "Rename key",
+  "keys.renameFailed": "The key could not be renamed.",
+  "keys.renameDone": "Renamed to {path}.",
+  "keys.renameMoved": "Files moved",
+  "keys.renameRewritten": "Configuration entries rewritten",
+  "keys.renameSkipped": "Left where they are, because their name is not this key's name with a suffix: {paths}",
+  "keys.renameRefused": "Nothing was renamed and nothing was written:",
+  "keys.renameFilePair": "{from} → {to}",
+  "keys.renameReference": "{directive} {from} → {to} — {path}:{line}",
+  "keys.renameBlockerTargetOccupied": "{detail} already exists",
+  "keys.renameBlockerUnresolved": "{detail} is a path this application cannot resolve, so it may well be this key",
+  "keys.renameBlockerNotEditable": "{detail} is outside ~/.ssh and cannot be rewritten",
+  "keys.renameBlockerOther": "{detail}",
+  "keys.noteKeychainEntryStale":
+    "If you stored this key's passphrase in the login Keychain, that entry still names the old file. macOS owns it, so ssh-ui cannot move it; update or remove it in Keychain Access if you no longer want it.",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -836,6 +857,27 @@ export const ja: Record<MessageKey, string> = {
   "keys.reference": "{directive} {value} — {path}:{line}",
   "keys.referenceWithReason": "{directive} {value} — {path}:{line}（{reason}）",
   "keys.unreadableEntry": "{path} — {reason}",
+
+  "keys.rename": "名前を変更",
+  "keys.renameHeading": "名前の変更: {path}",
+  "keys.renameNote":
+    "ディレクトリはそのままで、名前だけが変わります。この鍵を指している IdentityFile と CertificateFile は同じトランザクションで書き換えられるので、古い名前を指したままの行は残りません。",
+  "keys.renameNewName": "新しい名前",
+  "keys.renameSubmit": "名前を変更する",
+  "keys.renameFailed": "名前を変更できませんでした。",
+  "keys.renameDone": "{path} に変更しました。",
+  "keys.renameMoved": "移動したファイル",
+  "keys.renameRewritten": "書き換えた設定行",
+  "keys.renameSkipped": "この鍵の名前に接尾辞を付けた形ではないため、そのままにしました: {paths}",
+  "keys.renameRefused": "名前の変更は行われず、何も書き込まれていません:",
+  "keys.renameFilePair": "{from} → {to}",
+  "keys.renameReference": "{directive} {from} → {to} — {path}:{line}",
+  "keys.renameBlockerTargetOccupied": "{detail} はすでに存在します",
+  "keys.renameBlockerUnresolved": "{detail} は解決できないパスなので、この鍵を指している可能性があります",
+  "keys.renameBlockerNotEditable": "{detail} は ~/.ssh の外にあるため書き換えられません",
+  "keys.renameBlockerOther": "{detail}",
+  "keys.noteKeychainEntryStale":
+    "この鍵のパスフレーズをログインキーチェーンに保存している場合、その項目は古いファイル名のままです。キーチェーンは macOS が管理しているため ssh-ui からは移動できません。不要であればキーチェーンアクセスで更新または削除してください。",
 };
 
 export const messages = { en, ja } satisfies Record<string, Record<MessageKey, string>>;

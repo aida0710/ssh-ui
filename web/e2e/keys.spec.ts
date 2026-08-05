@@ -83,3 +83,63 @@ test("offers agent registration and refuses it honestly when no agent is reachab
   await expect(register).toBeDisabled();
   await expect(page.getByText(/No agent is reachable from this process/)).toBeVisible();
 });
+
+// Renaming a key is only useful if the configuration follows it. This spec
+// generates a key, points a real Host at it, renames it through the UI and then
+// reads the file back: the assertion that matters is the byte on disk, not the
+// confirmation on screen.
+test("renames a key and carries every directive that named it", async ({ page, installation }) => {
+  // The Host is written before the page loads, because the bootstrap fragment
+  // is spent on the first navigation and a reload would leave no session.
+  await installation.write(
+    "conf.d/20-rename.conf",
+    "Host renamed\n\tIdentityFile ~/.ssh/id_rename\n\tCertificateFile %d/.ssh/id_rename.pub\n",
+  );
+  await page.goto(installation.url);
+  await openSection(page, "Keys");
+
+  await page.getByLabel("File name").fill("id_rename");
+  await page.getByRole("textbox", { name: "Passphrase" }).fill("end-to-end-passphrase");
+  expect(await clickAndAwait(page, "Create key", "/api/v1/keys")).toBe(201);
+
+  const row = page.getByRole("row", { name: /id_rename\b/ }).first();
+  await row.getByRole("button", { name: "Rename" }).click();
+  await page.getByLabel("New name").fill("id_renamed");
+  expect(await clickAndAwait(page, "Rename key", "/api/v1/keys/")).toBe(200);
+
+  // Both halves moved…
+  expect(await installation.read("id_renamed.pub")).toContain("ssh-ed25519 ");
+  // …and both directives followed, each keeping the spelling it was written in.
+  expect(await installation.read("conf.d/20-rename.conf")).toBe(
+    "Host renamed\n\tIdentityFile ~/.ssh/id_renamed\n\tCertificateFile %d/.ssh/id_renamed.pub\n",
+  );
+  await expect(page.getByText("IdentityFile ~/.ssh/id_rename → ~/.ssh/id_renamed")).toBeVisible();
+});
+
+test("refuses a rename whose destination is taken, and writes nothing", async ({
+  page,
+  installation,
+}) => {
+  await page.goto(installation.url);
+  await openSection(page, "Keys");
+
+  await page.getByLabel("File name").fill("id_first");
+  await page.getByRole("textbox", { name: "Passphrase" }).fill("end-to-end-passphrase");
+  expect(await clickAndAwait(page, "Create key", "/api/v1/keys")).toBe(201);
+
+  await page.getByLabel("File name").fill("id_second");
+  await page.getByRole("textbox", { name: "Passphrase" }).fill("end-to-end-passphrase");
+  expect(await clickAndAwait(page, "Create key", "/api/v1/keys")).toBe(201);
+
+  const before = await installation.read("id_first");
+  const row = page.getByRole("row", { name: /id_first\b/ }).first();
+  await row.getByRole("button", { name: "Rename" }).click();
+  await page.getByLabel("New name").fill("id_second");
+  expect(await clickAndAwait(page, "Rename key", "/api/v1/keys/")).toBe(409);
+
+  await expect(page.getByRole("alert")).toContainText("already exists");
+  // The decisive assertion: a refused rename is not a partial one. Both keys are
+  // exactly where they were, with the bytes they had.
+  expect(await installation.read("id_first")).toBe(before);
+  expect(await installation.read("id_second.pub")).toContain("ssh-ed25519 ");
+});

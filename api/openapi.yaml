@@ -378,6 +378,42 @@ paths:
               schema: { $ref: "#/components/schemas/PublicKeyResponse" }
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/keys/{keyId}/name:
+    post:
+      operationId: renameKey
+      description: >-
+        Renames one key inside the directory it already occupies and rewrites
+        every configuration directive that names it, in one transaction. It
+        refuses rather than guesses: a directive whose path cannot be resolved,
+        or which lives in a file outside the workspace, blocks the rename and is
+        reported as a blocker so the user can see what would have been left
+        dangling.
+      parameters:
+        - name: keyId
+          in: path
+          required: true
+          schema: { type: string, minLength: 32, maxLength: 32 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RenameKeyRequest" }
+      responses:
+        "200":
+          description: Key renamed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RenameKeyResponse" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409":
+          description: The rename was blocked, and nothing was written
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RenameKeyResponse" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/keys/{keyId}/agent:
     post:
       operationId: registerKeyWithAgent
@@ -1143,6 +1179,42 @@ components:
         publicKey: { type: string }
         fingerprint: { type: string }
         comment: { type: string }
+    RenameKeyRequest:
+      type: object
+      additionalProperties: false
+      required: [newName]
+      properties:
+        newName: { type: string, minLength: 1, maxLength: 64 }
+    RenamedKeyFile:
+      type: object
+      additionalProperties: false
+      required: [from, to]
+      properties:
+        from: { type: string }
+        to: { type: string }
+    RewrittenKeyReference:
+      type: object
+      additionalProperties: false
+      required: [directive, configPath, line, from, to]
+      properties:
+        directive: { type: string }
+        configPath: { type: string }
+        line: { type: integer }
+        from: { type: string }
+        to: { type: string }
+    RenameKeyResponse:
+      type: object
+      additionalProperties: false
+      required: [id, relativePath, files, references, skipped, notes, blockers, transactionId]
+      properties:
+        id: { type: string }
+        relativePath: { type: string }
+        files: { type: array, items: { $ref: "#/components/schemas/RenamedKeyFile" } }
+        references: { type: array, items: { $ref: "#/components/schemas/RewrittenKeyReference" } }
+        skipped: { type: array, items: { type: string } }
+        notes: { type: array, items: { type: string } }
+        blockers: { type: array, items: { type: string } }
+        transactionId: { type: string }
     RegisterKeyRequest:
       type: object
       additionalProperties: false

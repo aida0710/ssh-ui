@@ -230,19 +230,15 @@ func rebuildLine(line config.Line, keyword string, values []string) (config.Line
 	return rebuilt, nil
 }
 
-// renderArgument writes one value using OpenSSH's quoting rules. OpenSSH has no
-// backslash escape inside a quoted argument, so a value containing a double
-// quote, a newline or a NUL cannot be represented and is refused instead of
-// being mangled.
+// renderArgument writes one value using OpenSSH's quoting rules. The rule is
+// ssh_config syntax, so it lives beside the parser that reads it; this wrapper
+// keeps the package's own error identity for the HTTP problem mapping.
 func renderArgument(lead, value string) (config.Argument, error) {
-	if strings.ContainsAny(value, "\n\r\x00\"") {
+	argument, err := config.RenderArgument(lead, value)
+	if err != nil {
 		return config.Argument{}, ErrUnquotableValue
 	}
-	raw := value
-	if value == "" || strings.ContainsAny(value, " \t") || strings.HasPrefix(value, "#") {
-		raw = `"` + value + `"`
-	}
-	return config.Argument{Lead: lead, Raw: raw, Value: value}, nil
+	return argument, nil
 }
 
 func buildDirectiveLine(indent, keyword string, values []string, ending string) (config.Line, error) {
