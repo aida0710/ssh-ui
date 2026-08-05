@@ -12,7 +12,8 @@ FUZZ_TARGETS = \
 	internal/config:FuzzExpandIncludePattern \
 	internal/effective:FuzzParseValues \
 	internal/knownhosts:FuzzParseKnownHostsRoundTrip \
-	internal/acceptance:FuzzAPIRequestBodies
+	internal/acceptance:FuzzAPIRequestBodies \
+	internal/remotesync:FuzzReadSnapshot
 
 
 generate:
