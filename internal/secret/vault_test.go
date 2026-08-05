@@ -82,10 +82,10 @@ func TestOpenRefusesATamperedFileIncludingItsHeader(t *testing.T) {
 	// the passphrase at that cost instead of the one it was sealed with.
 	sealed := sealedVault(t, map[string]string{"bastion": "hunter2"})
 
-	// Byte 26 is the salt length, 27 is the first salt byte, and the last byte
+	// Byte 27 is the salt length, 28 is the first salt byte, and the last byte
 	// is inside the tag. The cost fields have their own test above, because
 	// they are refused before any key is derived rather than by the AEAD.
-	for _, index := range []int{26, 27, 30, len(sealed) - 1} {
+	for _, index := range []int{27, 28, 31, len(sealed) - 1} {
 		tampered := slices.Clone(sealed)
 		tampered[index] ^= 0x01
 		if _, err := secret.Open(tampered, passphrase); err == nil {
@@ -121,7 +121,7 @@ func TestOpenRefusesSomethingThatIsNotAVault(t *testing.T) {
 	cases := map[string][]byte{
 		"empty":        {},
 		"short":        []byte("ssh-ui"),
-		"wrong magic":  append([]byte("not-an-ssh-ui-v"), make([]byte, 64)...),
+		"wrong magic":  append([]byte("not-an-ssh-ui-en"), make([]byte, 64)...),
 		"zero cost":    zeroCostVault(t),
 		"truncated":    sealedVault(t, map[string]string{"a": "b"})[:20],
 		"only header":  headerOf(t),
@@ -144,19 +144,19 @@ func TestOpenRefusesAHeaderDemandingAbsurdWork(t *testing.T) {
 	sealed := sealedVault(t, map[string]string{"bastion": "hunter2"})
 
 	expensiveTime := slices.Clone(sealed)
-	expensiveTime[18] = 0x01 // time becomes 65539
+	expensiveTime[19] = 0x01 // time becomes 65539
 	if _, err := secret.Open(expensiveTime, passphrase); !errors.Is(err, secret.ErrCostRefused) {
 		t.Fatalf("Open = %v, want ErrCostRefused", err)
 	}
 
 	expensiveMemory := slices.Clone(sealed)
-	expensiveMemory[21] = 0xFF // memory becomes about 4 TiB
+	expensiveMemory[22] = 0xFF // memory becomes about 4 TiB
 	if _, err := secret.Open(expensiveMemory, passphrase); !errors.Is(err, secret.ErrCostRefused) {
 		t.Fatalf("Open = %v, want ErrCostRefused", err)
 	}
 
 	manyThreads := slices.Clone(sealed)
-	manyThreads[25] = 0xFF
+	manyThreads[26] = 0xFF
 	if _, err := secret.Open(manyThreads, passphrase); !errors.Is(err, secret.ErrCostRefused) {
 		t.Fatalf("Open = %v, want ErrCostRefused", err)
 	}
@@ -167,14 +167,14 @@ func TestOpenSaysUpgradeRatherThanCorruptForAFutureFile(t *testing.T) {
 	// and a user must not be shown the first when the second is true.
 	sealed := sealedVault(t, map[string]string{"bastion": "hunter2"})
 	future := slices.Clone(sealed)
-	future[15] = 99 // envelope version
+	future[16] = 99 // envelope version
 
 	if _, err := secret.Open(future, passphrase); !errors.Is(err, secret.ErrUnsupportedVersion) {
 		t.Fatalf("Open = %v, want ErrUnsupportedVersion", err)
 	}
 
 	futureKDF := slices.Clone(sealed)
-	futureKDF[16] = 99 // KDF id
+	futureKDF[17] = 99 // KDF id
 	if _, err := secret.Open(futureKDF, passphrase); !errors.Is(err, secret.ErrUnsupportedVersion) {
 		t.Fatalf("Open = %v, want ErrUnsupportedVersion", err)
 	}
@@ -269,12 +269,12 @@ func zeroCostVault(t *testing.T) []byte {
 	sealed := sealedVault(t, map[string]string{"a": "b"})
 	zeroed := slices.Clone(sealed)
 	// memory = 0, which would make the KDF free.
-	zeroed[21], zeroed[22], zeroed[23], zeroed[24] = 0, 0, 0, 0
+	zeroed[22], zeroed[23], zeroed[24], zeroed[25] = 0, 0, 0, 0
 	return zeroed
 }
 
 func headerOf(t *testing.T) []byte {
 	t.Helper()
 	sealed := sealedVault(t, map[string]string{"a": "b"})
-	return sealed[:43]
+	return sealed[:44]
 }
