@@ -207,9 +207,9 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
                   <li key={`${item.host.file.absolute}:${item.host.line}`}>
                     {item.host.identity.alias === "" ? (
                       rulePath === undefined ? (
-                        <p aria-describedby={descriptionId} className="w-full rounded px-2 py-1 text-sm text-zinc-400">
+                        <p aria-describedby={descriptionId} className="w-full rounded px-2 py-1 text-sm text-ink-muted">
                           <span className="block">{hostLabel(item.host)}</span>
-                          <span className="block text-xs text-zinc-500">
+                          <span className="block text-xs text-ink-faint">
                             {t("tree.patternRuleExternal", { path: item.host.file.absolute })}
                           </span>
                         </p>
@@ -218,10 +218,10 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
                           type="button"
                           onClick={() => onOpenPatternRule(rulePath, item.host.line)}
                           aria-describedby={descriptionId}
-                          className="w-full rounded px-2 py-1 text-left text-sm hover:bg-zinc-900"
+                          className="w-full rounded px-2 py-1 text-left text-sm hover:bg-select-fill"
                         >
                           <span className="block">{hostLabel(item.host)}</span>
-                          <span className="block text-xs text-zinc-500">
+                          <span className="block text-xs text-ink-faint">
                             {t("tree.patternRuleOpen", { path: rulePath, line: item.host.line })}
                           </span>
                         </button>
@@ -247,7 +247,7 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
                         onDragEnd={() => setDragging(null)}
                         aria-current={active ? "true" : undefined}
                         aria-describedby={descriptionId}
-                        className={`w-full rounded px-2 py-1 text-left text-sm ${active ? "bg-zinc-800" : "hover:bg-zinc-900"}`}
+                        className={`w-full rounded px-2 py-1 text-left text-sm ${active ? "bg-select-fill" : "hover:bg-select-fill"}`}
                       >
                         <span className="flex items-center gap-1">
                           {/*
@@ -266,13 +266,13 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
                             />
                           )}
                           {item.favourite ? (
-                            <span aria-hidden="true" className="text-amber-300">
+                            <span aria-hidden="true" className="text-notice-ink">
                               ★
                             </span>
                           ) : null}
                           <span className="truncate">{hostLabel(item.host)}</span>
                           {item.host.duplicate === true ? (
-                            <span aria-hidden="true" className="text-amber-300">
+                            <span aria-hidden="true" className="text-notice-ink">
                               ⧉
                             </span>
                           ) : null}
@@ -280,7 +280,7 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
                         {item.tags.length === 0 ? null : (
                           <span aria-hidden="true" className="mt-0.5 flex flex-wrap gap-1">
                             {item.tags.map((tag) => (
-                              <span key={tag} className="rounded bg-zinc-800 px-1 text-[0.65rem] text-zinc-300">
+                              <span key={tag} className="rounded bg-select-fill px-1 text-[0.65rem] text-ink-muted">
                                 {tag}
                               </span>
                             ))}
@@ -331,7 +331,7 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
 
   function blockClass(target: string) {
     return `flex flex-col gap-1 rounded ${
-      accepts(target) ? "bg-zinc-900 outline outline-1 outline-zinc-600" : ""
+      accepts(target) ? "bg-select-fill outline outline-1 outline-accent" : ""
     }`;
   }
 
@@ -363,7 +363,7 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
                   return next;
                 })
               }
-              className="rounded px-1 text-xs text-zinc-500 hover:text-zinc-300"
+              className="rounded px-1 text-xs text-ink-faint hover:text-ink"
             >
               <span aria-hidden="true">{shut ? "\u25b8" : "\u25be"}</span>
             </button>
@@ -376,7 +376,7 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
             draggable={grouping === "groups"}
             onDragStart={(event) => startDrag(event, { kind: "group", name: node.name })}
             onDragEnd={() => setDragging(null)}
-            className="rounded px-1 text-xs font-semibold uppercase tracking-wide text-zinc-500"
+            className="rounded px-1 text-xs font-semibold uppercase tracking-wide text-ink-faint"
           >
             {node.label}
           </h2>
@@ -386,10 +386,10 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
             {node.items.length > 0
               ? renderItems(node.items)
               : node.children.length === 0
-                ? <p className="px-2 py-1 text-xs text-zinc-500">{t("tree.groupEmpty")}</p>
+                ? <p className="px-2 py-1 text-xs text-ink-faint">{t("tree.groupEmpty")}</p>
                 : null}
             {node.children.length === 0 ? null : (
-              <div className="ms-2 flex flex-col gap-1 border-s border-zinc-800 ps-2">
+              <div className="ms-2 flex flex-col gap-1 border-s border-line ps-2">
                 {node.children.map((child) => renderGroup(child))}
               </div>
             )}
@@ -400,7 +400,7 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
   }
 
   return (
-    <nav aria-label={t("tree.navLabel")} className="flex h-full flex-col gap-3 border-r border-zinc-800 p-4">
+    <nav aria-label={t("tree.navLabel")} className="flex h-full flex-col gap-3 border-r border-line p-4">
       <div className="flex gap-2">
         {(["groups", "files"] as const).map((mode) => (
           <button
@@ -408,13 +408,13 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
             type="button"
             onClick={() => setGrouping(mode)}
             aria-pressed={grouping === mode}
-            className={`rounded px-2 py-1 text-xs ${grouping === mode ? "bg-zinc-800 text-zinc-100" : "text-zinc-400"}`}
+            className={`rounded px-2 py-1 text-xs ${grouping === mode ? "bg-select-fill text-ink" : "text-ink-muted"}`}
           >
             {mode === "groups" ? t("tree.byGroups") : t("tree.byFiles")}
           </button>
         ))}
       </div>
-      <label className="text-xs text-zinc-400" htmlFor="connection-filter">
+      <label className="text-xs text-ink-muted" htmlFor="connection-filter">
         {t("tree.filter")}
       </label>
       <input
@@ -423,11 +423,11 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         placeholder={t("tree.filterPlaceholder")}
-        className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
+        className="rounded border border-control-line bg-control px-2 py-1 text-sm"
       />
 
       {visible.length === 0 ? (
-        <p role="status" className="text-sm text-zinc-400">
+        <p role="status" className="text-sm text-ink-muted">
           {t("tree.noMatch")}
         </p>
       ) : null}
@@ -443,7 +443,7 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
         fileSections.map((section) =>
           section.items.length === 0 ? null : (
             <section key={section.title} className="flex flex-col gap-1">
-              <h2 className="rounded px-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              <h2 className="rounded px-1 text-xs font-semibold uppercase tracking-wide text-ink-faint">
                 {section.title}
               </h2>
               {renderItems(section.items)}
@@ -459,11 +459,11 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
             target: dropping on it moves a connection back into the entry file.
           */}
           <section aria-label={t("tree.ungrouped")} {...dropHandlers("")} className={blockClass("")}>
-            <h2 className="rounded px-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            <h2 className="rounded px-1 text-xs font-semibold uppercase tracking-wide text-ink-faint">
               {t("tree.ungrouped")}
             </h2>
             {ungroupedItems.length === 0 ? (
-              <p className="px-2 py-1 text-xs text-zinc-500">{t("tree.groupEmpty")}</p>
+              <p className="px-2 py-1 text-xs text-ink-faint">{t("tree.groupEmpty")}</p>
             ) : (
               renderItems(ungroupedItems)
             )}

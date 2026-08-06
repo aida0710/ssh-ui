@@ -19,6 +19,8 @@ import { OrphanPanel } from "./OrphanPanel";
 import { useTranslate } from "../i18n/context";
 import type { InspectorContent } from "../ui/Inspector";
 import { HostInspector, hostNeedsAttention } from "./HostInspector";
+import { control, fieldLabel, narrowControl } from "../ui/form";
+import { Button } from "../ui/surface";
 import { appendHostBlock, duplicateHostBlock, removeHostBlock } from "./blocks";
 
 function toProblem(error: unknown): Problem {
@@ -359,25 +361,25 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
   }
 
   if (overview === null) {
-    return <p role="status" className="text-sm text-zinc-300">{t("conn.loading")}</p>;
+    return <p role="status" className="text-sm text-ink-muted">{t("conn.loading")}</p>;
   }
 
   return (
     <div className="grid grid-cols-[18rem_1fr] gap-6">
       <div className="flex flex-col gap-2">
-        <label htmlFor="new-alias" className="text-xs text-zinc-400">{t("conn.newAlias")}</label>
+        <label htmlFor="new-alias" className={fieldLabel}>{t("conn.newAlias")}</label>
         <input
           id="new-alias"
           value={newAlias}
           onChange={(event) => setNewAlias(event.target.value)}
-          className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
+          className={control}
         />
-        <label htmlFor="new-file" className="text-xs text-zinc-400">{t("conn.targetFile")}</label>
+        <label htmlFor="new-file" className={fieldLabel}>{t("conn.targetFile")}</label>
         <select
           id="new-file"
           value={targetFile}
           onChange={(event) => setTargetFile(event.target.value)}
-          className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
+          className={control}
         >
           {overview.files
             .filter((node) => node.editable && node.file.path !== undefined)
@@ -385,9 +387,7 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
               <option key={node.file.absolute} value={node.file.path}>{node.file.path}</option>
             ))}
         </select>
-        <button type="button" onClick={() => void createHost()} className="rounded bg-zinc-800 px-3 py-1 text-sm">
-          {t("conn.create")}
-        </button>
+        <Button onClick={() => void createHost()}>{t("conn.create")}</Button>
         <ConnectionTree
           overview={overview}
           selected={selection}
@@ -404,20 +404,18 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
           onSave={(metadata) => void submit({ kind: "metadata", metadata })}
         />
         {detail === null ? (
-          <p role="status" className="text-sm text-zinc-400">{t("conn.select")}</p>
+          <p role="status" className="text-sm text-ink-muted">{t("conn.select")}</p>
         ) : (
           <>
-            {localError === "" ? null : <p role="alert" className="text-sm text-rose-300">{localError}</p>}
-            <div className="flex gap-2">
-              <button type="button" onClick={duplicateHost} className="rounded border border-zinc-700 px-2 py-1 text-xs">
-                {t("conn.duplicate")}
-              </button>
+            {localError === "" ? null : <p role="alert" className="text-sm text-danger">{localError}</p>}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button onClick={duplicateHost}>{t("conn.duplicate")}</Button>
               <label htmlFor="move-target" className="sr-only">{t("conn.moveToFile")}</label>
               <select
                 id="move-target"
                 value={moveTarget}
                 onChange={(event) => setMoveTarget(event.target.value)}
-                className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs"
+                className={narrowControl}
               >
                 <option value="">{t("conn.moveToFilePlaceholder")}</option>
                 {overview.files
@@ -426,21 +424,15 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
                     <option key={node.file.absolute} value={node.file.path}>{node.file.path}</option>
                   ))}
               </select>
-              <button type="button" onClick={() => void moveHost()} className="rounded border border-zinc-700 px-2 py-1 text-xs">
-                {t("conn.move")}
-              </button>
+              <Button onClick={() => void moveHost()}>{t("conn.move")}</Button>
+              {/*
+                Both states are the danger button: the confirmation is a
+                different word, not a different kind of act.
+              */}
               {confirmingDelete ? (
-                <button type="button" onClick={() => void deleteHost()} className="rounded bg-rose-700 px-2 py-1 text-xs text-zinc-100">
-                  {t("conn.confirmDelete")}
-                </button>
+                <Button kind="danger" onClick={() => void deleteHost()}>{t("conn.confirmDelete")}</Button>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setConfirmingDelete(true)}
-                  className="rounded border border-rose-700 px-2 py-1 text-xs text-rose-300"
-                >
-                  {t("conn.delete")}
-                </button>
+                <Button kind="danger" onClick={() => setConfirmingDelete(true)}>{t("conn.delete")}</Button>
               )}
             </div>
             <HostDetailPanel

@@ -13,6 +13,7 @@ import {
   fieldLabel,
   hintText,
   narrowControl,
+  primaryAction,
   secondaryAction,
   sectionHeading,
 } from "../ui/form";
@@ -164,13 +165,13 @@ export function HostDetailPanel({
     <section className="flex flex-col gap-4">
       <header className="flex flex-col gap-1">
         <h2 className="text-lg font-medium">{detail.form.entry.identity.alias || detail.form.entry.patterns.join(" ")}</h2>
-        <p className="text-xs text-zinc-400">
+        <p className="text-xs text-ink-muted">
           {`${detail.form.entry.file.path ?? detail.form.entry.file.absolute}:${detail.form.entry.line}`}
         </p>
         <NoticeList notices={detail.form.notices ?? []} />
       </header>
 
-      <div role="tablist" aria-label={t("host.editorLabel")} className="flex gap-1 border-b border-zinc-800">
+      <div role="tablist" aria-label={t("host.editorLabel")} className="flex gap-1 border-b border-line">
         {tabs.map((name) => (
           <button
             key={name}
@@ -178,20 +179,20 @@ export function HostDetailPanel({
             role="tab"
             aria-selected={tab === name}
             onClick={() => setTab(name)}
-            className={`px-3 py-2 text-sm ${tab === name ? "border-b-2 border-zinc-200 text-zinc-100" : "text-zinc-400"}`}
+            className={`px-3 py-2 text-sm ${tab === name ? "border-b-2 border-accent text-ink" : "text-ink-muted"}`}
           >
             {t(tabLabels[name])}
           </button>
         ))}
       </div>
 
-      {localError === "" ? null : <p role="alert" className="text-sm text-rose-300">{localError}</p>}
+      {localError === "" ? null : <p role="alert" className="text-sm text-danger">{localError}</p>}
 
       {tab === "Basic" || tab === "Jump" || tab === "Advanced" ? (
         <div className="flex flex-col gap-3">
           {visibleFields.map((field) => (
             <div key={fieldKey(field)} className="flex flex-col gap-1">
-              <label htmlFor={`field-${fieldKey(field)}`} className="text-xs text-zinc-400">
+              <label htmlFor={`field-${fieldKey(field)}`} className="text-xs text-ink-muted">
                 {field.keyword}
               </label>
               <div className="flex gap-2">
@@ -200,7 +201,7 @@ export function HostDetailPanel({
                   value={draftFor(field)}
                   disabled={!field.editable || removed.includes(field.line)}
                   onChange={(event) => setDrafts({ ...drafts, [fieldKey(field)]: event.target.value })}
-                  className="flex-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
+                  className="flex-1 rounded border border-control-line bg-control px-2 py-1 text-sm"
                 />
                 <button
                   type="button"
@@ -209,18 +210,18 @@ export function HostDetailPanel({
                       ? removed.filter((line) => line !== field.line)
                       : [...removed, field.line])
                   }
-                  className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-300"
+                  className="rounded border border-control-line px-2 py-1 text-xs text-ink-muted"
                 >
                   {removed.includes(field.line) ? t("host.keep") : t("host.remove")}
                 </button>
               </div>
               {field.dangerous === true ? (
-                <p className="text-xs text-amber-300">
+                <p className="text-xs text-notice-ink">
                   {t("host.dangerousField", { keyword: field.keyword })}
                 </p>
               ) : null}
               {field.duplicate === true ? (
-                <p className="text-xs text-amber-300">
+                <p className="text-xs text-notice-ink">
                   A previous line in this block uses the same keyword. OpenSSH keeps the first one.
                 </p>
               ) : null}
@@ -228,26 +229,26 @@ export function HostDetailPanel({
           ))}
 
           {tab === "Advanced" ? (
-            <div className="flex flex-col gap-2 rounded border border-zinc-800 p-3">
-              <label htmlFor="new-directive" className="text-xs text-zinc-400">{t("host.newDirective")}</label>
+            <div className="flex flex-col gap-2 rounded border border-line p-3">
+              <label htmlFor="new-directive" className="text-xs text-ink-muted">{t("host.newDirective")}</label>
               <input
                 id="new-directive"
                 value={newKeyword}
                 onChange={(event) => setNewKeyword(event.target.value)}
-                className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
+                className="rounded border border-control-line bg-control px-2 py-1 text-sm"
               />
-              <label htmlFor="new-value" className="text-xs text-zinc-400">{t("host.newValue")}</label>
+              <label htmlFor="new-value" className="text-xs text-ink-muted">{t("host.newValue")}</label>
               <input
                 id="new-value"
                 value={newValue}
                 onChange={(event) => setNewValue(event.target.value)}
-                className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
+                className="rounded border border-control-line bg-control px-2 py-1 text-sm"
               />
-              <button type="button" onClick={addDirective} className="self-start rounded bg-zinc-800 px-3 py-1 text-sm">
+              <button type="button" onClick={addDirective} className={`self-start ${secondaryAction}`}>
                 {t("host.addDirective")}
               </button>
               {additions.length === 0 ? null : (
-                <ul className="text-xs text-zinc-300">
+                <ul className="text-xs text-ink-muted">
                   {additions.map((addition, index) => (
                     <li key={`${addition.keyword ?? ""}-${index}`}>
                       {`${addition.keyword ?? ""} ${formatValues(addition.values ?? [])}`}
@@ -258,7 +259,7 @@ export function HostDetailPanel({
             </div>
           ) : null}
 
-          <button type="button" onClick={submitFieldEdits} className="self-start rounded bg-zinc-200 px-3 py-1 text-sm text-zinc-900">
+          <button type="button" onClick={submitFieldEdits} className={`self-start ${primaryAction}`}>
             {t("host.saveChanges")}
           </button>
         </div>
@@ -266,7 +267,7 @@ export function HostDetailPanel({
 
       {tab === "Raw" ? (
         <div className="flex flex-col gap-2">
-          <label htmlFor="block-raw" className="text-xs text-zinc-400">
+          <label htmlFor="block-raw" className="text-xs text-ink-muted">
             {t("host.blockText")}
           </label>
           <textarea
@@ -275,9 +276,9 @@ export function HostDetailPanel({
             onChange={(event) => setBlockRaw(event.target.value)}
             rows={16}
             spellCheck={false}
-            className="rounded border border-zinc-700 bg-zinc-950 p-3 font-mono text-xs"
+            className="rounded border border-control-line bg-canvas p-3 font-mono text-xs"
           />
-          <button type="button" onClick={() => onBlockRaw(blockRaw)} className="self-start rounded bg-zinc-200 px-3 py-1 text-sm text-zinc-900">
+          <button type="button" onClick={() => onBlockRaw(blockRaw)} className={`self-start ${primaryAction}`}>
             {t("host.saveBlock")}
           </button>
         </div>
@@ -285,19 +286,19 @@ export function HostDetailPanel({
 
       {tab === "Effective" ? (
         <div className="flex flex-col gap-2">
-          <p role="status" className="text-xs text-amber-300">
+          <p role="status" className="text-xs text-notice-ink">
             {t("host.effectiveNote")}
           </p>
           <button
             type="button"
             onClick={() => setTab("Diagnostics")}
-            className="self-start rounded border border-zinc-700 px-2 py-1 text-xs"
+            className="self-start rounded border border-control-line px-2 py-1 text-xs"
           >
             {t("host.openDiagnostics")}
           </button>
           <ul className="flex flex-col gap-1">
             {detail.effective.entries.map((entry, index) => (
-              <li key={`${entry.keyword}-${index}`} className="text-xs text-zinc-300">
+              <li key={`${entry.keyword}-${index}`} className="text-xs text-ink-muted">
                 {`${entry.keyword} ${entry.values.join(" ")} — ${entry.source.path ?? entry.source.absolute ?? ""}:${entry.source.line ?? 0}`}
               </li>
             ))}
@@ -312,7 +313,7 @@ export function HostDetailPanel({
         // never routes one here, but an alias is what every check is addressed
         // by, so an empty one must not reach the panel from anywhere.
         identityAlias === "" ? (
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-ink-muted">
             {t("host.noDestination")}
           </p>
         ) : (
@@ -340,7 +341,7 @@ export function HostDetailPanel({
         display order exist only in metadata.json, so they moved to the
         inspector — which is the whole point of that pane.
       */}
-      <section className="flex flex-col gap-5 rounded-xl border border-zinc-800 p-4">
+      <section className="flex flex-col gap-5 rounded-xl border border-line p-4">
         <h3 className={sectionHeading}>{t("host.organisation")}</h3>
 
         <div className="flex flex-col gap-2">

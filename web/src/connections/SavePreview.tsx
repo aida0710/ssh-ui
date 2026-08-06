@@ -31,12 +31,12 @@ const noticeKeys: Record<string, MessageKey> = {
 
 function DiffView({ lines }: { lines: DiffLine[] }) {
   return (
-    <pre className="max-h-72 overflow-auto rounded bg-zinc-950 p-3 text-xs leading-5">
+    <pre className="max-h-72 overflow-auto rounded bg-canvas p-3 text-xs leading-5">
       {lines.map((line, index) => (
         <div
           key={`${line.op}-${line.oldLine ?? 0}-${line.newLine ?? 0}-${index}`}
           className={
-            line.op === "insert" ? "text-emerald-300" : line.op === "delete" ? "text-rose-300" : "text-zinc-400"
+            line.op === "insert" ? "text-live" : line.op === "delete" ? "text-danger" : "text-ink-muted"
           }
         >
           {`${line.op === "insert" ? "+" : line.op === "delete" ? "-" : " "} ${line.text}`}
@@ -50,12 +50,12 @@ function FileDiffView({ diff }: { diff: FileDiff }) {
   const t = useTranslate();
   return (
     <section className="flex flex-col gap-1">
-      <h4 className="text-xs font-semibold text-zinc-300">
+      <h4 className="text-xs font-semibold text-ink-muted">
         {diff.path}
         {diff.created === true ? t("preview.newFile") : ""}
       </h4>
       {diff.truncated === true ? (
-        <p className="text-xs text-amber-300">{t("preview.tooLarge")}</p>
+        <p className="text-xs text-notice-ink">{t("preview.tooLarge")}</p>
       ) : null}
       <DiffView lines={diff.lines} />
     </section>
@@ -79,7 +79,7 @@ export function NoticeList({ notices }: { notices: Notice[] }) {
   return (
     <ul className="flex flex-col gap-1">
       {notices.map((notice, index) => (
-        <li key={`${notice.code}-${notice.path ?? ""}-${notice.line ?? 0}-${index}`} className="text-xs text-amber-300">
+        <li key={`${notice.code}-${notice.path ?? ""}-${notice.line ?? 0}-${index}`} className="text-xs text-notice-ink">
           {notice.code in noticeKeys ? t(noticeKeys[notice.code]!) : notice.code}
           {notice.path === undefined ? "" : ` (${notice.path}${notice.line === undefined ? "" : `:${notice.line}`})`}
         </li>
@@ -99,11 +99,11 @@ export function SavePreviewPanel({
 }) {
   const t = useTranslate();
   return (
-    <section aria-labelledby="preview-heading" className="flex flex-col gap-3 rounded border border-zinc-800 p-4">
+    <section aria-labelledby="preview-heading" className="flex flex-col gap-3 rounded border border-line p-4">
       <h3 id="preview-heading" className="text-sm font-medium">{t("preview.heading")}</h3>
 
       {problem === null ? null : (
-        <p role="alert" className="text-sm text-rose-300">
+        <p role="alert" className="text-sm text-danger">
           {problem.code === "config_syntax_error"
             ? t("preview.syntaxError", {
                 path: problem.path ?? t("preview.theFile"),
@@ -123,7 +123,7 @@ export function SavePreviewPanel({
       {problem?.diagnostics === undefined ? null : (
         <ul className="flex flex-col gap-1">
           {problem.diagnostics.map((diagnostic, index) => (
-            <li key={`${diagnostic.code}-${index}`} className="text-xs text-rose-300">
+            <li key={`${diagnostic.code}-${index}`} className="text-xs text-danger">
               {`${diagnostic.severity}: ${diagnostic.code} ${diagnostic.path ?? ""}${diagnostic.line === undefined ? "" : `:${diagnostic.line}`}`}
             </li>
           ))}
@@ -132,17 +132,17 @@ export function SavePreviewPanel({
 
       {conflict === null ? null : (
         <div className="flex flex-col gap-2">
-          <h4 className="text-xs font-semibold text-zinc-300">{t("preview.changedOnDisk")}</h4>
+          <h4 className="text-xs font-semibold text-ink-muted">{t("preview.changedOnDisk")}</h4>
           <DiffView lines={conflict.externalChange} />
-          <h4 className="text-xs font-semibold text-zinc-300">{t("preview.pendingChange")}</h4>
+          <h4 className="text-xs font-semibold text-ink-muted">{t("preview.pendingChange")}</h4>
           <DiffView lines={conflict.localChange} />
-          <p className="text-xs text-zinc-400">{t("preview.mergeByHand")}</p>
+          <p className="text-xs text-ink-muted">{t("preview.mergeByHand")}</p>
         </div>
       )}
 
       {preview === null ? (
         conflict === null && problem === null ? (
-          <p className="text-xs text-zinc-400">{t("preview.nothingYet")}</p>
+          <p className="text-xs text-ink-muted">{t("preview.nothingYet")}</p>
         ) : null
       ) : (
         <div className="flex flex-col gap-3">
@@ -151,10 +151,10 @@ export function SavePreviewPanel({
           ))}
           {(preview.effective ?? []).map((effective) => (
             <section key={effective.alias} className="flex flex-col gap-1">
-              <h4 className="text-xs font-semibold text-zinc-300">{t("preview.explainedFor", { alias: effective.alias })}</h4>
+              <h4 className="text-xs font-semibold text-ink-muted">{t("preview.explainedFor", { alias: effective.alias })}</h4>
               <ul>
                 {effective.changes.map((change) => (
-                  <li key={change.keyword} className="text-xs text-zinc-300">
+                  <li key={change.keyword} className="text-xs text-ink-muted">
                     {`${change.keyword}: ${change.before.join(", ") || t("preview.unset")} → ${
                       change.after.join(", ") || t("preview.unset")
                     }`}
