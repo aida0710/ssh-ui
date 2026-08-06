@@ -413,6 +413,7 @@ export const en = {
   "tree.filter": "Filter connections",
   "tree.filterPlaceholder": "alias, pattern or tag",
   "tree.noMatch": "No connection matches this filter.",
+  "tree.groupEmpty": "No connection is in this group.",
   "tree.patternRuleExternal": "Pattern rule in {path}, a file this editor only reads.",
   "tree.patternRuleOpen": "Pattern rule — open it in the Config file view ({path}:{line})",
   "tree.favourite": "favourite",
@@ -460,6 +461,7 @@ export const en = {
   "host.organisation": "Organisation",
   "host.primaryGroup": "Primary group",
   "host.groupNone": "None",
+  "host.groupNoneMeans": "Choosing none moves the connection back into ~/.ssh/config, at the end of the file.",
   "host.groupIsADirectory":
     "A group is a directory, so changing it moves this connection's file into it. The move, the metadata identity and the Include region are one transaction.",
   "host.moveToGroup": "Move to this group",
@@ -1007,6 +1009,7 @@ export const ja: Record<MessageKey, string> = {
   "tree.filter": "接続を絞り込む",
   "tree.filterPlaceholder": "alias、パターン、タグ",
   "tree.noMatch": "この条件に一致する接続はありません。",
+  "tree.groupEmpty": "このグループに接続はありません。",
   "tree.patternRuleExternal": "{path} のパターン規則です。このエディタはこのファイルを読み取るだけです。",
   "tree.patternRuleOpen": "パターン規則 — 設定ファイル画面で開く（{path}:{line}）",
   "tree.favourite": "お気に入り",
@@ -1054,6 +1057,7 @@ export const ja: Record<MessageKey, string> = {
   "host.organisation": "整理",
   "host.primaryGroup": "所属グループ",
   "host.groupNone": "なし",
+  "host.groupNoneMeans": "「なし」を選ぶと接続は ~/.ssh/config の末尾へ戻ります。",
   "host.groupIsADirectory":
     "グループはディレクトリなので、変更するとこの接続のファイルがそこへ移動します。移動、metadata の識別、Include 領域は同一トランザクションです。",
   "host.moveToGroup": "このグループへ移動",

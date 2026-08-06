@@ -292,3 +292,28 @@ test("takes a comment with the connection when the block is deleted", async ({
   expect(after).not.toContain("the file server");
   expect(after).toContain("# the printer\nHost printer\n");
 });
+
+test("moves a connection into a group by dragging it", async ({ page, installation }) => {
+  await page.goto(installation.url);
+  await openSection(page, "Groups");
+  await page.getByLabel("New group name").fill("work");
+  await page.getByRole("button", { name: "Add group" }).click();
+  expect(await clickAndAwait(page, "Save groups", "/api/v1/config/save")).toBe(200);
+
+  await openSection(page, "Connections");
+  const tree = page.getByRole("navigation", { name: "Connections" });
+  // The heading is on screen before anything is in the group, which is what
+  // makes it a target at all: a group that hid until it held something could
+  // never be filled by dragging.
+  await expect(tree.getByRole("heading", { name: "work" })).toBeVisible();
+
+  await tree.getByRole("button", { name: "bastion" }).dragTo(tree.getByRole("heading", { name: "work" }));
+
+  // Read back through the file the group's Include names. That the block is in
+  // connections/work/config.conf is what proves the move landed somewhere
+  // OpenSSH reads, rather than merely somewhere a file was written.
+  await expect(async () => {
+    expect(await installation.read("connections/work/config.conf")).toContain("Host bastion");
+  }).toPass();
+  expect(await installation.read("config")).not.toContain("Host bastion\n");
+});

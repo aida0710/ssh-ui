@@ -340,6 +340,7 @@ export function HostDetailPanel({
         <div className="flex flex-col gap-2">
           <label htmlFor="host-group" className={fieldLabel}>{t("host.primaryGroup")}</label>
           <p className={hintText}>{t("host.groupIsADirectory")}</p>
+          <p className={hintText}>{t("host.groupNoneMeans")}</p>
           <div className="flex flex-wrap items-center gap-2">
             <select
               id="host-group"
@@ -354,7 +355,11 @@ export function HostDetailPanel({
             </select>
             <button
               type="button"
-              disabled={moveTo === "" || moveTo === detail.form.entry.group}
+              // Disabled only when the choice is where the connection already
+              // is. "None" used to be disabled too, which left no way at all —
+              // by mouse or by keyboard — to take a connection back out of a
+              // group.
+              disabled={moveTo === (detail.form.entry.group ?? "")}
               onClick={() => onMoveToGroup(moveTo)}
               className={secondaryAction}
             >

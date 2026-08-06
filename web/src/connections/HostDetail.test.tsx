@@ -288,3 +288,41 @@ describe("HostDetailPanel", () => {
     expect(screen.queryByText(/retires the note/)).not.toBeInTheDocument();
   });
 });
+
+describe("taking a connection out of every group", () => {
+  // The button was disabled for the empty choice, so there was no way at all to
+  // take a connection back out of a group without a mouse — and, before
+  // dragging existed, no way with one either.
+  const grouped: HostDetail = {
+    ...detail,
+    form: { ...detail.form, entry: { ...detail.form.entry, group: "work" } },
+  };
+
+  it("offers the empty choice for a connection that is in a group", async () => {
+    const user = userEvent.setup();
+    const handlers = renderPanel({ detail: grouped });
+
+    await user.selectOptions(screen.getByLabelText("Primary group"), "");
+    const button = screen.getByRole("button", { name: "Move to this group" });
+    expect(button).toBeEnabled();
+
+    await user.click(button);
+    expect(handlers.onMoveToGroup).toHaveBeenCalledWith("");
+  });
+
+  it("offers nothing to do for a connection that is in no group already", async () => {
+    const user = userEvent.setup();
+    renderPanel();
+
+    await user.selectOptions(screen.getByLabelText("Primary group"), "");
+    expect(screen.getByRole("button", { name: "Move to this group" })).toBeDisabled();
+  });
+
+  it("still offers nothing to do for the group the connection is already in", async () => {
+    const user = userEvent.setup();
+    renderPanel({ detail: grouped });
+
+    await user.selectOptions(screen.getByLabelText("Primary group"), "work");
+    expect(screen.getByRole("button", { name: "Move to this group" })).toBeDisabled();
+  });
+});

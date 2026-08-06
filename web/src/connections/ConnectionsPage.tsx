@@ -12,6 +12,7 @@ import {
   type SavePreview,
 } from "../api/config";
 import { ConnectionTree, type HostSelection } from "./ConnectionTree";
+import type { DragPayload } from "./dragdrop";
 import { HostDetailPanel } from "./HostDetail";
 import { NoticeList } from "./SavePreview";
 import { OrphanPanel } from "./OrphanPanel";
@@ -33,6 +34,10 @@ type ConnectionsPageProps = {
 export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
   const t = useTranslate();
   const [overview, setOverview] = useState<Overview | null>(null);
+  // Where a connection goes when it belongs to no group. The server reports the
+  // entry file rather than this page assuming it, and "config" is only the
+  // fallback for the moment before the first overview arrives.
+  const entryPath = overview?.entry.path ?? "config";
   const [selection, setSelection] = useState<HostSelection | null>(null);
   const [detail, setDetail] = useState<HostDetail | null>(null);
   const [preview, setPreview] = useState<SavePreview | null>(null);
@@ -141,22 +146,85 @@ export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
     });
   }
 
-  // The comment is written into the configuration file, so it goes through the
-  // same base-and-precondition path as every other edit to that file.
   // Moving a connection into a group is a file move, so the request names the
   // group and the server derives the destination path from it. Sending a path
   // as well would let the two disagree, which the server refuses outright.
-  function onMoveToGroup(group: string) {
+  //
+  // An empty group means "out of every group", which is not a move into a
+  // directory but a move back to the entry file. That form needs the entry
+  // file's bytes, so the destination is held to its own precondition the way a
+  // file-to-file move is.
+  async function onMoveToGroup(group: string) {
     if (detail === null) return;
-    void submit({
-      kind: "move",
-      path: detail.form.entry.file.path ?? "",
-      base: detail.file.contents,
-      alias: detail.form.entry.identity.alias,
-      destinationGroup: group,
-    });
+    const path = detail.form.entry.file.path ?? "";
+    const alias = detail.form.entry.identity.alias;
+    if (group !== "") {
+      void submit({ kind: "move", path, base: detail.file.contents, alias, destinationGroup: group });
+      return;
+    }
+    try {
+      const destination = await configApi.file(entryPath);
+      await submit({
+        kind: "move",
+        path,
+        base: detail.file.contents,
+        alias,
+        destinationPath: entryPath,
+        destinationBase: destination.contents,
+      }, false);
+      setSelection({ path: entryPath, alias });
+      setDetail(await configApi.host(entryPath, alias));
+    } catch (error) {
+      setProblem(toProblem(error));
+    }
   }
 
+  // A drop is one of the moves this page already performs, chosen by what was
+  // dragged. Nothing new reaches the server: a connection is a move, and a
+  // group changing parent is a rename to a new path.
+  //
+  // A dragged connection is not necessarily the selected one, so its file's
+  // bytes are read here rather than taken from the open detail, and submit is
+  // told not to reselect: the user dropped something, they did not ask to open
+  // it.
+  async function onTreeDrop(payload: DragPayload, target: string) {
+    try {
+      if (payload.kind === "group") {
+        const base = payload.name.slice(payload.name.lastIndexOf("/") + 1);
+        const result = await configApi.renameGroup(payload.name, target === "" ? base : `${target}/${base}`);
+        setPreview(result.preview);
+        setProblem(null);
+        await reload();
+        return;
+      }
+      const file = await configApi.file(payload.path);
+      if (target !== "") {
+        await submit({
+          kind: "move",
+          path: payload.path,
+          base: file.contents,
+          alias: payload.alias,
+          destinationGroup: target,
+        }, false);
+        return;
+      }
+      const destination = await configApi.file(entryPath);
+      await submit({
+        kind: "move",
+        path: payload.path,
+        base: file.contents,
+        alias: payload.alias,
+        destinationPath: entryPath,
+        destinationBase: destination.contents,
+      }, false);
+    } catch (error) {
+      setPreview(null);
+      setProblem(toProblem(error));
+    }
+  }
+
+  // The comment is written into the configuration file, so it goes through the
+  // same base-and-precondition path as every other edit to that file.
   function onComment(comment: string) {
     if (detail === null || selection === null) return;
     void submit({
@@ -302,6 +370,7 @@ export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
           selected={selection}
           onSelect={onSelect}
           onOpenPatternRule={onOpenFile}
+          onDrop={(payload, target) => void onTreeDrop(payload, target)}
         />
       </div>
       <div className="flex flex-col gap-4">
@@ -360,7 +429,7 @@ export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
               onBlockRaw={onBlockRaw}
               onRename={onRename}
               onComment={onComment}
-              onMoveToGroup={onMoveToGroup}
+              onMoveToGroup={(group) => void onMoveToGroup(group)}
               onMetadata={onMetadata}
             />
           </>
