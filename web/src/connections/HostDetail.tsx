@@ -350,7 +350,11 @@ export function HostDetailPanel({
         display order exist only in metadata.json, so they moved to the
         inspector — which is the whole point of that pane.
       */}
-      <section className="flex flex-col gap-5 rounded-xl border border-line p-4">
+      {/*
+        No border of its own: the card inside already draws one, and a bordered
+        box holding a bordered box reads as two groups where there is one.
+      */}
+      <section className="flex flex-col gap-3">
         <h3 className={sectionHeading}>{t("host.organisation")}</h3>
 
         {/*
