@@ -98,6 +98,10 @@ func New(options Options) (*Server, error) {
 		ExpectedHost:   host,
 		ExpectedOrigin: "http://" + host,
 		Sessions:       options.Sessions,
+		// The application is behind the master password, not each screen in
+		// turn. A server built without a vault has no way to be unlocked and is
+		// therefore shut, which is the safe direction for a missing wiring.
+		Unlocked: func() bool { return options.Passwords != nil && options.Passwords.Unlocked() },
 	}).Middleware)
 
 	handlers := Handlers{Sessions: options.Sessions, Version: options.Version}

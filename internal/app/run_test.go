@@ -253,6 +253,16 @@ func TestRunExposesTheKeyVaultAndItsTrashThroughTheWiredProcess(t *testing.T) {
 	}
 	call := keyVaultSession{base: base, client: client, cookie: cookies[0], csrf: bootstrapBody.CsrfToken, testing: t}
 
+	// Every route is behind the master password, so setting one is part of
+	// starting the application rather than part of a test about keys.
+	unlocked := call.do(http.MethodPost, "/api/v1/passwords/initialise",
+		[]byte(`{"passphrase":"a master password for this run"}`), nil)
+	if unlocked.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(unlocked.Body)
+		t.Fatalf("initialise the vault = %d: %s", unlocked.StatusCode, body)
+	}
+	unlocked.Body.Close()
+
 	listing := call.do(http.MethodGet, "/api/v1/keys", nil, nil)
 	defer listing.Body.Close()
 	if listing.StatusCode != http.StatusOK {

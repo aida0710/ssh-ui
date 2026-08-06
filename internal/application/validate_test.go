@@ -1,11 +1,14 @@
 package application
 
 import (
+	"crypto/rand"
 	"errors"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"sort"
 	"testing"
+	"time"
 
 	"ssh-ui/internal/storage"
 )
@@ -162,5 +165,43 @@ func TestValidateLeavesApplicationStateAlone(t *testing.T) {
 		}},
 	}); err == nil {
 		t.Fatal("a sibling of ssh-ui/ escaped validation")
+	}
+}
+
+// A write that touches only this application's own state is not a
+// configuration change, and must not be refused because the configuration it
+// never touched cannot be resolved.
+//
+// It matters more than it looks: the vault lives under ssh-ui/, the whole
+// application is behind the master password, and a workspace with no config
+// file yet — or a broken one — would otherwise be a workspace where the master
+// password cannot be set. The tool for fixing a broken configuration would
+// refuse to start because the configuration is broken.
+func TestStateOnlyWritesDoNotNeedAResolvableGraph(t *testing.T) {
+	home := t.TempDir()
+	root := filepath.Join(home, ".ssh")
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// No config file at all, which is what a first run looks like.
+	workspace, err := storage.NewWorkspace(storage.OSFileSystem{}, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := storage.NewManager(workspace, time.Now, rand.Reader)
+	_ = NewService(workspace, manager)
+
+	if err := workspace.EnsureDirectory(workspace.StateDir()); err != nil {
+		t.Fatal(err)
+	}
+	_, err = manager.Commit(storage.Request{
+		Operation: "secret.vault",
+		Changes: []storage.Change{{
+			Path:     filepath.Join(workspace.StateDir(), "secrets"),
+			Contents: []byte("sealed bytes that are not configuration"),
+		}},
+	})
+	if err != nil {
+		t.Fatalf("writing application state with no config present = %v", err)
 	}
 }

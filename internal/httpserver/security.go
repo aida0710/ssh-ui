@@ -17,6 +17,10 @@ const (
 
 	contentSecurityPolicy = "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'"
 
+	// spaFallbackRoute is the pattern the single-page application is served
+	// under. A request that matched only this one matched no API route.
+	spaFallbackRoute = "/*"
+
 	// MaxRequestBodyCeiling is the hard ceiling every /api/ request body is read
 	// through. Handlers apply their own, smaller limits; this one exists so a
 	// route added later cannot read an unbounded body by forgetting to.
@@ -27,6 +31,31 @@ type Security struct {
 	ExpectedHost   string
 	ExpectedOrigin string
 	Sessions       *session.Manager
+	// Unlocked reports whether the master password has been given. It is a
+	// function rather than the vault itself, so this file goes on knowing
+	// nothing about secrets, and a nil one is shut: a forgotten wiring must not
+	// be the difference between a locked application and an open one.
+	Unlocked func() bool
+}
+
+// gateExempt names the routes that answer while the vault is shut.
+//
+// They are the gate itself and the two things that must work before there is
+// anything to unlock. Everything else is behind the master password, which is
+// what "the application is locked" means — not "each screen asks when it needs
+// a secret", which is what this used to be.
+func gateExempt(method, path string) bool {
+	switch path {
+	case "/api/v1/health":
+		return method == http.MethodGet
+	case "/api/v1/session/bootstrap", "/api/v1/session/renew":
+		return method == http.MethodPost
+	case "/api/v1/passwords":
+		return method == http.MethodGet
+	case "/api/v1/passwords/initialise", "/api/v1/passwords/unlock":
+		return method == http.MethodPost
+	}
+	return false
 }
 
 func (s Security) Middleware(next echo.HandlerFunc) echo.HandlerFunc {
@@ -91,6 +120,18 @@ func (s Security) Middleware(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 		if isStateChanging && !isRenew && !s.Sessions.VerifyCSRF(cookie.Value, request.Header.Get(CSRFHeader)) {
 			return problem(c, http.StatusForbidden, "invalid_csrf")
+		}
+
+		// A path no API route claims is answered by the router, not by the
+		// gate. "There is no such route" and "the vault is shut" are different
+		// facts, and answering the second to both would make a typo in a URL
+		// look like a state the user could unlock their way out of. Middleware
+		// runs after the route lookup, so an empty pattern means nothing
+		// matched, and the SPA catch-all means nothing in the API matched — it
+		// 404s everything under /api/ itself.
+		claimed := c.Path() != "" && c.Path() != spaFallbackRoute
+		if claimed && !gateExempt(request.Method, request.URL.Path) && (s.Unlocked == nil || !s.Unlocked()) {
+			return problem(c, http.StatusConflict, "vault_locked")
 		}
 
 		c.Set(SessionContextKey, cookie.Value)

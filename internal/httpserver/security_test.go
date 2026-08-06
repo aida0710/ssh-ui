@@ -22,6 +22,7 @@ func TestSecurityRejectsCrossSiteAndWrongHost(t *testing.T) {
 		ExpectedHost:   "127.0.0.1:43123",
 		ExpectedOrigin: "http://127.0.0.1:43123",
 		Sessions:       manager,
+		Unlocked:       alwaysUnlocked,
 	}
 	tests := []struct {
 		name      string
@@ -75,6 +76,7 @@ func TestSecurityRefusesEveryAPIRequestFromAnotherSite(t *testing.T) {
 		ExpectedHost:   "127.0.0.1:43123",
 		ExpectedOrigin: "http://127.0.0.1:43123",
 		Sessions:       manager,
+		Unlocked:       alwaysUnlocked,
 	}).Middleware)
 	e.GET("/api/v1/test", func(c *echo.Context) error { return c.NoContent(http.StatusNoContent) })
 
@@ -135,6 +137,7 @@ func TestSecurityBoundsABodyAHandlerReadsWithoutItsOwnLimit(t *testing.T) {
 		ExpectedHost:   "127.0.0.1:43123",
 		ExpectedOrigin: "http://127.0.0.1:43123",
 		Sessions:       manager,
+		Unlocked:       alwaysUnlocked,
 	}).Middleware)
 
 	var read int
@@ -188,6 +191,7 @@ func TestSecurityNavigationHeadersAndAPIAuthentication(t *testing.T) {
 		ExpectedHost:   "127.0.0.1:43123",
 		ExpectedOrigin: "http://127.0.0.1:43123",
 		Sessions:       manager,
+		Unlocked:       alwaysUnlocked,
 	}).Middleware)
 	e.GET("/", func(c *echo.Context) error { return c.NoContent(http.StatusNoContent) })
 	e.GET("/api/v1/test", func(c *echo.Context) error { return c.NoContent(http.StatusNoContent) })
@@ -254,6 +258,7 @@ func TestSecurityRejectionDoesNotEchoRequestValues(t *testing.T) {
 		ExpectedHost:   "127.0.0.1:43123",
 		ExpectedOrigin: "http://127.0.0.1:43123",
 		Sessions:       manager,
+		Unlocked:       alwaysUnlocked,
 	}).Middleware)
 	e.POST("/api/v1/session/bootstrap", func(c *echo.Context) error {
 		return c.NoContent(http.StatusNoContent)
@@ -276,3 +281,110 @@ func TestSecurityRejectionDoesNotEchoRequestValues(t *testing.T) {
 		t.Fatalf("body = %q, want %q", got, want)
 	}
 }
+
+// runGuarded drives the middleware alone with a session that exists, so the
+// only thing that can refuse is the gate under test.
+func runGuarded(t *testing.T, host string, security Security, credentials session.Credentials, method, path string) *httptest.ResponseRecorder {
+	t.Helper()
+	e := echo.New()
+	e.Use(security.Middleware)
+	e.Add(method, path, func(c *echo.Context) error { return c.NoContent(http.StatusOK) })
+
+	request := httptest.NewRequest(method, path, strings.NewReader("{}"))
+	request.Host = host
+	request.Header.Set("Sec-Fetch-Site", "same-origin")
+	request.Header.Set(echo.HeaderOrigin, "http://"+host)
+	request.Header.Set(echo.HeaderContentType, "application/json")
+	request.Header.Set(CSRFHeader, credentials.CSRFToken)
+	request.AddCookie(&http.Cookie{Name: SessionCookie, Value: credentials.SessionID})
+	recorder := httptest.NewRecorder()
+	e.ServeHTTP(recorder, request)
+	return recorder
+}
+
+func gatedSecurity(t *testing.T, unlocked func() bool) (Security, string, session.Credentials) {
+	t.Helper()
+	manager, bootstrap, err := session.NewManager(bytes.NewReader(bytes.Repeat([]byte{0x51}, 96)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	credentials, err := manager.Bootstrap(bootstrap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const host = "127.0.0.1:43123"
+	security := Security{ExpectedHost: host, ExpectedOrigin: "http://" + host, Sessions: manager}
+	if unlocked != nil {
+		security.Unlocked = unlocked
+	}
+	return security, host, credentials
+}
+
+// The application is the thing behind the master password now, not each screen
+// in turn.
+//
+// The exemptions are the gate itself and the two things that must work before
+// there is anything to unlock. Everything else answers vault_locked.
+func TestEveryRouteButTheGateRefusesWhileTheVaultIsShut(t *testing.T) {
+	security, host, credentials := gatedSecurity(t, func() bool { return false })
+
+	locked := []struct{ method, path string }{
+		{http.MethodGet, "/api/v1/config/overview"},
+		{http.MethodPost, "/api/v1/config/save"},
+		{http.MethodGet, "/api/v1/keys"},
+		{http.MethodGet, "/api/v1/known-hosts"},
+		{http.MethodGet, "/api/v1/sync"},
+		{http.MethodGet, "/api/v1/history"},
+		{http.MethodGet, "/api/v1/credentials"},
+	}
+	for _, route := range locked {
+		recorder := runGuarded(t, host, security, credentials, route.method, route.path)
+		if recorder.Code != http.StatusConflict {
+			t.Errorf("%s %s while shut = %d, want 409", route.method, route.path, recorder.Code)
+		}
+		if !strings.Contains(recorder.Body.String(), "vault_locked") {
+			t.Errorf("%s %s = %s", route.method, route.path, recorder.Body.String())
+		}
+	}
+
+	open := []struct{ method, path string }{
+		{http.MethodGet, "/api/v1/health"},
+		{http.MethodGet, "/api/v1/passwords"},
+		{http.MethodPost, "/api/v1/passwords/initialise"},
+		{http.MethodPost, "/api/v1/passwords/unlock"},
+		{http.MethodPost, "/api/v1/session/renew"},
+	}
+	for _, route := range open {
+		recorder := runGuarded(t, host, security, credentials, route.method, route.path)
+		if recorder.Code != http.StatusOK {
+			t.Errorf("%s %s while shut = %d, want it to pass the gate: %s",
+				route.method, route.path, recorder.Code, recorder.Body.String())
+		}
+	}
+}
+
+// A gate with nothing wired to it is shut. A forgotten wiring must not be the
+// difference between a locked application and an open one.
+func TestAMiddlewareWithNoVaultToAskIsShut(t *testing.T) {
+	security, host, credentials := gatedSecurity(t, nil)
+	if recorder := runGuarded(t, host, security, credentials, http.MethodGet, "/api/v1/keys"); recorder.Code != http.StatusConflict {
+		t.Errorf("a middleware with no Unlocked = %d, want 409", recorder.Code)
+	}
+}
+
+// An open vault changes nothing else: the gate is one more check, not a
+// replacement for the session and the CSRF token.
+func TestAnOpenVaultStillRequiresTheSessionAndTheToken(t *testing.T) {
+	security, host, credentials := gatedSecurity(t, func() bool { return true })
+	if recorder := runGuarded(t, host, security, credentials, http.MethodGet, "/api/v1/keys"); recorder.Code != http.StatusOK {
+		t.Errorf("GET with an open vault = %d, want 200", recorder.Code)
+	}
+	withoutToken := session.Credentials{SessionID: credentials.SessionID}
+	if recorder := runGuarded(t, host, security, withoutToken, http.MethodPost, "/api/v1/config/save"); recorder.Code != http.StatusForbidden {
+		t.Errorf("POST with no CSRF token = %d, want 403", recorder.Code)
+	}
+}
+
+// alwaysUnlocked opens the gate for the tests that are about something else.
+// The gate has tests of its own, above.
+func alwaysUnlocked() bool { return true }

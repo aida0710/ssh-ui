@@ -246,7 +246,7 @@ func newRenewServer(t *testing.T) (*echo.Echo, session.Credentials) {
 	engine.Use((Security{
 		ExpectedHost:   renewTestHost,
 		ExpectedOrigin: "http://" + renewTestHost,
-		Sessions:       manager,
+		Sessions:       manager, Unlocked: alwaysUnlocked,
 	}).Middleware)
 	engine.POST("/api/v1/session/renew", Handlers{Sessions: manager}.Renew)
 	return engine, credentials

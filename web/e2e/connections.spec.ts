@@ -1,8 +1,8 @@
-import { clickAndAwait, expect, openSection, test } from "./support/environment";
+import { clickAndAwait, expect, openSection, test, openApplication } from "./support/environment";
 import type { Page } from "@playwright/test";
 
 async function openBastion(page: Page, url: string) {
-  await page.goto(url);
+  await openApplication(page, { url });
   await openSection(page, "Connections");
   await page
     .getByRole("navigation", { name: "Connections" })
@@ -184,7 +184,7 @@ test("re-associates a note whose connection is gone, without guessing", async ({
       ],
     }),
   );
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await openSection(page, "Connections");
 
   const panel = page.getByRole("region", { name: "Settings whose connection is gone" });
@@ -255,7 +255,7 @@ test("takes a comment with the connection it describes when the block moves", as
     "conf.d/10-home.conf",
     "# the file server\nHost nas\n\tHostName 198.51.100.20\n\n# the printer\nHost printer\n\tHostName 198.51.100.30\n",
   );
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await openSection(page, "Connections");
   await page.getByRole("navigation", { name: "Connections" }).getByRole("button", { name: "nas" }).click();
   await expect(page.getByLabel("Comment")).toHaveValue("the file server");
@@ -279,7 +279,7 @@ test("takes a comment with the connection when the block is deleted", async ({
     "conf.d/10-home.conf",
     "# the file server\nHost nas\n\tHostName 198.51.100.20\n\n# the printer\nHost printer\n\tHostName 198.51.100.30\n",
   );
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await openSection(page, "Connections");
   await page.getByRole("navigation", { name: "Connections" }).getByRole("button", { name: "nas" }).click();
 
@@ -294,7 +294,7 @@ test("takes a comment with the connection when the block is deleted", async ({
 });
 
 test("moves a connection into a group by dragging it", async ({ page, installation }) => {
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await openSection(page, "Groups");
   await page.getByLabel("New group name").fill("work");
   await page.getByRole("button", { name: "Add group" }).click();

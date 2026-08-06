@@ -109,6 +109,34 @@ export const test = base.extend<{ installation: Installation }>({
   },
 });
 
+// masterPassword is what every spec opens the application with. The whole
+// application is behind it now, so unlocking is part of starting rather than
+// part of a test about secrets.
+export const masterPassword = "an end to end master password";
+
+// openApplication navigates and gets past the front door.
+//
+// The first run of a fresh installation asks for a master password to be
+// chosen; a later one asks for it back. Specs get the second screen only if
+// they restart the binary, so this handles the first and is written to cope
+// with either.
+export async function openApplication(page: Page, installation: { url: string }) {
+  const response = await page.goto(installation.url);
+  const confirmation = page.getByLabel("Confirm master password", { exact: true });
+  await expect(page.getByLabel("Master password", { exact: true })).toBeVisible();
+  await page.getByLabel("Master password", { exact: true }).fill(masterPassword);
+  if (await confirmation.isVisible()) {
+    await confirmation.fill(masterPassword);
+    await page.getByRole("button", { name: "Create the vault" }).click();
+  } else {
+    await page.getByRole("button", { name: "Open" }).click();
+  }
+  await expect(sessionStatus(page)).toContainText("Local session active");
+  // The navigation's own response, for the spec that asserts the headers it
+  // carried rather than what the page did with them.
+  return response;
+}
+
 // sessionStatus is the header's own status line.
 //
 // It is scoped to the banner rather than selected by role alone: panels carry

@@ -1,11 +1,11 @@
-import { clickAndAwait, expect, openSection, sessionStatus, test } from "./support/environment";
+import { clickAndAwait, expect, openSection, sessionStatus, test, openApplication } from "./support/environment";
 
 test("exchanges the fragment for a session and removes it from the address bar", async ({
   page,
   context,
   installation,
 }) => {
-  await page.goto(installation.url);
+  await openApplication(page, installation);
 
   await expect(page.getByRole("heading", { name: "SSH UI", level: 1 })).toBeVisible();
   await expect(sessionStatus(page)).toContainText("Local session active");
@@ -30,7 +30,9 @@ test("refuses a replayed bootstrap fragment in a fresh browser context", async (
   const first = await browser.newContext();
   const firstPage = await first.newPage();
   await firstPage.goto(installation.url);
-  await expect(sessionStatus(firstPage)).toContainText("Local session active");
+  // Reaching the front door is what proves the session was established: the
+  // vault status is read through a route that still requires one.
+  await expect(firstPage.getByLabel("Master password", { exact: true })).toBeVisible();
   await first.close();
 
   const second = await browser.newContext();
@@ -46,7 +48,7 @@ test("contacts no origin but its own", async ({ page, installation }) => {
   const requested: string[] = [];
   page.on("request", (request) => requested.push(request.url()));
 
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await openSection(page, "Config");
   await expect(page.getByRole("heading", { name: "Include hierarchy" })).toBeVisible();
 
@@ -59,7 +61,7 @@ test("enforces the content security policy in the browser, not only in the heade
   page,
   installation,
 }) => {
-  const response = await page.goto(installation.url);
+  const response = await openApplication(page, installation);
   expect(response?.headers()["content-security-policy"]).toBe(
     "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; " +
       "form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'",
@@ -91,7 +93,7 @@ test("enforces the content security policy in the browser, not only in the heade
 });
 
 test("keeps no secret in persistent browser storage", async ({ page, installation }) => {
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await expect(sessionStatus(page)).toContainText("Local session active");
 
   // Nothing is written until the user chooses a language, so an untouched
@@ -123,7 +125,7 @@ test("keeps the chosen language across a reload, and translates the panels", asy
   page,
   installation,
 }) => {
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await expect(sessionStatus(page)).toContainText("Local session active");
 
   await page.getByLabel("Language").selectOption("ja");
@@ -155,7 +157,7 @@ test("keeps the chosen language across a reload, and translates the panels", asy
 // renewed from that cookie, every reload left the application dead until the
 // binary was started again.
 test("survives a reload", async ({ page, installation }) => {
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await openSection(page, "Connections");
   await expect(page.getByRole("navigation", { name: "Connections" })).toBeVisible();
 

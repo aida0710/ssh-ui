@@ -36,9 +36,22 @@ async function readProblem(response: Response): Promise<Problem | null> {
   }
 }
 
+// The application is behind the master password, and the vault shuts itself
+// after a day of not being used. That can happen between any two requests, so
+// every refusal is inspected for it here rather than in each screen: a screen
+// that handled it locally would show "that could not be done" on a shell that
+// is no longer usable at all.
+let onLocked: (() => void) | null = null;
+
+export function whenLocked(handler: (() => void) | null) {
+  onLocked = handler;
+}
+
 async function failure(response: Response): Promise<ApiError> {
   const problem = await readProblem(response);
-  return new ApiError(problem?.code ?? "request_failed", response.status, problem);
+  const code = problem?.code ?? "request_failed";
+  if (code === "vault_locked") onLocked?.();
+  return new ApiError(code, response.status, problem);
 }
 
 function validateHealth(value: unknown): HealthResponse {

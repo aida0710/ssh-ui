@@ -58,7 +58,7 @@ func newConfigHarness(t *testing.T) *testHarness {
 	engine.Use((Security{
 		ExpectedHost:   "127.0.0.1:43123",
 		ExpectedOrigin: "http://127.0.0.1:43123",
-		Sessions:       sessions,
+		Sessions:       sessions, Unlocked: alwaysUnlocked,
 	}).Middleware)
 	registerConfigRoutes(engine, ConfigHandlers{Service: service})
 

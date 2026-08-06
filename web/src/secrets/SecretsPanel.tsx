@@ -20,7 +20,13 @@ import {
   sectionHeading,
 } from "../ui/form";
 
-type SecretsPanelProps = { api?: IntegrationsApi };
+type SecretsPanelProps = {
+  api?: IntegrationsApi;
+  // onLock lets the shell shut its own front door. Locking the vault locks the
+  // application, so a panel that only refreshed itself would leave the user
+  // inside a shell whose next request will be refused.
+  onLock?: () => void;
+};
 
 // The two namespaces, drawn apart.
 //
@@ -52,7 +58,7 @@ const kinds: {
   },
 ];
 
-export function SecretsPanel({ api = integrationsApi }: SecretsPanelProps) {
+export function SecretsPanel({ api = integrationsApi, onLock }: SecretsPanelProps) {
   const t = useTranslate();
   const [status, setStatus] = useState<PasswordVaultStatus | null>(null);
   const [credentials, setCredentials] = useState<Credential[]>([]);
@@ -140,7 +146,11 @@ export function SecretsPanel({ api = integrationsApi }: SecretsPanelProps) {
     <div className="flex flex-col gap-4">
       {error === "" ? null : <p role="alert" className="text-sm text-rose-300">{error}</p>}
       <div>
-        <button type="button" className={secondaryAction} onClick={() => void run(() => api.lockVault(), t("secrets.failed"))}>
+        <button
+          type="button"
+          className={secondaryAction}
+          onClick={() => void api.lockVault().then(() => onLock?.())}
+        >
           {t("secrets.lock")}
         </button>
       </div>

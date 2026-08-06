@@ -1,7 +1,7 @@
-import { clickAndAwait, expect, openSection, test } from "./support/environment";
+import { clickAndAwait, expect, openSection, test, openApplication } from "./support/environment";
 
 test("shows the Include hierarchy and edits an included file", async ({ page, installation }) => {
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await openSection(page, "Config");
 
   await expect(page.getByRole("heading", { name: "Include hierarchy" })).toBeVisible();
@@ -39,7 +39,7 @@ test("renames an included file and carries the Include that named it", async ({
   );
   await installation.write("work/lon.conf", "Host lon\n\tHostName 198.51.100.7\n");
 
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await openSection(page, "Config");
   await page.getByRole("button", { name: "work/lon.conf" }).click();
 
@@ -69,7 +69,7 @@ test("deletes a file after a confirmation and offers it back in History", async 
   );
   await installation.write("work/lon.conf", "Host lon\n\tHostName 198.51.100.7\n");
 
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await openSection(page, "Config");
   await page.getByRole("button", { name: "work/lon.conf" }).click();
 

@@ -80,7 +80,7 @@ func newRemoteKeyServer(t *testing.T, outputs []platform.Output) (*echo.Echo, se
 	}
 
 	engine := echo.New()
-	engine.Use((Security{ExpectedHost: keyTestHost, ExpectedOrigin: "http://" + keyTestHost, Sessions: sessions}).Middleware)
+	engine.Use((Security{ExpectedHost: keyTestHost, ExpectedOrigin: "http://" + keyTestHost, Sessions: sessions, Unlocked: alwaysUnlocked}).Middleware)
 	registry := actionRegistry{}
 	addDiagnosticsActions(registry, diagnosticsService)
 	actions := ActionHandlers{Sessions: sessions, Kinds: registry}

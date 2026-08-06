@@ -62,7 +62,7 @@ func newKnownHostsServer(t *testing.T) (*echo.Echo, session.Credentials, *stubRu
 	}
 
 	engine := echo.New()
-	engine.Use((Security{ExpectedHost: keyTestHost, ExpectedOrigin: "http://" + keyTestHost, Sessions: sessions}).Middleware)
+	engine.Use((Security{ExpectedHost: keyTestHost, ExpectedOrigin: "http://" + keyTestHost, Sessions: sessions, Unlocked: alwaysUnlocked}).Middleware)
 	registry := actionRegistry{}
 	addKnownHostsActions(registry, service)
 	actions := ActionHandlers{Sessions: sessions, Kinds: registry}

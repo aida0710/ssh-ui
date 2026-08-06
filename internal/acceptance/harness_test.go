@@ -272,7 +272,25 @@ func newFixture(t testing.TB) *fixture {
 		},
 	}
 	f.bootstrapSession(bootstrap)
+	// Every route is behind the master password now, so setting one is part of
+	// starting the application rather than part of a test about passwords.
+	f.unlockApplication()
 	return f
+}
+
+// fixtureMasterPassword is what the harness sets on first run. It is a fixture
+// value and appears in no log line, no response and no file in the clear —
+// which is itself asserted by the leak sweep.
+const fixtureMasterPassword = "a fixture master password"
+
+func (f *fixture) unlockApplication() {
+	f.t.Helper()
+	body := []byte(`{"passphrase":"` + fixtureMasterPassword + `"}`)
+	response := f.do(http.MethodPost, "/api/v1/passwords/initialise", body)
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		f.t.Fatalf("initialise the vault = %d", response.StatusCode)
+	}
 }
 
 // writeFixtureTree lays out a realistic but entirely synthetic ~/.ssh, plus one

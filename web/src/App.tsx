@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { apiClient, type HealthResponse } from "./api/client";
+import { apiClient, whenLocked, type HealthResponse } from "./api/client";
+import { integrationsApi, type PasswordVaultStatus } from "./api/integrations";
 import { configApi } from "./api/config";
 import type { SessionState } from "./session/bootstrap";
 import { ConnectionsPage } from "./connections/ConnectionsPage";
@@ -8,6 +9,7 @@ import { GroupsPanel } from "./groups/GroupsPanel";
 import { HistoryPanel } from "./history/HistoryPanel";
 import { KeysScreen } from "./keys/KeysScreen";
 import { DiagnosticsPanel } from "./diagnostics/DiagnosticsPanel";
+import { LockScreen } from "./secrets/LockScreen";
 import { SecretsPanel } from "./secrets/SecretsPanel";
 import { SyncPanel } from "./sync/SyncPanel";
 import { KnownHostsPanel } from "./knownhosts/KnownHostsPanel";
@@ -19,6 +21,10 @@ import type { MessageKey } from "./i18n/messages";
 type AppProps = {
   bootstrap: () => Promise<SessionState>;
   health: () => Promise<HealthResponse>;
+  // vault answers whether the application is open. It is injected for the same
+  // reason bootstrap and health are: the shell's own state machine is what the
+  // tests drive, not the transport under it.
+  vault?: () => Promise<PasswordVaultStatus>;
 };
 
 const sections = [
@@ -57,9 +63,13 @@ const localeLabels: Record<Locale, MessageKey> = {
   ja: "shell.languageJapanese",
 };
 
-export function App({ bootstrap, health }: AppProps) {
+export function App({ bootstrap, health, vault = integrationsApi.passwordVault }: AppProps) {
   const { t, locale, setLocale } = useLanguage();
-  const [state, setState] = useState<"starting" | "ready" | "error">("starting");
+  // "locked" is the whole application, not a screen inside it. Every write
+  // keeps a backup sealed with the master password, so there is no usable state
+  // in which the vault is shut.
+  const [state, setState] = useState<"starting" | "locked" | "ready" | "error">("starting");
+  const [vaultExists, setVaultExists] = useState(false);
   const [version, setVersion] = useState("");
   const [section, setSection] = useState<Section>("Connections");
   const [fileTarget, setFileTarget] = useState<FileTarget | null>(null);
@@ -84,17 +94,18 @@ export function App({ bootstrap, health }: AppProps) {
         return health();
       })
       .then((result) => {
-        if (!active || result === null) return;
+        if (!active || result === null) return null;
         setVersion(result.version);
+        return vault();
+      })
+      .then((status) => {
+        if (!active || status === null) return;
+        setVaultExists(status.exists);
+        if (!status.unlocked) {
+          setState("locked");
+          return;
+        }
         setState("ready");
-        return configApi
-          .overview()
-          .then((overview) => {
-            if (active) setGroups((overview.metadata.groups ?? []).map((group) => group.name));
-          })
-          // A shell that cannot list groups still works: the destination list
-          // is empty and every other screen is unaffected.
-          .catch(() => undefined);
       })
       .catch(() => {
         if (active) setState("error");
@@ -104,7 +115,41 @@ export function App({ bootstrap, health }: AppProps) {
       active = false;
       apiClient.clear();
     };
-  }, [bootstrap, health]);
+  }, [bootstrap, health, vault]);
+
+  // The vault shuts itself after a day of not being used, which can happen
+  // between any two requests. The client reports it once, here, so the shell
+  // goes back to its front door instead of every screen reporting a failure on
+  // an application that is no longer usable.
+  useEffect(() => {
+    whenLocked(() => {
+      setVaultExists(true);
+      setState("locked");
+    });
+    return () => whenLocked(null);
+  }, []);
+
+  // The declared groups are read once the application is open, not while it is
+  // shut: every route that could answer refuses until then.
+  useEffect(() => {
+    if (state !== "ready") return;
+    let active = true;
+    void configApi
+      .overview()
+      .then((overview) => {
+        if (active) setGroups((overview.metadata.groups ?? []).map((group) => group.name));
+      })
+      // A shell that cannot list groups still works: the destination list is
+      // empty and every other screen is unaffected.
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [state]);
+
+  if (state === "locked") {
+    return <LockScreen exists={vaultExists} onOpen={() => setState("ready")} />;
+  }
 
   if (state === "error") {
     return (
@@ -180,7 +225,13 @@ export function App({ bootstrap, health }: AppProps) {
         </nav>
         <main className="relative overflow-y-auto p-6">
           {state === "ready" ? (
-            <SectionView section={section} fileTarget={fileTarget} groups={groups} onOpenFile={openFile} />
+            <SectionView
+              section={section}
+              fileTarget={fileTarget}
+              groups={groups}
+              onOpenFile={openFile}
+              onLock={() => setState("locked")}
+            />
           ) : null}
         </main>
       </div>
@@ -196,9 +247,10 @@ type SectionViewProps = {
   section: Section;
   fileTarget: FileTarget | null;
   onOpenFile: (path: string, line: number) => void;
+  onLock: () => void;
 };
 
-function SectionView({ section, fileTarget, groups, onOpenFile }: SectionViewProps) {
+function SectionView({ section, fileTarget, groups, onOpenFile, onLock }: SectionViewProps) {
   if (section === "Connections") {
     return <ConnectionsPage onOpenFile={onOpenFile} />;
   }
@@ -209,7 +261,7 @@ function SectionView({ section, fileTarget, groups, onOpenFile }: SectionViewPro
     return <GroupsPanel />;
   }
   if (section === "Secrets") {
-    return <SecretsPanel />;
+    return <SecretsPanel onLock={onLock} />;
   }
   if (section === "Sync") {
     return <SyncPanel />;

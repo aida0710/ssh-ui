@@ -83,7 +83,7 @@ func newDiagnosticsServer(t *testing.T) (*echo.Echo, session.Credentials, *stubR
 	}
 
 	engine := echo.New()
-	engine.Use((Security{ExpectedHost: keyTestHost, ExpectedOrigin: "http://" + keyTestHost, Sessions: manager}).Middleware)
+	engine.Use((Security{ExpectedHost: keyTestHost, ExpectedOrigin: "http://" + keyTestHost, Sessions: manager, Unlocked: alwaysUnlocked}).Middleware)
 	registry := actionRegistry{}
 	addDiagnosticsActions(registry, service)
 	actions := ActionHandlers{Sessions: manager, Kinds: registry}

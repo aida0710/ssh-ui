@@ -1,4 +1,4 @@
-import { expect, openSection, test } from "./support/environment";
+import { expect, openSection, test, openApplication } from "./support/environment";
 
 // The arrangement the whole feature exists for, driven through the built binary
 // against a throwaway HOME: one secret under a name, two hosts pointing at it,
@@ -7,11 +7,8 @@ test("gives one named secret to two hosts and writes neither name into the file"
   page,
   installation,
 }) => {
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await openSection(page, "Secrets");
-
-  await page.getByLabel("Master password").fill("correct horse battery staple");
-  await page.getByRole("button", { name: "Create the vault" }).click();
 
   const passwords = page.getByRole("region", { name: "Account passwords" });
   await expect(passwords).toBeVisible();
@@ -51,11 +48,8 @@ test("gives one named secret to two hosts and writes neither name into the file"
 // password on the next connection. The two namespaces are two namespaces so
 // that no screen has to be careful about it.
 test("never offers a key passphrase where a host password is chosen", async ({ page, installation }) => {
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await openSection(page, "Secrets");
-
-  await page.getByLabel("Master password").fill("correct horse battery staple");
-  await page.getByRole("button", { name: "Create the vault" }).click();
 
   const phrases = page.getByRole("region", { name: "Key passphrases" });
   await phrases.getByLabel("New key passphrase name").fill("build-key");

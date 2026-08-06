@@ -1,10 +1,10 @@
-import { clickAndAwait, expect, openSection, test } from "./support/environment";
+import { clickAndAwait, expect, openSection, test, openApplication } from "./support/environment";
 
 test("lists generated keys and reveals one only after an explicit confirmation", async ({
   page,
   installation,
 }) => {
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await openSection(page, "Keys");
   await expect(
     page.getByRole("table", { name: "Files classified by content and permissions" }),
@@ -65,7 +65,7 @@ test("offers agent registration and refuses it honestly when no agent is reachab
   page,
   installation,
 }) => {
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await openSection(page, "Keys");
 
   await page.getByLabel("File name").fill("id_agent");
@@ -95,7 +95,7 @@ test("renames a key and carries every directive that named it", async ({ page, i
     "conf.d/20-rename.conf",
     "Host renamed\n\tIdentityFile ~/.ssh/id_rename\n\tCertificateFile %d/.ssh/id_rename.pub\n",
   );
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await openSection(page, "Keys");
 
   await page.getByLabel("File name").fill("id_rename");
@@ -120,7 +120,7 @@ test("refuses a rename whose destination is taken, and writes nothing", async ({
   page,
   installation,
 }) => {
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await openSection(page, "Keys");
 
   await page.getByLabel("File name").fill("id_first");

@@ -133,7 +133,7 @@ func newKeyServer(t *testing.T, service KeyService) (*echo.Echo, *session.Manage
 		t.Fatalf("Bootstrap error = %v", err)
 	}
 	engine := echo.New()
-	engine.Use((Security{ExpectedHost: keyTestHost, ExpectedOrigin: "http://" + keyTestHost, Sessions: manager}).Middleware)
+	engine.Use((Security{ExpectedHost: keyTestHost, ExpectedOrigin: "http://" + keyTestHost, Sessions: manager, Unlocked: alwaysUnlocked}).Middleware)
 	// The confirmation endpoint is shared with every other subsystem, so this
 	// harness assembles it exactly as New does: a registry holding only the key
 	// vault's kinds, which is why a diagnostics kind is still unknown here.

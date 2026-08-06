@@ -23,7 +23,7 @@ func TestBootstrapHandlerSetsStrictSessionCookieAndRejectsReplay(t *testing.T) {
 	e.Use((Security{
 		ExpectedHost:   "127.0.0.1:43123",
 		ExpectedOrigin: "http://127.0.0.1:43123",
-		Sessions:       manager,
+		Sessions:       manager, Unlocked: alwaysUnlocked,
 	}).Middleware)
 	e.POST("/api/v1/session/bootstrap", (Handlers{Sessions: manager, Version: "test-version"}).Bootstrap)
 
@@ -79,7 +79,7 @@ func TestBootstrapHandlerRejectsWrongTokenWithoutCookie(t *testing.T) {
 	e.Use((Security{
 		ExpectedHost:   "127.0.0.1:43123",
 		ExpectedOrigin: "http://127.0.0.1:43123",
-		Sessions:       manager,
+		Sessions:       manager, Unlocked: alwaysUnlocked,
 	}).Middleware)
 	e.POST("/api/v1/session/bootstrap", (Handlers{Sessions: manager}).Bootstrap)
 
@@ -112,7 +112,7 @@ func TestHealthRequiresSessionCookie(t *testing.T) {
 	e.Use((Security{
 		ExpectedHost:   "127.0.0.1:43123",
 		ExpectedOrigin: "http://127.0.0.1:43123",
-		Sessions:       manager,
+		Sessions:       manager, Unlocked: alwaysUnlocked,
 	}).Middleware)
 	e.GET("/api/v1/health", (Handlers{Sessions: manager, Version: "test-version"}).Health)
 

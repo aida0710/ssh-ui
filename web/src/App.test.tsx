@@ -2,6 +2,11 @@ import { StrictMode } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+
+// The application is behind the master password, so every test that expects a
+// shell has to be given an open vault. The lock screen has tests of its own.
+const openVault = () =>
+  Promise.resolve({ exists: true, unlocked: true, aliases: [] as string[], minPassphraseLength: 12 });
 import { App } from "./App";
 import { LanguageProvider } from "./i18n/context";
 import { ja } from "./i18n/messages";
@@ -30,7 +35,7 @@ const csrfToken = "c".repeat(43);
 
 describe("App", () => {
   it("shows the starting status before session setup completes", () => {
-    render(<App bootstrap={() => new Promise(() => undefined)} health={vi.fn()} />);
+    render(<App bootstrap={() => new Promise(() => undefined)} health={vi.fn()} vault={openVault} />);
 
     expect(screen.getByRole("status")).toHaveTextContent("Starting secure local session…");
   });
@@ -40,6 +45,7 @@ describe("App", () => {
       <App
         bootstrap={vi.fn().mockResolvedValue({ csrfToken })}
         health={vi.fn().mockResolvedValue({ status: "ok", version: "0.1.0" })}
+      vault={openVault}
       />,
     );
 
@@ -66,6 +72,7 @@ describe("App", () => {
       <App
         bootstrap={vi.fn().mockResolvedValue({ csrfToken })}
         health={vi.fn().mockResolvedValue({ status: "ok", version: "0.1.0" })}
+      vault={openVault}
       />,
     );
 
@@ -82,6 +89,7 @@ describe("App", () => {
       <App
         bootstrap={vi.fn().mockResolvedValue({ csrfToken })}
         health={vi.fn().mockResolvedValue({ status: "ok", version: "0.1.0" })}
+      vault={openVault}
       />,
     );
 
@@ -100,6 +108,7 @@ describe("App", () => {
       <App
         bootstrap={vi.fn().mockResolvedValue({ csrfToken })}
         health={vi.fn().mockResolvedValue({ status: "ok", version: "0.1.0" })}
+      vault={openVault}
       />,
     );
 
@@ -116,6 +125,7 @@ describe("App", () => {
       <App
         bootstrap={vi.fn().mockResolvedValue({ csrfToken })}
         health={vi.fn().mockResolvedValue({ status: "ok", version: "0.1.0" })}
+      vault={openVault}
       />,
     );
 
@@ -130,6 +140,7 @@ describe("App", () => {
       <App
         bootstrap={vi.fn().mockResolvedValue({ csrfToken })}
         health={vi.fn().mockResolvedValue({ status: "ok", version: "0.1.0" })}
+      vault={openVault}
       />,
     );
 
@@ -141,7 +152,7 @@ describe("App", () => {
   });
 
   it("shows a recovery action when bootstrap fails", async () => {
-    render(<App bootstrap={vi.fn().mockRejectedValue(new Error("rejected"))} health={vi.fn()} />);
+    render(<App bootstrap={vi.fn().mockRejectedValue(new Error("rejected"))} health={vi.fn()} vault={openVault} />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Secure local session could not be started. Restart ssh-ui and use the newly opened tab.",
@@ -155,7 +166,7 @@ describe("App", () => {
 
     render(
       <StrictMode>
-        <App bootstrap={() => sessionPromise} health={health} />
+        <App bootstrap={() => sessionPromise} health={health} vault={openVault} />
       </StrictMode>,
     );
 
@@ -174,6 +185,7 @@ describe("App", () => {
         <App
           bootstrap={vi.fn().mockResolvedValue({ csrfToken })}
           health={vi.fn().mockResolvedValue({ status: "ok", version: "0.1.0" })}
+        vault={openVault}
         />
       </LanguageProvider>,
     );
@@ -196,6 +208,7 @@ describe("App", () => {
         <App
           bootstrap={vi.fn().mockResolvedValue({ csrfToken })}
           health={vi.fn().mockResolvedValue({ status: "ok", version: "0.1.0" })}
+        vault={openVault}
         />
       </LanguageProvider>,
     );

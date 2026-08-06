@@ -1,4 +1,4 @@
-import { expect, openSection, test } from "./support/environment";
+import { expect, openSection, test, openApplication } from "./support/environment";
 
 // A configuration long enough that the Connections panel cannot fit in the
 // 1280x720 viewport this suite runs at. Without it the assertions below would
@@ -13,7 +13,7 @@ test("keeps the header and the primary navigation still while a panel scrolls", 
   installation,
 }) => {
   await installation.write("conf.d/20-lab.conf", manyHosts);
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await openSection(page, "Connections");
   await expect(
     page.getByRole("navigation", { name: "Connections" }).getByRole("button", { name: "lab-00" }),
@@ -63,7 +63,7 @@ test("scrolls the primary navigation on its own when the viewport is short", asy
   installation,
 }) => {
   await page.setViewportSize({ width: 1280, height: 320 });
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await openSection(page, "Connections");
 
   const navigation = page.getByRole("navigation", { name: "Primary" });

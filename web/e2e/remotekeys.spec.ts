@@ -1,4 +1,4 @@
-import { clickAndAwait, expect, openSection, test } from "./support/environment";
+import { clickAndAwait, expect, openSection, test, openApplication } from "./support/environment";
 
 // A syntactically valid, entirely synthetic public key. Nothing in this spec
 // sends it anywhere: only the plan endpoint is exercised, and design §6.6 makes
@@ -12,7 +12,7 @@ test("shows the alias, effective user, fingerprint and the exact line before reg
   page,
   installation,
 }) => {
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await openSection(page, "Remote Keys");
   await expect(page.getByRole("heading", { name: "Remote Keys" })).toBeVisible();
 
@@ -48,7 +48,7 @@ test("shows the alias, effective user, fingerprint and the exact line before reg
 });
 
 test("refuses a public key that is not one valid line", async ({ page, installation }) => {
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await openSection(page, "Remote Keys");
 
   await page.getByLabel("Host alias").fill("bastion");

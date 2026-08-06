@@ -1,4 +1,4 @@
-import { clickAndAwait, expect, openSection, test } from "./support/environment";
+import { clickAndAwait, expect, openSection, test, openApplication } from "./support/environment";
 
 // A group is a directory, and this spec is about the two facts that follow from
 // that: the entry file gains one Include line per group, in a stated order, and
@@ -8,7 +8,7 @@ test("declares a group in the entry file and moves a connection into it", async 
   page,
   installation,
 }) => {
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await openSection(page, "Groups");
 
   await page.getByLabel("New group name").fill("work");
@@ -48,7 +48,7 @@ test("declares a group in the entry file and moves a connection into it", async 
 // whole reason the region emits one line per group, so it is asserted here
 // rather than assumed.
 test("gives a nested group its own Include line, deepest first", async ({ page, installation }) => {
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await openSection(page, "Groups");
 
   for (const name of ["work", "work/eu"]) {
@@ -71,7 +71,7 @@ test("renames a group and carries its files, its Include line and its keys", asy
   page,
   installation,
 }) => {
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await openSection(page, "Groups");
 
   await page.getByLabel("New group name").fill("work");
@@ -102,7 +102,7 @@ test("refuses to move a connection into a group nothing declares", async ({
   page,
   installation,
 }) => {
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await openSection(page, "Connections");
   await page
     .getByRole("navigation", { name: "Connections" })
@@ -120,7 +120,7 @@ test("shows a nested group inside its parent, and hides a container from the tre
   page,
   installation,
 }) => {
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await openSection(page, "Groups");
   for (const name of ["work", "work/eu"]) {
     await page.getByLabel("New group name").fill(name);

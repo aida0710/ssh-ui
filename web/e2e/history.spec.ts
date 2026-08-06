@@ -1,4 +1,4 @@
-import { clickAndAwait, expect, openSection, test } from "./support/environment";
+import { clickAndAwait, expect, openSection, test, openApplication } from "./support/environment";
 
 test("records a change in history and restores the previous bytes", async ({
   page,
@@ -6,7 +6,7 @@ test("records a change in history and restores the previous bytes", async ({
 }) => {
   const original = await installation.read("config");
 
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await openSection(page, "Connections");
   await page
     .getByRole("navigation", { name: "Connections" })

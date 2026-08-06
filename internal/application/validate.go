@@ -208,6 +208,16 @@ func (s *Service) validate(request storage.Request) error {
 		}
 	}
 
+	// A request that touches nothing OpenSSH reads cannot have changed the
+	// Include graph, so it is not asked to produce a resolvable one. The vault
+	// lives under ssh-ui/ and the whole application is behind it: without this,
+	// a workspace whose config file is missing or broken is a workspace where
+	// the master password cannot be set, and the tool for fixing a broken
+	// configuration would refuse to start because the configuration is broken.
+	if !s.touchesConfiguration(request) {
+		return nil
+	}
+
 	resolver := s.resolver
 	resolver.Loader = overlayLoader{base: s.resolver.Loader, pending: pending, gone: gone}
 	graph, err := resolver.Resolve(s.entryPath)
@@ -225,6 +235,38 @@ func (s *Service) validate(request storage.Request) error {
 		return &GraphError{Diagnostics: introduced}
 	}
 	return nil
+}
+
+// touchesConfiguration reports whether any path in the request is somewhere
+// OpenSSH could read. The metadata document is this application's own, but it
+// sits beside the state directory rather than inside it, so it is named here
+// too — changing it cannot change the graph either.
+func (s *Service) touchesConfiguration(request storage.Request) bool {
+	stateDir := filepath.Clean(s.workspace.StateDir())
+	metadataPath := filepath.Clean(s.metadata.Path())
+	outside := func(path string) bool {
+		cleaned := filepath.Clean(path)
+		return cleaned != metadataPath && !isInside(stateDir, cleaned)
+	}
+	for _, change := range request.Changes {
+		if outside(change.Path) {
+			return true
+		}
+	}
+	for _, move := range request.Moves {
+		if outside(move.From) || outside(move.To) {
+			return true
+		}
+	}
+	for _, removal := range request.Removals {
+		if outside(removal.Path) {
+			return true
+		}
+	}
+	// A directory this application creates or removes is only ever a group
+	// directory or one of its own, and a group directory changes what an
+	// Include reaches.
+	return len(request.Directories) > 0 || len(request.RemoveDirectories) > 0
 }
 
 // isInside reports whether path is directory itself or below it. It compares

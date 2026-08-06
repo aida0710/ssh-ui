@@ -1,4 +1,4 @@
-import { clickAndAwait, expect, openSection, test } from "./support/environment";
+import { clickAndAwait, expect, openSection, test, openApplication } from "./support/environment";
 
 // This spec deliberately stops short of "Scan". ssh-keyscan opens a connection
 // to whatever host it is given, and no automated test in this repository is
@@ -12,7 +12,7 @@ test("lists the known_hosts entries and deletes one through a confirmation", asy
   const before = await installation.read("known_hosts");
   expect(before).toContain("203.0.113.10");
 
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await openSection(page, "Known Hosts");
   await expect(page.getByRole("heading", { name: "Known Hosts" })).toBeVisible();
 
@@ -31,7 +31,7 @@ test("lists the known_hosts entries and deletes one through a confirmation", asy
 });
 
 test("keeps the search box scoped to the file it is showing", async ({ page, installation }) => {
-  await page.goto(installation.url);
+  await openApplication(page, installation);
   await openSection(page, "Known Hosts");
   await expect(page.getByRole("row").filter({ hasText: "203.0.113.10" })).toBeVisible();
 
