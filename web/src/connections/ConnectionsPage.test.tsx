@@ -54,7 +54,7 @@ describe("ConnectionsPage", () => {
       transactionId: "t1", written: ["config"], preview: { operation: "config.host_fields", diffs: [] },
     } as never);
 
-    render(<ConnectionsPage onOpenFile={vi.fn()} />);
+    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} />);
 
     await user.click(await screen.findByRole("button", { name: /bastion/ }));
     const input = await screen.findByLabelText("Port");
@@ -95,7 +95,7 @@ describe("ConnectionsPage", () => {
       },
     } as never);
 
-    render(<ConnectionsPage onOpenFile={vi.fn()} />);
+    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} />);
 
     await user.click(await screen.findByRole("button", { name: /bastion/ }));
     const input = await screen.findByLabelText("Port");
@@ -135,7 +135,7 @@ describe("ConnectionsPage", () => {
       },
     } as never);
 
-    render(<ConnectionsPage onOpenFile={vi.fn()} />);
+    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} />);
 
     await user.click(await screen.findByRole("button", { name: /bastion/ }));
     const input = await screen.findByLabelText("Port");
@@ -167,7 +167,7 @@ describe("ConnectionsPage", () => {
       ],
     } as never);
 
-    render(<ConnectionsPage onOpenFile={onOpenFile} />);
+    render(<ConnectionsPage onOpenFile={onOpenFile} onInspector={() => undefined} />);
 
     await user.click(await screen.findByRole("button", { name: /pattern rule/i }));
 
@@ -189,7 +189,7 @@ describe("ConnectionsPage", () => {
       },
     }));
 
-    render(<ConnectionsPage onOpenFile={vi.fn()} />);
+    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} />);
 
     await user.click(await screen.findByRole("button", { name: /bastion/ }));
     const input = await screen.findByLabelText("Port");
@@ -212,7 +212,7 @@ describe("ConnectionsPage", () => {
       contents: "Host bastion\n\tPort 22\n", digest: "digest", editable: true, exists: true,
     } as never);
 
-    render(<ConnectionsPage onOpenFile={vi.fn()} />);
+    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} />);
 
     await user.type(await screen.findByLabelText("New connection alias"), "build01");
     await user.click(screen.getByRole("button", { name: "Create connection" }));
@@ -244,7 +244,7 @@ describe("ConnectionsPage", () => {
       preview: { operation: "config.move", diffs: [] },
     } as never);
 
-    render(<ConnectionsPage onOpenFile={vi.fn()} />);
+    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} />);
 
     await user.click(await screen.findByRole("button", { name: /bastion/ }));
     await user.selectOptions(await screen.findByLabelText("Move to file"), "conf.d/10-home.conf");
@@ -266,7 +266,7 @@ describe("ConnectionsPage", () => {
       transactionId: "t1", written: ["config"], preview: { operation: "config.file_raw", diffs: [] },
     } as never);
 
-    render(<ConnectionsPage onOpenFile={vi.fn()} />);
+    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} />);
 
     await user.click(await screen.findByRole("button", { name: /bastion/ }));
     await user.click(await screen.findByRole("button", { name: "Delete connection" }));
@@ -298,7 +298,7 @@ describe("taking a connection out of every group", () => {
       transactionId: "tx", written: [], preview: { operation: "config.move", diffs: [] },
     } as never);
 
-    render(<ConnectionsPage onOpenFile={vi.fn()} />);
+    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} />);
     await user.click(await screen.findByRole("button", { name: /bastion/ }));
     await user.selectOptions(await screen.findByLabelText("Primary group"), "");
     await user.click(screen.getByRole("button", { name: "Move to this group" }));
@@ -358,7 +358,7 @@ describe("dropping in the tree", () => {
   });
 
   it("moves a connection into a group", async () => {
-    render(<ConnectionsPage onOpenFile={vi.fn()} />);
+    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} />);
     const row = await screen.findByRole("button", { name: /nas/ });
 
     drag(row, screen.getByRole("heading", { name: "work" }), {
@@ -373,7 +373,7 @@ describe("dropping in the tree", () => {
   });
 
   it("moves a connection out of every group by sending it to the entry file", async () => {
-    render(<ConnectionsPage onOpenFile={vi.fn()} />);
+    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} />);
     const row = await screen.findByRole("button", { name: /nas/ });
 
     drag(row, screen.getByRole("heading", { name: "Ungrouped" }), {
@@ -391,7 +391,7 @@ describe("dropping in the tree", () => {
     vi.mocked(configApi.renameGroup).mockResolvedValue({
       transactionId: "tx", written: [], preview: { operation: "config.group_rename", diffs: [] },
     } as never);
-    render(<ConnectionsPage onOpenFile={vi.fn()} />);
+    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} />);
     const source = await screen.findByRole("heading", { name: "work" });
 
     drag(source, screen.getByRole("heading", { name: "home" }), { kind: "group", name: "work" });
@@ -403,7 +403,7 @@ describe("dropping in the tree", () => {
     vi.mocked(configApi.renameGroup).mockResolvedValue({
       transactionId: "tx", written: [], preview: { operation: "config.group_rename", diffs: [] },
     } as never);
-    render(<ConnectionsPage onOpenFile={vi.fn()} />);
+    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} />);
     // The heading shows the group's own segment now that the tree nests; the
     // region around it carries the full name, and so does the drag payload.
     const source = within(await screen.findByRole("region", { name: "home/eu" }))

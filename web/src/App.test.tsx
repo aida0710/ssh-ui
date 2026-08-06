@@ -1,4 +1,4 @@
-import { StrictMode } from "react";
+import { StrictMode, type ReactNode } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -13,10 +13,19 @@ import { ThemeProvider } from "./theme/context";
 import { ja } from "./i18n/messages";
 
 vi.mock("./connections/ConnectionsPage", () => ({
-  ConnectionsPage: ({ onOpenFile }: { onOpenFile: (path: string, line: number) => void }) => (
+  ConnectionsPage: ({
+    onOpenFile,
+    onInspector,
+  }: {
+    onOpenFile: (path: string, line: number) => void;
+    onInspector: (content: { attention: boolean; body: ReactNode } | null) => void;
+  }) => (
     <div>
       connections panel
       <button type="button" onClick={() => onOpenFile("config", 9)}>open pattern rule</button>
+      <button type="button" onClick={() => onInspector({ attention: true, body: <p>inspector body</p> })}>
+        offer inspector
+      </button>
     </div>
   ),
 }));
@@ -73,6 +82,34 @@ describe("App", () => {
     ]) {
       expect(screen.getByRole("button", { name: label })).toBeEnabled();
     }
+  });
+
+  it("keeps the inspector open across a section change", async () => {
+    const user = userEvent.setup();
+    render(
+      <App
+        bootstrap={vi.fn().mockResolvedValue({ csrfToken })}
+        health={vi.fn().mockResolvedValue({ status: "ok", version: "0.1.0" })}
+        vault={openVault}
+      />,
+    );
+
+    await screen.findByText("connections panel");
+
+    // No content offered, no toggle. A pane that is always offered and usually
+    // empty teaches people not to open it.
+    expect(screen.queryByRole("button", { name: /details/i })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "offer inspector" }));
+    await user.click(screen.getByRole("button", { name: "Show details Needs attention" }));
+
+    expect(screen.getByRole("complementary", { name: "Details" })).toHaveTextContent("inspector body");
+
+    await user.click(screen.getByRole("button", { name: "Keys" }));
+    await user.click(screen.getByRole("button", { name: "Connections" }));
+    await user.click(screen.getByRole("button", { name: "offer inspector" }));
+
+    expect(screen.getByRole("complementary", { name: "Details" })).toBeInTheDocument();
   });
 
   it("offers the three appearances and remembers the chosen one", async () => {

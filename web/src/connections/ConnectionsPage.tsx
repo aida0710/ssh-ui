@@ -17,6 +17,7 @@ import { HostDetailPanel } from "./HostDetail";
 import { NoticeList } from "./SavePreview";
 import { OrphanPanel } from "./OrphanPanel";
 import { useTranslate } from "../i18n/context";
+import type { InspectorContent } from "../ui/Inspector";
 import { appendHostBlock, duplicateHostBlock, removeHostBlock } from "./blocks";
 
 function toProblem(error: unknown): Problem {
@@ -29,9 +30,12 @@ type ConnectionsPageProps = {
   // Opens a configuration file in the file view at a line. The tree needs it
   // for pattern rules, which have no identity and so no host detail to open.
   onOpenFile: (path: string, line: number) => void;
+  // The right-hand pane's contents, offered up to the shell. Null while no
+  // connection is open: there is nothing to inspect until one is.
+  onInspector: (content: InspectorContent) => void;
 };
 
-export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
+export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProps) {
   const t = useTranslate();
   const [overview, setOverview] = useState<Overview | null>(null);
   // Where a connection goes when it belongs to no group. The server reports the
@@ -59,6 +63,13 @@ export function ConnectionsPage({ onOpenFile }: ConnectionsPageProps) {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  // Nothing to inspect until a connection is open. Task by task this becomes
+  // the metadata, the notices and the inherited values; for now it is what
+  // says the toggle should not be drawn.
+  useEffect(() => {
+    onInspector(null);
+  }, [onInspector]);
 
   // The dependencies are the two values and not the selection object, because
   // a save reselects the host it has just written. An equal object with a new

@@ -17,6 +17,7 @@ import { RemoteKeyPanel } from "./remotekeys/RemoteKeyPanel";
 import { LanguageProvider, useLanguage } from "./i18n/context";
 import { locales, type Locale } from "./i18n/locale";
 import { Icon, IconSprite, type IconName } from "./ui/icons";
+import { InspectorPane, InspectorToggle, type InspectorContent } from "./ui/Inspector";
 import { useTheme } from "./theme/context";
 import { themes, type Theme } from "./theme/theme";
 import type { MessageKey } from "./i18n/messages";
@@ -112,6 +113,19 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
   // offers them as destinations; it never infers a group from a directory,
   // because a directory is a group only when the entry file declares it.
   const [groups, setGroups] = useState<string[]>([]);
+  // The pane belongs to the shell, not to a section. Opened on Connections it
+  // is still open on Keys: a pane that shut itself on every section change
+  // would have to be reopened constantly, and this is a preference about the
+  // window rather than about a host.
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [inspector, setInspector] = useState<InspectorContent>(null);
+
+  // The pane's contents belong to whichever section is open; its open state
+  // does not. Leaving a section therefore clears what is in the pane without
+  // closing it.
+  useEffect(() => {
+    setInspector(null);
+  }, [section]);
 
   // The shell owns section switching, so a view that can only address a block
   // by file and line hands the jump up here rather than routing by itself.
@@ -230,7 +244,18 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
           <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-live" />
           {state === "ready" ? t("shell.active", { version }) : t("shell.starting")}
         </p>
-        <label htmlFor="appearance" className="ml-auto text-sm text-ink-muted">
+        {inspector === null ? (
+          <span className="ml-auto" />
+        ) : (
+          <span className="ml-auto">
+            <InspectorToggle
+              open={inspectorOpen}
+              attention={inspector.attention}
+              onToggle={() => setInspectorOpen((open) => !open)}
+            />
+          </span>
+        )}
+        <label htmlFor="appearance" className="text-sm text-ink-muted">
           {t("shell.theme")}
         </label>
         <select
@@ -261,7 +286,11 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
           ))}
         </select>
       </header>
-      <div className="grid min-h-0 flex-1 grid-cols-[15rem_1fr] grid-rows-[minmax(0,1fr)]">
+      <div
+        className={`grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] ${
+          inspector !== null && inspectorOpen ? "grid-cols-[15rem_1fr_17rem]" : "grid-cols-[15rem_1fr]"
+        }`}
+      >
         <nav
           aria-label={t("shell.primaryNavigation")}
           className="relative overflow-y-auto border-r border-line bg-sidebar p-2"
@@ -304,9 +333,13 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
               groups={groups}
               onOpenFile={openFile}
               onLock={() => setState("locked")}
+              onInspector={setInspector}
             />
           ) : null}
         </main>
+        {inspector !== null && inspectorOpen ? (
+          <InspectorPane label={t("shell.inspector")}>{inspector.body}</InspectorPane>
+        ) : null}
       </div>
     </div>
   );
@@ -321,11 +354,14 @@ type SectionViewProps = {
   fileTarget: FileTarget | null;
   onOpenFile: (path: string, line: number) => void;
   onLock: () => void;
+  // A section supplies the right-hand pane's contents, or null when it has
+  // nothing to inspect. Only Connections fills it today.
+  onInspector: (content: InspectorContent) => void;
 };
 
-function SectionView({ section, fileTarget, groups, onOpenFile, onLock }: SectionViewProps) {
+function SectionView({ section, fileTarget, groups, onOpenFile, onLock, onInspector }: SectionViewProps) {
   if (section === "Connections") {
-    return <ConnectionsPage onOpenFile={onOpenFile} />;
+    return <ConnectionsPage onOpenFile={onOpenFile} onInspector={onInspector} />;
   }
   if (section === "Config") {
     return <ConfigExplorer target={fileTarget} />;
