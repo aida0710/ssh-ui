@@ -19,6 +19,9 @@ export const en = {
   "shell.bootstrapFailed":
     "Secure local session could not be started. Restart ssh-ui and use the newly opened tab.",
   "shell.primaryNavigation": "Primary",
+  "shell.navConnections": "Connections",
+  "shell.navKeysHosts": "Keys and hosts",
+  "shell.navMaintenance": "Maintenance",
   "shell.language": "Language",
   "shell.languageEnglish": "English",
   "shell.languageJapanese": "日本語",
@@ -729,6 +732,9 @@ export const ja: Record<MessageKey, string> = {
   "shell.bootstrapFailed":
     "ローカルセッションを開始できませんでした。ssh-ui を再起動し、新しく開いたタブを使ってください。",
   "shell.primaryNavigation": "メインナビゲーション",
+  "shell.navConnections": "接続",
+  "shell.navKeysHosts": "鍵とホスト",
+  "shell.navMaintenance": "保守",
   "shell.language": "言語",
   "shell.languageEnglish": "English",
   "shell.languageJapanese": "日本語",

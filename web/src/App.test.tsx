@@ -40,6 +40,41 @@ afterEach(() => {
 });
 
 describe("App", () => {
+  it("groups the navigation without adding headings to it", async () => {
+    render(
+      <App
+        bootstrap={vi.fn().mockResolvedValue({ csrfToken })}
+        health={vi.fn().mockResolvedValue({ status: "ok", version: "0.1.0" })}
+        vault={openVault}
+      />,
+    );
+
+    await screen.findByRole("heading", { name: "SSH UI" });
+
+    // The groups are named lists, not headings. A heading here would collide
+    // with the panels' own <h2>s: Playwright matches accessible names by
+    // substring, so a nav heading "Keys and hosts" makes a page-level query for
+    // the heading "Keys" match twice.
+    expect(screen.getByRole("list", { name: "Keys and hosts" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Keys and hosts" })).toBeNull();
+
+    // Every section button keeps the name it had.
+    for (const label of [
+      "Connections",
+      "Config",
+      "Groups",
+      "Keys",
+      "Known Hosts",
+      "Remote Keys",
+      "Diagnostics",
+      "Secrets",
+      "Sync",
+      "History",
+    ]) {
+      expect(screen.getByRole("button", { name: label })).toBeEnabled();
+    }
+  });
+
   it("offers the three appearances and remembers the chosen one", async () => {
     const user = userEvent.setup();
     render(

@@ -16,6 +16,7 @@ import { KnownHostsPanel } from "./knownhosts/KnownHostsPanel";
 import { RemoteKeyPanel } from "./remotekeys/RemoteKeyPanel";
 import { LanguageProvider, useLanguage } from "./i18n/context";
 import { locales, type Locale } from "./i18n/locale";
+import { Icon, IconSprite, type IconName } from "./ui/icons";
 import { useTheme } from "./theme/context";
 import { themes, type Theme } from "./theme/theme";
 import type { MessageKey } from "./i18n/messages";
@@ -64,6 +65,31 @@ const localeLabels: Record<Locale, MessageKey> = {
   en: "shell.languageEnglish",
   ja: "shell.languageJapanese",
 };
+
+const sectionIcons: Record<Section, IconName> = {
+  Connections: "connections",
+  Config: "config",
+  Groups: "groups",
+  Keys: "keys",
+  "Known Hosts": "knownHosts",
+  "Remote Keys": "remoteKeys",
+  Diagnostics: "diagnostics",
+  Secrets: "secrets",
+  Sync: "sync",
+  History: "history",
+};
+
+// Ten sections listed flat give no clue which are near each other.
+//
+// The group label is an `aria-label` on the list and an `aria-hidden` span for
+// the eye — deliberately not a heading. Playwright matches accessible names by
+// substring, so a heading "Keys and hosts" would make the end-to-end suite's
+// page-level query for the heading "Keys" match twice and fail on strict mode.
+const navGroups: { label: MessageKey; sections: Section[] }[] = [
+  { label: "shell.navConnections", sections: ["Connections", "Config", "Groups"] },
+  { label: "shell.navKeysHosts", sections: ["Keys", "Known Hosts", "Remote Keys"] },
+  { label: "shell.navMaintenance", sections: ["Diagnostics", "Secrets", "Sync", "History"] },
+];
 
 const themeLabels: Record<Theme, MessageKey> = {
   system: "shell.themeSystem",
@@ -162,9 +188,9 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
 
   if (state === "error") {
     return (
-      <main>
-        <h1>{t("shell.title")}</h1>
-        <p role="alert">{t("shell.bootstrapFailed")}</p>
+      <main className="p-6">
+        <h1 className="text-base font-semibold">{t("shell.title")}</h1>
+        <p role="alert" className="mt-2 text-sm text-danger">{t("shell.bootstrapFailed")}</p>
       </main>
     );
   }
@@ -189,11 +215,19 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
   // block, sat at their static offset far below the fold, and stretched the
   // document's scrolling area — the header scrolled away again while the panel
   // itself looked correctly clipped.
+  //
+  // The navigation is three lists rather than one. Their group labels are
+  // `aria-label`s and `aria-hidden` spans, never headings: Playwright matches
+  // accessible names by substring, so a heading "Keys and hosts" would make the
+  // end-to-end suite's page-level query for the level-2 heading "Keys" match
+  // twice and fail on a strict-mode violation.
   return (
-    <div className="flex h-screen flex-col bg-zinc-950 text-zinc-100">
-      <header className="flex shrink-0 items-baseline gap-3 border-b border-zinc-800 px-6 py-4">
-        <h1 className="text-xl font-semibold">{t("shell.title")}</h1>
-        <p role="status" className="text-sm text-zinc-300">
+    <div className="flex h-screen flex-col bg-canvas text-ink">
+      <IconSprite />
+      <header className="flex shrink-0 items-center gap-3 border-b border-line bg-toolbar px-6 py-3">
+        <h1 className="text-base font-semibold">{t("shell.title")}</h1>
+        <p role="status" className="flex items-center gap-1.5 text-xs text-ink-muted">
+          <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-live" />
           {state === "ready" ? t("shell.active", { version }) : t("shell.starting")}
         </p>
         <label htmlFor="appearance" className="ml-auto text-sm text-ink-muted">
@@ -228,24 +262,39 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
         </select>
       </header>
       <div className="grid min-h-0 flex-1 grid-cols-[15rem_1fr] grid-rows-[minmax(0,1fr)]">
-        <nav aria-label={t("shell.primaryNavigation")} className="relative overflow-y-auto border-r border-zinc-800 p-4">
-          <ul>
-            {sections.map((name) => (
-              <li key={name}>
-                <button
-                  type="button"
-                  disabled={!enabledSections.includes(name)}
-                  aria-current={section === name ? "page" : undefined}
-                  onClick={() => setSection(name)}
-                  className={`w-full px-3 py-2 text-left ${
-                    enabledSections.includes(name) ? "text-zinc-200 hover:bg-zinc-900" : "text-zinc-500"
-                  }`}
-                >
-                  {t(sectionLabels[name])}
-                </button>
-              </li>
-            ))}
-          </ul>
+        <nav
+          aria-label={t("shell.primaryNavigation")}
+          className="relative overflow-y-auto border-r border-line bg-sidebar p-2"
+        >
+          {navGroups.map((group) => (
+            <div key={group.label} className="mb-2">
+              <span aria-hidden="true" className="block px-2 pt-2 pb-1 text-xs font-semibold text-ink-muted">
+                {t(group.label)}
+              </span>
+              <ul aria-label={t(group.label)}>
+                {group.sections.map((name) => (
+                  <li key={name}>
+                    <button
+                      type="button"
+                      disabled={!enabledSections.includes(name)}
+                      aria-current={section === name ? "page" : undefined}
+                      onClick={() => setSection(name)}
+                      className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm ${
+                        section === name
+                          ? "bg-select-fill text-ink"
+                          : enabledSections.includes(name)
+                            ? "text-ink hover:bg-select-fill"
+                            : "text-ink-faint"
+                      }`}
+                    >
+                      <Icon name={sectionIcons[name]} className="h-4 w-4 text-ink-muted" />
+                      {t(sectionLabels[name])}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </nav>
         <main className="relative overflow-y-auto p-6">
           {state === "ready" ? (
