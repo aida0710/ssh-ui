@@ -62,6 +62,28 @@ func NewManager(random io.Reader) (*Manager, string, error) {
 	}, bootstrap, nil
 }
 
+// Reissue mints a fresh bootstrap token, replacing the one this manager holds.
+//
+// A bootstrap is spent on first use, and until this existed only a new process
+// printed another — which is fine when the user starts the application and it
+// prints a URL, and useless when it runs as a background agent whose standard
+// output goes nowhere. The reissue is asked for by the command line, which had
+// to read a file only this user can read to ask at all.
+//
+// Any session already established stays established. What this replaces is the
+// way in for a browser that has none.
+func (m *Manager) Reissue() (string, error) {
+	fresh, err := token(m.random)
+	if err != nil {
+		return "", err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.bootstrapHash = sha256.Sum256([]byte(fresh))
+	m.bootstrapUsed = false
+	return fresh, nil
+}
+
 func (m *Manager) Bootstrap(presented string) (Credentials, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

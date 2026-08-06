@@ -53,6 +53,11 @@ type Dependencies struct {
 	// program OpenSSH executes to obtain a stored password. Only cmd/ssh-ui can
 	// know it; an empty path leaves every terminal launch on the plain path.
 	AskpassHelper string
+	// LoginItem turns "start at login" on and off. Off is the default and
+	// nothing here changes that: a background process holding the key to every
+	// stored secret is not something to arrange on somebody's behalf. A nil one
+	// reports the setting unsupported.
+	LoginItem httpserver.LoginItemController
 	// Answerable is the prompt rule the askpass endpoint applies. A nil rule
 	// means no prompt is ever answered, which is the safe default.
 	Answerable func(prompt string) bool
@@ -199,6 +204,7 @@ func Build(dependencies Dependencies, version string) (*httpserver.Server, strin
 	server, err := httpserver.New(httpserver.Options{
 		Listener:  listener,
 		CLISecret: cliSecret,
+		LoginItem: dependencies.LoginItem,
 		// The alias is checked here as well as on the command line, so what a
 		// terminal is told about a host this will not launch is the same
 		// sentence the screen shows.

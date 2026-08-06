@@ -1,4 +1,4 @@
-.PHONY: generate test build fuzz e2e verify-generated integration integration-up integration-down integration-sshd-relax
+.PHONY: generate test build fuzz e2e verify-generated integration integration-up integration-down integration-sshd-relax install uninstall
 
 # FUZZTIME is per target. `make fuzz` is a campaign, not a single run, so the
 # default is short enough to be part of an ordinary verification pass; raise it
@@ -136,3 +136,25 @@ integration: build
 	SSH_UI_TEST_SSH_USER=$(SSH_USER) \
 	SSH_UI_TEST_SSH_PASSWORD=$(SSH_PASS) \
 	go test ./internal/objectstore ./internal/remotesync ./internal/sshintegration -count=1 -v
+
+# The binary goes to one stable path, and that matters more here than it
+# usually does: SSH_ASKPASS and the Terminal launch both embed the absolute
+# path of this binary at the moment they run, so a rebuild in another checkout
+# or a moved repository silently breaks a stored-password connection.
+#
+# ~/.local/bin needs no sudo and no ownership of a system directory. If it is
+# not on PATH this says so rather than installing somewhere nothing looks.
+INSTALL_DIR ?= $(HOME)/.local/bin
+
+install: build
+	mkdir -p "$(INSTALL_DIR)"
+	install -m 0755 bin/ssh-ui "$(INSTALL_DIR)/ssh-ui"
+	@echo "installed $(INSTALL_DIR)/ssh-ui"
+	@case ":$$PATH:" in \
+		*":$(INSTALL_DIR):"*) ;; \
+		*) echo "note: $(INSTALL_DIR) is not on PATH; add it to run 'ssh-ui <alias>' by name" ;; \
+	esac
+
+uninstall:
+	rm -f "$(INSTALL_DIR)/ssh-ui"
+	@echo "removed $(INSTALL_DIR)/ssh-ui"

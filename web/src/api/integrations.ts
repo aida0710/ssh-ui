@@ -14,6 +14,7 @@ export type KnownHostsScanResponse = components["schemas"]["KnownHostsScanRespon
 export type KnownHostCandidate = components["schemas"]["KnownHostCandidate"];
 export type IssueActionResponse = components["schemas"]["IssueActionResponse"];
 export type ChangeMasterPasswordResult = components["schemas"]["ChangeMasterPasswordResult"];
+export type LoginItem = components["schemas"]["LoginItem"];
 export type PasswordVaultStatus = components["schemas"]["PasswordVaultStatus"];
 export type PasswordEligibility = components["schemas"]["PasswordEligibility"];
 export type Credential = components["schemas"]["Credential"];
@@ -64,6 +65,8 @@ export type IntegrationsApi = {
   unlockVault(passphrase: string): Promise<PasswordVaultStatus>;
   lockVault(): Promise<PasswordVaultStatus>;
   changeMasterPassword(current: string, next: string): Promise<ChangeMasterPasswordResult>;
+  loginItem(): Promise<LoginItem>;
+  setLoginItem(enabled: boolean): Promise<LoginItem>;
   passwordEligibility(alias: string): Promise<PasswordEligibility>;
   // Credentials are named secrets. A host references an account password and a
   // key references a passphrase, and the two namespaces never mix: picking the
@@ -87,6 +90,14 @@ export type IntegrationsApi = {
 
 // The generated types describe the contract; these guards check the payload the
 // UI actually received, because a type assertion proves nothing at runtime.
+function validateLoginItem(value: unknown): LoginItem {
+  const record = asRecord(value);
+  if (typeof record.enabled !== "boolean" || typeof record.supported !== "boolean") {
+    throw new Error("invalid_response");
+  }
+  return { enabled: record.enabled, supported: record.supported };
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error("invalid_response");
@@ -385,6 +396,18 @@ export const integrationsApi: IntegrationsApi = {
   },
   async lockVault() {
     return validateVaultStatus(await postJSON<unknown>("/api/v1/passwords/lock", {}));
+  },
+  async loginItem() {
+    return validateLoginItem(await apiClient.read("/api/v1/login-item"));
+  },
+  async setLoginItem(enabled) {
+    return validateLoginItem(
+      await apiClient.mutate("/api/v1/login-item", {
+        method: "PUT",
+        headers: jsonHeaders,
+        body: JSON.stringify({ enabled, supported: true }),
+      }),
+    );
   },
   async changeMasterPassword(current, next) {
     const answer = await postJSON<unknown>("/api/v1/passwords/change", { current, next });

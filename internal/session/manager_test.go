@@ -128,3 +128,39 @@ func TestRenewCSRFRefusesASessionThatIsNotThere(t *testing.T) {
 		t.Error("RenewCSRF answered for a session that does not exist")
 	}
 }
+
+// A bootstrap is spent on first use. Reissuing is what lets a browser in when
+// the process that printed the first one is a background agent whose standard
+// output goes nowhere.
+func TestReissueMintsAWayInWithoutDisturbingTheSessions(t *testing.T) {
+	manager, first, err := NewManager(&countingReader{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	established, err := manager.Bootstrap(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.Bootstrap(first); !errors.Is(err, ErrBootstrapUsed) {
+		t.Fatalf("the first bootstrap is still spendable: %v", err)
+	}
+
+	second, err := manager.Reissue()
+	if err != nil {
+		t.Fatalf("Reissue = %v", err)
+	}
+	if second == first {
+		t.Error("the reissued bootstrap is the one that was spent")
+	}
+	if _, err := manager.Bootstrap(first); err == nil {
+		t.Error("the old bootstrap still works after a reissue")
+	}
+	if _, err := manager.Bootstrap(second); err != nil {
+		t.Fatalf("the reissued bootstrap does not work: %v", err)
+	}
+	// The session that already existed is untouched: this is a way in for a
+	// browser that has none, not a way to end the ones that do.
+	if _, ok := manager.Authenticate(established.SessionID); !ok {
+		t.Error("an established session was lost")
+	}
+}

@@ -11,6 +11,7 @@ import (
 	"ssh-ui/internal/handoff"
 	"ssh-ui/internal/platform"
 	"ssh-ui/internal/secret"
+	"ssh-ui/internal/session"
 )
 
 // ConnectPath is where the command line asks what it needs to connect.
@@ -38,6 +39,11 @@ type ConnectHandlers struct {
 	// Warnings reports the directives OpenSSH will run for this host, so they
 	// are said before the connection rather than discovered during it.
 	Warnings func(alias string) []string
+	// Sessions mints the way into the browser, and BaseURL is where that way
+	// leads. Both nil means this application cannot be opened from the command
+	// line, which is the state of a build with no session manager.
+	Sessions *session.Manager
+	BaseURL  string
 }
 
 type connectRequest struct {
@@ -51,8 +57,46 @@ type connectResponse struct {
 	Warnings     []string `json:"warnings"`
 }
 
+// OpenPath is where the command line asks for a way into the browser.
+//
+// A bootstrap token is spent on first use and only a new process printed
+// another, which is fine when the user starts the application and it prints a
+// URL, and useless when it runs as a background agent whose standard output
+// goes nowhere. Rather than write that URL to a log file — a live credential in
+// a place nothing protects — it is minted here, when somebody asks.
+const OpenPath = "/cli/open"
+
+type openResponse struct {
+	URL string `json:"url"`
+}
+
 func registerConnectRoutes(engine *echo.Echo, handlers ConnectHandlers) {
 	engine.POST(ConnectPath, handlers.Connect)
+	engine.POST(OpenPath, handlers.Open)
+}
+
+// Open answers with a URL that will establish a session.
+func (h ConnectHandlers) Open(c *echo.Context) error {
+	if !h.authorised(c.Request()) {
+		return c.NoContent(http.StatusForbidden)
+	}
+	if h.Sessions == nil || h.BaseURL == "" {
+		return c.NoContent(http.StatusServiceUnavailable)
+	}
+	bootstrap, err := h.Sessions.Reissue()
+	if err != nil {
+		return c.NoContent(http.StatusInternalServerError)
+	}
+	return c.JSON(http.StatusOK, openResponse{URL: h.BaseURL + "/#bootstrap=" + bootstrap})
+}
+
+// authorised reports whether the caller read the handoff rather than guessed
+// at it. Every refusal is the same shape from outside, so a caller without the
+// secret learns nothing at all.
+func (h ConnectHandlers) authorised(request *http.Request) bool {
+	presented := request.Header.Get(handoff.HeaderName)
+	return h.Secret != "" && len(presented) == len(h.Secret) &&
+		subtle.ConstantTimeCompare([]byte(presented), []byte(h.Secret)) == 1
 }
 
 // Connect answers with what one connection needs, and nothing that outlives it.
@@ -65,9 +109,7 @@ func (h ConnectHandlers) Connect(c *echo.Context) error {
 	if request.Header.Get(echo.HeaderContentType) != "application/json" {
 		return c.NoContent(http.StatusUnsupportedMediaType)
 	}
-	presented := request.Header.Get(handoff.HeaderName)
-	if h.Secret == "" || len(presented) != len(h.Secret) ||
-		subtle.ConstantTimeCompare([]byte(presented), []byte(h.Secret)) != 1 {
+	if !h.authorised(request) {
 		return c.NoContent(http.StatusForbidden)
 	}
 

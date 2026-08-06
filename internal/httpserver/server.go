@@ -33,16 +33,19 @@ type Options struct {
 	// ConnectWarnings names the directives OpenSSH will run for a host, so the
 	// command line can say them before the connection rather than during it.
 	ConnectWarnings func(alias string) []string
-	Listener        net.Listener
-	Sessions        *session.Manager
-	UI              fs.FS
-	Version         string
-	Logger          *slog.Logger
-	Config          *application.Service
-	Keys            KeyService
-	Diagnostics     *diagnostics.Service
-	KnownHosts      *knownhosts.Service
-	RemoteKeys      *remotekey.Service
+	// LoginItem turns "start at login" on and off. A nil one reports the
+	// setting unsupported, which is what a platform without launchd is.
+	LoginItem   LoginItemController
+	Listener    net.Listener
+	Sessions    *session.Manager
+	UI          fs.FS
+	Version     string
+	Logger      *slog.Logger
+	Config      *application.Service
+	Keys        KeyService
+	Diagnostics *diagnostics.Service
+	KnownHosts  *knownhosts.Service
+	RemoteKeys  *remotekey.Service
 	// Passwords is the stored-password vault. A nil service leaves every
 	// password route and the askpass endpoint unregistered, which is what the
 	// tests that do not wire it rely on.
@@ -187,11 +190,17 @@ func New(options Options) (*Server, error) {
 	// `ssh-ui <alias>` asks here for what one connection needs. The secret is
 	// what the caller must have read out of the state directory; without one
 	// this route refuses everything.
+	registerLoginItemRoutes(e, LoginItemHandlers{
+		Controller: options.LoginItem,
+		Program:    options.AskpassHelper,
+	})
 	registerConnectRoutes(e, ConnectHandlers{
 		Secret:     options.CLISecret,
 		Passwords:  options.Passwords,
 		AskpassURL: "http://" + host + AskpassPath,
 		Warnings:   options.ConnectWarnings,
+		Sessions:   options.Sessions,
+		BaseURL:    "http://" + host,
 	})
 	if options.Sync != nil {
 		registerSyncRoutes(e, SyncHandlers{Service: options.Sync, Secrets: options.Passwords})

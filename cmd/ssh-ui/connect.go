@@ -36,10 +36,59 @@ func connectInvocation(argv []string) (string, bool) {
 		return "", false
 	}
 	word := argv[1]
-	if word == "" || word[0] == '-' || word == AskpassSubcommand {
+	if word == "" || word[0] == '-' || word == AskpassSubcommand || word == OpenSubcommand {
 		return "", false
 	}
 	return word, true
+}
+
+// OpenSubcommand opens the running application in a browser.
+//
+// A bootstrap token is spent on first use, so a background agent — whose
+// standard output goes nowhere on purpose, because that URL carries a live one
+// — has no way to hand one out. This asks for a fresh one when the user wants
+// to look at something. A host called "open" is a host this cannot connect to
+// by name; there is one word and this is it.
+const OpenSubcommand = "open"
+
+// runOpen asks the running application for a way in and opens the browser.
+func runOpen(ctx context.Context, stateDir string, client *http.Client, browser func(string) error, stderr io.Writer) int {
+	found, err := handoff.Read(stateDir)
+	if err != nil {
+		fmt.Fprintln(stderr, "ssh-ui: not running")
+		return 1
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, found.URL+httpserver.OpenPath, bytes.NewReader([]byte("{}")))
+	if err != nil {
+		fmt.Fprintf(stderr, "ssh-ui: %v\n", err)
+		return 1
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set(handoff.HeaderName, found.Secret)
+	response, err := client.Do(request)
+	if err != nil {
+		fmt.Fprintln(stderr, "ssh-ui: not answering")
+		return 1
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		fmt.Fprintln(stderr, "ssh-ui: refused")
+		return 1
+	}
+	var answer struct {
+		URL string `json:"url"`
+	}
+	if err := json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&answer); err != nil || answer.URL == "" {
+		fmt.Fprintln(stderr, "ssh-ui: the answer carried no way in")
+		return 1
+	}
+	// The URL is handed to the browser and never printed. It carries a live
+	// bootstrap token, and a terminal keeps what it is shown.
+	if err := browser(answer.URL); err != nil {
+		fmt.Fprintf(stderr, "ssh-ui: %v\n", err)
+		return 1
+	}
+	return 0
 }
 
 // runConnect asks the running application for what this connection needs and

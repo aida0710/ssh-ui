@@ -378,6 +378,32 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/login-item:
+    get:
+      operationId: getLoginItem
+      responses:
+        "200":
+          description: Whether this application starts at login
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LoginItem" }
+        "401": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setLoginItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginItem" }
+      responses:
+        "200":
+          description: The setting after the change
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LoginItem" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
   /api/v1/passwords/change:
     post:
       operationId: changeMasterPassword
@@ -1147,6 +1173,17 @@ components:
       required: [credentials]
       properties:
         credentials: { type: array, items: { $ref: "#/components/schemas/Credential" } }
+    LoginItem:
+      type: object
+      additionalProperties: false
+      required: [enabled, supported]
+      properties:
+        # Off unless the user asks. A background process holding the key to
+        # every stored secret is not something to arrange on somebody's behalf.
+        enabled: { type: boolean }
+        # False when this build cannot resolve its own path, which is what a
+        # launchd agent has to name.
+        supported: { type: boolean }
     ChangeMasterPasswordRequest:
       type: object
       additionalProperties: false

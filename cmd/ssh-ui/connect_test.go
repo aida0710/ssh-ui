@@ -18,6 +18,8 @@ func TestWhatCountsAsAConnectInvocation(t *testing.T) {
 		{[]string{"ssh-ui"}, "", false},
 		{[]string{"ssh-ui", "-open=false"}, "", false},
 		{[]string{"ssh-ui", "--open=false"}, "", false},
+		// The one word that is a command rather than a host.
+		{[]string{"ssh-ui", "open"}, "", false},
 		// The helper OpenSSH runs, which takes the prompt as its argument.
 		{[]string{"ssh-ui", "askpass"}, "", false},
 		{[]string{"ssh-ui", "askpass", "password:"}, "", false},

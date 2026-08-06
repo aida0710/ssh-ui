@@ -76,6 +76,11 @@ export const en = {
   "secrets.newPassphraseName": "New key passphrase name",
   "secrets.newPassphraseValue": "New key passphrase value",
   "secrets.storePassphrase": "Store key passphrase",
+  "login.heading": "Start at login",
+  "login.note":
+    "Off by default. With it on, ssh-ui runs in the background from the moment you log in, so `ssh-ui <alias>` always finds it. It starts locked: the first time you want the interface, run `ssh-ui open`, which mints a fresh way in rather than leaving one in a log file.",
+  "login.enable": "Start ssh-ui when I log in",
+  "login.failed": "That could not be changed.",
   "secrets.changeHeading": "Master password",
   "secrets.changeNote":
     "Changing it re-seals the vault, the sync settings and every backup on this machine, and pushes the bucket's live snapshot again. The dated copies beside it keep the old password: they are history, and re-sealing them would mean fetching and re-uploading the whole bucket.",
@@ -801,6 +806,11 @@ export const ja: Record<MessageKey, string> = {
   "secrets.newPassphraseName": "新しい鍵パスフレーズの名前",
   "secrets.newPassphraseValue": "新しい鍵パスフレーズの値",
   "secrets.storePassphrase": "鍵パスフレーズを保存",
+  "login.heading": "ログイン時に起動",
+  "login.note":
+    "既定はオフです。オンにすると、ログイン時から ssh-ui がバックグラウンドで動くので、`ssh-ui <接続先>` が常に本体を見つけられます。起動直後は施錠された状態です。画面を見たくなったら `ssh-ui open` を実行してください（その場で新しい入り口を発行します。ログファイルに残さないためです）。",
+  "login.enable": "ログイン時に ssh-ui を起動する",
+  "login.failed": "変更できませんでした。",
   "secrets.changeHeading": "マスターパスワード",
   "secrets.changeNote":
     "変更すると、vault・同期設定・このマシンの全バックアップを封じ直し、バケットのライブスナップショットを push し直します。その隣にある日付付きコピーは古いパスワードのままです（履歴であり、封じ直すにはバケット全体を取得して上げ直すことになるためです）。",

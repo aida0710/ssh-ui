@@ -5,12 +5,14 @@ import {
   type Credential,
   type CredentialKind,
   type IntegrationsApi,
+  type LoginItem,
   type PasswordVaultStatus,
 } from "../api/integrations";
 import { useTranslate } from "../i18n/context";
 import type { MessageKey } from "../i18n/messages";
 import { PasswordField } from "../ui/PasswordField";
 import {
+  CheckboxField,
   Field,
   control,
   dangerAction,
@@ -178,6 +180,8 @@ export function SecretsPanel({ api = integrationsApi, onLock }: SecretsPanelProp
         </button>
       </div>
 
+      <LoginItemSection api={api} />
+
       <section aria-label={t("secrets.changeHeading")} className={sectionCard}>
         <h3 className={sectionHeading}>{t("secrets.changeHeading")}</h3>
         <p className={hintText}>{t("secrets.changeNote")}</p>
@@ -260,5 +264,54 @@ export function SecretsPanel({ api = integrationsApi, onLock }: SecretsPanelProp
         );
       })}
     </div>
+  );
+}
+
+// Start at login, off unless asked for.
+//
+// It lives here because this screen is where the vault is, and what the setting
+// really arranges is a process that holds the key to it. A background service
+// nobody asked for is not something to arrange on somebody's behalf, so the
+// switch starts off and nothing turns it on but this.
+function LoginItemSection({ api }: { api: IntegrationsApi }) {
+  const t = useTranslate();
+  const [item, setItem] = useState<LoginItem | null>(null);
+  const [failed, setFailed] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    void api
+      .loginItem()
+      .then((loaded) => {
+        if (active) setItem(loaded);
+      })
+      .catch(() => {
+        if (active) setItem({ enabled: false, supported: false });
+      });
+    return () => {
+      active = false;
+    };
+  }, [api]);
+
+  if (item === null || !item.supported) {
+    return null;
+  }
+  return (
+    <section aria-label={t("login.heading")} className={sectionCard}>
+      <h3 className={sectionHeading}>{t("login.heading")}</h3>
+      <p className={hintText}>{t("login.note")}</p>
+      {failed === "" ? null : <p role="alert" className="text-sm text-rose-300">{failed}</p>}
+      <CheckboxField
+        label={t("login.enable")}
+        checked={item.enabled}
+        onChange={(next) => {
+          setFailed("");
+          void api
+            .setLoginItem(next)
+            .then(setItem)
+            .catch(() => setFailed(t("login.failed")));
+        }}
+      />
+    </section>
   );
 }

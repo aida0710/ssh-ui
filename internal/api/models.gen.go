@@ -619,6 +619,12 @@ type KnownHostsScanResponse struct {
 	Notice     string               `json:"notice"`
 }
 
+// LoginItem defines model for LoginItem.
+type LoginItem struct {
+	Enabled   bool `json:"enabled"`
+	Supported bool `json:"supported"`
+}
+
 // Metadata defines model for Metadata.
 type Metadata struct {
 	Groups        *[]GroupMetadata `json:"groups,omitempty"`
@@ -1103,6 +1109,9 @@ type DeleteKnownHostsJSONRequestBody = KnownHostsDeleteRequest
 
 // ScanKnownHostsJSONRequestBody defines body for ScanKnownHosts for application/json ContentType.
 type ScanKnownHostsJSONRequestBody = KnownHostsScanRequest
+
+// SetLoginItemJSONRequestBody defines body for SetLoginItem for application/json ContentType.
+type SetLoginItemJSONRequestBody = LoginItem
 
 // ChangeMasterPasswordJSONRequestBody defines body for ChangeMasterPassword for application/json ContentType.
 type ChangeMasterPasswordJSONRequestBody = ChangeMasterPasswordRequest

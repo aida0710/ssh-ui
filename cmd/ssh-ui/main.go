@@ -78,6 +78,22 @@ func main() {
 		))
 	}
 
+	if len(os.Args) == 2 && os.Args[1] == OpenSubcommand {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "ssh-ui: %v\n", err)
+			os.Exit(1)
+		}
+		os.Exit(runOpen(
+			context.Background(), app.HandoffDir(home),
+			&http.Client{Timeout: connectTimeout},
+			func(target string) error {
+				return macos.NewBrowser(macos.NewExecRunner()).Open(context.Background(), target)
+			},
+			os.Stderr,
+		))
+	}
+
 	// `ssh-ui <alias>` connects. It is checked after the askpass branch and
 	// before flag parsing, because an alias is a bare word and flag.Parse would
 	// stop at it and then the application would start instead of connecting.
@@ -135,8 +151,11 @@ func main() {
 	}
 
 	dependencies := app.Dependencies{
-		Random:    rand.Reader,
-		Browser:   browser,
+		Random:  rand.Reader,
+		Browser: browser,
+		// Off unless the user turns it on, from the interface. Nothing here
+		// registers anything; this only makes the switch reachable.
+		LoginItem: macos.LoginItem{Runner: runner, Home: home},
 		Listen:    net.Listen,
 		UI:        assets,
 		Logger:    logger,

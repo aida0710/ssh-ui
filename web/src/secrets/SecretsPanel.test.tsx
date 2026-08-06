@@ -25,6 +25,8 @@ function buildApi(overrides: Partial<IntegrationsApi> = {}): IntegrationsApi {
       vault: { exists: true, unlocked: true, aliases: [] },
       snapshotResealed: true,
     }),
+    loginItem: vi.fn().mockResolvedValue({ enabled: false, supported: true }),
+    setLoginItem: vi.fn().mockResolvedValue({ enabled: true, supported: true }),
     ...overrides,
   } as unknown as IntegrationsApi;
 }
@@ -157,5 +159,32 @@ describe("SecretsPanel", () => {
     expect(screen.getByLabelText("New master password")).toHaveAttribute("type", "password");
     await user.click(screen.getByRole("button", { name: "Show New master password" }));
     expect(screen.getByLabelText("New master password")).toHaveAttribute("type", "text");
+  });
+
+  // Off unless asked for. A background process holding the key to every stored
+  // secret is not something to arrange on somebody's behalf.
+  it("offers to start at login, off, and turns it on when asked", async () => {
+    const user = userEvent.setup();
+    const api = buildApi();
+    render(<SecretsPanel api={api} />);
+
+    const section = await screen.findByRole("region", { name: "Start at login" });
+    const toggle = within(section).getByRole("checkbox", { name: "Start ssh-ui when I log in" });
+    expect(toggle).not.toBeChecked();
+
+    await user.click(toggle);
+    await waitFor(() => expect(api.setLoginItem).toHaveBeenCalledWith(true));
+  });
+
+  // A build that cannot resolve its own path has nothing to register, and a
+  // switch that does nothing is worse than no switch.
+  it("shows no switch where it is not supported", async () => {
+    const api = buildApi({
+      loginItem: vi.fn().mockResolvedValue({ enabled: false, supported: false }),
+    });
+    render(<SecretsPanel api={api} />);
+    await screen.findByRole("region", { name: "Account passwords" });
+
+    expect(screen.queryByRole("region", { name: "Start at login" })).not.toBeInTheDocument();
   });
 });
