@@ -737,15 +737,28 @@ func TestBackupsAreSealedAndReadBackThroughTheManager(t *testing.T) {
 	}
 }
 
-// sealForTest is obviously not the identity, so a backup written without it
-// cannot pass by accident. The real one is the vault's key.
+// sealForTest stands in for the vault's key. It is reversible and obviously not
+// the identity: the bytes on disk must not be the bytes that went in, or a
+// guard that greps a backup for key material would pass on plaintext.
 func sealForTest(plaintext []byte) ([]byte, error) {
-	return append([]byte("sealed:"), plaintext...), nil
+	sealed := make([]byte, 0, len(plaintext)+len(testSealMarker))
+	sealed = append(sealed, testSealMarker...)
+	for _, b := range plaintext {
+		sealed = append(sealed, b^0x5a)
+	}
+	return sealed, nil
 }
 
 func unsealForTest(sealed []byte) ([]byte, error) {
-	if !bytes.HasPrefix(sealed, []byte("sealed:")) {
+	if !bytes.HasPrefix(sealed, testSealMarker) {
 		return nil, errors.New("that backup was not sealed")
 	}
-	return bytes.TrimPrefix(sealed, []byte("sealed:")), nil
+	body := sealed[len(testSealMarker):]
+	plaintext := make([]byte, 0, len(body))
+	for _, b := range body {
+		plaintext = append(plaintext, b^0x5a)
+	}
+	return plaintext, nil
 }
+
+var testSealMarker = []byte("sealed:")

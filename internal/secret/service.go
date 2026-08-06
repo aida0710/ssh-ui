@@ -507,9 +507,6 @@ func (s *Service) SetSyncSettings(settings SyncSettings) error {
 		Operation: "sync.settings",
 		Changes: []storage.Change{{
 			Path: s.settingsPath(), Contents: sealed, Precondition: precondition,
-			// The settings are a secret, so no generational copy is kept: the
-			// vault's own writes make none either.
-			SkipBackup: true,
 		}},
 	})
 	return err
@@ -608,11 +605,10 @@ func (s *Service) expireLocked() {
 // write seals the vault and commits it through the transaction manager, so a
 // half-written secrets file is not a state this application can reach.
 //
-// SkipBackup is set. The file is already encrypted, so a backup would not
-// disclose anything a copy of the live file does not — but it would leave one
-// more copy of the ciphertext for every change, and a store of passwords is
-// not something whose old generations anyone wants kept. The same reasoning
-// the key vault applies to private keys.
+// A generation is kept, like every other write. The backups are themselves
+// sealed with this vault's key, so an old generation of the vault discloses
+// nothing a copy of the live file does not — and an accident here is one of the
+// few that cannot be undone any other way.
 func (s *Service) write() error {
 	s.mu.Lock()
 	vault := s.use()
@@ -643,7 +639,6 @@ func (s *Service) write() error {
 			Path:         s.path(),
 			Contents:     sealed,
 			Precondition: precondition,
-			SkipBackup:   true,
 		}},
 	})
 	return err

@@ -395,7 +395,6 @@ func (service *Service) ChangePassphrase(change PassphraseChange) (PassphraseRes
 			Path:         absolute,
 			Contents:     encoded,
 			Precondition: precondition,
-			SkipBackup:   true,
 		}},
 	})
 	if err != nil {

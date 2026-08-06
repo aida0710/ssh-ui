@@ -1,6 +1,7 @@
 package keys
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"errors"
@@ -43,9 +44,15 @@ func newServiceWithAgent(t *testing.T, runner platform.OutputRunner, agent platf
 	t.Helper()
 	workspace := newTestWorkspace(t)
 	clock := steppingClock(time.Date(2026, 8, 5, 9, 0, 0, 0, time.UTC))
+	manager := storage.NewManager(workspace, clock, rand.Reader)
+	// The application seals every generational backup with the master
+	// password, so these tests do too: without it they would prove things
+	// about a shape of backup the application no longer writes.
+	manager.Seal = sealForTest
+	manager.Unseal = unsealForTest
 	service := NewService(ServiceOptions{
 		Workspace:    workspace,
-		Transactions: storage.NewManager(workspace, clock, rand.Reader),
+		Transactions: manager,
 		Resolver:     storage.NewResolver(workspace),
 		Catalogue:    newFakeCatalogue(runner, fakeToolchain{}),
 		Agent:        agent,
@@ -56,8 +63,12 @@ func newServiceWithAgent(t *testing.T, runner platform.OutputRunner, agent platf
 }
 
 // assertNoKeyMaterialInBackups walks the generational backup directory and
-// fails if any file there holds a private key. The trash is the recovery point
-// for key material; the backup directory must never hold a second copy of it.
+// fails if any file there holds a private key in the clear.
+//
+// It used to mean the directory held no copy at all, which is why a passphrase
+// change could not be undone. It now holds a sealed copy, and this is what
+// keeps that safe: the bytes on disk must be unreadable without the master
+// password. Sealing is what changed, not the rule about plaintext.
 func assertNoKeyMaterialInBackups(t *testing.T, workspace *storage.Workspace) {
 	t.Helper()
 	backups := filepath.Join(workspace.StateDir(), "backups")
@@ -1047,3 +1058,95 @@ func TestRegisterWithoutAStoredPassphraseSendsWhatItWasGiven(t *testing.T) {
 		t.Errorf("the agent was given %q", agent.passphrases[0])
 	}
 }
+
+// A passphrase change can be undone now.
+//
+// It kept no backup because the previous contents are a private key and a copy
+// of one in ~/.ssh/ssh-ui/backups/ was worse than the lost undo. The backups
+// are sealed with the master password now, so that reason is gone — and this is
+// the write where an accident is least recoverable: get the new passphrase
+// wrong and the key is a key nobody can open.
+func TestChangingAPassphraseKeepsASealedBackup(t *testing.T) {
+	workspace := newTestWorkspace(t)
+	clock := steppingClock(time.Date(2026, 8, 5, 9, 0, 0, 0, time.UTC))
+	manager := storage.NewManager(workspace, clock, rand.Reader)
+	manager.Seal = sealForTest
+	manager.Unseal = unsealForTest
+	service := NewService(ServiceOptions{
+		Workspace:    workspace,
+		Transactions: manager,
+		Resolver:     storage.NewResolver(workspace),
+		Catalogue:    newFakeCatalogue(&fakeRunner{}, fakeToolchain{}),
+		Now:          clock,
+		Random:       rand.Reader,
+	})
+
+	if _, err := service.Generate(GenerateRequest{
+		Algorithm:  AlgorithmEd25519,
+		FileName:   "id_work",
+		Comment:    "aida@laptop",
+		Passphrase: []byte("first passphrase"),
+	}); err != nil {
+		t.Fatalf("Generate error = %v", err)
+	}
+	before, err := os.ReadFile(filepath.Join(workspace.Root(), "id_work"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := service.ChangePassphrase(PassphraseChange{
+		KeyID:   ItemID("id_work"),
+		Current: []byte("first passphrase"),
+		New:     []byte("second passphrase"),
+	}); err != nil {
+		t.Fatalf("ChangePassphrase error = %v", err)
+	}
+
+	records, err := manager.History()
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := ""
+	for _, record := range records {
+		candidate := filepath.Join(record.BackupDir, "id_work")
+		if _, statErr := os.Stat(candidate); statErr == nil {
+			found = candidate
+		}
+	}
+	if found == "" {
+		t.Fatal("the passphrase change kept no backup, so it still cannot be undone")
+	}
+	opened, err := manager.ReadBackup(found)
+	if err != nil {
+		t.Fatalf("ReadBackup = %v", err)
+	}
+	if !bytes.Equal(opened, before) {
+		t.Error("the backup is not the key the change replaced")
+	}
+}
+
+// sealForTest stands in for the vault's key. It is reversible and obviously not
+// the identity: the bytes on disk must not be the bytes that went in, or a
+// guard that greps a backup for key material would pass on plaintext.
+func sealForTest(plaintext []byte) ([]byte, error) {
+	sealed := make([]byte, 0, len(plaintext)+len(testSealMarker))
+	sealed = append(sealed, testSealMarker...)
+	for _, b := range plaintext {
+		sealed = append(sealed, b^0x5a)
+	}
+	return sealed, nil
+}
+
+func unsealForTest(sealed []byte) ([]byte, error) {
+	if !bytes.HasPrefix(sealed, testSealMarker) {
+		return nil, errors.New("that backup was not sealed")
+	}
+	body := sealed[len(testSealMarker):]
+	plaintext := make([]byte, 0, len(body))
+	for _, b := range body {
+		plaintext = append(plaintext, b^0x5a)
+	}
+	return plaintext, nil
+}
+
+var testSealMarker = []byte("sealed:")

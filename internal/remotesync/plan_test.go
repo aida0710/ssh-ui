@@ -83,9 +83,13 @@ func TestANewFileGetsAPreconditionThatItDoesNotExist(t *testing.T) {
 	}
 }
 
-func TestPlanMarksPrivateKeysSkipBackup(t *testing.T) {
-	// The one place a private key could be copied into backups/. Named
-	// explicitly so that a change to Plan cannot quietly drop it.
+// A pull that overwrites a local private key keeps the previous one.
+//
+// It used to ask for no backup, because the copy would have been the key in the
+// clear. The backups are sealed with the master password now, and this is
+// exactly the case where the key that was replaced is what somebody wants
+// back: a snapshot from another machine landing on top of a local key.
+func TestPlanKeepsTheKeyAPullOverwrites(t *testing.T) {
 	remote := manifestOf(
 		file("config", "c", false),
 		file("keys/work/id_ed25519", "private", true),
@@ -100,9 +104,8 @@ func TestPlanMarksPrivateKeysSkipBackup(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, change := range request.Changes {
-		wantSkip := strings.Contains(change.Path, "keys/")
-		if change.SkipBackup != wantSkip {
-			t.Errorf("%s SkipBackup = %v, want %v", change.Path, change.SkipBackup, wantSkip)
+		if change.SkipBackup {
+			t.Errorf("%s asked for no backup, so the pull cannot be undone", change.Path)
 		}
 	}
 }

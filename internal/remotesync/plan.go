@@ -90,11 +90,11 @@ func Plan(root string, base *Manifest, local map[string]string, remote Manifest,
 			Path:         filepath.Join(root, filepath.FromSlash(item.Path)),
 			Contents:     contents[item.Path],
 			Precondition: precondition,
-			// A private key is never copied into the generational backup
-			// directory. SkipBackup exists in the storage layer for exactly
-			// that reason, and a pull that ignored it would defeat the
-			// decision from a new direction.
-			SkipBackup: item.Secret,
+			// A private key this pull overwrites keeps a backup like anything
+			// else. It used to keep none, because the copy would have been the
+			// key in the clear; the backups are sealed with the master password
+			// now, and a pull replacing a local key is exactly the case where
+			// the previous one is what somebody wants back.
 		})
 	}
 

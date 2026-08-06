@@ -303,10 +303,15 @@ func TestRenameCarriesThePasswordThroughAWrite(t *testing.T) {
 	}
 }
 
-func TestTheVaultIsNotCopiedIntoTheBackupDirectory(t *testing.T) {
-	// A store of passwords is not something whose old generations anyone wants
-	// kept, and every change would otherwise leave one more copy of the
-	// ciphertext behind. The key vault applies the same rule to private keys.
+// The vault keeps generations like every other file, and every one of them is
+// unreadable.
+//
+// It used to keep none, on the reasoning that old copies of a password store
+// are not something anyone wants left behind. What that cost was the undo: a
+// vault damaged by an accident had nothing to go back to. The backups are
+// sealed with this vault's own key now, so an old generation discloses nothing
+// a copy of the live file does not.
+func TestTheVaultKeepsGenerationsAndNoneOfThemIsReadable(t *testing.T) {
 	service, home := newService(t)
 	if err := service.Initialise(passphrase); err != nil {
 		t.Fatal(err)
@@ -321,15 +326,26 @@ func TestTheVaultIsNotCopiedIntoTheBackupDirectory(t *testing.T) {
 	found := 0
 	_ = filepath.Walk(backups, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info == nil || info.IsDir() {
-			return nil //nolint:nilerr // a missing backup directory is the passing case
+			return nil //nolint:nilerr // a missing backup directory fails below
 		}
-		if strings.Contains(filepath.ToSlash(path), "secrets") {
-			found++
+		if !strings.Contains(filepath.ToSlash(path), "secrets") {
+			return nil
+		}
+		found++
+		contents, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Errorf("read %s: %v", path, readErr)
+			return nil
+		}
+		for _, plain := range []string{"first", "second", "bastion", passphrase} {
+			if strings.Contains(string(contents), plain) {
+				t.Errorf("%s carries %q in the clear", path, plain)
+			}
 		}
 		return nil
 	})
-	if found != 0 {
-		t.Errorf("%d copies of the vault are in the backup directory", found)
+	if found == 0 {
+		t.Error("the vault kept no generation, so an accident to it cannot be undone")
 	}
 }
 
