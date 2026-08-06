@@ -651,3 +651,88 @@ func TestBackupsAreSealedWithTheMasterPasswordAndOpenedWithIt(t *testing.T) {
 		t.Errorf("OpenBackup while shut = %v, want ErrLocked", err)
 	}
 }
+
+// Changing the master password re-seals everything the old one held.
+//
+// The vault, the sealed sync settings and every generational backup are sealed
+// with a key derived from it, so a change that only replaced the vault would
+// leave the rest openable by a password nobody uses any more — which is the
+// same as losing them.
+func TestChangingTheMasterPasswordReSealsTheVaultTheSettingsAndTheBackups(t *testing.T) {
+	service, home := newService(t)
+	if err := service.Initialise(passphrase); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.SetCredential(secret.KindPassword, "office-vm", "hunter2"); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.SetSyncSettings(secret.SyncSettings{Bucket: "b", AccessKeyID: "AKID"}); err != nil {
+		t.Fatal(err)
+	}
+	// A second write, so a generational backup of the vault exists to re-seal.
+	if err := service.SetCredential(secret.KindPassword, "office-vm", "hunter3"); err != nil {
+		t.Fatal(err)
+	}
+
+	const next = "a different master password"
+	if err := service.ChangeMasterPassword(passphrase, next); err != nil {
+		t.Fatalf("ChangeMasterPassword = %v", err)
+	}
+
+	// The old one opens nothing, the new one opens everything.
+	reopened := mustReopen(t, home)
+	if err := reopened.Unlock(passphrase); !errors.Is(err, secret.ErrWrongPassphrase) {
+		t.Errorf("the old password still opens the vault: %v", err)
+	}
+	if err := reopened.Unlock(next); err != nil {
+		t.Fatalf("the new password does not open the vault: %v", err)
+	}
+	listed, err := reopened.Credentials()
+	if err != nil {
+		t.Fatalf("Credentials = %v", err)
+	}
+	if _, ok := listed[secret.KindPassword]["office-vm"]; !ok {
+		t.Errorf("the credential did not survive: %#v", listed)
+	}
+	settings, err := reopened.SyncSettings()
+	if err != nil || settings.AccessKeyID != "AKID" {
+		t.Errorf("the settings did not survive: %+v, %v", settings, err)
+	}
+
+	// And every backup opens with the new one.
+	backups := filepath.Join(home, ".ssh", "ssh-ui", "backups")
+	found := 0
+	if err := filepath.Walk(backups, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil || info == nil || info.IsDir() {
+			return nil //nolint:nilerr // a missing directory fails the count below
+		}
+		found++
+		sealed, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		if _, openErr := reopened.OpenBackup(sealed); openErr != nil {
+			t.Errorf("%s cannot be opened with the new master password: %v", path, openErr)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if found == 0 {
+		t.Error("no backup was there to re-seal, so this proved nothing")
+	}
+}
+
+func TestChangingTheMasterPasswordRefusesTheWrongCurrentOne(t *testing.T) {
+	service, _ := newService(t)
+	if err := service.Initialise(passphrase); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.ChangeMasterPassword("not the master password", "a new master password"); !errors.Is(err, secret.ErrWrongPassphrase) {
+		t.Errorf("ChangeMasterPassword with the wrong current = %v, want ErrWrongPassphrase", err)
+	}
+	// And it still opens with the one it had.
+	if err := service.Unlock(passphrase); err != nil {
+		t.Errorf("the vault was disturbed by a refused change: %v", err)
+	}
+}

@@ -9,6 +9,7 @@ import {
 } from "../api/integrations";
 import { useTranslate } from "../i18n/context";
 import type { MessageKey } from "../i18n/messages";
+import { PasswordField } from "../ui/PasswordField";
 import {
   Field,
   control,
@@ -63,6 +64,10 @@ export function SecretsPanel({ api = integrationsApi, onLock }: SecretsPanelProp
   const [status, setStatus] = useState<PasswordVaultStatus | null>(null);
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [master, setMaster] = useState("");
+  const [currentMaster, setCurrentMaster] = useState("");
+  const [nextMaster, setNextMaster] = useState("");
+  const [confirmMaster, setConfirmMaster] = useState("");
+  const [changed, setChanged] = useState("");
   const [drafts, setDrafts] = useState<Record<string, { name: string; secret: string }>>({});
   const [error, setError] = useState("");
 
@@ -116,14 +121,7 @@ export function SecretsPanel({ api = integrationsApi, onLock }: SecretsPanelProp
         <h3 className={sectionHeading}>{t("secrets.heading")}</h3>
         <p className={hintText}>{creating ? t("secrets.explainNew") : t("secrets.explainLocked")}</p>
         {error === "" ? null : <p role="alert" className="text-sm text-rose-300">{error}</p>}
-        <Field label={t("secrets.master")}>
-          <input
-            type="password"
-            value={master}
-            onChange={(event) => setMaster(event.target.value)}
-            className={control}
-          />
-        </Field>
+        <PasswordField label={t("secrets.master")} value={master} onChange={setMaster} />
         <div>
           <button
             type="button"
@@ -142,9 +140,34 @@ export function SecretsPanel({ api = integrationsApi, onLock }: SecretsPanelProp
     );
   }
 
+  async function changeMaster() {
+    setError("");
+    setChanged("");
+    try {
+      const result = await api.changeMasterPassword(currentMaster, nextMaster);
+      setCurrentMaster("");
+      setNextMaster("");
+      setConfirmMaster("");
+      // What was re-sealed and what was not. The dated copies in the bucket
+      // stay under the old password by design, and a live snapshot that could
+      // not be reached stays under it by accident — the difference matters to
+      // anybody who later restores from one.
+      setChanged(
+        result.snapshotResealed
+          ? t("secrets.changedWithSnapshot")
+          : t("secrets.changedWithoutSnapshot", { reason: result.snapshotProblem ?? "" }),
+      );
+    } catch (caught) {
+      setError(
+        failureCode(caught) === "wrong_passphrase" ? t("secrets.wrongCurrent") : t("secrets.changeFailed"),
+      );
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {error === "" ? null : <p role="alert" className="text-sm text-rose-300">{error}</p>}
+      {changed === "" ? null : <p role="status" className="text-sm text-emerald-300">{changed}</p>}
       <div>
         <button
           type="button"
@@ -154,6 +177,22 @@ export function SecretsPanel({ api = integrationsApi, onLock }: SecretsPanelProp
           {t("secrets.lock")}
         </button>
       </div>
+
+      <section aria-label={t("secrets.changeHeading")} className={sectionCard}>
+        <h3 className={sectionHeading}>{t("secrets.changeHeading")}</h3>
+        <p className={hintText}>{t("secrets.changeNote")}</p>
+        <PasswordField label={t("secrets.currentMaster")} value={currentMaster} onChange={setCurrentMaster} />
+        <PasswordField label={t("secrets.newMaster")} value={nextMaster} onChange={setNextMaster} />
+        <PasswordField label={t("secrets.confirmMaster")} value={confirmMaster} onChange={setConfirmMaster} />
+        <button
+          type="button"
+          className={`self-start ${primaryAction}`}
+          disabled={currentMaster === "" || nextMaster.length < 12 || nextMaster !== confirmMaster}
+          onClick={() => void changeMaster()}
+        >
+          {t("secrets.change")}
+        </button>
+      </section>
 
       {kinds.map((group) => {
         const draft = draftFor(group.kind);

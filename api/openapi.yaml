@@ -378,6 +378,24 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/passwords/change:
+    post:
+      operationId: changeMasterPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChangeMasterPasswordRequest" }
+      responses:
+        "200":
+          description: The master password was changed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChangeMasterPasswordResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
   /api/v1/passwords/lock:
     post:
       operationId: lockPasswordVault
@@ -1129,6 +1147,24 @@ components:
       required: [credentials]
       properties:
         credentials: { type: array, items: { $ref: "#/components/schemas/Credential" } }
+    ChangeMasterPasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [current, next]
+      properties:
+        current: { type: string, minLength: 1, maxLength: 1024 }
+        next: { type: string, minLength: 1, maxLength: 1024 }
+    ChangeMasterPasswordResult:
+      type: object
+      additionalProperties: false
+      required: [vault, snapshotResealed]
+      properties:
+        vault: { $ref: "#/components/schemas/PasswordVaultStatus" }
+        # Whether the bucket's live snapshot was sealed again with the new
+        # password. False with a reason means the local change is done and the
+        # bucket still holds one only the old password opens.
+        snapshotResealed: { type: boolean }
+        snapshotProblem: { type: string }
     StoreCredentialRequest:
       type: object
       additionalProperties: false

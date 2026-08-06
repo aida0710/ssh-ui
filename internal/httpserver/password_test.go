@@ -505,3 +505,39 @@ func TestOneNamedSecretServesTwoHostsAndTheFileNamesNeither(t *testing.T) {
 		}
 	}
 }
+
+// Changing the master password re-seals the bucket's live snapshot too, and
+// says so when it cannot.
+func TestChangingTheMasterPasswordReportsWhetherTheBucketFollowed(t *testing.T) {
+	engine, service, _ := passwordEngineIn(t)
+	if code := send(t, engine, http.MethodPost, "/api/v1/passwords/initialise",
+		`{"passphrase":"`+testPassphrase+`"}`, nil).Code; code != http.StatusOK {
+		t.Fatal("initialise")
+	}
+	_ = service
+
+	// No bucket wired: the local half is done and the answer does not claim the
+	// remote one was.
+	recorder := send(t, engine, http.MethodPost, "/api/v1/passwords/change",
+		`{"current":"`+testPassphrase+`","next":"a different master password"}`, nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("change = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var answer api.ChangeMasterPasswordResult
+	if err := json.Unmarshal(recorder.Body.Bytes(), &answer); err != nil {
+		t.Fatal(err)
+	}
+	if answer.SnapshotResealed {
+		t.Error("it claims the bucket was updated when no bucket is configured")
+	}
+
+	// And the new one is the one that works now.
+	if code := send(t, engine, http.MethodPost, "/api/v1/passwords/unlock",
+		`{"passphrase":"`+testPassphrase+`"}`, nil).Code; code != http.StatusForbidden {
+		t.Error("the old master password still unlocks")
+	}
+	if code := send(t, engine, http.MethodPost, "/api/v1/passwords/unlock",
+		`{"passphrase":"a different master password"}`, nil).Code; code != http.StatusOK {
+		t.Error("the new master password does not unlock")
+	}
+}

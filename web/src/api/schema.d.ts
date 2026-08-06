@@ -372,6 +372,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/passwords/change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["changeMasterPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/passwords/lock": {
         parameters: {
             query?: never;
@@ -936,6 +952,15 @@ export interface components {
         };
         CredentialList: {
             credentials: components["schemas"]["Credential"][];
+        };
+        ChangeMasterPasswordRequest: {
+            current: string;
+            next: string;
+        };
+        ChangeMasterPasswordResult: {
+            vault: components["schemas"]["PasswordVaultStatus"];
+            snapshotResealed: boolean;
+            snapshotProblem?: string;
         };
         StoreCredentialRequest: {
             secret: string;
@@ -2224,6 +2249,34 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    changeMasterPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeMasterPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description The master password was changed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeMasterPasswordResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     lockPasswordVault: {

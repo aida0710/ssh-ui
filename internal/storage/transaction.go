@@ -18,7 +18,13 @@ const (
 	journalDirectoryName = "journal"
 	historyDirectoryName = "history"
 	backupDirectoryName  = "backups"
-	temporaryPrefix      = ".ssh-ui-"
+	// BackupDirectoryName is the same name, for the one caller outside this
+	// package that has to read the directory itself: re-sealing every backup
+	// when the master password changes cannot go through ReadBackup, which
+	// opens with the key the service holds now rather than the one they were
+	// sealed with.
+	BackupDirectoryName = backupDirectoryName
+	temporaryPrefix     = ".ssh-ui-"
 
 	statusStaging    = "staging"
 	statusStaged     = "staged"

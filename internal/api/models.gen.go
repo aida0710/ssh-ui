@@ -71,6 +71,19 @@ type BootstrapResponse struct {
 	CsrfToken string `json:"csrfToken"`
 }
 
+// ChangeMasterPasswordRequest defines model for ChangeMasterPasswordRequest.
+type ChangeMasterPasswordRequest struct {
+	Current string `json:"current"`
+	Next    string `json:"next"`
+}
+
+// ChangeMasterPasswordResult defines model for ChangeMasterPasswordResult.
+type ChangeMasterPasswordResult struct {
+	SnapshotProblem  *string             `json:"snapshotProblem,omitempty"`
+	SnapshotResealed bool                `json:"snapshotResealed"`
+	Vault            PasswordVaultStatus `json:"vault"`
+}
+
 // ChangePassphraseRequest defines model for ChangePassphraseRequest.
 type ChangePassphraseRequest struct {
 	CurrentPassphrase string `json:"currentPassphrase"`
@@ -1090,6 +1103,9 @@ type DeleteKnownHostsJSONRequestBody = KnownHostsDeleteRequest
 
 // ScanKnownHostsJSONRequestBody defines body for ScanKnownHosts for application/json ContentType.
 type ScanKnownHostsJSONRequestBody = KnownHostsScanRequest
+
+// ChangeMasterPasswordJSONRequestBody defines body for ChangeMasterPassword for application/json ContentType.
+type ChangeMasterPasswordJSONRequestBody = ChangeMasterPasswordRequest
 
 // InitialisePasswordVaultJSONRequestBody defines body for InitialisePasswordVault for application/json ContentType.
 type InitialisePasswordVaultJSONRequestBody = PassphraseRequest

@@ -21,6 +21,10 @@ function buildApi(overrides: Partial<IntegrationsApi> = {}): IntegrationsApi {
     deleteCredential: vi.fn().mockResolvedValue({ credentials: [] }),
     assignCredential: vi.fn().mockResolvedValue({ credentials: [] }),
     unassignCredential: vi.fn().mockResolvedValue({ credentials: [] }),
+    changeMasterPassword: vi.fn().mockResolvedValue({
+      vault: { exists: true, unlocked: true, aliases: [] },
+      snapshotResealed: true,
+    }),
     ...overrides,
   } as unknown as IntegrationsApi;
 }
@@ -99,5 +103,59 @@ describe("SecretsPanel", () => {
     expect(await screen.findByLabelText("Master password")).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Account passwords" })).not.toBeInTheDocument();
     expect(api.credentials).not.toHaveBeenCalled();
+  });
+
+  // Changing it re-seals everything the old one held, so the screen says what
+  // followed and what did not: a bucket that was not reached still holds a
+  // snapshot only the old password opens, and that is not a detail.
+  it("changes the master password and says whether the bucket followed", async () => {
+    const user = userEvent.setup();
+    const api = buildApi();
+    render(<SecretsPanel api={api} />);
+    await screen.findByRole("region", { name: "Master password" });
+
+    await user.type(screen.getByLabelText("Current master password"), "the old one is long");
+    await user.type(screen.getByLabelText("New master password"), "the new one is long");
+    // One field is not enough for a password nobody can recover.
+    expect(screen.getByRole("button", { name: "Change the master password" })).toBeDisabled();
+
+    await user.type(screen.getByLabelText("Confirm new master password"), "the new one is long");
+    await user.click(screen.getByRole("button", { name: "Change the master password" }));
+
+    await waitFor(() =>
+      expect(api.changeMasterPassword).toHaveBeenCalledWith("the old one is long", "the new one is long"),
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent(/live snapshot/i);
+  });
+
+  it("says the bucket still holds a snapshot the old password opens", async () => {
+    const user = userEvent.setup();
+    const api = buildApi({
+      changeMasterPassword: vi.fn().mockResolvedValue({
+        vault: { exists: true, unlocked: true, aliases: [] },
+        snapshotResealed: false,
+        snapshotProblem: "sync_failed",
+      }),
+    });
+    render(<SecretsPanel api={api} />);
+    await screen.findByRole("region", { name: "Master password" });
+
+    await user.type(screen.getByLabelText("Current master password"), "the old one is long");
+    await user.type(screen.getByLabelText("New master password"), "the new one is long");
+    await user.type(screen.getByLabelText("Confirm new master password"), "the new one is long");
+    await user.click(screen.getByRole("button", { name: "Change the master password" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent(/still opens with the old password/i);
+  });
+
+  // A password nobody can recover is one worth reading back before pressing.
+  it("shows what is being typed when asked", async () => {
+    const user = userEvent.setup();
+    render(<SecretsPanel api={buildApi()} />);
+    await screen.findByRole("region", { name: "Master password" });
+
+    expect(screen.getByLabelText("New master password")).toHaveAttribute("type", "password");
+    await user.click(screen.getByRole("button", { name: "Show New master password" }));
+    expect(screen.getByLabelText("New master password")).toHaveAttribute("type", "text");
   });
 });

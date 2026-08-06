@@ -55,6 +55,7 @@ function buildApi(overrides: Partial<IntegrationsApi> = {}): IntegrationsApi {
     initialiseVault: vi.fn().mockResolvedValue({ exists: true, unlocked: true, aliases: [] }),
     unlockVault: vi.fn().mockResolvedValue({ exists: true, unlocked: true, aliases: [] }),
     lockVault: vi.fn().mockResolvedValue({ exists: true, unlocked: false, aliases: [] }),
+    changeMasterPassword: vi.fn(),
     credentials: vi.fn().mockResolvedValue({ credentials: [] }),
     storeCredential: vi.fn().mockResolvedValue({ credentials: [] }),
     deleteCredential: vi.fn().mockResolvedValue({ credentials: [] }),

@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"ssh-ui/internal/api"
 	"ssh-ui/internal/application"
 	"ssh-ui/internal/platform"
+	"ssh-ui/internal/remotesync"
 	"ssh-ui/internal/secret"
 )
 
@@ -48,12 +50,33 @@ type PasswordHandlers struct {
 	// that the rule and the helper that also applies it cannot drift into two
 	// different rules without a test noticing.
 	Answerable func(prompt string) bool
+	// ResealSnapshot pushes the workspace again under a new master password, so
+	// the bucket's live snapshot stops being one only the old password opens.
+	// It is injected because where a snapshot goes belongs to the object store,
+	// and a nil one means this machine has no bucket to update.
+	ResealSnapshot func(ctx context.Context, passphrase string) error
+}
+
+// snapshotProblemCode names why the bucket was not updated, in the same
+// vocabulary the sync screen already uses.
+func snapshotProblemCode(err error) string {
+	switch {
+	case errors.Is(err, remotesync.ErrNotConfigured):
+		return "sync_not_configured"
+	case errors.Is(err, remotesync.ErrRemoteMoved):
+		return "sync_remote_moved"
+	case errors.Is(err, remotesync.ErrPushRefused):
+		return "sync_push_refused"
+	default:
+		return "sync_failed"
+	}
 }
 
 func registerPasswordRoutes(engine *echo.Echo, handlers PasswordHandlers) {
 	engine.GET("/api/v1/passwords", handlers.Status)
 	engine.POST("/api/v1/passwords/initialise", handlers.Initialise)
 	engine.POST("/api/v1/passwords/unlock", handlers.Unlock)
+	engine.POST("/api/v1/passwords/change", handlers.Change)
 	engine.POST("/api/v1/passwords/lock", handlers.Lock)
 	engine.GET("/api/v1/passwords/:alias/eligibility", handlers.Eligible)
 	engine.PUT("/api/v1/passwords/:alias", handlers.Store)
@@ -108,6 +131,51 @@ func (h PasswordHandlers) Unlock(c *echo.Context) error {
 		return passwordProblem(c, err)
 	}
 	return h.status(c)
+}
+
+// Change replaces the master password and re-seals what it held.
+//
+// The bucket's live snapshot is sealed with the same password, so it is pushed
+// again here — the vault cannot do it, because where a snapshot goes belongs to
+// the object store and the secret package does not import it. The dated copies
+// beside it are deliberately left alone: they are history, and re-sealing every
+// one of them would mean downloading and re-uploading the whole bucket.
+//
+// A push that fails does not undo the change. The local half is done, and
+// saying so is more use than pretending it is not: the answer carries whether
+// the bucket was updated and why not.
+func (h PasswordHandlers) Change(c *echo.Context) error {
+	var request api.ChangeMasterPasswordRequest
+	if err := decodeJSON(c, &request); err != nil {
+		return problem(c, http.StatusBadRequest, "invalid_request")
+	}
+	if err := h.Service.ChangeMasterPassword(request.Current, request.Next); err != nil {
+		return passwordProblem(c, err)
+	}
+
+	answer := api.ChangeMasterPasswordResult{SnapshotResealed: true}
+	if h.ResealSnapshot != nil {
+		if err := h.ResealSnapshot(c.Request().Context(), request.Next); err != nil {
+			reason := snapshotProblemCode(err)
+			answer.SnapshotResealed, answer.SnapshotProblem = false, &reason
+		}
+	} else {
+		answer.SnapshotResealed = false
+	}
+
+	exists, err := h.Service.Exists()
+	if err != nil {
+		return problem(c, http.StatusInternalServerError, "vault_unreadable")
+	}
+	minimum := secret.MinPassphraseLength
+	aliases := h.Service.Aliases()
+	if aliases == nil {
+		aliases = []string{}
+	}
+	answer.Vault = api.PasswordVaultStatus{
+		Exists: exists, Unlocked: h.Service.Unlocked(), Aliases: aliases, MinPassphraseLength: &minimum,
+	}
+	return c.JSON(http.StatusOK, answer)
 }
 
 func (h PasswordHandlers) Lock(c *echo.Context) error {

@@ -13,6 +13,7 @@ export type KnownHostsChangeResponse = components["schemas"]["KnownHostsChangeRe
 export type KnownHostsScanResponse = components["schemas"]["KnownHostsScanResponse"];
 export type KnownHostCandidate = components["schemas"]["KnownHostCandidate"];
 export type IssueActionResponse = components["schemas"]["IssueActionResponse"];
+export type ChangeMasterPasswordResult = components["schemas"]["ChangeMasterPasswordResult"];
 export type PasswordVaultStatus = components["schemas"]["PasswordVaultStatus"];
 export type PasswordEligibility = components["schemas"]["PasswordEligibility"];
 export type Credential = components["schemas"]["Credential"];
@@ -62,6 +63,7 @@ export type IntegrationsApi = {
   initialiseVault(passphrase: string): Promise<PasswordVaultStatus>;
   unlockVault(passphrase: string): Promise<PasswordVaultStatus>;
   lockVault(): Promise<PasswordVaultStatus>;
+  changeMasterPassword(current: string, next: string): Promise<ChangeMasterPasswordResult>;
   passwordEligibility(alias: string): Promise<PasswordEligibility>;
   // Credentials are named secrets. A host references an account password and a
   // key references a passphrase, and the two namespaces never mix: picking the
@@ -383,6 +385,16 @@ export const integrationsApi: IntegrationsApi = {
   },
   async lockVault() {
     return validateVaultStatus(await postJSON<unknown>("/api/v1/passwords/lock", {}));
+  },
+  async changeMasterPassword(current, next) {
+    const answer = await postJSON<unknown>("/api/v1/passwords/change", { current, next });
+    const record = asRecord(answer);
+    if (typeof record.snapshotResealed !== "boolean") throw new Error("invalid_response");
+    return {
+      vault: validateVaultStatus(record.vault),
+      snapshotResealed: record.snapshotResealed,
+      ...(typeof record.snapshotProblem === "string" ? { snapshotProblem: record.snapshotProblem } : {}),
+    };
   },
   async passwordEligibility(alias) {
     return validatePasswordEligibility(

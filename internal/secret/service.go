@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"ssh-ui/internal/envelope"
 	"ssh-ui/internal/platform"
 	"ssh-ui/internal/storage"
 )
@@ -653,4 +654,137 @@ func (s *Service) Aliases() []string {
 		return nil
 	}
 	return vault.Subjects(KindPassword)
+}
+
+// ChangeMasterPassword re-derives the key and re-seals everything it held.
+//
+// The vault, the sealed object store settings and every generational backup are
+// sealed with a key derived from the master password. A change that replaced
+// only the vault would leave the rest openable by a password nobody uses any
+// more, which is the same as losing them: the backups exist to be restored
+// from, and a backup nobody can open is not a backup.
+//
+// One transaction. It keeps no generational copies of what it replaces, and
+// that is the one place SkipBackup is still right: a copy of the old vault
+// sealed with the old key would be unopenable the moment this finishes.
+// Everything is staged in the journal, so an interruption can be completed;
+// what it cannot be is rolled back, and Rollback says so rather than pretending.
+//
+// The remote snapshot is not this function's to re-seal — it belongs to the
+// object store and this package does not import it. The caller pushes.
+func (s *Service) ChangeMasterPassword(current, next string) error {
+	if ok, err := s.Verify(current); err != nil {
+		return err
+	} else if !ok {
+		return ErrWrongPassphrase
+	}
+
+	s.mu.Lock()
+	vault := s.use()
+	if vault == nil {
+		s.mu.Unlock()
+		return ErrLocked
+	}
+	previous, err := vault.Rekey(next)
+	if err != nil {
+		s.mu.Unlock()
+		return err
+	}
+	// From here the vault holds the new key, so anything it seals is sealed
+	// with it and anything sealed before is opened with the old one.
+	changes, buildErr := s.reSealed(vault, previous)
+	if buildErr != nil {
+		// Put the old key back: nothing has been written, so the vault in
+		// memory must go on matching the vault on disk.
+		vault.key = previous
+		s.mu.Unlock()
+		return buildErr
+	}
+	sealed, sealErr := vault.Seal()
+	s.mu.Unlock()
+	if sealErr != nil {
+		return sealErr
+	}
+
+	previousVault, readErr := s.workspace.FileSystem().ReadFile(s.path())
+	if readErr != nil {
+		return readErr
+	}
+	changes = append(changes, storage.Change{
+		Path: s.path(), Contents: sealed, SkipBackup: true,
+		Precondition: storage.Precondition{Exists: true, Digest: storage.Digest(previousVault)},
+	})
+	if _, err := s.transactions.Commit(storage.Request{
+		Operation: "secret.rekey",
+		Changes:   changes,
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+// reSealed reads every file the old key sealed and seals it with the new one.
+//
+// The backups are read directly rather than through the manager, because the
+// manager opens them with the key the service currently holds — which is the
+// new one by the time this runs.
+func (s *Service) reSealed(vault *Vault, previous envelope.Key) ([]storage.Change, error) {
+	changes := make([]storage.Change, 0, 8)
+
+	settings, err := s.workspace.FileSystem().ReadFile(s.settingsPath())
+	switch {
+	case err == nil:
+		plaintext, openErr := previous.Open(settings)
+		if openErr != nil {
+			return nil, openErr
+		}
+		resealed, sealErr := vault.SealBytes(plaintext)
+		if sealErr != nil {
+			return nil, sealErr
+		}
+		changes = append(changes, storage.Change{
+			Path: s.settingsPath(), Contents: resealed, SkipBackup: true,
+			Precondition: storage.Precondition{Exists: true, Digest: storage.Digest(settings)},
+		})
+	case errors.Is(err, fs.ErrNotExist):
+	default:
+		return nil, err
+	}
+
+	backups := filepath.Join(s.workspace.StateDir(), storage.BackupDirectoryName)
+	walkErr := filepath.WalkDir(backups, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil
+			}
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		body, readErr := s.workspace.FileSystem().ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		plaintext, openErr := previous.Open(body)
+		if openErr != nil {
+			// A backup written before the backups were sealed at all is not
+			// this function's to convert, and refusing the whole change over
+			// one is worse than leaving it as it was.
+			return nil
+		}
+		resealed, sealErr := vault.SealBytes(plaintext)
+		if sealErr != nil {
+			return sealErr
+		}
+		changes = append(changes, storage.Change{
+			Path: path, Contents: resealed, SkipBackup: true,
+			Precondition: storage.Precondition{Exists: true, Digest: storage.Digest(body)},
+		})
+		return nil
+	})
+	if walkErr != nil && !errors.Is(walkErr, fs.ErrNotExist) {
+		return nil, walkErr
+	}
+	return changes, nil
 }

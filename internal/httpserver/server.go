@@ -159,10 +159,18 @@ func New(options Options) (*Server, error) {
 		if options.Config != nil {
 			eligibility = options.Config.PasswordEligibility
 		}
+		// The bucket's live snapshot is sealed with the master password too, so
+		// changing it pushes again. A machine with no bucket has nothing to
+		// update and the answer says so.
+		var reseal func(context.Context, string) error
+		if options.Sync != nil {
+			reseal = options.Sync.Push
+		}
 		registerPasswordRoutes(e, PasswordHandlers{
-			Service:     options.Passwords,
-			Answerable:  options.Answerable,
-			Eligibility: eligibility,
+			Service:        options.Passwords,
+			Answerable:     options.Answerable,
+			Eligibility:    eligibility,
+			ResealSnapshot: reseal,
 		})
 	}
 	if options.Sync != nil {

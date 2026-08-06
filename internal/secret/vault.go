@@ -223,6 +223,22 @@ func (v *Vault) OpenSettings(sealed []byte) (SyncSettings, error) {
 }
 
 // Seal encrypts the vault for writing.
+// Rekey derives a fresh key from passphrase and adopts it.
+//
+// The contents are untouched; what changes is what opens them. Everything the
+// old key sealed has to be re-sealed by the caller in the same breath, which is
+// why this is a method on the vault rather than a new vault: the caller needs
+// both keys at once.
+func (v *Vault) Rekey(passphrase string) (envelope.Key, error) {
+	key, err := envelope.Derive(passphrase)
+	if err != nil {
+		return envelope.Key{}, err
+	}
+	previous := v.key
+	v.key = key
+	return previous, nil
+}
+
 // SealBytes seals arbitrary bytes with this vault's key.
 //
 // It is what turns the generational backup directory from a pile of previous
