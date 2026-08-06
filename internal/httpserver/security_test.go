@@ -100,6 +100,9 @@ func TestSecurityRefusesEveryAPIRequestFromAnotherSite(t *testing.T) {
 				request.Header.Set("Sec-Fetch-Site", test.fetchSite)
 			}
 			request.AddCookie(&http.Cookie{Name: SessionCookie, Value: credentials.SessionID})
+			// A read carries the token now, so the refusal under test is the
+			// Fetch Metadata one rather than a missing token.
+			request.Header.Set(CSRFHeader, credentials.CSRFToken)
 			response := httptest.NewRecorder()
 			e.ServeHTTP(response, request)
 			if response.Code != test.want {
@@ -237,7 +240,12 @@ func TestSecurityNavigationHeadersAndAPIAuthentication(t *testing.T) {
 	if got := run(http.MethodGet, "/api/v1/test", false, false).Code; got != http.StatusUnauthorized {
 		t.Fatalf("unauthenticated GET = %d", got)
 	}
-	if response := run(http.MethodGet, "/api/v1/test", true, false); response.Code != http.StatusNoContent || response.Header().Get("Cache-Control") != "no-store" {
+	// A read needs the token too: a cookie is not scoped to a port, so another
+	// server on 127.0.0.1 receives it, and the token never travels there.
+	if got := run(http.MethodGet, "/api/v1/test", true, false).Code; got != http.StatusForbidden {
+		t.Fatalf("GET with the cookie and no token = %d", got)
+	}
+	if response := run(http.MethodGet, "/api/v1/test", true, true); response.Code != http.StatusNoContent || response.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("authenticated GET = %d, cache = %q", response.Code, response.Header().Get("Cache-Control"))
 	}
 	if got := run(http.MethodPost, "/api/v1/test", true, false).Code; got != http.StatusForbidden {
@@ -388,3 +396,28 @@ func TestAnOpenVaultStillRequiresTheSessionAndTheToken(t *testing.T) {
 // alwaysUnlocked opens the gate for the tests that are about something else.
 // The gate has tests of its own, above.
 func alwaysUnlocked() bool { return true }
+
+// A cookie is not scoped to a port, and neither is a site.
+//
+// Another server on 127.0.0.1 — a development server on some other port —
+// receives this application's session cookie, because SameSite compares scheme
+// and registrable domain and an IP is the whole site. The cookie alone must
+// therefore not be enough to read anything: the CSRF token lives in the page's
+// memory and never travels to that other port, so requiring it on reads as
+// well as writes is what makes a leaked cookie worth nothing.
+func TestReadsRequireTheTokenAsWellAsTheCookie(t *testing.T) {
+	security, host, credentials := gatedSecurity(t, func() bool { return true })
+
+	withoutToken := session.Credentials{SessionID: credentials.SessionID}
+	if recorder := runGuarded(t, host, security, withoutToken, http.MethodGet, "/api/v1/keys"); recorder.Code != http.StatusForbidden {
+		t.Errorf("GET with the cookie and no token = %d, want 403", recorder.Code)
+	}
+	if recorder := runGuarded(t, host, security, credentials, http.MethodGet, "/api/v1/keys"); recorder.Code != http.StatusOK {
+		t.Errorf("GET with both = %d, want 200", recorder.Code)
+	}
+	// Renewing is how a page that has lost its token gets one, so it cannot be
+	// asked for a token it is asking for.
+	if recorder := runGuarded(t, host, security, withoutToken, http.MethodPost, "/api/v1/session/renew"); recorder.Code != http.StatusOK {
+		t.Errorf("renew with no token = %d, want it to pass", recorder.Code)
+	}
+}

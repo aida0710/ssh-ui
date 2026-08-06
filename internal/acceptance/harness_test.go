@@ -283,6 +283,20 @@ func newFixture(t testing.TB) *fixture {
 // which is itself asserted by the leak sweep.
 const fixtureMasterPassword = "a fixture master password"
 
+// unlockAgain opens the vault a sweep has shut. Every route is behind the
+// master password, so a test that touches POST /api/v1/passwords/lock has
+// locked itself out of everything after it.
+func (f *fixture) unlockAgain() {
+	f.t.Helper()
+	body := []byte(`{"passphrase":"` + fixtureMasterPassword + `"}`)
+	response := f.do(http.MethodPost, "/api/v1/passwords/unlock", body)
+	status := response.StatusCode
+	_ = readBody(f.t, response)
+	if status != http.StatusOK {
+		f.t.Fatalf("unlock the vault again = %d", status)
+	}
+}
+
 func (f *fixture) unlockApplication() {
 	f.t.Helper()
 	body := []byte(`{"passphrase":"` + fixtureMasterPassword + `"}`)
@@ -420,15 +434,36 @@ func (f *fixture) doAs(t testing.TB, client *http.Client, method, path string, b
 	}
 	request.Host = f.host
 	request.Header.Set("Sec-Fetch-Site", "same-origin")
+	// The token accompanies a read as much as a write, because the cookie is
+	// not scoped to a port and the token is: another server on 127.0.0.1
+	// receives the cookie and never the token.
+	request.Header.Set(httpserver.CSRFHeader, f.canaries.CSRF)
 	if method != http.MethodGet && method != http.MethodHead {
 		request.Header.Set("Origin", f.baseURL)
-		request.Header.Set(httpserver.CSRFHeader, f.canaries.CSRF)
 		request.Header.Set("Content-Type", "application/json")
 	}
 	for _, apply := range adjust {
 		apply(request)
 	}
 	response, err := client.Do(request)
+	if err == nil && path == "/api/v1/session/renew" && response.StatusCode == http.StatusOK {
+		// Renewing rotates the token, and the harness has to follow it exactly
+		// as the frontend does. The route sweeps call every route including
+		// this one, so without this every request after it in the same test
+		// carries a token the session no longer knows — which was invisible
+		// while reads did not need one.
+		body, readErr := io.ReadAll(response.Body)
+		_ = response.Body.Close()
+		if readErr == nil {
+			var renewed struct {
+				CsrfToken string `json:"csrfToken"`
+			}
+			if json.Unmarshal(body, &renewed) == nil && renewed.CsrfToken != "" {
+				f.canaries.CSRF = renewed.CsrfToken
+			}
+		}
+		response.Body = io.NopCloser(bytes.NewReader(body))
+	}
 	if err != nil {
 		t.Fatalf("%s %s: %v", method, path, err)
 	}
@@ -499,7 +534,11 @@ func (f *fixture) keyID() string {
 		return f.cachedKey
 	}
 	response := f.do(http.MethodGet, "/api/v1/keys", nil)
+	status := response.StatusCode
 	body := readBody(f.t, response)
+	if status != http.StatusOK {
+		f.t.Fatalf("the key inventory answered %d: %s", status, body)
+	}
 	var payload struct {
 		Items []struct {
 			ID           string `json:"id"`

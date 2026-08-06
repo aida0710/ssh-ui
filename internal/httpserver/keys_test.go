@@ -151,11 +151,12 @@ func sendKeyRequest(t *testing.T, engine *echo.Echo, credentials session.Credent
 	request.Host = keyTestHost
 	request.Header.Set(echo.HeaderContentType, "application/json")
 	request.AddCookie(&http.Cookie{Name: SessionCookie, Value: credentials.SessionID})
-	// Fetch Metadata accompanies every API request, a read as much as a write.
+	// Fetch Metadata and the CSRF token accompany every API request, a read as
+	// much as a write: the cookie is not scoped to a port and the token is.
 	request.Header.Set("Sec-Fetch-Site", "same-origin")
+	request.Header.Set(CSRFHeader, credentials.CSRFToken)
 	if method != http.MethodGet && method != http.MethodHead {
 		request.Header.Set(echo.HeaderOrigin, "http://"+keyTestHost)
-		request.Header.Set(CSRFHeader, credentials.CSRFToken)
 	}
 	if actionToken != "" {
 		request.Header.Set(ActionHeader, actionToken)

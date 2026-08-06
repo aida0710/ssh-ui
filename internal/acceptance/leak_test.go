@@ -371,6 +371,13 @@ func TestNoResponseCarriesASecretItIsNotEntitledTo(t *testing.T) {
 		record(route.Method, f.concretePath(route.Path), emptyBodyFor(route.Method))
 	}
 
+	// Phase one touched POST /api/v1/passwords/lock, which shuts the whole
+	// application: every read after it answers vault_locked. Opening it again
+	// is what lets phase two look at populated bodies rather than at problem
+	// documents — which is the difference between this sweep proving something
+	// and proving nothing.
+	f.unlockAgain()
+
 	// Phase two: drive the read paths to a real 200, so the sweep looks at
 	// populated bodies rather than at problem documents.
 	record(http.MethodGet, "/api/v1/config/overview", nil)

@@ -113,7 +113,12 @@ func TestConfigEndpointsRequireASessionAndCSRF(t *testing.T) {
 	if got := harness.call(t, http.MethodPost, "/api/v1/config/save", save, true, false).Code; got != http.StatusForbidden {
 		t.Fatalf("save without CSRF = %d", got)
 	}
-	response := harness.call(t, http.MethodGet, "/api/v1/config/overview", nil, true, false)
+	// A read without the token is refused too: the cookie is not scoped to a
+	// port and the token is.
+	if got := harness.call(t, http.MethodGet, "/api/v1/config/overview", nil, true, false).Code; got != http.StatusForbidden {
+		t.Fatalf("overview without CSRF = %d", got)
+	}
+	response := harness.call(t, http.MethodGet, "/api/v1/config/overview", nil, true, true)
 	if response.Code != http.StatusOK {
 		t.Fatalf("overview = %d, body %s", response.Code, response.Body.String())
 	}
@@ -155,7 +160,7 @@ func TestEveryConfigMutationRequiresCSRFAndEveryResponseIsUncacheable(t *testing
 		"/api/v1/history",
 	}
 	for _, target := range reads {
-		response := harness.call(t, http.MethodGet, target, nil, true, false)
+		response := harness.call(t, http.MethodGet, target, nil, true, true)
 		if response.Code != http.StatusOK {
 			t.Errorf("GET %s = %d, body %s", target, response.Code, response.Body.String())
 		}
@@ -171,7 +176,7 @@ func TestEveryConfigMutationRequiresCSRFAndEveryResponseIsUncacheable(t *testing
 func TestOverviewAndHostResponsesMatchTheGeneratedContract(t *testing.T) {
 	harness := newConfigHarness(t)
 
-	overview := harness.call(t, http.MethodGet, "/api/v1/config/overview", nil, true, false)
+	overview := harness.call(t, http.MethodGet, "/api/v1/config/overview", nil, true, true)
 	var generatedOverview api.Overview
 	decoder := json.NewDecoder(bytes.NewReader(overview.Body.Bytes()))
 	decoder.DisallowUnknownFields()
@@ -182,7 +187,7 @@ func TestOverviewAndHostResponsesMatchTheGeneratedContract(t *testing.T) {
 		t.Fatalf("hosts = %#v", generatedOverview.Hosts)
 	}
 
-	host := harness.call(t, http.MethodGet, "/api/v1/config/host?path=config&alias=bastion", nil, true, false)
+	host := harness.call(t, http.MethodGet, "/api/v1/config/host?path=config&alias=bastion", nil, true, true)
 	if host.Code != http.StatusOK {
 		t.Fatalf("host = %d, body %s", host.Code, host.Body.String())
 	}
@@ -197,10 +202,10 @@ func TestOverviewAndHostResponsesMatchTheGeneratedContract(t *testing.T) {
 func TestHostEndpointRejectsTraversalAndUnknownAliases(t *testing.T) {
 	harness := newConfigHarness(t)
 
-	if got := harness.call(t, http.MethodGet, "/api/v1/config/host?path=../.bashrc&alias=x", nil, true, false).Code; got != http.StatusBadRequest {
+	if got := harness.call(t, http.MethodGet, "/api/v1/config/host?path=../.bashrc&alias=x", nil, true, true).Code; got != http.StatusBadRequest {
 		t.Fatalf("traversal path = %d", got)
 	}
-	if got := harness.call(t, http.MethodGet, "/api/v1/config/host?path=config&alias=absent", nil, true, false).Code; got != http.StatusNotFound {
+	if got := harness.call(t, http.MethodGet, "/api/v1/config/host?path=config&alias=absent", nil, true, true).Code; got != http.StatusNotFound {
 		t.Fatalf("unknown alias = %d", got)
 	}
 }
@@ -251,7 +256,7 @@ func TestErrorBodiesCarryLocationsNeverConfigurationText(t *testing.T) {
 			Fields: []application.FieldEdit{{Action: application.ActionSet, Line: 2, Values: []string{`echo "hi"`}}},
 		}, true, true),
 		// Unknown host.
-		harness.call(t, http.MethodGet, "/api/v1/config/host?path=config&alias=absent", nil, true, false),
+		harness.call(t, http.MethodGet, "/api/v1/config/host?path=config&alias=absent", nil, true, true),
 		// Unknown transaction.
 		harness.call(t, http.MethodPost, "/api/v1/history/restore", restoreRequest{
 			TransactionID: "20260101T000000.000-aabbccdd", Path: "config",
@@ -366,7 +371,7 @@ func TestPreviewAndSaveRoundTripThroughTheContract(t *testing.T) {
 		t.Fatalf("config = %q", contents)
 	}
 
-	history := harness.call(t, http.MethodGet, "/api/v1/history", nil, true, false)
+	history := harness.call(t, http.MethodGet, "/api/v1/history", nil, true, true)
 	var generatedHistory api.HistoryList
 	historyDecoder := json.NewDecoder(bytes.NewReader(history.Body.Bytes()))
 	historyDecoder.DisallowUnknownFields()

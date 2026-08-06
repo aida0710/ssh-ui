@@ -172,11 +172,12 @@ func (call keyVaultSession) do(method, path string, body []byte, headers map[str
 	}
 	request.AddCookie(call.cookie)
 	request.Header.Set("Content-Type", "application/json")
-	// Fetch Metadata accompanies every API request, a read as much as a write.
+	// Fetch Metadata and the CSRF token accompany every API request, a read as
+	// much as a write: the cookie is not scoped to a port and the token is.
 	request.Header.Set("Sec-Fetch-Site", "same-origin")
+	request.Header.Set("X-SSH-UI-CSRF", call.csrf)
 	if method != http.MethodGet {
 		request.Header.Set("Origin", call.base)
-		request.Header.Set("X-SSH-UI-CSRF", call.csrf)
 	}
 	for name, value := range headers {
 		request.Header.Set(name, value)

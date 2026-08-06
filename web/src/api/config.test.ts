@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { apiClient, ApiError } from "./client";
 import { configApi } from "./config";
 
@@ -24,6 +24,12 @@ afterEach(() => {
 });
 
 describe("configApi", () => {
+  // Reads carry the token now, so every one of these needs a session: the
+  // cookie is not scoped to a port and the token is.
+  beforeEach(() => {
+    apiClient.setCSRF("t".repeat(43));
+  });
+
   it("returns a runtime-validated overview", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(
       JSON.stringify(overviewPayload),

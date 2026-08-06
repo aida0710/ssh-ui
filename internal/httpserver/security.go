@@ -118,7 +118,23 @@ func (s Security) Middleware(next echo.HandlerFunc) echo.HandlerFunc {
 		if _, ok := s.Sessions.Authenticate(cookie.Value); !ok {
 			return problem(c, http.StatusUnauthorized, "invalid_session")
 		}
-		if isStateChanging && !isRenew && !s.Sessions.VerifyCSRF(cookie.Value, request.Header.Get(CSRFHeader)) {
+		// The token is required on reads as well as writes. A cookie is not
+		// scoped to a port and neither is a site, so another server on
+		// 127.0.0.1 receives this one — SameSite compares scheme and
+		// registrable domain, and an IP is the whole site. The token lives in
+		// the page's memory and never travels there, so requiring it is what
+		// makes a leaked cookie worth nothing on its own.
+		//
+		// Renewing is exempt because it is how a page that lost its token gets
+		// one: a reload has the cookie and nothing else.
+		claimed := c.Path() != "" && c.Path() != spaFallbackRoute
+		// Health is exempt from the token as well as from the gate. It carries
+		// a version string and nothing else, and it is the one request made
+		// before a page has settled, so requiring a token there would be a
+		// bootstrap ordering trap for no gain.
+		isHealth := request.Method == http.MethodGet && request.URL.Path == "/api/v1/health"
+		if (isStateChanging || claimed) && !isRenew && !isHealth &&
+			!s.Sessions.VerifyCSRF(cookie.Value, request.Header.Get(CSRFHeader)) {
 			return problem(c, http.StatusForbidden, "invalid_csrf")
 		}
 
@@ -129,7 +145,6 @@ func (s Security) Middleware(next echo.HandlerFunc) echo.HandlerFunc {
 		// runs after the route lookup, so an empty pattern means nothing
 		// matched, and the SPA catch-all means nothing in the API matched — it
 		// 404s everything under /api/ itself.
-		claimed := c.Path() != "" && c.Path() != spaFallbackRoute
 		if claimed && !gateExempt(request.Method, request.URL.Path) && (s.Unlocked == nil || !s.Unlocked()) {
 			return problem(c, http.StatusConflict, "vault_locked")
 		}

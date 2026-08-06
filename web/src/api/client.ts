@@ -80,8 +80,15 @@ export const apiClient = {
     if (!response.ok) throw new Error("health_failed");
     return validateHealth(await response.json());
   },
+  // A read carries the token as well, because the cookie alone is not proof
+  // of anything: it is not scoped to a port, so another server on 127.0.0.1
+  // receives it, while the token stays in this page's memory.
   async read(path: string): Promise<unknown> {
-    const response = await fetch(path, { credentials: "same-origin" });
+    if (!csrfToken) throw new Error("csrf_unavailable");
+    const response = await fetch(path, {
+      credentials: "same-origin",
+      headers: { "X-SSH-UI-CSRF": csrfToken },
+    });
     if (!response.ok) throw await failure(response);
     return response.json() as Promise<unknown>;
   },
