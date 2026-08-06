@@ -75,17 +75,22 @@ type CheckboxFieldProps = {
   label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
+  // Refusing the control is better than a flag that quietly does nothing: a
+  // group holding connections of its own cannot be hidden, and the caller says
+  // why beside it.
+  disabled?: boolean;
 };
 
 // CheckboxField puts the box beside its sentence with room to breathe, and
 // aligns the two at the top so a wrapped sentence does not push the box down
 // to its middle.
-export function CheckboxField({ label, checked, onChange }: CheckboxFieldProps) {
+export function CheckboxField({ label, checked, onChange, disabled = false }: CheckboxFieldProps) {
   return (
-    <label className="flex items-start gap-2 text-sm text-ink">
+    <label className={`flex items-start gap-2 text-sm ${disabled ? "text-ink-faint" : "text-ink"}`}>
       <input
         type="checkbox"
         checked={checked}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.checked)}
         className="mt-0.5 h-4 w-4 shrink-0 accent-accent"
       />

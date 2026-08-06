@@ -56,6 +56,20 @@ beforeEach(() => {
   } as never);
 });
 
+// Renaming, removing and nesting rewrite files, and they are offered for the
+// group you have selected rather than for all of them at once. Selecting is
+// clicking the row, which is what the panel asks of a user too.
+async function select(user: ReturnType<typeof userEvent.setup>, name: string) {
+  await user.click(
+    await screen.findByRole("heading", {
+      // A string name is a whole-string match in testing-library — unlike
+      // Playwright, where it is a substring — so "company" does not also find
+      // "company/eu".
+      name,
+    }),
+  );
+}
+
 describe("GroupsPanel", () => {
   it("lists groups with their directories, members and settings", async () => {
     render(<GroupsPanel />);
@@ -120,7 +134,8 @@ describe("GroupsPanel", () => {
     } as never);
     render(<GroupsPanel />);
 
-    await user.type(await screen.findByLabelText("Rename company to"), "corp");
+    await select(user, "company");
+    await user.type(screen.getByLabelText("Rename company to"), "corp");
     await user.click(screen.getByRole("button", { name: "Rename company" }));
 
     // A group is a directory, so a rename is N file moves plus the Include
@@ -138,7 +153,8 @@ describe("GroupsPanel", () => {
     } as never);
     render(<GroupsPanel />);
 
-    await user.type(await screen.findByLabelText("Rename company to"), "lab");
+    await select(user, "company");
+    await user.type(screen.getByLabelText("Rename company to"), "lab");
     await user.click(screen.getByRole("button", { name: "Rename company" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("lab already exists");
@@ -152,7 +168,8 @@ describe("GroupsPanel", () => {
     const user = userEvent.setup();
     render(<GroupsPanel />);
 
-    await user.click(await screen.findByRole("button", { name: "Rename company" }));
+    await select(user, "company");
+    await user.click(screen.getByRole("button", { name: "Rename company" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("needs a name of its own");
   });
@@ -169,6 +186,8 @@ describe("GroupsPanel", () => {
       preview: { operation: "config.group_delete", diffs: [] },
     } as never);
     render(<GroupsPanel />);
+
+    await select(user, "company");
 
     // Removing a group relocates its connections; nothing is deleted. The
     // destination is asked for inside the removal, after a sentence that says
@@ -194,6 +213,7 @@ describe("GroupsPanel", () => {
     await user.click(screen.getByRole("button", { name: "Add group" }));
 
     expect(await screen.findByText("Not saved")).toBeInTheDocument();
+    await select(user, "lab");
     expect(screen.getByRole("button", { name: "Remove lab" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Rename lab" })).toBeDisabled();
     expect(screen.getByText(/no directory yet/)).toBeInTheDocument();
@@ -240,7 +260,8 @@ describe("GroupsPanel", () => {
     const user = userEvent.setup();
     render(<GroupsPanel />);
 
-    await user.click(await screen.findByRole("button", { name: "Add a group inside company" }));
+    await select(user, "company");
+    await user.click(screen.getByRole("button", { name: "Add a group inside company" }));
 
     // The path is prefilled, so the user types the child's name and nothing
     // else — nesting was previously discoverable only from a sentence about
@@ -260,27 +281,9 @@ describe("hiding a group from the connections tree", () => {
     },
   };
 
-  it("offers it for a group that holds no connections of its own", async () => {
-    const user = userEvent.setup();
-    vi.mocked(configApi.overview).mockResolvedValue(withContainer as never);
-    render(<GroupsPanel />);
-
-    const toggle = await screen.findByLabelText("Hide company/eu from Connections");
-    expect(toggle).toBeEnabled();
-
-    await user.click(toggle);
-    expect(toggle).toBeChecked();
-  });
-
-  // Hiding a group that holds connections would take them out of view with it.
-  // Refusing the control is better than a flag that quietly does nothing.
-  it("refuses it for a group that holds connections, and says why", async () => {
-    vi.mocked(configApi.overview).mockResolvedValue(withContainer as never);
-    render(<GroupsPanel />);
-
-    expect(await screen.findByLabelText("Hide company from Connections")).toBeDisabled();
-    expect(screen.getByText(/holds connections of its own/)).toBeInTheDocument();
-  });
+  // Hiding is one of the three settings that live only in metadata.json, so
+  // it moved to the inspector with the colour and the display order.
+  // GroupInspector.test.tsx holds what used to be asserted here.
 
   // A directory under connections/ that no Include names looks like a group and
   // is read by nothing. The engine has always known; nothing showed it.

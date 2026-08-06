@@ -87,6 +87,9 @@ test("renames a group and carries its files, its Include line and its keys", asy
   expect(await clickAndAwait(page, "Move to this group", "/api/v1/config/save")).toBe(200);
 
   await openSection(page, "Groups");
+  // Renaming rewrites files, so it is offered for the group you have
+  // selected rather than for every group at once.
+  await page.getByRole("heading", { name: "work", exact: true }).click();
   await page.getByLabel("Rename work to").fill("client-a");
   expect(await clickAndAwait(page, "Rename work", "/api/v1/config/groups/rename")).toBe(200);
 
@@ -135,8 +138,21 @@ test("shows a nested group inside its parent, and hides a container from the tre
   await expect(tree.getByRole("region", { name: "work" }).getByRole("heading", { name: "eu" })).toBeVisible();
 
   // "work" holds nothing of its own, so hiding it is offered.
+  //
+  // Hiding is one of the three settings that exist only in metadata.json —
+  // with the colour and the display order — so it lives in the inspector.
+  // Selecting the group fills the pane; the pane is shut until asked for.
   await openSection(page, "Groups");
-  await page.getByLabel("Hide work from Connections").check();
+  await page.getByRole("listitem").filter({ hasText: "work" }).first().click();
+  await page.getByRole("button", { name: /Show details/ }).click();
+  //
+  // Clicked and then asserted, rather than `check()`. The pane's contents are
+  // built by the panel and handed to the shell, so the new state arrives a
+  // render after the click — `check()` verifies synchronously and calls that a
+  // checkbox that would not change.
+  const hide = page.getByLabel("Hide work from Connections");
+  await hide.click();
+  await expect(hide).toBeChecked();
   expect(await clickAndAwait(page, "Save groups", "/api/v1/config/save")).toBe(200);
 
   await openSection(page, "Connections");

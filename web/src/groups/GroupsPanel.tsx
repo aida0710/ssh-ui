@@ -17,6 +17,8 @@ import {
 } from "../ui/form";
 import { useTranslate } from "../i18n/context";
 import { Notice } from "../ui/surface";
+import type { InspectorContent } from "../ui/Inspector";
+import { GroupInspector } from "./GroupInspector";
 
 function toProblem(error: unknown): Problem {
   if (error instanceof ApiError && error.problem !== null) return error.problem;
@@ -84,20 +86,29 @@ export function isValidGroupName(name: string): boolean {
   );
 }
 
-export function GroupsPanel() {
+type GroupsPanelProps = {
+  // The inspector's contents, offered up to the shell — the same arrangement
+  // the connections screen uses. A panel rendered on its own in a test passes
+  // nothing and simply has no pane.
+  onInspector?: (content: InspectorContent) => void;
+};
+
+export function GroupsPanel({ onInspector }: GroupsPanelProps = {}) {
   const t = useTranslate();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [metadata, setMetadata] = useState<Metadata | null>(null);
   const [preview, setPreview] = useState<SavePreview | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
   const [newName, setNewName] = useState("");
-  const [settingGroup, setSettingGroup] = useState("");
   const [settingKeyword, setSettingKeyword] = useState("");
   const [settingValue, setSettingValue] = useState("");
   const [renaming, setRenaming] = useState<Record<string, string>>({});
   const [removing, setRemoving] = useState<Record<string, string>>({});
   const [confirmingRemove, setConfirmingRemove] = useState<Record<string, boolean>>({});
   const [localError, setLocalError] = useState("");
+  // Which group the inspector is describing. Nothing is selected until a row
+  // is, so the pane is not offered on a screen you have only just opened.
+  const [selected, setSelected] = useState("");
 
   const reload = useCallback(async () => {
     try {
@@ -112,6 +123,42 @@ export function GroupsPanel() {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  // The pane follows the selected group. This sits above the early return
+  // because a hook has to: the draft and the projection are read defensively
+  // here rather than from the constants below, which only exist once there is
+  // something to show.
+  useEffect(() => {
+    if (onInspector === undefined) return;
+    const group = (metadata?.groups ?? []).find((candidate) => candidate.name === selected);
+    if (group === undefined) {
+      onInspector(null);
+      return;
+    }
+    onInspector({
+      // A declaration with no directory, or a directory nothing declares, is
+      // worth the dot. An empty group is not — that is the state every group
+      // is in the moment after it is made.
+      attention: (overview?.notices ?? []).some(
+        (notice) =>
+          notice.detail === group.name &&
+          ["group_not_declared", "group_directory_missing"].includes(notice.code),
+      ),
+      body: (
+        <GroupInspector
+          group={group}
+          members={(overview?.hosts ?? [])
+            .filter((host) => host.group === group.name)
+            .map((host) => host.identity.alias)}
+          onUpdate={(patch) => updateGroup(group.name, patch)}
+        />
+      ),
+    });
+    // updateGroup closes over the draft, which changes with metadata; the body
+    // is rebuilt with it rather than memoised, so the pane never edits a stale
+    // document.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, metadata, overview, onInspector]);
 
   if (overview === null || metadata === null) {
     return <p role="status" className="text-sm text-ink-muted">{t("groups.loading")}</p>;
@@ -169,8 +216,10 @@ export function GroupsPanel() {
     setLocalError("");
   }
 
+  // The group is the selected one. It used to be a third picker on a page
+  // that lists every group already.
   function addSetting() {
-    if (settingGroup === "" || settingKeyword === "") {
+    if (selected === "" || settingKeyword === "") {
       setLocalError(t("groups.chooseGroupAndKeyword"));
       return;
     }
@@ -184,7 +233,7 @@ export function GroupsPanel() {
     setMetadata({
       ...loaded,
       groups: groups.map((group) =>
-        group.name === settingGroup
+        group.name === selected
           ? { ...group, settings: [...(group.settings ?? []), { keyword: settingKeyword, values }] }
           : group,
       ),
@@ -286,7 +335,13 @@ export function GroupsPanel() {
         {groups.map((group) => (
           <li
             key={group.name}
-            className="rounded border border-line p-3"
+            // Selecting a group is what fills the inspector, so the row says
+            // which one is open the way the connection tree does.
+            onFocus={() => setSelected(group.name)}
+            onClick={() => setSelected(group.name)}
+            className={`rounded-lg border p-3 ${
+              selected === group.name ? "border-line bg-select-fill" : "border-line"
+            }`}
             style={{ marginInlineStart: `${(depthOf(group.name) - 1) * 1.5}rem` }}
           >
             {/*
@@ -312,12 +367,18 @@ export function GroupsPanel() {
                   <span className="text-ink-faint">{group.name.slice(0, group.name.lastIndexOf("/") + 1)}</span>
                 )}
                 <span>{group.name.slice(group.name.lastIndexOf("/") + 1)}</span>
-                {savedGroups.has(group.name) ? null : (
-                  <span className="rounded border border-notice-line px-1.5 py-0.5 text-[10px] font-normal text-notice-ink">
-                    {t("groups.unsaved")}
-                  </span>
-                )}
               </h3>
+              {/*
+                Outside the heading. Inside it the badge joined the heading's
+                accessible name with no separator — "labNot saved" — because
+                adjacent elements concatenate. The heading is the group's name
+                and nothing else.
+              */}
+              {savedGroups.has(group.name) ? null : (
+                <span className="rounded border border-notice-line px-1.5 py-0.5 text-[10px] font-normal text-notice-ink">
+                  {t("groups.unsaved")}
+                </span>
+              )}
               <p className="font-mono text-xs text-ink-faint">
                 {t("groups.directories", {
                   connections: `connections/${group.name}`,
@@ -325,65 +386,13 @@ export function GroupsPanel() {
                 })}
               </p>
               {/*
-                Colour and display order are how the group looks, not what
-                happens to it, so they sit with the name and leave the strip
-                below to the three actions that rewrite files.
+                Colour, display order and hiding are how the group looks to this
+                application and nothing else — they are in metadata.json, not in
+                any configuration file — so they are in the inspector, the same
+                place a connection's colour and tags went. What is left on the
+                row is what the group *is*.
               */}
-              <div className="ms-auto flex items-end gap-3">
-                <label htmlFor={`group-colour-${group.name}`} className="flex flex-col gap-1">
-                  <span className={fieldLabel}>{t("groups.colour")}</span>
-                  <span className="flex items-center gap-2">
-                    <input
-                      id={`group-colour-${group.name}`}
-                      type="color"
-                      value={group.colour === undefined || group.colour === "" ? "#71717a" : group.colour}
-                      onChange={(event) => updateGroup(group.name, { colour: event.target.value })}
-                      className="h-8 w-12 rounded border border-control-line bg-control"
-                    />
-                    {group.colour === undefined || group.colour === "" ? null : (
-                      <button
-                        type="button"
-                        onClick={() => updateGroup(group.name, { colour: "" })}
-                        className={secondaryAction}
-                      >
-                        {t("groups.clearColour", { name: group.name })}
-                      </button>
-                    )}
-                  </span>
-                </label>
-                <label htmlFor={`group-order-${group.name}`} className="flex flex-col gap-1">
-                  <span className={fieldLabel}>{t("groups.displayOrder")}</span>
-                  <input
-                    id={`group-order-${group.name}`}
-                    type="number"
-                    value={String(group.order ?? 0)}
-                    onChange={(event) => updateGroup(group.name, { order: Number(event.target.value) || 0 })}
-                    className={`${control} w-20`}
-                  />
-                </label>
-                {/*
-                  Hiding is for a group whose purpose is to hold other groups.
-                  One with connections of its own would take them out of view
-                  with it, so the control is refused there rather than left to
-                  set a flag that quietly does nothing.
-                */}
-                <label htmlFor={`group-hidden-${group.name}`} className="flex flex-col gap-1">
-                  <span className={fieldLabel}>{t("groups.hideShort")}</span>
-                  <input
-                    id={`group-hidden-${group.name}`}
-                    type="checkbox"
-                    aria-label={t("groups.hide", { name: group.name })}
-                    checked={group.hidden === true}
-                    disabled={membersOf(group.name).length > 0}
-                    onChange={(event) => updateGroup(group.name, { hidden: event.target.checked })}
-                    className="size-4 self-center"
-                  />
-                </label>
-              </div>
             </div>
-            {membersOf(group.name).length > 0 ? (
-              <p className={`mt-1 ${hintText}`}>{t("groups.hideOnlyContainers")}</p>
-            ) : null}
             <p className="mt-1 text-xs text-ink-muted">
               {t("groups.members")}{" "}
               <span>{membersOf(group.name).length === 0 ? t("groups.noMembers") : membersOf(group.name).join(", ")}</span>
@@ -400,6 +409,13 @@ export function GroupsPanel() {
               </ul>
             )}
 
+            {/*
+              Only for the group you have selected. These three rewrite files,
+              and every group carrying its own copy of them meant a page whose
+              controls outnumbered its facts four to one — which is what made
+              this screen read as a wall.
+            */}
+            {selected !== group.name ? null : (
             <div className="mt-3 flex flex-wrap items-end gap-x-4 gap-y-3 border-t border-line pt-3">
               {/*
                 The visible captions are short and the group's name lives in the
@@ -465,6 +481,7 @@ export function GroupsPanel() {
                 {t("groups.addChild", { name: group.name })}
               </button>
             </div>
+            )}
             {savedGroups.has(group.name) ? null : (
               <p className="mt-2 text-xs text-notice-ink">{t("groups.newGroupNote")}</p>
             )}
@@ -542,22 +559,16 @@ export function GroupsPanel() {
         </button>
       </section>
 
+      {/*
+        Scoped to the group you have selected, so the picker that used to sit
+        here — a third "Choose a group" on a page that already shows them all —
+        is gone. Asking which group, on a screen where one is already open, was
+        asking a question the screen had answered.
+      */}
+      {selected === "" ? null : (
       <section className={sectionCard}>
-        <h3 className={sectionHeading}>{t("groups.settingHeading")}</h3>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Field label={t("groups.group")}>
-            <select
-              id="setting-group"
-              value={settingGroup}
-              onChange={(event) => setSettingGroup(event.target.value)}
-              className={control}
-            >
-              <option value="">{t("groups.chooseGroup")}</option>
-              {groups.map((group) => (
-                <option key={group.name} value={group.name}>{group.name}</option>
-              ))}
-            </select>
-          </Field>
+        <h3 className={sectionHeading}>{t("groups.settingHeadingFor", { name: selected })}</h3>
+        <div className="grid gap-3 sm:grid-cols-2">
           <Field label={t("groups.directive")}>
             <input
               id="setting-keyword"
@@ -581,6 +592,7 @@ export function GroupsPanel() {
           {t("groups.addSetting")}
         </button>
       </section>
+      )}
 
       {/*
         Which controls on this page write, and when, was not stated anywhere.

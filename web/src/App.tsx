@@ -413,12 +413,12 @@ function SectionView(props: SectionViewProps) {
   return <div className="h-full overflow-y-auto p-6">{<PaddedSection {...props} />}</div>;
 }
 
-function PaddedSection({ section, fileTarget, groups, onOpenFile, onLock }: SectionViewProps) {
+function PaddedSection({ section, fileTarget, groups, onOpenFile, onLock, onInspector }: SectionViewProps) {
   if (section === "Config") {
     return <ConfigExplorer target={fileTarget} />;
   }
   if (section === "Groups") {
-    return <GroupsPanel />;
+    return <GroupsPanel onInspector={onInspector} />;
   }
   if (section === "Secrets") {
     return <SecretsPanel onLock={onLock} />;
