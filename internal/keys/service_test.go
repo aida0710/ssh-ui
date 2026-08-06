@@ -990,3 +990,60 @@ func TestDeregisterSaysSoWhenThereIsNoAgent(t *testing.T) {
 		t.Errorf("Deregister error = %v, want ErrAgentUnavailable", err)
 	}
 }
+
+// A key whose passphrase is stored is added to the agent in one action rather
+// than two. The lookup is injected, the same way validateGroup is: where a
+// secret lives belongs to the secret package, and this one must not import it
+// to ask.
+func TestRegisterUsesAStoredPassphraseWhenNoneIsTyped(t *testing.T) {
+	agent := &fakeAgent{available: true}
+	service, workspace := newServiceWithAgent(t, newQueryRunner(), agent)
+	_ = workspace
+	generateWorkKey(t, service)
+	stored := map[string]string{"id_work": "correct horse"}
+	service.SetStoredPassphrase(func(relative string) (string, bool) {
+		value, ok := stored[relative]
+		return value, ok
+	})
+
+	if _, err := service.Register(context.Background(), RegisterRequest{KeyID: ItemID("id_work")}); err != nil {
+		t.Fatalf("Register = %v", err)
+	}
+	if len(agent.passphrases) != 1 || string(agent.passphrases[0]) != "correct horse" {
+		t.Errorf("the agent was given %q, want the stored passphrase", agent.passphrases)
+	}
+}
+
+// A typed passphrase always wins: the person at the keyboard is more current
+// than the file.
+func TestATypedPassphraseBeatsTheStoredOne(t *testing.T) {
+	agent := &fakeAgent{available: true}
+	service, _ := newServiceWithAgent(t, newQueryRunner(), agent)
+	generateWorkKey(t, service)
+	service.SetStoredPassphrase(func(string) (string, bool) { return "the stale one", true })
+
+	if _, err := service.Register(context.Background(), RegisterRequest{
+		KeyID: ItemID("id_work"), Passphrase: []byte("typed just now"),
+	}); err != nil {
+		t.Fatalf("Register = %v", err)
+	}
+	if string(agent.passphrases[0]) != "typed just now" {
+		t.Errorf("the agent was given %q, want the typed passphrase", agent.passphrases[0])
+	}
+}
+
+// Nothing stored is how this behaved before anything was, and still does.
+func TestRegisterWithoutAStoredPassphraseSendsWhatItWasGiven(t *testing.T) {
+	agent := &fakeAgent{available: true}
+	service, _ := newServiceWithAgent(t, newQueryRunner(), agent)
+	generateWorkKey(t, service)
+
+	if _, err := service.Register(context.Background(), RegisterRequest{
+		KeyID: ItemID("id_work"), Passphrase: []byte("correct horse"),
+	}); err != nil {
+		t.Fatalf("Register = %v", err)
+	}
+	if string(agent.passphrases[0]) != "correct horse" {
+		t.Errorf("the agent was given %q", agent.passphrases[0])
+	}
+}

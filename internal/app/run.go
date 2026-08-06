@@ -75,7 +75,10 @@ type Dependencies struct {
 // Two managers over one workspace is safe: a Manager holds no mutable state
 // between calls, and every transaction is identified by its own timestamp and
 // random suffix, so the journal and the history remain one consistent stream.
-func buildKeyService(workspace *storage.Workspace, dependencies Dependencies, configuration *application.Service) httpserver.KeyService {
+// The concrete type rather than the interface, because the wiring installs the
+// stored-passphrase lookup on it after the vault exists. It still satisfies
+// httpserver.KeyService where that is what is wanted.
+func buildKeyService(workspace *storage.Workspace, dependencies Dependencies, configuration *application.Service) *keys.Service {
 	transactions := storage.NewManager(workspace, time.Now, dependencies.Random)
 	return keys.NewService(keys.ServiceOptions{
 		Workspace:    workspace,
@@ -151,6 +154,12 @@ func Build(dependencies Dependencies, version string) (*httpserver.Server, strin
 	// it is one more ordinary managed file under ~/.ssh, so one journal covers
 	// it, and it travels with everything else the workspace holds.
 	passwordService := secret.NewService(workspace, transactions)
+
+	// A key whose passphrase is stored is added to the agent in one action
+	// rather than two. The lookup is installed here rather than imported by
+	// internal/keys, which must no more ask the secret package where a secret
+	// lives than it asks the configuration engine what a group is.
+	keyService.SetStoredPassphrase(passwordService.KeyPassphraseFor)
 
 	// The snapshot needs to know which files are configuration, and that is a
 	// question the Include graph answers. Passing the answer in keeps the

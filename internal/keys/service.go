@@ -127,30 +127,44 @@ type Service struct {
 	// configuration engine — a group exists when an Include line declares it —
 	// and this package must not import that engine to ask.
 	validateGroup func(string) error
+	// storedPassphrase answers with the passphrase kept for a key, if there is
+	// one and the vault is open. Injected for the same reason as validateGroup:
+	// where a secret lives belongs to the secret package, and this one must not
+	// import it to ask. A nil one means nothing is stored, which is how this
+	// behaved before anything was.
+	storedPassphrase func(relativePath string) (string, bool)
 }
 
 type ServiceOptions struct {
-	Workspace     *storage.Workspace
-	Transactions  *storage.Manager
-	Resolver      config.Resolver
-	Catalogue     CatalogueReader
-	Agent         platform.KeyAgent
-	Now           func() time.Time
-	Random        io.Reader
-	ValidateGroup func(string) error
+	Workspace        *storage.Workspace
+	Transactions     *storage.Manager
+	Resolver         config.Resolver
+	StoredPassphrase func(relativePath string) (string, bool)
+	Catalogue        CatalogueReader
+	Agent            platform.KeyAgent
+	Now              func() time.Time
+	Random           io.Reader
+	ValidateGroup    func(string) error
 }
 
 func NewService(options ServiceOptions) *Service {
 	return &Service{
-		workspace:     options.Workspace,
-		transactions:  options.Transactions,
-		resolver:      options.Resolver,
-		catalogue:     options.Catalogue,
-		agent:         options.Agent,
-		now:           options.Now,
-		random:        options.Random,
-		validateGroup: options.ValidateGroup,
+		workspace:        options.Workspace,
+		transactions:     options.Transactions,
+		resolver:         options.Resolver,
+		catalogue:        options.Catalogue,
+		agent:            options.Agent,
+		now:              options.Now,
+		random:           options.Random,
+		validateGroup:    options.ValidateGroup,
+		storedPassphrase: options.StoredPassphrase,
 	}
+}
+
+// SetStoredPassphrase installs the lookup after construction, for the wiring
+// that builds this service before the vault it would ask.
+func (service *Service) SetStoredPassphrase(lookup func(relativePath string) (string, bool)) {
+	service.storedPassphrase = lookup
 }
 
 // entryPath is the user configuration file the Include graph starts from.
@@ -609,10 +623,22 @@ func (service *Service) Register(ctx context.Context, request RegisterRequest) (
 		return RegisterResult{}, ErrUnknownKey
 	}
 
+	// A stored passphrase is used when the caller supplied none, which is what
+	// turns adding a key to the agent into one action rather than two. It is
+	// never preferred over one that was typed: the person at the keyboard is
+	// more current than the file.
+	passphrase := request.Passphrase
+	if len(passphrase) == 0 && service.storedPassphrase != nil {
+		if stored, ok := service.storedPassphrase(item.RelativePath); ok {
+			passphrase = []byte(stored)
+			defer Wipe(passphrase)
+		}
+	}
+
 	absolute := service.absolutePath(item.RelativePath)
 	if err := service.agent.Add(ctx, platform.AgentAddRequest{
 		PrivateKeyPath:  absolute,
-		Passphrase:      request.Passphrase,
+		Passphrase:      passphrase,
 		LifetimeSeconds: request.LifetimeSeconds,
 		StoreInKeychain: request.StoreInKeychain,
 	}); err != nil {
