@@ -28,6 +28,17 @@ import (
 // suggests it can be read.
 const WorkspacePath = "ssh-ui/secrets"
 
+// SettingsPath is the object store's settings, sealed with the same master
+// password and kept beside the vault rather than inside it.
+//
+// The vault travels: remotesync.Collect names ssh-ui/secrets outright. Putting
+// the access key inside it would put the key to the bucket inside the bucket,
+// and someone who obtained one snapshot by any means, along with its
+// passphrase, would gain the live bucket and every snapshot after it rather
+// than the one they already had. Collect lists what it takes, so this file is
+// excluded by construction and not by a rule anyone has to remember.
+const SettingsPath = "ssh-ui/sync-settings"
+
 // SchemaVersion is the version of the plaintext document, inside the
 // encryption. The header carries its own version for the envelope.
 const SchemaVersion = 2
@@ -88,9 +99,14 @@ func ValidKind(kind Kind) bool {
 	return kind == KindPassword || kind == KindKeyPassphrase
 }
 
-// SyncSettings is what the object store needs, kept here because two of its six
-// fields are secrets and splitting them across two homes would mean a screen
-// that is half filled in.
+// SyncSettings is what the object store needs.
+//
+// It is sealed with the same master password as the vault and kept in its own
+// file, because the vault travels: Collect names ssh-ui/secrets outright, and
+// putting the access key inside the vault would put the key to the bucket
+// inside the bucket. Someone who obtained one snapshot by any means, and its
+// passphrase, would gain the live bucket and every future snapshot rather than
+// the one they already had.
 type SyncSettings struct {
 	Endpoint        string `json:"endpoint,omitempty"`
 	Bucket          string `json:"bucket,omitempty"`
@@ -112,7 +128,6 @@ type document struct {
 	KeyPassphrases map[string]string `json:"keyPassphrases"`
 	Hosts          map[string]string `json:"hosts"`
 	Keys           map[string]string `json:"keys"`
-	Sync           SyncSettings      `json:"sync"`
 }
 
 // Vault is an opened secrets file.
@@ -124,7 +139,6 @@ type Vault struct {
 	key      envelope.Key
 	secrets  map[Kind]map[string]string
 	subjects map[Kind]map[string]string
-	sync     SyncSettings
 }
 
 func newMaps() (map[Kind]map[string]string, map[Kind]map[string]string) {
@@ -179,7 +193,31 @@ func Open(sealed []byte, passphrase string) (*Vault, error) {
 			subjects[kind][subject] = name
 		}
 	}
-	return &Vault{key: key, secrets: secrets, subjects: subjects, sync: parsed.Sync}, nil
+	return &Vault{key: key, secrets: secrets, subjects: subjects}, nil
+}
+
+// SealSettings encrypts the object store settings with the vault's own key, for
+// the file beside it. Same master password, different file: this one does not
+// travel.
+func (v *Vault) SealSettings(settings SyncSettings) ([]byte, error) {
+	plaintext, err := json.Marshal(settings)
+	if err != nil {
+		return nil, err
+	}
+	return v.key.Seal(plaintext)
+}
+
+// OpenSettings decrypts the file SealSettings wrote.
+func (v *Vault) OpenSettings(sealed []byte) (SyncSettings, error) {
+	plaintext, err := v.key.Open(sealed)
+	if err != nil {
+		return SyncSettings{}, err
+	}
+	var settings SyncSettings
+	if err := json.Unmarshal(plaintext, &settings); err != nil {
+		return SyncSettings{}, ErrWrongPassphrase
+	}
+	return settings, nil
 }
 
 // Seal encrypts the vault for writing.
@@ -190,7 +228,6 @@ func (v *Vault) Seal() ([]byte, error) {
 		KeyPassphrases: v.secrets[KindKeyPassphrase],
 		Hosts:          v.subjects[KindPassword],
 		Keys:           v.subjects[KindKeyPassphrase],
-		Sync:           v.sync,
 	})
 	if err != nil {
 		return nil, err
@@ -298,14 +335,6 @@ func (v *Vault) SecretFor(kind Kind, subject string) (string, bool) {
 	}
 	return v.Secret(kind, name)
 }
-
-// Sync returns the object store settings, secrets included. Only the callers
-// that build a client ask for this; the screen is answered from the fields that
-// are not secret.
-func (v *Vault) Sync() SyncSettings { return v.sync }
-
-// SetSync replaces the object store settings.
-func (v *Vault) SetSync(settings SyncSettings) { v.sync = settings }
 
 // Rename carries a subject's reference to a new name, which is what a host
 // rename has to do or the reference is silently orphaned under a name nothing

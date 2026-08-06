@@ -377,10 +377,6 @@ func TestSealedBytesCarryNothingFromEitherNamespace(t *testing.T) {
 	_ = vault.Assign(secret.KindPassword, "web-1", "office-vm")
 	_ = vault.Set(secret.KindKeyPassphrase, "build-key", "s3cret-phrase")
 	_ = vault.Assign(secret.KindKeyPassphrase, "keys/id_work", "build-key")
-	vault.SetSync(secret.SyncSettings{
-		Endpoint: "https://s3.example", Bucket: "b", AccessKeyID: "AKIAEXAMPLE", SecretAccessKey: "s3cret-key",
-	})
-
 	sealed, err := vault.Seal()
 	if err != nil {
 		t.Fatal(err)
@@ -388,7 +384,6 @@ func TestSealedBytesCarryNothingFromEitherNamespace(t *testing.T) {
 	for _, absent := range []string{
 		"office-vm", "s3cret-password", "web-1",
 		"build-key", "s3cret-phrase", "keys/id_work",
-		"AKIAEXAMPLE", "s3cret-key", "s3.example",
 	} {
 		if bytes.Contains(sealed, []byte(absent)) {
 			t.Errorf("the sealed file carries %q", absent)

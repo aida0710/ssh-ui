@@ -393,3 +393,80 @@ func TestTheServiceWillNotCrossTheNamespaces(t *testing.T) {
 		t.Error("a host was pointed at a key passphrase through the service")
 	}
 }
+
+// The object store's settings are sealed with the same master password and kept
+// beside the vault, not inside it. The vault travels — remotesync.Collect names
+// ssh-ui/secrets outright — and the key to the bucket must not be in the bucket.
+func TestSyncSettingsAreSealedBesideTheVaultAndNotInIt(t *testing.T) {
+	service, home := newService(t)
+	if err := service.Initialise(passphrase); err != nil {
+		t.Fatal(err)
+	}
+
+	settings := secret.SyncSettings{
+		Endpoint: "https://s3.example", Bucket: "b", Region: "auto",
+		AccessKeyID: "AKIAEXAMPLE", SecretAccessKey: "s3cret-key", Direction: "both",
+	}
+	if err := service.SetSyncSettings(settings); err != nil {
+		t.Fatalf("SetSyncSettings = %v", err)
+	}
+
+	read, err := service.SyncSettings()
+	if err != nil {
+		t.Fatalf("SyncSettings = %v", err)
+	}
+	if read != settings {
+		t.Errorf("settings = %#v, want %#v", read, settings)
+	}
+
+	// Not in the vault, and not readable from either file.
+	vault, err := os.ReadFile(vaultPath(home))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sealedSettings, err := os.ReadFile(filepath.Join(home, ".ssh", filepath.FromSlash(secret.SettingsPath)))
+	if err != nil {
+		t.Fatalf("the settings file is not there: %v", err)
+	}
+	for _, absent := range []string{"AKIAEXAMPLE", "s3cret-key", "s3.example"} {
+		if strings.Contains(string(vault), absent) {
+			t.Errorf("the vault carries %q", absent)
+		}
+		if strings.Contains(string(sealedSettings), absent) {
+			t.Errorf("the settings file carries %q in the clear", absent)
+		}
+	}
+}
+
+// Never configured is a state, not a failure: a machine that has not been given
+// settings answers the zero value so the screen can show an empty form rather
+// than an error.
+func TestSyncSettingsAnswerEmptyBeforeTheyAreEverSet(t *testing.T) {
+	service, _ := newService(t)
+	if err := service.Initialise(passphrase); err != nil {
+		t.Fatal(err)
+	}
+
+	settings, err := service.SyncSettings()
+	if err != nil {
+		t.Fatalf("SyncSettings = %v", err)
+	}
+	if settings != (secret.SyncSettings{}) {
+		t.Errorf("settings = %#v, want the zero value", settings)
+	}
+}
+
+func TestSyncSettingsRefuseAShutVault(t *testing.T) {
+	service, _ := newService(t)
+	if err := service.Initialise(passphrase); err != nil {
+		t.Fatal(err)
+	}
+	service.Lock()
+
+	if _, err := service.SyncSettings(); !errors.Is(err, secret.ErrLocked) {
+		t.Errorf("SyncSettings while locked = %v, want ErrLocked", err)
+	}
+	if err := service.SetSyncSettings(secret.SyncSettings{Bucket: "b"}); !errors.Is(err, secret.ErrLocked) {
+		t.Errorf("SetSyncSettings while locked = %v, want ErrLocked", err)
+	}
+}

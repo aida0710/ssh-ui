@@ -148,6 +148,36 @@ func (k Key) Seal(plaintext []byte) ([]byte, error) {
 	return gcm.Seal(sealed, nonce, plaintext, header), nil
 }
 
+// Open decrypts sealed with a key already held, which is the mirror of Seal:
+// that works from a key alone and this does too.
+//
+// It exists for the caller that keeps the key and deliberately not the
+// passphrase — the vault — so it can seal a second file beside its own and read
+// it back without asking the user again. The header is authenticated data, so a
+// key that does not match fails the tag rather than being detected separately.
+func (k Key) Open(sealed []byte) ([]byte, error) {
+	if len(k.material) != derivedKeyLength {
+		return nil, ErrNotAnEnvelope
+	}
+	header, _, rest, err := readHeader(sealed)
+	if err != nil {
+		return nil, err
+	}
+	if len(rest) < nonceLength {
+		return nil, ErrNotAnEnvelope
+	}
+	nonce, ciphertext := rest[:nonceLength], rest[nonceLength:]
+	gcm, err := newGCM(k.material)
+	if err != nil {
+		return nil, err
+	}
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, header)
+	if err != nil {
+		return nil, ErrWrongPassphrase
+	}
+	return plaintext, nil
+}
+
 // Open decrypts sealed with passphrase and returns the plaintext along with
 // the key, so the caller can re-seal without deriving again.
 func Open(sealed []byte, passphrase string) ([]byte, Key, error) {

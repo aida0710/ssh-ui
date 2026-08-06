@@ -22,9 +22,15 @@ There are two credential namespaces, and they do not mix.
   "hosts":          { "web-1": "office-vm", "web-2": "office-vm" },
   "keyPassphrases": { "build-key": "…" },
   "keys":           { "keys/work/id_work": "build-key" },
-  "sync":           { "endpoint": "…", "bucket": "…", "region": "…",
-                      "accessKeyId": "…", "secretAccessKey": "…" }
 }
+```
+
+The object store's settings are **not** in it. They live beside it, in
+`ssh-ui/sync-settings`, sealed with the same master password:
+
+```json
+{ "endpoint": "…", "bucket": "…", "region": "…",
+  "accessKeyId": "…", "secretAccessKey": "…", "direction": "…" }
 ```
 
 An account password and a key passphrase are kept apart, and not for tidiness.
@@ -54,13 +60,30 @@ code than the thing it migrates.
 through a credential name.
 
 **Object store credentials.** They are supplied per run today and written
-nowhere, so every push means typing an access key again. They move into the
-vault with the endpoint and the bucket.
+nowhere, so every push means typing an access key again. They are now stored —
+in their own sealed file rather than in the vault.
 
-There is a bootstrap the design has to state rather than solve: the vault is
-part of the snapshot the object store holds, so a machine that has never synced
-needs its credentials typed once before it can pull the vault that would have
-held them. That is one entry per machine, not per run.
+The distinction matters and the code already argued for it before this design
+did. `SyncHandlers.Configure` carried the reason:
+
+> A snapshot that carried the key to its own bucket would be a bootstrapping
+> convenience and a much larger blast radius, and it would mean anybody who
+> obtained one snapshot could fetch every later one.
+
+The vault travels: `Collect` names `ssh-ui/secrets` outright. Putting the access
+key inside it would put the key to the bucket inside the bucket. Someone who
+obtained one snapshot by any means — a backup, a stray copy — and its passphrase
+would gain the live bucket and every future snapshot, rather than the one
+snapshot they already had.
+
+So the settings live in `ssh-ui/sync-settings`, sealed with the same master
+password and never collected. `Collect` lists what it takes, so a new file under
+`ssh-ui/` is excluded by construction rather than by a rule someone has to
+remember.
+
+The bootstrap follows from that and is stated rather than solved: a machine that
+has never synced types its credentials once. That is one entry per machine, not
+per run, and it is the price of the key to the bucket not being in the bucket.
 
 **Private key passphrases.** This changes a boundary the README states:
 

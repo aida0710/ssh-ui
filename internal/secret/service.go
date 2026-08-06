@@ -343,27 +343,63 @@ func (s *Service) KeyPassphraseFor(relativePath string) (string, bool) {
 	return s.vault.SecretFor(KindKeyPassphrase, relativePath)
 }
 
-// SyncSettings returns the object store settings, secrets included. Only the
-// caller that builds a client asks; the screen is answered without them.
+// settingsPath is the sealed object store settings beside the vault.
+func (s *Service) settingsPath() string {
+	return filepath.Join(s.workspace.Root(), filepath.FromSlash(SettingsPath))
+}
+
+// SyncSettings returns the object store settings, secrets included.
+//
+// Only the caller that builds a client asks for these; the screen is answered
+// from the fields that are not secret. A machine that has never been given them
+// answers the zero value and no error, because "not configured yet" is a state
+// and not a failure.
 func (s *Service) SyncSettings() (SyncSettings, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.vault == nil {
 		return SyncSettings{}, ErrLocked
 	}
-	return s.vault.Sync(), nil
+	sealed, err := s.workspace.FileSystem().ReadFile(s.settingsPath())
+	if errors.Is(err, fs.ErrNotExist) {
+		return SyncSettings{}, nil
+	}
+	if err != nil {
+		return SyncSettings{}, err
+	}
+	return s.vault.OpenSettings(sealed)
 }
 
-// SetSyncSettings replaces the object store settings and writes the vault.
+// SetSyncSettings replaces the object store settings.
 func (s *Service) SetSyncSettings(settings SyncSettings) error {
 	s.mu.Lock()
 	if s.vault == nil {
 		s.mu.Unlock()
 		return ErrLocked
 	}
-	s.vault.SetSync(settings)
+	sealed, err := s.vault.SealSettings(settings)
 	s.mu.Unlock()
-	return s.write()
+	if err != nil {
+		return err
+	}
+	if err := s.workspace.EnsureDirectory(s.workspace.StateDir()); err != nil {
+		return err
+	}
+	current, readErr := s.workspace.FileSystem().ReadFile(s.settingsPath())
+	precondition := storage.Precondition{}
+	if readErr == nil {
+		precondition = storage.Precondition{Exists: true, Digest: storage.Digest(current)}
+	}
+	_, err = s.transactions.Commit(storage.Request{
+		Operation: "sync.settings",
+		Changes: []storage.Change{{
+			Path: s.settingsPath(), Contents: sealed, Precondition: precondition,
+			// The settings are a secret, so no generational copy is kept: the
+			// vault's own writes make none either.
+			SkipBackup: true,
+		}},
+	})
+	return err
 }
 
 // IssueToken mints a single-use token for one alias.
