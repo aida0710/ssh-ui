@@ -31,29 +31,23 @@ const TerminalScript = `on run argv
 end run
 `
 
-// TerminalPasswordScript is the same payload with the askpass helper armed.
+// TerminalPasswordScript opens the connection through this application's own
+// command line.
+//
+// It runs `ssh-ui <alias>`, which asks the running application for a one-time
+// token and execs ssh with the environment set. The window used to be given
+// that environment directly — five variables and the token among them — which
+// put a live credential-bearing token into the Terminal's scrollback and into
+// whatever history file the shell keeps. Now nothing of it is ever printed.
 //
 // It keeps the property that matters: nothing is concatenated into this text.
-// The alias, the helper path, the loopback endpoint and the one-time token all
-// arrive through `on run argv` and are quoted individually, so there is no
-// AppleScript string for any of them to escape from and no shell word any of
-// them can split.
-//
-// SSH_ASKPASS_REQUIRE=force is what makes OpenSSH consult the helper rather
-// than the terminal it is running in, and NumberOfPasswordPrompts=1 stops a
-// wrong stored password being offered three times, which on some servers
-// counts towards a lockout.
+// The alias and the path to this binary arrive through `on run argv` and are
+// quoted individually, so there is no AppleScript string for either to escape
+// from and no shell word either can split.
 const TerminalPasswordScript = `on run argv
 	set targetAlias to item 1 of argv
 	set helperPath to item 2 of argv
-	set askpassURL to item 3 of argv
-	set askpassToken to item 4 of argv
-	set sshCommand to "SSH_ASKPASS=" & quoted form of helperPath & ¬
-		" SSH_ASKPASS_REQUIRE=force" & ¬
-		" SSH_UI_ASKPASS_URL=" & quoted form of askpassURL & ¬
-		" SSH_UI_ASKPASS_TOKEN=" & quoted form of askpassToken & ¬
-		" SSH_UI_ASKPASS_ALIAS=" & quoted form of targetAlias & ¬
-		" ssh -o NumberOfPasswordPrompts=1 -- " & quoted form of targetAlias
+	set sshCommand to quoted form of helperPath & " " & quoted form of targetAlias
 	tell application "Terminal"
 		activate
 		do script sshCommand
@@ -100,7 +94,7 @@ func (t Terminal) LaunchWithPassword(ctx context.Context, alias, helperPath, end
 	if !filepath.IsAbs(helperPath) {
 		return ErrHelperPathNotAbsolute
 	}
-	return t.run(ctx, TerminalPasswordScript, []string{"-", alias, helperPath, endpoint, token})
+	return t.run(ctx, TerminalPasswordScript, []string{"-", alias, helperPath})
 }
 
 // Launch opens `ssh -- <alias>` in a new Terminal window.

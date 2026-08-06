@@ -78,6 +78,21 @@ func main() {
 		))
 	}
 
+	// `ssh-ui <alias>` connects. It is checked after the askpass branch and
+	// before flag parsing, because an alias is a bare word and flag.Parse would
+	// stop at it and then the application would start instead of connecting.
+	if alias, ok := connectInvocation(os.Args); ok {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "ssh-ui: %v\n", err)
+			os.Exit(1)
+		}
+		os.Exit(runConnect(
+			context.Background(), alias, app.HandoffDir(home),
+			&http.Client{Timeout: connectTimeout}, os.Stderr,
+		))
+	}
+
 	openBrowser := flag.Bool("open", true,
 		"open the UI in the default browser; -open=false prints the URL on standard output instead")
 	flag.Parse()

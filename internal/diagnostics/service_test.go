@@ -275,3 +275,29 @@ func TestInspectReplacesTheHomeDirectoryInEvaluatedValues(t *testing.T) {
 		t.Errorf("userknownhostsfile = %q, want both paths shortened", got)
 	}
 }
+
+// The command a user copies is this binary and an alias.
+//
+// It used to be five environment variables and a flag, which is what the
+// Terminal button assembles for itself and is not something anybody should
+// type. This one connects the same way: it asks the running application for a
+// stored password and falls back to a plain ssh when there is none.
+func TestTerminalCommandIsThisBinaryAndTheAlias(t *testing.T) {
+	service := &diagnostics.Service{Self: "/Applications/ssh-ui"}
+	command, launchable, warning := service.TerminalCommand("bastion")
+	if command != "/Applications/ssh-ui bastion" || !launchable || warning != "" {
+		t.Errorf("TerminalCommand = %q, %v, %q", command, launchable, warning)
+	}
+
+	// An alias this will not put on a command line is still shown, with why.
+	command, launchable, warning = service.TerminalCommand("-oProxyCommand=id")
+	if launchable || warning == "" {
+		t.Errorf("an unsafe alias = %q, %v, %q", command, launchable, warning)
+	}
+
+	// Without a resolved path a plain ssh still connects.
+	plain := &diagnostics.Service{}
+	if command, _, _ := plain.TerminalCommand("bastion"); command != "ssh -- bastion" {
+		t.Errorf("with no path = %q", command)
+	}
+}

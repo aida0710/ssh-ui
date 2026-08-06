@@ -9,10 +9,12 @@ import (
 	"io/fs"
 	"log/slog"
 	"net"
+	"path/filepath"
 	"time"
 
 	"ssh-ui/internal/application"
 	"ssh-ui/internal/diagnostics"
+	"ssh-ui/internal/handoff"
 	"ssh-ui/internal/httpserver"
 	"ssh-ui/internal/keys"
 	"ssh-ui/internal/knownhosts"
@@ -132,6 +134,10 @@ func Build(dependencies Dependencies, version string) (*httpserver.Server, strin
 	keyService := buildKeyService(workspace, dependencies, configService)
 	diagnosticsService := diagnostics.NewService(
 		workspace, dependencies.Runner, dependencies.Toolchain, dependencies.Terminal, dependencies.Lookup)
+	// The command shown to the user is this binary and an alias, so it has to
+	// know where this binary is. Nothing inside the application can work that
+	// out; the entry point resolves it once and passes it in.
+	diagnosticsService.Self = dependencies.AskpassHelper
 	// known_hosts shares the config transaction manager: both write ordinary
 	// managed files under ~/.ssh, so one journal covers them.
 	var scanEnvironment []string
@@ -181,8 +187,27 @@ func Build(dependencies Dependencies, version string) (*httpserver.Server, strin
 		newOrigin(dependencies.Random),
 	)
 
+	// `ssh-ui <alias>` reads this to find the running application. The secret
+	// is minted here, per run, and written after the listener is up so the URL
+	// in it is the one that answers.
+	cliSecret, err := handoff.Mint(dependencies.Random)
+	if err != nil {
+		listener.Close()
+		return nil, "", err
+	}
+
 	server, err := httpserver.New(httpserver.Options{
-		Listener:      listener,
+		Listener:  listener,
+		CLISecret: cliSecret,
+		// The alias is checked here as well as on the command line, so what a
+		// terminal is told about a host this will not launch is the same
+		// sentence the screen shows.
+		ConnectWarnings: func(alias string) []string {
+			if _, _, warning := diagnosticsService.TerminalCommand(alias); warning != "" {
+				return []string{warning}
+			}
+			return nil
+		},
 		Sessions:      sessions,
 		UI:            dependencies.UI,
 		Version:       version,
@@ -201,7 +226,25 @@ func Build(dependencies Dependencies, version string) (*httpserver.Server, strin
 		listener.Close()
 		return nil, "", err
 	}
+
+	// Written here rather than where the process starts serving, because this
+	// is where the URL becomes known and because a server that is built is a
+	// server something can connect through. A copy left behind by a process
+	// that was killed points at a port nothing is listening on with a secret
+	// nothing accepts, so removing it is tidiness rather than a guarantee.
+	if _, err := handoff.Write(HandoffDir(dependencies.Home), server.URL(), cliSecret); err != nil {
+		dependencies.Logger.Warn(
+			"write the command-line handoff; ssh-ui <alias> will connect without a stored password",
+			"error", err)
+	}
 	return server, bootstrap, nil
+}
+
+// HandoffDir is where the running application leaves the file `ssh-ui <alias>`
+// reads. It is the same state directory everything else of this application's
+// own lives in.
+func HandoffDir(home string) string {
+	return filepath.Join(home, ".ssh", "ssh-ui")
 }
 
 func Run(ctx context.Context, dependencies Dependencies, version string) error {
@@ -213,6 +256,16 @@ func Run(ctx context.Context, dependencies Dependencies, version string) error {
 	target := server.URL() + "/#bootstrap=" + bootstrap
 	serverCtx, stopServer := context.WithCancel(ctx)
 	defer stopServer()
+
+	// The handoff is written once the URL is known and taken away on the way
+	// out. A copy left behind by a process that was killed points at a port
+	// nothing is listening on with a secret nothing accepts, so the removal is
+	// tidiness rather than a guarantee anything rests on.
+	defer func() {
+		if err := handoff.Remove(HandoffDir(dependencies.Home)); err != nil {
+			dependencies.Logger.Warn("remove the command-line handoff", "error", err)
+		}
+	}()
 
 	serveErrors := make(chan error, 1)
 	go func() { serveErrors <- server.Serve(serverCtx) }()

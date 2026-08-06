@@ -51,6 +51,11 @@ type Service struct {
 	Reachability   Reachability
 	Authentication Authentication
 	Terminal       platform.TerminalLauncher
+	// Self is the absolute path of this binary, so the command shown to the
+	// user is one they can run. Nothing inside the application knows where it
+	// was installed; the entry point resolves it once and passes it in. An
+	// empty one falls back to a plain ssh, which still connects.
+	Self string
 }
 
 // NewService wires the production dependencies together.
@@ -237,10 +242,19 @@ func (s *Service) LaunchTerminal(ctx context.Context, alias string) error {
 
 // TerminalCommand returns the command a user would run by hand.
 //
+// It is this binary and the alias, because that is the whole command: it asks
+// the running application for a stored password and falls back to a plain ssh
+// when there is none. What it replaced was five environment variables and a
+// flag, which was the hand-written form of what the Terminal button does for
+// itself and was never meant to be typed.
+//
 // An alias outside the safe character set is never launched; the command is
 // still returned as text so the user can inspect and quote it themselves.
 func (s *Service) TerminalCommand(alias string) (string, bool, string) {
 	command := "ssh -- " + alias
+	if s.Self != "" {
+		command = s.Self + " " + alias
+	}
 	if err := platform.ValidateAlias(alias); err != nil {
 		return command, false, UnsafeAliasWarning
 	}

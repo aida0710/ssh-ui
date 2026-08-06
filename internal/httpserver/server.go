@@ -26,16 +26,23 @@ import (
 )
 
 type Options struct {
-	Listener    net.Listener
-	Sessions    *session.Manager
-	UI          fs.FS
-	Version     string
-	Logger      *slog.Logger
-	Config      *application.Service
-	Keys        KeyService
-	Diagnostics *diagnostics.Service
-	KnownHosts  *knownhosts.Service
-	RemoteKeys  *remotekey.Service
+	// CLISecret is what `ssh-ui <alias>` must present. It is minted per run and
+	// written to the state directory, so a handoff left behind by a process
+	// that was killed carries a secret nothing accepts.
+	CLISecret string
+	// ConnectWarnings names the directives OpenSSH will run for a host, so the
+	// command line can say them before the connection rather than during it.
+	ConnectWarnings func(alias string) []string
+	Listener        net.Listener
+	Sessions        *session.Manager
+	UI              fs.FS
+	Version         string
+	Logger          *slog.Logger
+	Config          *application.Service
+	Keys            KeyService
+	Diagnostics     *diagnostics.Service
+	KnownHosts      *knownhosts.Service
+	RemoteKeys      *remotekey.Service
 	// Passwords is the stored-password vault. A nil service leaves every
 	// password route and the askpass endpoint unregistered, which is what the
 	// tests that do not wire it rely on.
@@ -58,6 +65,10 @@ type Server struct {
 	http     *http.Server
 	url      string
 	engine   *echo.Echo
+	// cliSecret is what `ssh-ui <alias>` must present. It is held so the caller
+	// that knows where the handoff belongs can read it back rather than
+	// carrying it alongside.
+	cliSecret string
 }
 
 // Route is one route this server registered.
@@ -173,6 +184,15 @@ func New(options Options) (*Server, error) {
 			ResealSnapshot: reseal,
 		})
 	}
+	// `ssh-ui <alias>` asks here for what one connection needs. The secret is
+	// what the caller must have read out of the state directory; without one
+	// this route refuses everything.
+	registerConnectRoutes(e, ConnectHandlers{
+		Secret:     options.CLISecret,
+		Passwords:  options.Passwords,
+		AskpassURL: "http://" + host + AskpassPath,
+		Warnings:   options.ConnectWarnings,
+	})
 	if options.Sync != nil {
 		registerSyncRoutes(e, SyncHandlers{Service: options.Sync, Secrets: options.Passwords})
 	}
@@ -189,8 +209,9 @@ func New(options Options) (*Server, error) {
 			Handler:           e,
 			ReadHeaderTimeout: 5 * time.Second,
 		},
-		url:    "http://" + host,
-		engine: e,
+		url:       "http://" + host,
+		cliSecret: options.CLISecret,
+		engine:    e,
 	}, nil
 }
 
@@ -255,6 +276,10 @@ func acceptsHTML(header string) bool {
 	}
 	return false
 }
+
+// CLISecret is what `ssh-ui <alias>` must present, so the caller that knows
+// where to write the handoff can read it back without holding it separately.
+func (s *Server) CLISecret() string { return s.cliSecret }
 
 func (s *Server) URL() string {
 	return s.url

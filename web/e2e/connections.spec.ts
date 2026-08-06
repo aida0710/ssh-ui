@@ -119,7 +119,11 @@ test("diagnoses the open connection from its own tab, and starts nothing unasked
   expect(started.filter((path) => path.startsWith("/api/v1/terminal/"))).toEqual([]);
 
   expect(await clickAndAwait(page, "Terminal command", "/api/v1/terminal/command")).toBe(200);
-  await expect(panel.getByText("ssh -- bastion")).toBeVisible();
+  // This binary and the alias. It used to be five environment variables and a
+  // flag, which is what the Terminal button assembles for itself and carried a
+  // live one-time token into the shell's history.
+  await expect(panel.getByText(/ssh-ui bastion$/)).toBeVisible();
+  await expect(panel.getByText(/SSH_UI_ASKPASS_TOKEN/)).toHaveCount(0);
 
   // Still nothing launched: building the command and running it are separate
   // operations, and only the second one needs a confirmation.

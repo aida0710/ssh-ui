@@ -111,7 +111,10 @@ func TestLaunchWithPasswordPassesEveryValueAsAnArgument(t *testing.T) {
 		t.Fatalf("commands = %d", len(runner.commands))
 	}
 	command := runner.commands[0]
-	want := []string{"-", "bastion", "/Applications/ssh-ui", "http://127.0.0.1:5555/askpass", "one-time-token"}
+	// The endpoint and the token are not here any more. The window runs this
+	// application's own command line, which asks for a token when it needs one,
+	// so no live token is ever written into the Terminal's scrollback.
+	want := []string{"-", "bastion", "/Applications/ssh-ui"}
 	if !slices.Equal(command.Arguments, want) {
 		t.Errorf("arguments = %#v, want %#v", command.Arguments, want)
 	}
@@ -125,21 +128,25 @@ func TestLaunchWithPasswordPassesEveryValueAsAnArgument(t *testing.T) {
 	}
 }
 
-func TestTerminalPasswordScriptArmsTheHelperAndBoundsThePrompts(t *testing.T) {
-	for _, fragment := range []string{
+// The window carries nothing a shell history should not keep.
+//
+// It used to carry the one-time token itself, in a command line the shell wrote
+// to its history and Terminal kept in scrollback. What it runs now is this
+// binary and an alias; the token is asked for by that process and never
+// printed.
+func TestTerminalPasswordScriptCarriesNoCredential(t *testing.T) {
+	for _, absent := range []string{
 		"SSH_ASKPASS=",
-		"SSH_ASKPASS_REQUIRE=force",
 		"SSH_UI_ASKPASS_URL=",
 		"SSH_UI_ASKPASS_TOKEN=",
 		"SSH_UI_ASKPASS_ALIAS=",
-		"NumberOfPasswordPrompts=1",
 	} {
-		if !strings.Contains(macos.TerminalPasswordScript, fragment) {
-			t.Errorf("the script is missing %q", fragment)
+		if strings.Contains(macos.TerminalPasswordScript, absent) {
+			t.Errorf("the script still carries %q into the window", absent)
 		}
 	}
 	// Every value must be quoted for the shell Terminal runs.
-	if strings.Count(macos.TerminalPasswordScript, "quoted form of") != 5 {
+	if strings.Count(macos.TerminalPasswordScript, "quoted form of") != 2 {
 		t.Errorf("not every value is quoted: %q", macos.TerminalPasswordScript)
 	}
 }
