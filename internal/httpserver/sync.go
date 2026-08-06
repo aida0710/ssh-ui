@@ -86,13 +86,13 @@ func (h SyncHandlers) status(c *echo.Context) error {
 
 func (h SyncHandlers) Status(c *echo.Context) error { return h.status(c) }
 
-// Configure points this run at a bucket.
+// Configure points this machine at a bucket.
 //
-// The credentials live in memory for the life of the process and are never
-// written into the workspace. A snapshot that carried the key to its own
-// bucket would be a bootstrapping convenience and a much larger blast radius,
-// and it would mean anybody who obtained one snapshot could fetch every later
-// one.
+// The credentials are sealed with the master password and kept beside the vault
+// rather than inside it. The vault travels — Collect names ssh-ui/secrets
+// outright — and a snapshot that carried the key to its own bucket would be a
+// bootstrapping convenience and a much larger blast radius: anybody who
+// obtained one snapshot could fetch every later one.
 func (h SyncHandlers) Configure(c *echo.Context) error {
 	var request api.SyncSettingsRequest
 	if err := decodeJSON(c, &request); err != nil {

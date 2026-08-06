@@ -190,4 +190,35 @@ describe("SyncPanel", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/pull first|could not be pushed/i);
   });
+  // The settings are sealed with the master password now, so a shut vault
+  // cannot fill this form in. Showing the empty form anyway would read as
+  // "your bucket is gone" and invite the user to type the access key again.
+  it("asks for the master password rather than showing an empty bucket form", async () => {
+    const api = buildApi({ ...unconfigured, locked: true }, nothingToDo);
+    render(<SyncPanel api={api} />);
+
+    expect(await screen.findByLabelText("Master password")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Access key ID")).not.toBeInTheDocument();
+    expect(screen.getByText(/sealed with the master password/i)).toBeInTheDocument();
+  });
+
+  it("opens the vault in place and reads the settings back", async () => {
+    // Nothing is asked at startup: this is the screen asking for itself, at the
+    // moment it needs the answer.
+    const syncStatus = vi
+      .fn()
+      .mockResolvedValueOnce({ ...unconfigured, locked: true })
+      .mockResolvedValue(configured);
+    const api = buildApi(unconfigured, nothingToDo, {
+      syncStatus,
+      unlockVault: vi.fn().mockResolvedValue({ exists: true, unlocked: true, aliases: [] }),
+    });
+    render(<SyncPanel api={api} />);
+
+    await userEvent.type(await screen.findByLabelText("Master password"), "the master password");
+    await userEvent.click(screen.getByRole("button", { name: "Unlock" }));
+
+    await waitFor(() => expect(api.unlockVault).toHaveBeenCalledWith("the master password"));
+    expect(await screen.findByText("https://acc.r2.cloudflarestorage.com/ssh-ui")).toBeInTheDocument();
+  });
 });

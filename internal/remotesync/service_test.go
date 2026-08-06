@@ -15,6 +15,7 @@ import (
 
 	"ssh-ui/internal/objectstore"
 	"ssh-ui/internal/remotesync"
+	"ssh-ui/internal/secret"
 	"ssh-ui/internal/storage"
 )
 
@@ -416,5 +417,37 @@ func TestBothIsTheDefaultAndTheEmptyStringMeansIt(t *testing.T) {
 	}
 	if _, ok := remotesync.ParseDirection("sideways"); ok {
 		t.Error("ParseDirection accepted a name that is not a direction")
+	}
+}
+
+// The vault travels; the key to the bucket does not.
+//
+// The sealed settings hold the access key for this very bucket, so a snapshot
+// carrying them would mean anyone who obtained one snapshot could fetch every
+// later one. They are excluded by construction — Collect names what it takes —
+// and this is the test that notices if that list ever grows a wildcard.
+func TestASnapshotCarriesTheVaultAndNotTheKeyToItsOwnBucket(t *testing.T) {
+	installation := newInstallation(t, &fakeBucket{}, map[string]string{
+		"config":               "Host bastion\n",
+		"ssh-ui/secrets":       "sealed vault bytes",
+		"ssh-ui/sync-settings": "sealed access key",
+	})
+
+	manifest, contents, err := installation.service.Collect()
+	if err != nil {
+		t.Fatalf("Collect = %v", err)
+	}
+	packed := map[string]bool{}
+	for _, entry := range manifest.Files {
+		packed[entry.Path] = true
+	}
+	if !packed["ssh-ui/secrets"] {
+		t.Errorf("the vault does not travel: %v", packed)
+	}
+	if packed[secret.SettingsPath] {
+		t.Errorf("the snapshot carries the key to its own bucket: %v", packed)
+	}
+	if _, ok := contents[secret.SettingsPath]; ok {
+		t.Error("the settings are in the archive even though the manifest omits them")
 	}
 }

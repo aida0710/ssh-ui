@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { failureCode } from "../api/client";
 import {
   integrationsApi,
   type IntegrationsApi,
@@ -32,6 +33,7 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
   const [accessKeyId, setAccessKeyId] = useState("");
   const [secretAccessKey, setSecretAccessKey] = useState("");
   const [direction, setDirection] = useState<SyncDirection>("both");
+  const [master, setMaster] = useState("");
   const [passphrase, setPassphrase] = useState("");
   const [preview, setPreview] = useState<PullResponse | null>(null);
   const [notice, setNotice] = useState("");
@@ -50,14 +52,21 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
     void reload();
   }, [reload]);
 
-  async function run<T>(operation: () => Promise<T>, apply: (value: T) => void, failure: string) {
+  // explain turns a refusal the server named into the sentence for it, so a
+  // caller that has more than one way to fail can say which one happened.
+  async function run<T>(
+    operation: () => Promise<T>,
+    apply: (value: T) => void,
+    failure: string,
+    explain?: (code: string) => string,
+  ) {
     setError("");
     setNotice("");
     setBusy(true);
     try {
       apply(await operation());
-    } catch {
-      setError(failure);
+    } catch (caught) {
+      setError(explain?.(failureCode(caught)) || failure);
     } finally {
       setBusy(false);
     }
@@ -65,6 +74,52 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
 
   if (status === null) {
     return <p role="status" className={hintText}>{t("sync.loading")}</p>;
+  }
+
+  // A shut vault cannot fill this form in, and neither push nor pull can run
+  // without the settings it holds. Showing the form anyway would read as "your
+  // bucket is gone" and invite the user to type the access key a second time,
+  // which is the thing storing it was meant to stop.
+  if (status.locked) {
+    return (
+      <div className="flex flex-col gap-4">
+        <h2 className="font-medium">{t("sync.heading")}</h2>
+        {error === "" ? null : <p role="alert" className="text-sm text-rose-300">{error}</p>}
+        <section className={sectionCard}>
+          <h3 className={sectionHeading}>{t("sync.bucketHeading")}</h3>
+          <p className="text-sm text-zinc-300">{t("sync.sealed")}</p>
+          <Field label={t("secrets.master")}>
+            <input
+              type="password"
+              value={master}
+              onChange={(event) => setMaster(event.target.value)}
+              className={control}
+            />
+          </Field>
+          <button
+            type="button"
+            disabled={busy || master === ""}
+            onClick={() =>
+              void run(
+                () => api.unlockVault(master),
+                () => {
+                  setMaster("");
+                  void reload();
+                },
+                // A machine that has never made a vault is not a machine whose
+                // master password was wrong, and saying so would send someone
+                // hunting for a password that does not exist.
+                t("sync.unlockFailed"),
+                (code) => (code === "vault_missing" ? t("sync.noVault") : ""),
+              )
+            }
+            className={`self-start ${primaryAction}`}
+          >
+            {t("secrets.unlock")}
+          </button>
+        </section>
+      </div>
+    );
   }
 
   const conflicted = (preview?.conflicts ?? []).length > 0;
@@ -108,10 +163,10 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
             />
           </Field>
           {/*
-            The credentials live in memory for this run and are never written
-            into the workspace: a snapshot carrying the key to its own bucket
-            would mean anyone who obtained one snapshot could fetch every later
-            one.
+            The credentials are sealed with the master password and kept beside
+            the vault rather than inside it. The vault travels; the key to the
+            bucket must not, because anyone who obtained one snapshot could
+            otherwise fetch every later one.
           */}
           <Field label={t("sync.secretAccessKey")} hint={t("sync.credentialsNote")}>
             <input
