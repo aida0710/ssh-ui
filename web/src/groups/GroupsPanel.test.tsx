@@ -247,3 +247,37 @@ describe("GroupsPanel", () => {
     expect(screen.getByLabelText("New group name")).toHaveValue("company/");
   });
 });
+
+describe("hiding a group from the connections tree", () => {
+  // "company" holds build01 directly; "company/eu" holds nothing, which is what
+  // a group made to contain other groups looks like.
+  const withContainer = {
+    ...overview,
+    metadata: {
+      ...overview.metadata,
+      groups: [{ name: "company" }, { name: "company/eu" }],
+    },
+  };
+
+  it("offers it for a group that holds no connections of its own", async () => {
+    const user = userEvent.setup();
+    vi.mocked(configApi.overview).mockResolvedValue(withContainer as never);
+    render(<GroupsPanel />);
+
+    const toggle = await screen.findByLabelText("Hide company/eu from Connections");
+    expect(toggle).toBeEnabled();
+
+    await user.click(toggle);
+    expect(toggle).toBeChecked();
+  });
+
+  // Hiding a group that holds connections would take them out of view with it.
+  // Refusing the control is better than a flag that quietly does nothing.
+  it("refuses it for a group that holds connections, and says why", async () => {
+    vi.mocked(configApi.overview).mockResolvedValue(withContainer as never);
+    render(<GroupsPanel />);
+
+    expect(await screen.findByLabelText("Hide company from Connections")).toBeDisabled();
+    expect(screen.getByText(/holds connections of its own/)).toBeInTheDocument();
+  });
+});

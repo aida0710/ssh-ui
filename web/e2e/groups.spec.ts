@@ -115,3 +115,32 @@ test("refuses to move a connection into a group nothing declares", async ({
   await expect(page.getByRole("button", { name: "Move to this group" })).toBeDisabled();
   expect(await installation.read("conf.d/10-home.conf")).toContain("Host nas");
 });
+
+test("shows a nested group inside its parent, and hides a container from the tree", async ({
+  page,
+  installation,
+}) => {
+  await page.goto(installation.url);
+  await openSection(page, "Groups");
+  for (const name of ["work", "work/eu"]) {
+    await page.getByLabel("New group name").fill(name);
+    await page.getByRole("button", { name: "Add group" }).click();
+  }
+  expect(await clickAndAwait(page, "Save groups", "/api/v1/config/save")).toBe(200);
+
+  await openSection(page, "Connections");
+  const tree = page.getByRole("navigation", { name: "Connections" });
+  // The child is drawn inside the parent's block, not beside it, and its
+  // heading carries only its own segment.
+  await expect(tree.getByRole("region", { name: "work" }).getByRole("heading", { name: "eu" })).toBeVisible();
+
+  // "work" holds nothing of its own, so hiding it is offered.
+  await openSection(page, "Groups");
+  await page.getByLabel("Hide work from Connections").check();
+  expect(await clickAndAwait(page, "Save groups", "/api/v1/config/save")).toBe(200);
+
+  await openSection(page, "Connections");
+  await expect(tree.getByRole("region", { name: "work" })).toHaveCount(0);
+  // The child survives its parent's heading going away.
+  await expect(tree.getByRole("region", { name: "work/eu" })).toBeVisible();
+});

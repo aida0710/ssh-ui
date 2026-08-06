@@ -229,3 +229,44 @@ func TestRenameHostIdentityMovesExactlyOneEntry(t *testing.T) {
 		t.Fatal("RenameHostIdentity must not mutate its input")
 	}
 }
+
+// Hidden is presentation, like Colour and Order: this engine carries it and
+// never acts on it. A group whose purpose is to hold other groups has nothing
+// of its own to show in the connections tree, and this takes its heading out of
+// it — while leaving the Include line, the directory and every answer ssh gives
+// exactly as they were.
+func TestGroupMetadataCarriesTheHiddenFlagThroughARoundTrip(t *testing.T) {
+	metadata := NewMetadata()
+	metadata.Groups = []GroupMetadata{{Name: "dubguild", Hidden: true}, {Name: "dubguild/mdx"}}
+
+	encoded, err := EncodeMetadata(metadata)
+	if err != nil {
+		t.Fatalf("EncodeMetadata error = %v", err)
+	}
+	if !strings.Contains(string(encoded), `"hidden": true`) {
+		t.Errorf("encoded metadata lost the hidden flag:\n%s", encoded)
+	}
+
+	decoded, err := DecodeMetadata(encoded)
+	if err != nil {
+		t.Fatalf("DecodeMetadata error = %v", err)
+	}
+	if len(decoded.Groups) != 2 || !decoded.Groups[0].Hidden || decoded.Groups[1].Hidden {
+		t.Errorf("groups = %#v, want only dubguild hidden", decoded.Groups)
+	}
+}
+
+// A group that is not hidden writes no key at all, so an untouched workspace's
+// metadata does not grow a field for every group the moment this ships.
+func TestAGroupThatIsNotHiddenWritesNoHiddenKey(t *testing.T) {
+	metadata := NewMetadata()
+	metadata.Groups = []GroupMetadata{{Name: "work"}}
+
+	encoded, err := EncodeMetadata(metadata)
+	if err != nil {
+		t.Fatalf("EncodeMetadata error = %v", err)
+	}
+	if strings.Contains(string(encoded), "hidden") {
+		t.Errorf("encoded metadata carries a hidden key it did not need:\n%s", encoded)
+	}
+}

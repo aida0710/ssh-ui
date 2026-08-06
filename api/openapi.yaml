@@ -1785,6 +1785,10 @@ components:
         colour: { type: string }
         note: { type: string }
         order: { type: integer }
+        # Presentation only. A group whose purpose is to hold other groups has
+        # nothing of its own to show in the connections tree, and this takes its
+        # heading out of it. Nothing OpenSSH reads changes.
+        hidden: { type: boolean }
         settings: { type: array, items: { $ref: "#/components/schemas/Setting" } }
     Metadata:
       type: object

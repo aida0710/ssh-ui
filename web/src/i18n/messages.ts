@@ -363,6 +363,10 @@ export const en = {
   "groups.renameShort": "New name",
   "groups.rename": "Rename {name}",
   "groups.displayOrder": "Display order",
+  "groups.hideShort": "Hide from Connections",
+  "groups.hide": "Hide {name} from Connections",
+  "groups.hideOnlyContainers":
+    "This group holds connections of its own, so hiding it would hide them. Move them into a child group first.",
   "groups.remove": "Remove {name}",
   "groups.newName": "New group name",
   "groups.invalidName":
@@ -414,6 +418,8 @@ export const en = {
   "tree.filterPlaceholder": "alias, pattern or tag",
   "tree.noMatch": "No connection matches this filter.",
   "tree.groupEmpty": "No connection is in this group.",
+  "tree.collapse": "Collapse {name}",
+  "tree.expand": "Expand {name}",
   "tree.patternRuleExternal": "Pattern rule in {path}, a file this editor only reads.",
   "tree.patternRuleOpen": "Pattern rule — open it in the Config file view ({path}:{line})",
   "tree.favourite": "favourite",
@@ -960,6 +966,10 @@ export const ja: Record<MessageKey, string> = {
   "groups.renameShort": "新しい名前",
   "groups.rename": "{name} の名前を変更",
   "groups.displayOrder": "表示順",
+  "groups.hideShort": "接続タブで非表示",
+  "groups.hide": "{name} を接続タブで非表示",
+  "groups.hideOnlyContainers":
+    "このグループは直下に接続を持っています。非表示にするとその接続まで見えなくなるので、先に子グループへ移してください。",
   "groups.remove": "{name} を削除",
   "groups.newName": "新しいグループ名",
   "groups.invalidName":
@@ -1010,6 +1020,8 @@ export const ja: Record<MessageKey, string> = {
   "tree.filterPlaceholder": "alias、パターン、タグ",
   "tree.noMatch": "この条件に一致する接続はありません。",
   "tree.groupEmpty": "このグループに接続はありません。",
+  "tree.collapse": "{name} を折りたたむ",
+  "tree.expand": "{name} を展開する",
   "tree.patternRuleExternal": "{path} のパターン規則です。このエディタはこのファイルを読み取るだけです。",
   "tree.patternRuleOpen": "パターン規則 — 設定ファイル画面で開く（{path}:{line}）",
   "tree.favourite": "お気に入り",

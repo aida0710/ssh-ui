@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConnectionsPage } from "./ConnectionsPage";
@@ -403,7 +403,10 @@ describe("dropping in the tree", () => {
       transactionId: "tx", written: [], preview: { operation: "config.group_rename", diffs: [] },
     } as never);
     render(<ConnectionsPage onOpenFile={vi.fn()} />);
-    const source = await screen.findByRole("heading", { name: "home/eu" });
+    // The heading shows the group's own segment now that the tree nests; the
+    // region around it carries the full name, and so does the drag payload.
+    const source = within(await screen.findByRole("region", { name: "home/eu" }))
+      .getByRole("heading", { name: "eu" });
 
     drag(source, screen.getByRole("heading", { name: "Ungrouped" }), { kind: "group", name: "home/eu" });
 

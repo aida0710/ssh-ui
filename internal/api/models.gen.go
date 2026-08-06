@@ -308,6 +308,7 @@ type GroupDeleteRequest struct {
 // GroupMetadata defines model for GroupMetadata.
 type GroupMetadata struct {
 	Colour   *string    `json:"colour,omitempty"`
+	Hidden   *bool      `json:"hidden,omitempty"`
 	Name     string     `json:"name"`
 	Note     *string    `json:"note,omitempty"`
 	Order    *int       `json:"order,omitempty"`

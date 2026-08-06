@@ -1,9 +1,31 @@
-import { useMemo, useState, type DragEvent } from "react";
+import { Fragment, useMemo, useState, type DragEvent, type ReactNode } from "react";
 import type { HostEntry, Overview } from "../api/config";
 import { useTranslate } from "../i18n/context";
 import { canDrop, dragMimeType, type DragPayload } from "./dragdrop";
 
 export type HostSelection = { path: string; alias: string };
+
+// One decorated connection: the projection's entry plus the presentation the
+// metadata document carries for it.
+type Decorated = {
+  host: HostEntry;
+  group: string;
+  tags: string[];
+  favourite: boolean;
+  colour: string;
+  order: number;
+};
+
+// One group in the tree. name is the full declared name, which every callback
+// and every drop target uses; label is its last segment, which is all the
+// heading shows, because the rest is the route the reader already walked.
+type GroupNode = {
+  name: string;
+  label: string;
+  hidden: boolean;
+  items: Decorated[];
+  children: GroupNode[];
+};
 
 type ConnectionTreeProps = {
   overview: Overview;
@@ -47,6 +69,10 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
   // The private type on dataTransfer is then only good for telling one of these
   // drags from one that began outside the page.
   const [dragging, setDragging] = useState<DragPayload | null>(null);
+  // Collapse is momentary and is not written down. Persisting it would put an
+  // interface state into metadata.json beside the settings that describe the
+  // configuration; a tree that opens fully on reload is the cheaper wrong.
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
 
   const groupNames = useMemo(
     () => (overview.metadata.groups ?? []).map((group) => group.name),
@@ -111,102 +137,63 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
   );
 
   const visible = decorated.filter((item) => matchesQuery(item.host, item.tags, query));
-
-  const sections = useMemo(() => {
-    if (grouping === "files") {
-      return overview.files.map((file) => ({
+  const fileSections = useMemo(
+    () =>
+      overview.files.map((file) => ({
         title: file.file.path ?? file.file.absolute,
         items: visible.filter((item) => item.host.file.absolute === file.file.absolute),
-      }));
+      })),
+    [overview.files, visible],
+  );
+
+  // A group name is its own hierarchy — work/eu is inside work — so the tree is
+  // built from the declared names rather than listed beside them. Drawn flat, a
+  // group made only to hold other groups read as an empty sibling of its own
+  // children, which is what it is not.
+  const groupTree = useMemo(() => {
+    const declared = [...(overview.metadata.groups ?? [])].sort(
+      (left, right) => (left.order ?? 0) - (right.order ?? 0),
+    );
+    const nodes = new Map<string, GroupNode>();
+    for (const group of declared) {
+      nodes.set(group.name, {
+        name: group.name,
+        label: group.name.slice(group.name.lastIndexOf("/") + 1),
+        hidden: group.hidden === true,
+        items: visible.filter((item) => item.group === group.name),
+        children: [],
+      });
     }
-    const names = [
-      ...[...(overview.metadata.groups ?? [])]
-        .sort((left, right) => (left.order ?? 0) - (right.order ?? 0))
-        .map((group) => group.name),
-      ungrouped,
-    ];
-    return names.map((name) => ({
-      title: name,
-      items: visible.filter((item) => (item.group === "" ? name === ungrouped : item.group === name)),
-    }));
-  }, [grouping, overview.files, overview.metadata.groups, visible]);
+    const roots: GroupNode[] = [];
+    for (const group of declared) {
+      const node = nodes.get(group.name);
+      if (node === undefined) continue;
+      // The nearest declared ancestor is the parent. A group whose ancestors
+      // are all undeclared is a root: a directory no Include line names is not
+      // a group, and inventing one here would draw a heading for something that
+      // does not exist.
+      let parent: GroupNode | undefined;
+      let candidate = group.name;
+      while (parent === undefined) {
+        const cut = candidate.lastIndexOf("/");
+        if (cut < 0) break;
+        candidate = candidate.slice(0, cut);
+        parent = nodes.get(candidate);
+      }
+      if (parent === undefined) roots.push(node);
+      else parent.children.push(node);
+    }
+    return roots;
+  }, [overview.metadata.groups, visible]);
 
-  return (
-    <nav aria-label={t("tree.navLabel")} className="flex h-full flex-col gap-3 border-r border-zinc-800 p-4">
-      <div className="flex gap-2">
-        {(["groups", "files"] as const).map((mode) => (
-          <button
-            key={mode}
-            type="button"
-            onClick={() => setGrouping(mode)}
-            aria-pressed={grouping === mode}
-            className={`rounded px-2 py-1 text-xs ${grouping === mode ? "bg-zinc-800 text-zinc-100" : "text-zinc-400"}`}
-          >
-            {mode === "groups" ? t("tree.byGroups") : t("tree.byFiles")}
-          </button>
-        ))}
-      </div>
-      <label className="text-xs text-zinc-400" htmlFor="connection-filter">
-        {t("tree.filter")}
-      </label>
-      <input
-        id="connection-filter"
-        type="search"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder={t("tree.filterPlaceholder")}
-        className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
-      />
+  const ungroupedItems = useMemo(() => visible.filter((item) => item.group === ""), [visible]);
 
-      {visible.length === 0 ? (
-        <p role="status" className="text-sm text-zinc-400">
-          {t("tree.noMatch")}
-        </p>
-      ) : null}
-
-      {/*
-        A declared group is shown whether or not it holds anything. Hiding an
-        empty one meant a group made in the Groups panel was absent here until
-        something was put in it, and — since a connection can be dragged between
-        groups — that emptying a group removed the only thing it could be
-        dragged back onto. A file is different: it is not a place a connection
-        can be put, so an empty one is only noise.
-      */}
-      {sections.map((section) => (
-        section.items.length === 0 && grouping === "files" ? null : (
-          <section key={section.title} className="flex flex-col gap-1">
-            <h2
-              draggable={grouping === "groups" && section.title !== ungrouped}
-              onDragStart={(event) => {
-                if (grouping !== "groups" || section.title === ungrouped) return;
-                startDrag(event, { kind: "group", name: section.title });
-              }}
-              onDragEnd={() => setDragging(null)}
-              onDragOver={(event) => {
-                if (!accepts(targetOf(section.title))) return;
-                // This call is the whole of what makes a drop possible.
-                event.preventDefault();
-                event.dataTransfer.dropEffect = "move";
-              }}
-              onDrop={(event) => {
-                if (dragging === null || !accepts(targetOf(section.title))) return;
-                event.preventDefault();
-                onDrop(dragging, targetOf(section.title));
-                setDragging(null);
-              }}
-              className={`rounded px-1 text-xs font-semibold uppercase tracking-wide ${
-                accepts(targetOf(section.title))
-                  ? "bg-zinc-800 text-zinc-200 outline outline-1 outline-zinc-600"
-                  : "text-zinc-500"
-              }`}
-            >
-              {section.title === ungrouped ? t("tree.ungrouped") : section.title}
-            </h2>
-            {section.items.length === 0 ? (
-              <p className="px-2 py-1 text-xs text-zinc-500">{t("tree.groupEmpty")}</p>
-            ) : (
+  // The row list, lifted out of the render so the recursive group renderer and
+  // the by-file view draw one thing rather than two copies of it.
+  function renderItems(items: Decorated[]) {
+    return (
             <ul>
-              {section.items.map((item) => {
+              {items.map((item) => {
                 const active =
                   selected !== null &&
                   selected.path === item.host.identity.path &&
@@ -315,10 +302,174 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
                 );
               })}
             </ul>
+    );
+  }
+
+  // The drop behaviour every group block and the ungrouped bucket share.
+  //
+  // The whole block takes the drop, not only the heading. Sections nest now, so
+  // the innermost one to accept stops the event: otherwise a drop into a child
+  // would also be a drop into its parent, and which one won would be an
+  // accident of bubbling order.
+  function dropHandlers(target: string) {
+    return {
+      onDragOver: (event: DragEvent) => {
+        if (!accepts(target)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.dataTransfer.dropEffect = "move";
+      },
+      onDrop: (event: DragEvent) => {
+        if (dragging === null || !accepts(target)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onDrop(dragging, target);
+        setDragging(null);
+      },
+    };
+  }
+
+  function blockClass(target: string) {
+    return `flex flex-col gap-1 rounded ${
+      accepts(target) ? "bg-zinc-900 outline outline-1 outline-zinc-600" : ""
+    }`;
+  }
+
+  // One group, and everything under it.
+  //
+  // A hidden group with nothing of its own draws no heading and no section: its
+  // children take its place, one level shallower. The flag is ignored while it
+  // holds connections, because metadata.json is a file a user may edit by hand
+  // and a heading that vanished with connections under it is the failure this
+  // guards against.
+  function renderGroup(node: GroupNode): ReactNode {
+    if (node.hidden && node.items.length === 0) {
+      return <Fragment key={node.name}>{node.children.map((child) => renderGroup(child))}</Fragment>;
+    }
+    const shut = collapsed.has(node.name);
+    return (
+      <section key={node.name} aria-label={node.name} {...dropHandlers(node.name)} className={blockClass(node.name)}>
+        <div className="flex items-center gap-1">
+          {node.children.length === 0 ? null : (
+            <button
+              type="button"
+              aria-label={t(shut ? "tree.expand" : "tree.collapse", { name: node.name })}
+              aria-expanded={!shut}
+              onClick={() =>
+                setCollapsed((current) => {
+                  const next = new Set(current);
+                  if (next.has(node.name)) next.delete(node.name);
+                  else next.add(node.name);
+                  return next;
+                })
+              }
+              className="rounded px-1 text-xs text-zinc-500 hover:text-zinc-300"
+            >
+              <span aria-hidden="true">{shut ? "\u25b8" : "\u25be"}</span>
+            </button>
+          )}
+          {/*
+            The heading is the drag handle. A whole block that could be picked
+            up would make picking up a connection inside it ambiguous.
+          */}
+          <h2
+            draggable={grouping === "groups"}
+            onDragStart={(event) => startDrag(event, { kind: "group", name: node.name })}
+            onDragEnd={() => setDragging(null)}
+            className="rounded px-1 text-xs font-semibold uppercase tracking-wide text-zinc-500"
+          >
+            {node.label}
+          </h2>
+        </div>
+        {shut ? null : (
+          <>
+            {node.items.length > 0
+              ? renderItems(node.items)
+              : node.children.length === 0
+                ? <p className="px-2 py-1 text-xs text-zinc-500">{t("tree.groupEmpty")}</p>
+                : null}
+            {node.children.length === 0 ? null : (
+              <div className="ms-2 flex flex-col gap-1 border-s border-zinc-800 ps-2">
+                {node.children.map((child) => renderGroup(child))}
+              </div>
+            )}
+          </>
+        )}
+      </section>
+    );
+  }
+
+  return (
+    <nav aria-label={t("tree.navLabel")} className="flex h-full flex-col gap-3 border-r border-zinc-800 p-4">
+      <div className="flex gap-2">
+        {(["groups", "files"] as const).map((mode) => (
+          <button
+            key={mode}
+            type="button"
+            onClick={() => setGrouping(mode)}
+            aria-pressed={grouping === mode}
+            className={`rounded px-2 py-1 text-xs ${grouping === mode ? "bg-zinc-800 text-zinc-100" : "text-zinc-400"}`}
+          >
+            {mode === "groups" ? t("tree.byGroups") : t("tree.byFiles")}
+          </button>
+        ))}
+      </div>
+      <label className="text-xs text-zinc-400" htmlFor="connection-filter">
+        {t("tree.filter")}
+      </label>
+      <input
+        id="connection-filter"
+        type="search"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder={t("tree.filterPlaceholder")}
+        className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
+      />
+
+      {visible.length === 0 ? (
+        <p role="status" className="text-sm text-zinc-400">
+          {t("tree.noMatch")}
+        </p>
+      ) : null}
+
+      {/*
+        A declared group is shown whether or not it holds anything. Hiding an
+        empty one meant a group made in the Groups panel was absent here until
+        something was put in it, and — since a connection can be dragged between
+        groups — that emptying a group removed the only thing it could be
+        dragged back onto. A file is different: it is not a place a connection
+        can be put, so an empty one is only noise.
+      */}      {grouping === "files" ? (
+        fileSections.map((section) =>
+          section.items.length === 0 ? null : (
+            <section key={section.title} className="flex flex-col gap-1">
+              <h2 className="rounded px-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                {section.title}
+              </h2>
+              {renderItems(section.items)}
+            </section>
+          ),
+        )
+      ) : (
+        <>
+          {groupTree.map((node) => renderGroup(node))}
+          {/*
+            The ungrouped bucket is not a declared group and has no children, so
+            it is drawn here rather than by the recursion. It is still a drop
+            target: dropping on it moves a connection back into the entry file.
+          */}
+          <section aria-label={t("tree.ungrouped")} {...dropHandlers("")} className={blockClass("")}>
+            <h2 className="rounded px-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              {t("tree.ungrouped")}
+            </h2>
+            {ungroupedItems.length === 0 ? (
+              <p className="px-2 py-1 text-xs text-zinc-500">{t("tree.groupEmpty")}</p>
+            ) : (
+              renderItems(ungroupedItems)
             )}
           </section>
-        )
-      ))}
+        </>
+      )}
     </nav>
   );
 }
