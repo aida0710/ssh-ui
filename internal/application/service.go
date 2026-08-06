@@ -1173,7 +1173,9 @@ func (s *Service) Restore(identifier, relative string) (SaveResult, error) {
 	if err != nil {
 		return SaveResult{}, err
 	}
-	contents, err := s.workspace.FileSystem().ReadFile(filepath.Join(record.BackupDir, filepath.FromSlash(relative)))
+	// Through the manager, because a backup is ciphertext: reading the file
+	// directly would write the sealed bytes over the user's configuration.
+	contents, err := s.manager.ReadBackup(filepath.Join(record.BackupDir, filepath.FromSlash(relative)))
 	if err != nil {
 		return SaveResult{}, err
 	}

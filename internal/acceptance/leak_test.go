@@ -2,6 +2,8 @@ package acceptance_test
 
 import (
 	"bytes"
+	"encoding/json"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -488,5 +490,92 @@ func TestTheLogScrapeWouldNoticeASecret(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(f.home, ".ssh")); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Nothing in the backup directory is readable without the master password.
+//
+// The generational backups hold the previous contents of every file this
+// application replaces, which is why the writes whose previous contents could
+// be a private key used to keep no backup at all and could therefore never be
+// undone. This is what makes keeping them safe: the whole directory is
+// ciphertext, and restoring one comes back through the vault.
+func TestNothingInTheBackupDirectoryIsReadable(t *testing.T) {
+	f := newFixture(t)
+
+	base := string(f.read("config"))
+	saved := f.do(http.MethodPost, "/api/v1/config/save", mustJSON(t, map[string]any{
+		"kind": "file_raw", "path": "config", "base": base,
+		"raw": base + "\n# a line that makes this a change\n",
+	}))
+	status := saved.StatusCode
+	body := readBody(t, saved)
+	if status != http.StatusOK {
+		t.Fatalf("save = %d (%s); there would be no backup to inspect", status, body)
+	}
+
+	backups := filepath.Join(f.root, "ssh-ui", "backups")
+	found := 0
+	err := filepath.WalkDir(backups, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil || entry.IsDir() {
+			return walkErr
+		}
+		found++
+		contents, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		// The previous configuration is what this backup is of, so finding any
+		// recognisable part of it means the file was written in the clear.
+		for _, secret := range []string{"Host bastion", "203.0.113.10", "IdentityFile"} {
+			if bytes.Contains(contents, []byte(secret)) {
+				t.Errorf("%s carries %q in the clear", path, secret)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if found == 0 {
+		t.Fatal("no backup was written, so this test proved nothing")
+	}
+
+	// And it can still be restored, which is the whole point of keeping it.
+	history := f.do(http.MethodGet, "/api/v1/history", nil)
+	defer func() { _ = history.Body.Close() }()
+	if history.StatusCode != http.StatusOK {
+		t.Fatalf("history = %d", history.StatusCode)
+	}
+	var listed struct {
+		Entries []struct {
+			ID         string   `json:"id"`
+			Restorable []string `json:"restorable"`
+		} `json:"entries"`
+	}
+	if err := json.Unmarshal([]byte(readBody(t, history)), &listed); err != nil {
+		t.Fatal(err)
+	}
+	restored := false
+	for _, entry := range listed.Entries {
+		for _, path := range entry.Restorable {
+			if path != "config" {
+				continue
+			}
+			response := f.do(http.MethodPost, "/api/v1/history/restore",
+				mustJSON(t, map[string]any{"transactionId": entry.ID, "path": path}))
+			code := response.StatusCode
+			restoreBody := readBody(t, response)
+			if code != http.StatusOK {
+				t.Fatalf("restore = %d (%s)", code, restoreBody)
+			}
+			restored = true
+		}
+	}
+	if !restored {
+		t.Fatal("nothing was offered as restorable")
+	}
+	if got := string(f.read("config")); got != base {
+		t.Errorf("after restoring, config = %q, want the bytes from before the save", got)
 	}
 }

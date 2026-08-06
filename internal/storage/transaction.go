@@ -154,6 +154,23 @@ func (e *ConflictError) Error() string {
 	return "external change detected for " + e.Path
 }
 
+// ReadBackup reads one generational backup and opens it.
+//
+// Every reader comes through here — the rollback below, and the history screen
+// that offers to restore one file — so there is one place that knows a backup
+// is ciphertext and no caller that can forget and write the sealed bytes over
+// somebody's configuration.
+func (m *Manager) ReadBackup(path string) ([]byte, error) {
+	contents, err := m.workspace.FileSystem().ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if m.Unseal == nil {
+		return contents, nil
+	}
+	return m.Unseal(contents)
+}
+
 // Digest is the content hash used for preconditions and journal entries.
 func Digest(contents []byte) string {
 	sum := sha256.Sum256(contents)
@@ -213,6 +230,16 @@ type Manager struct {
 	now       func() time.Time
 	random    io.Reader
 	Validate  func(Request) error
+	// Seal and Unseal turn a generational backup into ciphertext and back.
+	//
+	// They are injected because where a secret lives belongs to the secret
+	// package and this one must not import it to ask — the same reasoning that
+	// keeps the key vault from importing it to find a passphrase. A manager
+	// with no Seal writes backups in the clear, which is what this did before
+	// there was a master password to seal them with; every wiring that has one
+	// sets both.
+	Seal   func(plaintext []byte) ([]byte, error)
+	Unseal func(sealed []byte) ([]byte, error)
 }
 
 func NewManager(workspace *Workspace, now func() time.Time, random io.Reader) *Manager {
@@ -514,7 +541,15 @@ func (m *Manager) Commit(request Request) (Result, error) {
 		if err := m.workspace.EnsureDirectory(filepath.Dir(backupPath)); err != nil {
 			return Result{}, err
 		}
-		if err := m.writeFile(backupPath, previousContents[index], fs.FileMode(entry.Mode)); err != nil {
+		contents := previousContents[index]
+		if m.Seal != nil {
+			sealed, err := m.Seal(contents)
+			if err != nil {
+				return Result{}, err
+			}
+			contents = sealed
+		}
+		if err := m.writeFile(backupPath, contents, fs.FileMode(entry.Mode)); err != nil {
 			return Result{}, err
 		}
 		entry.Backup = backupPath

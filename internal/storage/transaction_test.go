@@ -693,3 +693,59 @@ func TestAPurgeStillCopiesNothingIntoTheBackupDirectory(t *testing.T) {
 		t.Errorf("the purge wrote the key into the backup directory: %v", err)
 	}
 }
+
+// A backup is ciphertext, and the manager is the only thing that knows it.
+//
+// Nothing else reads the backup directory directly: rollback and restore both
+// come back through here, so there is one place that knows what those bytes
+// are and no caller that can forget.
+func TestBackupsAreSealedAndReadBackThroughTheManager(t *testing.T) {
+	manager, workspace := newTestManager(t)
+	manager.Seal = sealForTest
+	manager.Unseal = unsealForTest
+
+	path := filepath.Join(workspace.Root(), "config")
+	if err := os.WriteFile(path, []byte("Host bastion\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	result, err := manager.Commit(Request{
+		Operation: "config.save",
+		Changes: []Change{{
+			Path:         path,
+			Contents:     []byte("Host bastion\n\tPort 2222\n"),
+			Precondition: Precondition{Exists: true, Digest: Digest([]byte("Host bastion\n"))},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Commit = %v", err)
+	}
+
+	backup := filepath.Join(result.BackupDir, "config")
+	onDisk, err := os.ReadFile(backup)
+	if err != nil {
+		t.Fatalf("read the backup: %v", err)
+	}
+	if bytes.Equal(onDisk, []byte("Host bastion\n")) {
+		t.Error("the backup is the previous contents in the clear")
+	}
+	restored, err := manager.ReadBackup(backup)
+	if err != nil {
+		t.Fatalf("ReadBackup = %v", err)
+	}
+	if string(restored) != "Host bastion\n" {
+		t.Errorf("ReadBackup = %q, want the previous contents", restored)
+	}
+}
+
+// sealForTest is obviously not the identity, so a backup written without it
+// cannot pass by accident. The real one is the vault's key.
+func sealForTest(plaintext []byte) ([]byte, error) {
+	return append([]byte("sealed:"), plaintext...), nil
+}
+
+func unsealForTest(sealed []byte) ([]byte, error) {
+	if !bytes.HasPrefix(sealed, []byte("sealed:")) {
+		return nil, errors.New("that backup was not sealed")
+	}
+	return bytes.TrimPrefix(sealed, []byte("sealed:")), nil
+}

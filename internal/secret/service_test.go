@@ -1,6 +1,7 @@
 package secret_test
 
 import (
+	"bytes"
 	"crypto/rand"
 	"errors"
 	"os"
@@ -591,5 +592,46 @@ func TestVerifyAnswersWhetherThatIsTheMasterPassword(t *testing.T) {
 	service.Lock()
 	if ok, err := service.Verify(passphrase); err != nil || !ok {
 		t.Errorf("Verify on a locked vault = %v, %v", ok, err)
+	}
+}
+
+// Every generational backup is ciphertext, and the vault is what opens it.
+//
+// A backup of a private key used to be a copy of that key sitting in
+// ~/.ssh/ssh-ui/backups/, which is why the writes that could produce one asked
+// for no backup at all and could therefore never be undone. Sealing them is
+// what buys back the undo.
+func TestBackupsAreSealedWithTheMasterPasswordAndOpenedWithIt(t *testing.T) {
+	service, _ := newService(t)
+	if err := service.Initialise(passphrase); err != nil {
+		t.Fatal(err)
+	}
+
+	plain := []byte("-----BEGIN OPENSSH PRIVATE KEY-----\nnot really\n")
+	sealed, err := service.SealBackup(plain)
+	if err != nil {
+		t.Fatalf("SealBackup = %v", err)
+	}
+	if bytes.Contains(sealed, []byte("BEGIN OPENSSH")) {
+		t.Error("the sealed backup carries the key in the clear")
+	}
+
+	opened, err := service.OpenBackup(sealed)
+	if err != nil {
+		t.Fatalf("OpenBackup = %v", err)
+	}
+	if !bytes.Equal(opened, plain) {
+		t.Errorf("OpenBackup returned %q", opened)
+	}
+
+	// A shut vault seals nothing and opens nothing. The application is behind
+	// the master password precisely so this cannot happen while anything is
+	// being written, and it fails loudly rather than writing in the clear.
+	service.Lock()
+	if _, err := service.SealBackup(plain); !errors.Is(err, secret.ErrLocked) {
+		t.Errorf("SealBackup while shut = %v, want ErrLocked", err)
+	}
+	if _, err := service.OpenBackup(sealed); !errors.Is(err, secret.ErrLocked) {
+		t.Errorf("OpenBackup while shut = %v, want ErrLocked", err)
 	}
 }

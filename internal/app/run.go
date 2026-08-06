@@ -161,6 +161,16 @@ func Build(dependencies Dependencies, version string) (*httpserver.Server, strin
 	// lives than it asks the configuration engine what a group is.
 	keyService.SetStoredPassphrase(passwordService.KeyPassphraseFor)
 
+	// Every generational backup is ciphertext. The previous contents of a file
+	// this application replaces may be a private key, which is why the writes
+	// that could produce one used to ask for no backup at all and could
+	// therefore never be undone. Sealing them buys the undo back. The manager
+	// is handed the two functions rather than the vault, so the storage layer
+	// goes on knowing nothing about secrets, and the application being behind
+	// the master password is what makes them always available.
+	transactions.Seal = passwordService.SealBackup
+	transactions.Unseal = passwordService.OpenBackup
+
 	// The snapshot needs to know which files are configuration, and that is a
 	// question the Include graph answers. Passing the answer in keeps the
 	// dependency pointing the right way: internal/remotesync imports nothing

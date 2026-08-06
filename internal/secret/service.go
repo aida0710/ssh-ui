@@ -426,6 +426,34 @@ func (s *Service) KeyPassphraseFor(relativePath string) (string, bool) {
 	return vault.SecretFor(KindKeyPassphrase, relativePath)
 }
 
+// SealBackup seals one generational backup, and OpenBackup opens it.
+//
+// They are handed to the storage layer rather than imported by it: where a
+// secret lives belongs to this package, and the transaction manager must not
+// have to know. A shut vault seals nothing and opens nothing — the application
+// is behind the master password so that cannot happen while anything is being
+// written, and failing here is the right answer if it somehow does, because the
+// alternative is a copy of a private key in the clear.
+func (s *Service) SealBackup(plaintext []byte) ([]byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	vault := s.use()
+	if vault == nil {
+		return nil, ErrLocked
+	}
+	return vault.SealBytes(plaintext)
+}
+
+func (s *Service) OpenBackup(sealed []byte) ([]byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	vault := s.use()
+	if vault == nil {
+		return nil, ErrLocked
+	}
+	return vault.OpenBytes(sealed)
+}
+
 // settingsPath is the sealed object store settings beside the vault.
 func (s *Service) settingsPath() string {
 	return filepath.Join(s.workspace.Root(), filepath.FromSlash(SettingsPath))

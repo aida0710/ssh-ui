@@ -188,7 +188,7 @@ func (m *Manager) Rollback(identifier string) error {
 			continue
 		}
 		if entry.HadPrevious {
-			contents, readErr := fileSystem.ReadFile(entry.Backup)
+			contents, readErr := m.ReadBackup(entry.Backup)
 			if readErr != nil {
 				return readErr
 			}

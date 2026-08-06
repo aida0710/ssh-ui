@@ -27,6 +27,11 @@ func interruptedCommit(t *testing.T) (*Manager, *Workspace, string, string) {
 		},
 	}
 	manager := NewManager(workspace, fixedClock(), bytes.NewReader(bytes.Repeat([]byte{0x5a}, 4096)))
+	// Backups are ciphertext in the running application, so every rollback test
+	// below rolls back from ciphertext. Without this they would prove the undo
+	// works on a shape of backup the application no longer writes.
+	manager.Seal = sealForTest
+	manager.Unseal = unsealForTest
 	if _, err := manager.Commit(Request{
 		Operation: "config.save",
 		Changes: []Change{
@@ -127,6 +132,11 @@ func TestRollbackRemovesFilesTheTransactionCreated(t *testing.T) {
 		},
 	}
 	manager := NewManager(workspace, fixedClock(), bytes.NewReader(bytes.Repeat([]byte{0x5a}, 4096)))
+	// Backups are ciphertext in the running application, so every rollback test
+	// below rolls back from ciphertext. Without this they would prove the undo
+	// works on a shape of backup the application no longer writes.
+	manager.Seal = sealForTest
+	manager.Unseal = unsealForTest
 	if _, err := manager.Commit(Request{
 		Operation: "config.save",
 		Changes: []Change{

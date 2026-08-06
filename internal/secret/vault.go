@@ -221,6 +221,20 @@ func (v *Vault) OpenSettings(sealed []byte) (SyncSettings, error) {
 }
 
 // Seal encrypts the vault for writing.
+// SealBytes seals arbitrary bytes with this vault's key.
+//
+// It is what turns the generational backup directory from a pile of previous
+// file contents — including, for the writes that used to refuse a backup
+// entirely, previous private keys — into a pile of ciphertext.
+func (v *Vault) SealBytes(plaintext []byte) ([]byte, error) {
+	return v.key.Seal(plaintext)
+}
+
+// OpenBytes is its inverse, for a rollback or a restore.
+func (v *Vault) OpenBytes(sealed []byte) ([]byte, error) {
+	return v.key.Open(sealed)
+}
+
 func (v *Vault) Seal() ([]byte, error) {
 	plaintext, err := json.Marshal(document{
 		SchemaVersion:  SchemaVersion,
