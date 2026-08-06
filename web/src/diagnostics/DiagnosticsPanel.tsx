@@ -133,7 +133,7 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
         {busy ? t("diag.running") : alias === "" ? t("diag.needsAlias") : t("diag.idle")}
       </p>
       {error ? (
-        <p role="alert" className="text-sm text-rose-300">
+        <p role="alert" className="text-sm text-danger">
           {error}
         </p>
       ) : null}
@@ -169,9 +169,9 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
           <h3 className={sectionHeading}>{t("diag.configuration")}</h3>
           <ul className="flex flex-col gap-1">
             {config.files.map((file) => (
-              <li key={file.path} className="font-mono text-xs text-zinc-300">
+              <li key={file.path} className="font-mono text-xs text-ink-muted">
                 {file.path}
-                {file.missing ? <span className="text-amber-300">{t("diag.missingSuffix")}</span> : null}
+                {file.missing ? <span className="text-notice-ink">{t("diag.missingSuffix")}</span> : null}
               </li>
             ))}
           </ul>
@@ -182,10 +182,10 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
                   key={`${diagnostic.code}-${index}`}
                   className={`font-mono text-xs ${
                     diagnostic.severity === "error"
-                      ? "text-rose-300"
+                      ? "text-danger"
                       : diagnostic.severity === "warning"
-                        ? "text-amber-300"
-                        : "text-zinc-400"
+                        ? "text-notice-ink"
+                        : "text-ink-muted"
                   }`}
                 >
                   {`${diagnostic.code} ${diagnostic.path}${diagnostic.line > 0 ? `:${diagnostic.line}` : ""} ${diagnostic.detail}`}
@@ -204,35 +204,35 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
         OpenSSH said about its own refusal is the only thing that explains it.
       */}
       {effective?.failure.failed ? (
-        <div className="rounded border border-rose-800 p-3 text-sm">
-          <h3 className="font-medium text-rose-300">{t("diag.refused")}</h3>
-          <p className="text-zinc-300">{t("diag.exited", { code: effective.failure.exitCode })}</p>
+        <div className="rounded border border-control-line p-3 text-sm">
+          <h3 className="font-medium text-danger">{t("diag.refused")}</h3>
+          <p className="text-ink-muted">{t("diag.exited", { code: effective.failure.exitCode })}</p>
           {effective.failure.stderr ? (
-            <pre className="mt-1 whitespace-pre-wrap break-all text-zinc-400">{effective.failure.stderr}</pre>
+            <pre className="mt-1 whitespace-pre-wrap break-all text-ink-muted">{effective.failure.stderr}</pre>
           ) : (
-            <p className="text-zinc-400">{t("diag.noStderr")}</p>
+            <p className="text-ink-muted">{t("diag.noStderr")}</p>
           )}
           {effective.failure.truncated ? (
-            <p className="text-amber-300">{t("diag.outputTruncated")}</p>
+            <p className="text-notice-ink">{t("diag.outputTruncated")}</p>
           ) : null}
         </div>
       ) : null}
 
       {directives.length > 0 ? (
-        <div className="rounded border border-amber-700 p-3 text-sm">
-          <h3 className="font-medium text-amber-300">{t("diag.canRunCommand")}</h3>
-          <p className="text-zinc-300">{effective?.tokenWarning}</p>
+        <div className="rounded border border-notice-line p-3 text-sm">
+          <h3 className="font-medium text-notice-ink">{t("diag.canRunCommand")}</h3>
+          <p className="text-ink-muted">{effective?.tokenWarning}</p>
           <ul className="mt-2 flex flex-col gap-1">
             {directives.map((directive) => (
               <li key={`${directive.path}:${directive.line}:${directive.keyword}`}>
-                <span className="text-zinc-400">
+                <span className="text-ink-muted">
                   {t("diag.directiveAt", {
                     keyword: directive.keyword,
                     path: directive.path,
                     line: directive.line,
                   })}
                 </span>
-                <pre className="whitespace-pre-wrap break-all text-zinc-100">{directive.command}</pre>
+                <pre className="whitespace-pre-wrap break-all text-ink">{directive.command}</pre>
               </li>
             ))}
           </ul>
@@ -243,7 +243,7 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
               onClick={() =>
                 void run(() => api.effective(alias, true), setEffective, t("diag.explainFailed"))
               }
-              className="mt-2 rounded border border-amber-600 px-3 py-1.5 text-sm text-amber-200 hover:bg-amber-950 disabled:border-zinc-700 disabled:text-zinc-500"
+              className="mt-2 rounded border border-notice-line px-3 py-1.5 text-sm text-notice-ink hover:bg-notice disabled:border-line disabled:text-ink-faint"
             >
               {t("diag.runAnyway")}
             </button>
@@ -281,15 +281,15 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
               {effective.sources.map((source) => (
                 <tr
                   key={`${source.path}:${source.line}:${source.keyword}`}
-                  className={`border-b border-zinc-900 ${source.winner ? "" : "opacity-60"}`}
+                  className={`border-b border-line ${source.winner ? "" : "opacity-60"}`}
                 >
-                  <th scope="row" className="py-1.5 pr-3 text-left font-normal text-zinc-400">
+                  <th scope="row" className="py-1.5 pr-3 text-left font-normal text-ink-muted">
                     {source.keyword}
                   </th>
-                  <td className="py-1.5 pr-3 font-mono text-xs text-zinc-100">{source.value}</td>
-                  <td className="py-1.5 pr-3 font-mono text-xs text-zinc-500">{`${source.path}:${source.line}`}</td>
-                  <td className="py-1.5 pr-3 font-mono text-xs text-zinc-500">{source.condition}</td>
-                  <td className="py-1.5 text-zinc-500">{source.winner ? t("diag.inEffect") : t("diag.superseded")}</td>
+                  <td className="py-1.5 pr-3 font-mono text-xs text-ink">{source.value}</td>
+                  <td className="py-1.5 pr-3 font-mono text-xs text-ink-faint">{`${source.path}:${source.line}`}</td>
+                  <td className="py-1.5 pr-3 font-mono text-xs text-ink-faint">{source.condition}</td>
+                  <td className="py-1.5 text-ink-faint">{source.winner ? t("diag.inEffect") : t("diag.superseded")}</td>
                 </tr>
               ))}
             </tbody>
@@ -309,18 +309,18 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
           <ol className="flex flex-col gap-1">
             {effective.route.map((stage) => (
               <li key={`${stage.order}-${stage.hop}`} style={{ marginInlineStart: `${stage.depth}rem` }}>
-                <span className="text-zinc-100">{stage.hop}</span>
+                <span className="text-ink">{stage.hop}</span>
                 {stage.complex ? (
-                  <span className="ml-2 text-amber-300">{t("diag.hopComplex")}</span>
+                  <span className="ml-2 text-notice-ink">{t("diag.hopComplex")}</span>
                 ) : (
-                  <span className="ml-2 text-zinc-400">
+                  <span className="ml-2 text-ink-muted">
                     {`${stage.user === "" ? "" : `${stage.user}@`}${stage.hostname}${
                       stage.port === "" ? "" : `:${stage.port}`
                     }`}
                   </span>
                 )}
                 {stage.parent === "" ? null : (
-                  <span className="ml-2 text-zinc-500">{t("diag.reachedThrough", { parent: stage.parent })}</span>
+                  <span className="ml-2 text-ink-faint">{t("diag.reachedThrough", { parent: stage.parent })}</span>
                 )}
               </li>
             ))}
@@ -334,16 +334,16 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
         answer" and "OpenSSH is the authority for this one".
       */}
       {effective && effective.complexities.length > 0 ? (
-        <div className="rounded border border-amber-700 p-3 text-sm">
-          <h3 className="font-medium text-amber-300">{t("diag.notSimple")}</h3>
-          <p className="text-zinc-300">{t("diag.notSimpleDetail")}</p>
+        <div className="rounded border border-notice-line p-3 text-sm">
+          <h3 className="font-medium text-notice-ink">{t("diag.notSimple")}</h3>
+          <p className="text-ink-muted">{t("diag.notSimpleDetail")}</p>
           <ul className="mt-2 flex flex-col gap-1">
             {effective.complexities.map((note, index) => (
               <li key={`${note.code}-${note.path}-${note.line}-${index}`}>
-                <span className="text-zinc-100">{note.code}</span>
-                <span className="ml-2 text-zinc-400">{`${note.path}:${note.line}`}</span>
-                {note.condition === "" ? null : <span className="ml-2 text-zinc-500">{t("diag.inside", { condition: note.condition })}</span>}
-                {note.detail === "" ? null : <p className="text-zinc-400">{note.detail}</p>}
+                <span className="text-ink">{note.code}</span>
+                <span className="ml-2 text-ink-muted">{`${note.path}:${note.line}`}</span>
+                {note.condition === "" ? null : <span className="ml-2 text-ink-faint">{t("diag.inside", { condition: note.condition })}</span>}
+                {note.detail === "" ? null : <p className="text-ink-muted">{note.detail}</p>}
               </li>
             ))}
           </ul>
@@ -358,8 +358,8 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
             are two different facts — where it dialled, and what happened — and
             the address is the one worth reading in a fixed pitch.
           */}
-          <p className="font-mono text-xs text-zinc-100">{reach.address}</p>
-          <p className="text-zinc-200">{reach.outcome}</p>
+          <p className="font-mono text-xs text-ink">{reach.address}</p>
+          <p className="text-ink">{reach.outcome}</p>
           <p className={hintText}>{reach.notice}</p>
         </div>
       ) : null}
@@ -367,9 +367,9 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
       {auth ? (
         <div className={`${sectionCard} text-sm`}>
           <h3 className={sectionHeading}>{t("diag.authentication")}</h3>
-          <p className="text-zinc-200">{auth.outcome}</p>
+          <p className="text-ink">{auth.outcome}</p>
           {auth.stderr ? (
-            <pre className="whitespace-pre-wrap break-all font-mono text-xs text-zinc-400">{auth.stderr}</pre>
+            <pre className="whitespace-pre-wrap break-all font-mono text-xs text-ink-muted">{auth.stderr}</pre>
           ) : null}
         </div>
       ) : null}
@@ -377,7 +377,7 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
       {terminal ? (
         <div className={`${sectionCard} text-sm`}>
           <h3 className={sectionHeading}>{t("diag.terminal")}</h3>
-          <pre className="whitespace-pre-wrap break-all rounded bg-zinc-900 p-2 font-mono text-xs text-zinc-100">
+          <pre className="whitespace-pre-wrap break-all rounded bg-control p-2 font-mono text-xs text-ink">
             {terminal.command}
           </pre>
           <div className="flex items-center gap-2">
@@ -400,7 +400,7 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
             and copying is the whole point of showing it. Design §6.5 allows the
             copy and withholds only the launch.
           */}
-          {terminal.launchable ? null : <p className="text-amber-300">{terminal.warning}</p>}
+          {terminal.launchable ? null : <p className="text-notice-ink">{terminal.warning}</p>}
         </div>
       ) : null}
     </section>

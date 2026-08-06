@@ -53,7 +53,7 @@ export function CopyButton({ value, label, className }: CopyButtonProps) {
       <button
         type="button"
         onClick={() => void copy()}
-        className={className ?? "rounded border border-zinc-700 px-2 py-1 text-xs"}
+        className={className ?? "rounded border border-control-line px-2 py-1 text-xs"}
       >
         {t("copy.button", { label: t(label) })}
       </button>
@@ -61,7 +61,7 @@ export function CopyButton({ value, label, className }: CopyButtonProps) {
         aria-live rather than role="status": the shell owns the single status
         region, and a second one would compete with it.
       */}
-      <span aria-live="polite" className={state === "failed" ? "text-xs text-red-300" : "text-xs text-zinc-400"}>
+      <span aria-live="polite" className={state === "failed" ? "text-xs text-red-300" : "text-xs text-ink-muted"}>
         {state === "copied" ? t("copy.done") : state === "failed" ? t("copy.refused") : ""}
       </span>
     </span>

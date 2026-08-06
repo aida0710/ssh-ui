@@ -113,7 +113,7 @@ export function GroupsPanel() {
   }, [reload]);
 
   if (overview === null || metadata === null) {
-    return <p role="status" className="text-sm text-zinc-300">{t("groups.loading")}</p>;
+    return <p role="status" className="text-sm text-ink-muted">{t("groups.loading")}</p>;
   }
 
   // Hoisted function declarations do not inherit the narrowing above, so the
@@ -256,14 +256,14 @@ export function GroupsPanel() {
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-xs text-zinc-400">
+      <p className="text-xs text-ink-muted">
         {t("groups.directoryNote", { connections: "connections", keys: "keys" })}
       </p>
-      <p className="text-xs text-zinc-400">
+      <p className="text-xs text-ink-muted">
         {t("groups.compileNote", { file: loaded.groupsFile ?? "groups.ssh-ui.conf" })}
       </p>
-      <p className="text-xs text-zinc-500">{t("groups.orderNote")}</p>
-      {localError === "" ? null : <p role="alert" className="text-sm text-rose-300">{localError}</p>}
+      <p className="text-xs text-ink-faint">{t("groups.orderNote")}</p>
+      {localError === "" ? null : <p role="alert" className="text-sm text-danger">{localError}</p>}
       {/*
         What the declaration and the disk say about each other. A directory
         under connections/ that no Include names is the one worth showing here
@@ -275,7 +275,7 @@ export function GroupsPanel() {
         {groups.map((group) => (
           <li
             key={group.name}
-            className="rounded border border-zinc-800 p-3"
+            className="rounded border border-line p-3"
             style={{ marginInlineStart: `${(depthOf(group.name) - 1) * 1.5}rem` }}
           >
             {/*
@@ -298,16 +298,16 @@ export function GroupsPanel() {
                   style={{ backgroundColor: group.colour === undefined || group.colour === "" ? "#3f3f46" : group.colour }}
                 />
                 {depthOf(group.name) === 1 ? null : (
-                  <span className="text-zinc-500">{group.name.slice(0, group.name.lastIndexOf("/") + 1)}</span>
+                  <span className="text-ink-faint">{group.name.slice(0, group.name.lastIndexOf("/") + 1)}</span>
                 )}
                 <span>{group.name.slice(group.name.lastIndexOf("/") + 1)}</span>
                 {savedGroups.has(group.name) ? null : (
-                  <span className="rounded border border-amber-700 px-1.5 py-0.5 text-[10px] font-normal text-amber-300">
+                  <span className="rounded border border-notice-line px-1.5 py-0.5 text-[10px] font-normal text-notice-ink">
                     {t("groups.unsaved")}
                   </span>
                 )}
               </h3>
-              <p className="font-mono text-xs text-zinc-500">
+              <p className="font-mono text-xs text-ink-faint">
                 {t("groups.directories", {
                   connections: `connections/${group.name}`,
                   keys: `keys/${group.name}`,
@@ -327,7 +327,7 @@ export function GroupsPanel() {
                       type="color"
                       value={group.colour === undefined || group.colour === "" ? "#71717a" : group.colour}
                       onChange={(event) => updateGroup(group.name, { colour: event.target.value })}
-                      className="h-8 w-12 rounded border border-zinc-700 bg-zinc-900"
+                      className="h-8 w-12 rounded border border-control-line bg-control"
                     />
                     {group.colour === undefined || group.colour === "" ? null : (
                       <button
@@ -373,7 +373,7 @@ export function GroupsPanel() {
             {membersOf(group.name).length > 0 ? (
               <p className={`mt-1 ${hintText}`}>{t("groups.hideOnlyContainers")}</p>
             ) : null}
-            <p className="mt-1 text-xs text-zinc-400">
+            <p className="mt-1 text-xs text-ink-muted">
               {t("groups.members")}{" "}
               <span>{membersOf(group.name).length === 0 ? t("groups.noMembers") : membersOf(group.name).join(", ")}</span>
             </p>
@@ -382,14 +382,14 @@ export function GroupsPanel() {
               carried an empty row nobody had asked for.
             */}
             {(group.settings ?? []).length === 0 ? null : (
-              <ul className="mt-2 flex flex-col gap-0.5 font-mono text-xs text-zinc-300">
+              <ul className="mt-2 flex flex-col gap-0.5 font-mono text-xs text-ink-muted">
                 {(group.settings ?? []).map((setting, index) => (
                   <li key={`${setting.keyword}-${index}`}>{`${setting.keyword} ${formatValues(setting.values)}`}</li>
                 ))}
               </ul>
             )}
 
-            <div className="mt-3 flex flex-wrap items-end gap-x-4 gap-y-3 border-t border-zinc-800 pt-3">
+            <div className="mt-3 flex flex-wrap items-end gap-x-4 gap-y-3 border-t border-line pt-3">
               {/*
                 The visible captions are short and the group's name lives in the
                 accessible name instead. Spelled out on screen, four groups
@@ -455,16 +455,16 @@ export function GroupsPanel() {
               </button>
             </div>
             {savedGroups.has(group.name) ? null : (
-              <p className="mt-2 text-xs text-amber-300">{t("groups.newGroupNote")}</p>
+              <p className="mt-2 text-xs text-notice-ink">{t("groups.newGroupNote")}</p>
             )}
 
             {confirmingRemove[group.name] !== true ? null : (
               <div
                 role="group"
                 aria-label={t("groups.removeInto", { name: group.name })}
-                className="mt-3 flex flex-col gap-2 rounded border border-rose-900 bg-rose-950/30 p-3"
+                className="mt-3 flex flex-col gap-2 rounded border border-control-line bg-card/30 p-3"
               >
-                <p className="text-sm text-zinc-200">
+                <p className="text-sm text-ink">
                   {membersOf(group.name).length === 0
                     ? t("groups.removeExplainEmpty", { name: group.name })
                     : t("groups.removeExplain", { name: group.name, count: membersOf(group.name).length })}
@@ -575,7 +575,7 @@ export function GroupsPanel() {
         Which controls on this page write, and when, was not stated anywhere.
         It is stated once, here, beside the button that does the writing.
       */}
-      <p className={unsaved ? "text-sm text-amber-300" : hintText}>
+      <p className={unsaved ? "text-sm text-notice-ink" : hintText}>
         {unsaved ? t("groups.unsavedNote") : t("groups.savedNote")}
       </p>
 

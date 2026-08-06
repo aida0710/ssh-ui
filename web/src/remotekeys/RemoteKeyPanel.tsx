@@ -143,7 +143,7 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
         {t("rk.heading")}
       </h2>
 
-      <p aria-live="polite" className="text-sm text-zinc-400">
+      <p aria-live="polite" className="text-sm text-ink-muted">
         {busy ? t("rk.waiting") : t("rk.idle")}
       </p>
       {error ? (
@@ -158,7 +158,7 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
           <select
             value={chosen}
             onChange={(event) => void choose(event.target.value)}
-            className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1"
+            className="rounded border border-control-line bg-control px-2 py-1"
           >
             <option value="">{t("rk.typeInstead")}</option>
             {candidates.map((item) => (
@@ -173,7 +173,7 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
           <input
             value={alias}
             onChange={(event) => edit(setAlias)(event.target.value)}
-            className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1"
+            className="rounded border border-control-line bg-control px-2 py-1"
           />
         </label>
         <label className="flex flex-col gap-1">
@@ -184,7 +184,7 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
               setChosen("");
               edit(setKeyPath)(event.target.value);
             }}
-            className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1"
+            className="rounded border border-control-line bg-control px-2 py-1"
           />
         </label>
         <label className="flex flex-col gap-1">
@@ -196,14 +196,14 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
               edit(setPublicKey)(event.target.value);
             }}
             rows={3}
-            className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 font-mono"
+            className="rounded border border-control-line bg-control px-2 py-1 font-mono"
           />
         </label>
         <div className="flex gap-2">
           <button
             type="button"
             onClick={() => void describe()}
-            className="rounded border border-zinc-700 px-3 py-1"
+            className="rounded border border-control-line px-3 py-1"
           >
             {t("rk.showWhatWouldHappen")}
           </button>
@@ -212,7 +212,7 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
               type="button"
               disabled={blocked}
               onClick={() => void register()}
-              className="rounded border border-amber-600 px-3 py-1 disabled:border-zinc-800 disabled:text-zinc-600"
+              className="rounded border border-notice-line px-3 py-1 disabled:border-line disabled:text-ink-faint"
             >
               {t("rk.register")}
             </button>
@@ -223,23 +223,23 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
       {plan ? (
         <section
           aria-labelledby="remote-key-plan-heading"
-          className="rounded border border-amber-700 p-3 text-sm"
+          className="rounded border border-notice-line p-3 text-sm"
         >
-          <h3 id="remote-key-plan-heading" className="font-medium text-amber-300">
+          <h3 id="remote-key-plan-heading" className="font-medium text-notice-ink">
             {t("rk.confirmHeading")}
           </h3>
           <dl className="mt-2 grid grid-cols-[12rem_1fr] gap-x-3 gap-y-1">
-            <dt className="text-zinc-400">{t("rk.alias")}</dt>
+            <dt className="text-ink-muted">{t("rk.alias")}</dt>
             <dd>{plan.alias}</dd>
-            <dt className="text-zinc-400">{t("rk.effectiveUser")}</dt>
+            <dt className="text-ink-muted">{t("rk.effectiveUser")}</dt>
             <dd>{plan.user === "" ? t("rk.noUser") : plan.user}</dd>
-            <dt className="text-zinc-400">{t("rk.destination")}</dt>
+            <dt className="text-ink-muted">{t("rk.destination")}</dt>
             <dd>{`${plan.hostname}:${plan.port}`}</dd>
-            <dt className="text-zinc-400">{t("rk.valuesCameFrom")}</dt>
+            <dt className="text-ink-muted">{t("rk.valuesCameFrom")}</dt>
             <dd>{plan.valuesFrom in valuesFromLabels ? t(valuesFromLabels[plan.valuesFrom]!) : plan.valuesFrom}</dd>
-            <dt className="text-zinc-400">{t("rk.keyFile")}</dt>
+            <dt className="text-ink-muted">{t("rk.keyFile")}</dt>
             <dd>{plan.keyPath}</dd>
-            <dt className="text-zinc-400">{t("rk.fingerprint")}</dt>
+            <dt className="text-ink-muted">{t("rk.fingerprint")}</dt>
             <dd>{plan.fingerprint}</dd>
           </dl>
 
@@ -252,15 +252,15 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
           </p>
           <pre
             aria-label={t("rk.keyLineLabel")}
-            className="mt-1 overflow-x-auto rounded bg-zinc-950 p-3 text-xs"
+            className="mt-1 overflow-x-auto rounded bg-canvas p-3 text-xs"
           >
             {plan.keyLine}
           </pre>
           <div className="mt-1">
             <CopyButton value={plan.keyLine} label="copy.keyLine" />
           </div>
-          <p className="mt-3 text-zinc-400">{t("rk.remoteRuns")}</p>
-          <pre aria-label={t("rk.remoteCommandLabel")} className="mt-1 overflow-x-auto rounded bg-zinc-950 p-3 text-xs">
+          <p className="mt-3 text-ink-muted">{t("rk.remoteRuns")}</p>
+          <pre aria-label={t("rk.remoteCommandLabel")} className="mt-1 overflow-x-auto rounded bg-canvas p-3 text-xs">
             {plan.routine}
           </pre>
           <div className="mt-1">
@@ -268,15 +268,15 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
           </div>
 
           {unavoidable.length > 0 ? (
-            <div className="mt-3 rounded border border-amber-700 p-2">
-              <h4 className="font-medium text-amber-300">{t("rk.connectingRuns")}</h4>
+            <div className="mt-3 rounded border border-notice-line p-2">
+              <h4 className="font-medium text-notice-ink">{t("rk.connectingRuns")}</h4>
               <ul className="mt-1 flex flex-col gap-1">
                 {unavoidable.map((directive) => (
                   <li key={`${directive.path}:${directive.line}:${directive.keyword}`}>
-                    <span className="text-zinc-400">
+                    <span className="text-ink-muted">
                       {directive.keyword} at {directive.path}:{directive.line}
                     </span>
-                    <pre className="whitespace-pre-wrap break-all text-zinc-100">{directive.command}</pre>
+                    <pre className="whitespace-pre-wrap break-all text-ink">{directive.command}</pre>
                   </li>
                 ))}
               </ul>
@@ -293,7 +293,7 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
 
           {manual ? (
             <div className="mt-3">
-              <h4 className="font-medium text-amber-300">
+              <h4 className="font-medium text-notice-ink">
                 {t("rk.manualHeading")}
               </h4>
               <ol className="mt-1 list-decimal pl-5">
@@ -311,7 +311,7 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
           <h3 className="font-medium">{t("rk.result")}</h3>
           <p>{result.outcome in outcomeLabels ? t(outcomeLabels[result.outcome]!) : result.outcome}</p>
           {result.stderr ? (
-            <pre className="whitespace-pre-wrap break-all text-zinc-400">{result.stderr}</pre>
+            <pre className="whitespace-pre-wrap break-all text-ink-muted">{result.stderr}</pre>
           ) : null}
         </div>
       ) : null}

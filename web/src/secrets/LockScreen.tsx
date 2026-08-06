@@ -67,9 +67,9 @@ export function LockScreen({ exists, onOpen, api = integrationsApi }: LockScreen
         path for a key derived from a password nobody has, and somebody typing
         one for the first time is the only person who can act on that.
       */}
-      {exists ? null : <p className="text-sm text-amber-300">{t("lock.noRecovery")}</p>}
+      {exists ? null : <p className="text-sm text-notice-ink">{t("lock.noRecovery")}</p>}
       {error === "" ? null : (
-        <p role="alert" className="text-sm text-rose-300">
+        <p role="alert" className="text-sm text-danger">
           {error}
         </p>
       )}

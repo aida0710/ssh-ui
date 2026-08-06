@@ -99,10 +99,10 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
     return (
       <div className="flex flex-col gap-4">
         <h2 className="font-medium">{t("sync.heading")}</h2>
-        {error === "" ? null : <p role="alert" className="text-sm text-rose-300">{error}</p>}
+        {error === "" ? null : <p role="alert" className="text-sm text-danger">{error}</p>}
         <section className={sectionCard}>
           <h3 className={sectionHeading}>{t("sync.bucketHeading")}</h3>
-          <p className="text-sm text-zinc-300">{t("sync.sealed")}</p>
+          <p className="text-sm text-ink-muted">{t("sync.sealed")}</p>
           <Field label={t("secrets.master")}>
             <input
               type="password"
@@ -148,17 +148,17 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
         between the bucket and them.
       */}
       <p className={hintText}>{t("sync.warning")}</p>
-      {error === "" ? null : <p role="alert" className="text-sm text-rose-300">{error}</p>}
-      {notice === "" ? null : <p role="status" className="text-sm text-zinc-300">{notice}</p>}
+      {error === "" ? null : <p role="alert" className="text-sm text-danger">{error}</p>}
+      {notice === "" ? null : <p role="status" className="text-sm text-ink-muted">{notice}</p>}
 
       <section className={sectionCard}>
         <h3 className={sectionHeading}>{t("sync.bucketHeading")}</h3>
         {status.configured ? (
-          <p className="font-mono text-xs text-zinc-400">
+          <p className="font-mono text-xs text-ink-muted">
             {[status.endpoint, status.bucket, status.path].filter((part) => part !== "" && part !== undefined).join("/")}
           </p>
         ) : (
-          <p className="text-sm text-zinc-300">{t("sync.notConfigured")}</p>
+          <p className="text-sm text-ink-muted">{t("sync.notConfigured")}</p>
         )}
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label={t("sync.endpoint")} hint={t("sync.endpointHint")}>
@@ -259,7 +259,7 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
           // The refusal is stated where the button is, not only when it is
           // pressed: a disabled control with no reason beside it reads as a
           // fault in the application rather than as a setting.
-          <p role="status" className="text-sm text-amber-300">
+          <p role="status" className="text-sm text-notice-ink">
             {t(`sync.direction.${status.direction}.active`)}
           </p>
         )}
@@ -316,8 +316,8 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
                 would violate the byte-preservation promise the parser exists
                 to keep, so this says which files and stops.
               */}
-              <p className="text-sm text-amber-300">{t("sync.conflictExplain")}</p>
-              <ul className="flex flex-col gap-1 font-mono text-xs text-amber-200">
+              <p className="text-sm text-notice-ink">{t("sync.conflictExplain")}</p>
+              <ul className="flex flex-col gap-1 font-mono text-xs text-notice-ink">
                 {preview.conflicts.map((conflict) => (
                   <li key={conflict.path}>{conflict.path}</li>
                 ))}
@@ -327,7 +327,7 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
           {preview.written.length === 0 ? null : (
             <>
               <p className={hintText}>{t("sync.wouldWrite", { count: preview.written.length })}</p>
-              <ul className="flex flex-col gap-1 font-mono text-xs text-zinc-300">
+              <ul className="flex flex-col gap-1 font-mono text-xs text-ink-muted">
                 {preview.written.map((path) => (
                   <li key={path}>{path}</li>
                 ))}
@@ -337,7 +337,7 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
           {preview.removed.length === 0 ? null : (
             <>
               <p className={hintText}>{t("sync.wouldRemove", { count: preview.removed.length })}</p>
-              <ul className="flex flex-col gap-1 font-mono text-xs text-rose-300">
+              <ul className="flex flex-col gap-1 font-mono text-xs text-danger">
                 {preview.removed.map((path) => (
                   <li key={path}>{path}</li>
                 ))}

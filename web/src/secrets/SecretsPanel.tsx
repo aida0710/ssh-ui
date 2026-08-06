@@ -120,7 +120,7 @@ export function SecretsPanel({ api = integrationsApi, onLock }: SecretsPanelProp
       <section aria-label={t("secrets.heading")} className={sectionCard}>
         <h3 className={sectionHeading}>{t("secrets.heading")}</h3>
         <p className={hintText}>{creating ? t("secrets.explainNew") : t("secrets.explainLocked")}</p>
-        {error === "" ? null : <p role="alert" className="text-sm text-rose-300">{error}</p>}
+        {error === "" ? null : <p role="alert" className="text-sm text-danger">{error}</p>}
         <PasswordField label={t("secrets.master")} value={master} onChange={setMaster} />
         <div>
           <button
@@ -166,8 +166,8 @@ export function SecretsPanel({ api = integrationsApi, onLock }: SecretsPanelProp
 
   return (
     <div className="flex flex-col gap-4">
-      {error === "" ? null : <p role="alert" className="text-sm text-rose-300">{error}</p>}
-      {changed === "" ? null : <p role="status" className="text-sm text-emerald-300">{changed}</p>}
+      {error === "" ? null : <p role="alert" className="text-sm text-danger">{error}</p>}
+      {changed === "" ? null : <p role="status" className="text-sm text-live">{changed}</p>}
       <div>
         <button
           type="button"

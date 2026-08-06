@@ -47,17 +47,17 @@ export function RevealDialog({ keyId, relativePath, api, onClose }: RevealDialog
       role="dialog"
       aria-modal="true"
       aria-labelledby="reveal-heading"
-      className="mt-6 rounded-xl border border-amber-700 bg-zinc-900 p-6"
+      className="mt-6 rounded-xl border border-notice-line bg-control p-6"
     >
       <h3 id="reveal-heading" className="font-medium">
         {t("reveal.heading", { path: relativePath })}
       </h3>
       {state === "confirm" && (
         <>
-          <p className="mt-2 text-sm text-zinc-300">{t("reveal.warning")}</p>
+          <p className="mt-2 text-sm text-ink-muted">{t("reveal.warning")}</p>
           <button
             type="button"
-            className="mt-4 rounded-md border border-amber-600 px-3 py-2"
+            className="mt-4 rounded-md border border-notice-line px-3 py-2"
             onClick={() => void confirm()}
           >
             {t("reveal.show")}
@@ -67,13 +67,13 @@ export function RevealDialog({ keyId, relativePath, api, onClose }: RevealDialog
       {state === "loading" && (
         // aria-live rather than role="status": the shell owns the single status
         // region, and a second one would compete with it.
-        <p aria-live="polite" className="mt-2 text-sm text-zinc-300">
+        <p aria-live="polite" className="mt-2 text-sm text-ink-muted">
           {t("reveal.requesting")}
         </p>
       )}
       {state === "shown" && (
         <>
-          <pre aria-label={t("reveal.privateKeyLabel")} className="mt-4 overflow-x-auto rounded-md bg-zinc-950 p-4 text-xs">
+          <pre aria-label={t("reveal.privateKeyLabel")} className="mt-4 overflow-x-auto rounded-md bg-canvas p-4 text-xs">
             {material}
           </pre>
           {/*
@@ -93,7 +93,7 @@ export function RevealDialog({ keyId, relativePath, api, onClose }: RevealDialog
           {t("reveal.failed")}
         </p>
       )}
-      <button type="button" className="mt-4 rounded-md border border-zinc-700 px-3 py-2" onClick={close}>
+      <button type="button" className="mt-4 rounded-md border border-control-line px-3 py-2" onClick={close}>
         {t("reveal.close")}
       </button>
     </div>

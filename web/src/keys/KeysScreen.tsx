@@ -87,8 +87,8 @@ function certificateLines(
 // A row's actions were bare buttons in a table with no rules, so they ran
 // together as text and read as prose rather than as controls. The border and
 // these classes are what separate one key from the next.
-const rowAction = "rounded border border-zinc-700 px-2 py-1 text-xs hover:bg-zinc-800 disabled:text-zinc-600";
-const rowDanger = "rounded border border-rose-700 px-2 py-1 text-xs text-rose-300 hover:bg-rose-950";
+const rowAction = "rounded border border-control-line px-2 py-1 text-xs hover:bg-select-fill disabled:text-ink-faint";
+const rowDanger = "rounded border border-control-line px-2 py-1 text-xs text-danger hover:bg-select-fill";
 
 const noteLabels: Record<string, MessageKey> = {
   fingerprint_unavailable: "keys.noteFingerprintUnavailable",
@@ -465,12 +465,12 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
         </thead>
         <tbody>
           {inventory.items.map((item) => (
-            <tr key={item.id} className="border-b border-zinc-800 align-top">
+            <tr key={item.id} className="border-b border-line align-top">
               <td className="py-2 pr-3 font-mono text-xs">{item.relativePath}</td>
               <td className="py-2 pr-3">
                 {item.kind}
                 {item.certificate === undefined ? null : (
-                  <ul className="text-xs text-zinc-400">
+                  <ul className="text-xs text-ink-muted">
                     {certificateLines(item.certificate, now, t).map((line) => (
                       <li key={line.text} className={line.expired ? "text-red-300" : undefined}>
                         {line.text}
@@ -483,7 +483,7 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
               <td className="py-2 pr-3 font-mono text-xs break-all">
                 {item.fingerprint !== "" ? item.fingerprint : null}
                 {item.notes.map((note) => (
-                  <span key={note} className="ml-2 text-amber-300">
+                  <span key={note} className="ml-2 text-notice-ink">
                     {note in noteLabels ? t(noteLabels[note]!) : note}
                   </span>
                 ))}
@@ -579,7 +579,7 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
           ))}
           {inventory.items.length === 0 && (
             <tr>
-              <td colSpan={7} className="py-3 text-sm text-zinc-400">
+              <td colSpan={7} className="py-3 text-sm text-ink-muted">
                 {t("keys.inventoryEmpty")}
               </td>
             </tr>
@@ -597,8 +597,8 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
             Which files go, so a public key disappearing beside the private one
             is not a surprise. They travel together because they are one key.
           */}
-          <p className="text-sm text-zinc-200">{t("keys.trashExplain")}</p>
-          <ul className="flex flex-col gap-0.5 font-mono text-xs text-zinc-300">
+          <p className="text-sm text-ink">{t("keys.trashExplain")}</p>
+          <ul className="flex flex-col gap-0.5 font-mono text-xs text-ink-muted">
             {trashGroup(pendingTrash).map((member) => (
               <li key={member.id}>{member.relativePath}</li>
             ))}
@@ -613,10 +613,10 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
             <p className={hintText}>{t("keys.trashNoReferences")}</p>
           ) : (
             <>
-              <p className="text-sm text-amber-300">
+              <p className="text-sm text-notice-ink">
                 {t("keys.trashReferences", { count: pendingTrash.references.length })}
               </p>
-              <ul className="flex flex-col gap-0.5 font-mono text-xs text-amber-200">
+              <ul className="flex flex-col gap-0.5 font-mono text-xs text-notice-ink">
                 {pendingTrash.references.map((reference, index) => (
                   <li key={`${reference.configPath}-${reference.line}-${index}`}>
                     {`${reference.hostPatterns.join(" ")} — ${reference.configPath}:${reference.line}`}
@@ -642,7 +642,7 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
           <h3 id="public-key-heading" className={sectionHeading}>
             {t("keys.publicKeyHeading", { path: publicKeyView.relativePath })}
           </h3>
-          <pre aria-label={t("keys.publicKeyLabel")} className="overflow-x-auto rounded-md bg-zinc-950 p-4 text-xs">
+          <pre aria-label={t("keys.publicKeyLabel")} className="overflow-x-auto rounded-md bg-canvas p-4 text-xs">
             {publicKeyView.text}
           </pre>
           <div className="flex gap-2">
@@ -663,11 +663,11 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
       */}
       {inventory.unreadable.length > 0 && (
         <section aria-labelledby="unreadable-heading" className="flex flex-col gap-2">
-          <h3 id="unreadable-heading" className="text-sm font-medium text-amber-300">
+          <h3 id="unreadable-heading" className="text-sm font-medium text-notice-ink">
             {t("keys.unreadableHeading")}
           </h3>
-          <p className="text-sm text-zinc-400">{t("keys.unreadableNote")}</p>
-          <ul className="text-sm text-zinc-300">
+          <p className="text-sm text-ink-muted">{t("keys.unreadableNote")}</p>
+          <ul className="text-sm text-ink-muted">
             {inventory.unreadable.map((file) => (
               <li key={file.relativePath}>{t("keys.unreadableEntry", { path: file.relativePath, reason: file.reason })}</li>
             ))}
@@ -677,10 +677,10 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
 
       {inventory.unresolvedReferences.length > 0 && (
         <section aria-labelledby="unresolved-heading" className="flex flex-col gap-2">
-          <h3 id="unresolved-heading" className="text-sm font-medium text-amber-300">
+          <h3 id="unresolved-heading" className="text-sm font-medium text-notice-ink">
             {t("keys.unresolvedHeading")}
           </h3>
-          <ul className="text-sm text-zinc-300">
+          <ul className="text-sm text-ink-muted">
             {inventory.unresolvedReferences.map((reference) => (
               <li key={`${reference.configPath}:${reference.line}:${reference.value}`}>
                 {t("keys.referenceWithReason", {
@@ -702,7 +702,7 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
         </h3>
         {inventory.agentAvailable ? (
           inventory.agentIdentities.length === 0 ? (
-            <p className="text-sm text-zinc-400">{t("keys.agentEmpty")}</p>
+            <p className="text-sm text-ink-muted">{t("keys.agentEmpty")}</p>
           ) : (
             <table className="w-full min-w-[32rem] text-left text-sm">
               <caption className="sr-only">{t("keys.agentIdentitiesCaption")}</caption>
@@ -715,7 +715,7 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
               </thead>
               <tbody>
                 {inventory.agentIdentities.map((identity) => (
-                  <tr key={identity.fingerprint} className="border-b border-zinc-800">
+                  <tr key={identity.fingerprint} className="border-b border-line">
                     <td className="py-2 pr-3">
                       {identity.bits > 0 ? `${identity.algorithm} · ${identity.bits}` : identity.algorithm}
                     </td>
@@ -730,16 +730,16 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
           // ssh-add talks to whatever SSH_AUTH_SOCK names. Saying "no agent is
           // running" would be a guess: this process may simply not have been
           // given the socket. The message says what is missing, not why.
-          <p className="text-sm text-amber-300">
+          <p className="text-sm text-notice-ink">
             {t("keys.agentUnavailable")}
           </p>
         )}
         {inventory.agentDelegations.length > 0 && (
           <>
-            <p className="text-sm text-zinc-400">
+            <p className="text-sm text-ink-muted">
               {t("keys.agentDelegationsNote")}
             </p>
-            <ul className="text-sm text-zinc-300">
+            <ul className="text-sm text-ink-muted">
               {inventory.agentDelegations.map((reference) => (
                 <li key={`${reference.configPath}:${reference.line}`}>
                   {t("keys.reference", {
@@ -768,7 +768,7 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
           <h3 id="agent-register-heading" className={sectionHeading}>
             {t("keys.registerHeading", { path: registering.relativePath })}
           </h3>
-          <p className="text-sm text-zinc-400">{t("keys.registerNote")}</p>
+          <p className="text-sm text-ink-muted">{t("keys.registerNote")}</p>
           <div className="grid gap-4 sm:grid-cols-2">
             {registering.encrypted && (
               // "Key passphrase", not "Passphrase": the generation form below
@@ -864,7 +864,7 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
           <h3 id="relocate-heading" className={sectionHeading}>
             {t("keys.relocateHeading", { path: relocating.relativePath })}
           </h3>
-          <p className="text-sm text-zinc-400">{t("keys.relocateNote")}</p>
+          <p className="text-sm text-ink-muted">{t("keys.relocateNote")}</p>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label={t("keys.relocateNewName")}>
               <input className={control} value={newName} onChange={(event) => setNewName(event.target.value)} />
@@ -908,7 +908,7 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
               : t("keys.relocateDone", { path: relocated.relativePath })}
           </h3>
           {relocated.blockers.length > 0 && (
-            <ul role="alert" className="text-amber-300">
+            <ul role="alert" className="text-notice-ink">
               {relocated.blockers.map((blocker) => (
                 <li key={blocker}>{describeBlocker(blocker, t)}</li>
               ))}
@@ -916,8 +916,8 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
           )}
           {relocated.files.length > 0 && (
             <>
-              <h4 className="text-xs uppercase tracking-wide text-zinc-400">{t("keys.relocateMoved")}</h4>
-              <ul className="font-mono text-xs text-zinc-300">
+              <h4 className="text-xs uppercase tracking-wide text-ink-muted">{t("keys.relocateMoved")}</h4>
+              <ul className="font-mono text-xs text-ink-muted">
                 {relocated.files.map((file) => (
                   <li key={file.from}>{t("keys.relocateFilePair", { from: file.from, to: file.to })}</li>
                 ))}
@@ -926,8 +926,8 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
           )}
           {relocated.references.length > 0 && (
             <>
-              <h4 className="text-xs uppercase tracking-wide text-zinc-400">{t("keys.relocateRewritten")}</h4>
-              <ul className="text-xs text-zinc-300">
+              <h4 className="text-xs uppercase tracking-wide text-ink-muted">{t("keys.relocateRewritten")}</h4>
+              <ul className="text-xs text-ink-muted">
                 {relocated.references.map((reference) => (
                   <li key={`${reference.configPath}:${reference.line}:${reference.from}`}>
                     {t("keys.relocateReference", {
@@ -943,10 +943,10 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
             </>
           )}
           {relocated.skipped.length > 0 && (
-            <p className="text-zinc-400">{t("keys.relocateSkipped", { paths: relocated.skipped.join(", ") })}</p>
+            <p className="text-ink-muted">{t("keys.relocateSkipped", { paths: relocated.skipped.join(", ") })}</p>
           )}
           {relocated.notes.map((note) => (
-            <p key={note} className="text-amber-300">
+            <p key={note} className="text-notice-ink">
               {note in noteLabels ? t(noteLabels[note]!) : note}
             </p>
           ))}
@@ -979,7 +979,7 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
           <h3 id="passphrase-heading" className={sectionHeading}>
             {t("keys.passphraseHeading", { path: changingPassphrase.relativePath })}
           </h3>
-          <p className="text-sm text-zinc-400">{t("keys.passphraseNote")}</p>
+          <p className="text-sm text-ink-muted">{t("keys.passphraseNote")}</p>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label={t("keys.currentPassphrase")}>
               <input
@@ -1084,10 +1084,10 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
 
       {terminalCommand !== null && (
         <div>
-          <p className="text-sm text-zinc-300">
+          <p className="text-sm text-ink-muted">
             {t("keys.hardwareNote")}
           </p>
-          <pre aria-label={t("copy.terminalCommand")} className="overflow-x-auto rounded-md bg-zinc-950 p-4 text-xs">
+          <pre aria-label={t("copy.terminalCommand")} className="overflow-x-auto rounded-md bg-canvas p-4 text-xs">
             {terminalCommand.join(" ")}
           </pre>
           <div className="mt-2">
@@ -1098,7 +1098,7 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
 
       <div className="flex flex-col gap-2">
         <h3 className={sectionHeading}>{t("keys.trashHeading")}</h3>
-        <p className="text-sm text-zinc-400">{t("keys.trashNote")}</p>
+        <p className="text-sm text-ink-muted">{t("keys.trashNote")}</p>
         <div className="overflow-x-auto">
         <table className="w-full min-w-[40rem] text-left text-sm">
           <caption className="sr-only">{t("keys.trashCaption")}</caption>
@@ -1112,7 +1112,7 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
           </thead>
           <tbody>
             {trash.entries.map((entry) => (
-              <tr key={entry.id} className="border-b border-zinc-800 align-top">
+              <tr key={entry.id} className="border-b border-line align-top">
                 <td className="py-2 pr-3 font-mono text-xs">
                   {entry.files.map((file) => file.originalRelativePath).join(", ")}
                 </td>
@@ -1148,7 +1148,7 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
             ))}
             {trash.entries.length === 0 && (
               <tr>
-                <td colSpan={4} className="py-3 text-sm text-zinc-400">
+                <td colSpan={4} className="py-3 text-sm text-ink-muted">
                   {t("keys.trashEmpty")}
                 </td>
               </tr>

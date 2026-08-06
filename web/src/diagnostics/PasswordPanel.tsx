@@ -154,11 +154,11 @@ export function PasswordPanel({ api = integrationsApi, alias }: PasswordPanelPro
         whether to use this should read that before the field, not after.
       */}
       <p className={hintText}>{t("password.warning")}</p>
-      {error === "" ? null : <p role="alert" className="text-sm text-rose-300">{error}</p>}
+      {error === "" ? null : <p role="alert" className="text-sm text-danger">{error}</p>}
 
       {!status.exists ? (
         <>
-          <p className="text-sm text-zinc-300">{t("password.noVault", { count: minimum })}</p>
+          <p className="text-sm text-ink-muted">{t("password.noVault", { count: minimum })}</p>
           <Field label={t("password.newPassphrase")} hint={t("password.passphraseLost")}>
             <input
               type="password"
@@ -182,7 +182,7 @@ export function PasswordPanel({ api = integrationsApi, alias }: PasswordPanelPro
             A locked vault cannot say whether this host has a password. Saying
             "none stored" here would be a guess, and a wrong one half the time.
           */}
-          <p className="text-sm text-zinc-300">{t("password.locked")}</p>
+          <p className="text-sm text-ink-muted">{t("password.locked")}</p>
           <Field label={t("password.passphrase")}>
             <input
               type="password"
@@ -202,7 +202,7 @@ export function PasswordPanel({ api = integrationsApi, alias }: PasswordPanelPro
         </>
       ) : stored ? (
         <>
-          <p className="text-sm text-zinc-300">{t("password.stored", { alias })}</p>
+          <p className="text-sm text-ink-muted">{t("password.stored", { alias })}</p>
           {/*
             Which name, when it is not this host's own. A shared secret is the
             reason names exist, and someone about to forget it here should know
@@ -235,11 +235,11 @@ export function PasswordPanel({ api = integrationsApi, alias }: PasswordPanelPro
       ) : (
         <>
           {(eligibility?.blockers ?? []).length === 0 ? null : (
-            <div role="alert" className="flex flex-col gap-1 rounded border border-rose-800 bg-rose-950/30 p-3">
-              <p className="text-sm text-rose-200">{t("password.blocked", { alias })}</p>
+            <div role="alert" className="flex flex-col gap-1 rounded border border-control-line bg-card/30 p-3">
+              <p className="text-sm text-danger">{t("password.blocked", { alias })}</p>
               <ul className="flex flex-col gap-1">
                 {(eligibility?.blockers ?? []).map((notice, index) => (
-                  <li key={`${notice.code}-${index}`} className="text-xs text-rose-300">
+                  <li key={`${notice.code}-${index}`} className="text-xs text-danger">
                     {eligibilityText(t, notice.code)}
                     {notice.path === undefined ? "" : ` (${notice.path}${notice.line === undefined ? "" : `:${notice.line}`})`}
                   </li>
@@ -250,7 +250,7 @@ export function PasswordPanel({ api = integrationsApi, alias }: PasswordPanelPro
           {(eligibility?.warnings ?? []).length === 0 ? null : (
             <ul className="flex flex-col gap-1">
               {(eligibility?.warnings ?? []).map((notice, index) => (
-                <li key={`${notice.code}-${index}`} className="text-xs text-amber-300">
+                <li key={`${notice.code}-${index}`} className="text-xs text-notice-ink">
                   {eligibilityText(t, notice.code)}
                   {notice.detail === undefined ? "" : ` (${notice.detail})`}
                 </li>

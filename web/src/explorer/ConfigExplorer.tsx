@@ -211,7 +211,7 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
   }
 
   if (overview === null) {
-    return <p role="status" className="text-sm text-zinc-300">{t("explorer.loading")}</p>;
+    return <p role="status" className="text-sm text-ink-muted">{t("explorer.loading")}</p>;
   }
 
   const openPath = file?.file.path ?? file?.file.absolute ?? "";
@@ -230,12 +230,12 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
             return (
               <li
                 key={node.file.absolute}
-                className={`rounded border p-2 ${current ? "border-zinc-500 bg-zinc-900" : "border-zinc-800"}`}
+                className={`rounded border p-2 ${current ? "border-control-line bg-control" : "border-line"}`}
               >
                 {node.file.path === undefined ? (
-                  <p className="text-sm text-zinc-400">
+                  <p className="text-sm text-ink-muted">
                     <span className="font-mono text-xs">{node.file.absolute}</span>
-                    <span className="block text-xs text-amber-300">
+                    <span className="block text-xs text-notice-ink">
                       {t("explorer.externalFile")}
                     </span>
                   </p>
@@ -244,7 +244,7 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
                     type="button"
                     aria-current={current ? "true" : "false"}
                     onClick={() => void open(node.file.path ?? "")}
-                    className={`text-left font-mono text-sm hover:underline ${current ? "text-zinc-50" : "text-zinc-200"}`}
+                    className={`text-left font-mono text-sm hover:underline ${current ? "font-semibold text-ink" : "text-ink-muted"}`}
                   >
                     {node.file.path}
                   </button>
@@ -257,7 +257,7 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
                   })}
                 </p>
                 {(node.includes ?? []).map((include) => (
-                  <div key={`${node.file.absolute}:${include.line}:${include.pattern}`} className="mt-1 text-xs text-zinc-400">
+                  <div key={`${node.file.absolute}:${include.line}:${include.pattern}`} className="mt-1 text-xs text-ink-muted">
                     <span className="font-mono">{include.pattern}</span>
                     {/*
                       This was the one string on the screen that was never
@@ -265,7 +265,7 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
                       Japanese panel.
                     */}
                     {include.condition === undefined ? null : (
-                      <span className="ml-1 text-amber-300">
+                      <span className="ml-1 text-notice-ink">
                         {t("explorer.insideCondition", { condition: include.condition })}
                       </span>
                     )}
@@ -283,7 +283,7 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
           })}
         </ul>
 
-        <div className="flex flex-col gap-2 rounded border border-zinc-800 p-3">
+        <div className="flex flex-col gap-2 rounded border border-line p-3">
           <label htmlFor="new-file-path" className={fieldLabel}>{t("explorer.newFilePath")}</label>
           <input
             id="new-file-path"
@@ -335,7 +335,7 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
             {overview.diagnostics.map((diagnostic, index) => (
               <li
                 key={`${diagnostic.code}-${index}`}
-                className={`font-mono text-xs ${diagnostic.severity === "error" ? "text-rose-300" : diagnostic.severity === "warning" ? "text-amber-300" : "text-zinc-400"}`}
+                className={`font-mono text-xs ${diagnostic.severity === "error" ? "text-danger" : diagnostic.severity === "warning" ? "text-notice-ink" : "text-ink-muted"}`}
               >
                 {`${diagnostic.code} ${diagnostic.path ?? diagnostic.absolute ?? ""}${diagnostic.line === undefined ? "" : `:${diagnostic.line}`} ${diagnostic.detail ?? ""}`}
               </li>
@@ -347,7 +347,7 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
       <section className="flex flex-col gap-3">
         <p aria-live="polite" className={hintText}>{jump}</p>
         {file === null ? (
-          <p role="status" className="text-sm text-zinc-400">{t("explorer.selectFile")}</p>
+          <p role="status" className="text-sm text-ink-muted">{t("explorer.selectFile")}</p>
         ) : (
           <div className="flex flex-col gap-2">
             <div className="flex items-baseline justify-between gap-2">
@@ -359,7 +359,7 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
                 the draft differs from what was read is the least this can do
                 before that happens.
               */}
-              {modified ? <span className="text-xs text-amber-300">{t("explorer.unsaved")}</span> : null}
+              {modified ? <span className="text-xs text-notice-ink">{t("explorer.unsaved")}</span> : null}
             </div>
             <textarea
               id="file-raw"
@@ -369,7 +369,7 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
               rows={24}
               spellCheck={false}
               disabled={!file.editable}
-              className="w-full resize-y rounded border border-zinc-700 bg-zinc-950 p-3 font-mono text-xs text-zinc-100 focus:border-zinc-400 focus:outline-none disabled:border-zinc-800 disabled:text-zinc-500"
+              className="w-full resize-y rounded border border-control-line bg-canvas p-3 font-mono text-xs text-ink focus:border-accent focus:outline-none disabled:border-line disabled:text-ink-faint"
             />
             <div className="flex gap-2">
               <button type="button" onClick={() => void run("preview")} className={secondaryAction}>
@@ -386,7 +386,7 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
             </div>
 
             {file.file.path === undefined || !file.editable ? null : (
-              <div className="flex flex-col gap-2 rounded border border-zinc-800 p-3">
+              <div className="flex flex-col gap-2 rounded border border-line p-3">
                 <h4 className={sectionHeading}>{t("explorer.fileOperations")}</h4>
                 {/*
                   The Include lines that name this file travel with it. That is
@@ -417,7 +417,7 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
                       <button
                         type="button"
                         onClick={() => void deleteFile()}
-                        className="rounded border border-rose-700 px-2 py-1 text-xs text-rose-200 hover:bg-rose-950"
+                        className="rounded border border-control-line px-2 py-1 text-xs text-danger hover:bg-select-fill"
                       >
                         {t("explorer.confirmDelete")}
                       </button>

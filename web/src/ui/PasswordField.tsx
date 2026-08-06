@@ -47,7 +47,7 @@ export function PasswordField({ label, value, onChange, hint, autoFocus }: Passw
         onClick={() => setShown(!shown)}
         aria-pressed={shown}
         aria-label={t(shown ? "password.hideNamed" : "password.showNamed", { label })}
-        className="whitespace-nowrap rounded border border-zinc-700 px-2 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800"
+        className="whitespace-nowrap rounded border border-control-line px-2 py-1.5 text-xs text-ink-muted hover:bg-select-fill"
       >
         {shown ? t("password.hide") : t("password.show")}
       </button>

@@ -141,7 +141,7 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
         {t("kh.heading")}
       </h2>
 
-      <p aria-live="polite" className="text-sm text-zinc-400">
+      <p aria-live="polite" className="text-sm text-ink-muted">
         {status}
       </p>
       {error ? (
@@ -163,33 +163,33 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
           <input
             value={scanHost}
             onChange={(event) => setScanHost(event.target.value)}
-            className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1"
+            className="rounded border border-control-line bg-control px-2 py-1"
           />
         </label>
-        <button type="button" onClick={() => void scan()} className="rounded border border-zinc-700 px-3 py-1 text-sm">
+        <button type="button" onClick={() => void scan()} className="rounded border border-control-line px-3 py-1 text-sm">
           {t("kh.scan")}
         </button>
       </div>
 
-      {notice ? <p className="text-sm text-amber-300">{notice}</p> : null}
+      {notice ? <p className="text-sm text-notice-ink">{notice}</p> : null}
       {candidates.length > 0 ? (
         <table className="text-sm">
-          <caption className="text-left text-zinc-400">{t("kh.scanCandidates")}</caption>
+          <caption className="text-left text-ink-muted">{t("kh.scanCandidates")}</caption>
           <tbody>
             {candidates.map((candidate) => (
               <tr key={`${candidate.host}-${candidate.fingerprint}`}>
                 <td className="pr-3">{candidate.host}</td>
-                <td className="pr-3 text-zinc-400">{candidate.keyType}</td>
-                <td className="pr-3 text-zinc-400">{candidate.fingerprint}</td>
+                <td className="pr-3 text-ink-muted">{candidate.keyType}</td>
+                <td className="pr-3 text-ink-muted">{candidate.fingerprint}</td>
                 {/* A scan cannot establish identity, so the label describes how
                     the key was obtained and never repeats a claim of the
                     response. */}
-                <td className="pr-3 text-amber-300">{t("kh.unverified")}</td>
+                <td className="pr-3 text-notice-ink">{t("kh.unverified")}</td>
                 <td>
                   <button
                     type="button"
                     onClick={() => openAdd(candidate)}
-                    className="rounded border border-zinc-700 px-2 py-1"
+                    className="rounded border border-control-line px-2 py-1"
                   >
                     {t("kh.add")}
                   </button>
@@ -201,10 +201,10 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
       ) : null}
 
       {adding ? (
-        <div className="rounded border border-amber-700 p-3 text-sm">
-          <h3 className="font-medium text-amber-300">{t("kh.addHeading")}</h3>
-          <p className="text-zinc-300">{t("kh.addExplain", { host: adding.host })}</p>
-          <p className="text-zinc-400">
+        <div className="rounded border border-notice-line p-3 text-sm">
+          <h3 className="font-medium text-notice-ink">{t("kh.addHeading")}</h3>
+          <p className="text-ink-muted">{t("kh.addExplain", { host: adding.host })}</p>
+          <p className="text-ink-muted">
             {adding.keyType} · {adding.fingerprint}
           </p>
           <label className="mt-2 flex flex-col gap-1">
@@ -212,7 +212,7 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
             <input
               value={expectedFingerprint}
               onChange={(event) => setExpectedFingerprint(event.target.value)}
-              className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1"
+              className="rounded border border-control-line bg-control px-2 py-1"
             />
           </label>
           <label className="mt-2 flex items-center gap-2">
@@ -228,11 +228,11 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
               type="button"
               disabled={!provenOrAcknowledged}
               onClick={() => void confirmAdd()}
-              className="rounded border border-amber-600 px-3 py-1 disabled:border-zinc-800 disabled:text-zinc-600"
+              className="rounded border border-notice-line px-3 py-1 disabled:border-line disabled:text-ink-faint"
             >
               {t("kh.addToKnownHosts")}
             </button>
-            <button type="button" onClick={closeAdd} className="rounded border border-zinc-700 px-3 py-1">
+            <button type="button" onClick={closeAdd} className="rounded border border-control-line px-3 py-1">
               {t("kh.cancel")}
             </button>
           </div>
@@ -246,24 +246,24 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
             setQuery(event.target.value);
             void search(event.target.value);
           }}
-          className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1"
+          className="rounded border border-control-line bg-control px-2 py-1"
         />
       </label>
 
       {listing ? (
         <table className="text-sm">
-          <caption className="text-left text-zinc-400">{listing.path}</caption>
+          <caption className="text-left text-ink-muted">{listing.path}</caption>
           <tbody>
             {listing.entries.map((item) => (
               <tr key={`${item.line}-${item.digest}`}>
                 <td className="pr-3">{item.hashed ? t("kh.hashed") : item.hosts.join(", ")}</td>
-                <td className="pr-3 text-zinc-400">{item.keyType}</td>
-                <td className="pr-3 text-zinc-400">{item.fingerprint}</td>
+                <td className="pr-3 text-ink-muted">{item.keyType}</td>
+                <td className="pr-3 text-ink-muted">{item.fingerprint}</td>
                 <td>
                   <button
                     type="button"
                     onClick={() => setPending(item)}
-                    className="rounded border border-zinc-700 px-2 py-1"
+                    className="rounded border border-control-line px-2 py-1"
                   >
                     {t("kh.delete")}
                   </button>
@@ -290,7 +290,7 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
             <button
               type="button"
               onClick={() => setPending(null)}
-              className="rounded border border-zinc-700 px-3 py-1"
+              className="rounded border border-control-line px-3 py-1"
             >
               {t("kh.cancel")}
             </button>
