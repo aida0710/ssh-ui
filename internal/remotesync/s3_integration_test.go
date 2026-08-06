@@ -121,8 +121,11 @@ func TestAgainstARealBucketASnapshotTravelsBetweenTwoMachines(t *testing.T) {
 		if err := first.service.Apply(result); err != nil && !errors.Is(err, remotesync.ErrNothingToApply) {
 			t.Fatalf("Apply of the snapshot already in the bucket = %v", err)
 		}
-	case errors.Is(err, objectstore.ErrNotFound):
-		// An empty bucket: there is nothing to learn, and the push creates it.
+	case errors.Is(err, remotesync.ErrNoSnapshot), errors.Is(err, objectstore.ErrNotFound):
+		// An empty bucket — the state a fresh container starts in. There is
+		// nothing to learn from it, and the push is the write that creates the
+		// object. ErrNoSnapshot is what the service answers; ErrNotFound is what
+		// the client under it answers, and either can reach here.
 	default:
 		t.Fatalf("Pull before push = %v", err)
 	}
