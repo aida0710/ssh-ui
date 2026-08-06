@@ -160,6 +160,7 @@ type Overview struct {
 	Entry       FileRef          `json:"entry"`
 	Files       []FileNode       `json:"files"`
 	Hosts       []HostEntry      `json:"hosts"`
+	Groups      []GroupView      `json:"groups"`
 	Metadata    Metadata         `json:"metadata"`
 	Diagnostics []DiagnosticView `json:"diagnostics"`
 	Notices     []Notice         `json:"notices"`
@@ -257,9 +258,27 @@ func (s *Service) Overview() (Overview, error) {
 	notices = append(notices, orphanNotices...)
 	notices = append(notices, s.unreachedConnectionFiles(graph)...)
 
+	// What the declaration and the disk say about each other. A directory
+	// under connections/ that no Include names is the one that silently does
+	// nothing: the files in it are configuration nobody reads.
+	// A workspace whose entry file is missing declares no groups, and asking a
+	// nil file what it declares is how this first reached production.
+	entryNode := graph.Nodes[s.entryPath]
+	var groups []GroupView
+	if entryNode != nil && entryNode.File != nil {
+		present, presentErr := s.presentGroupDirectories()
+		if presentErr != nil {
+			return Overview{}, presentErr
+		}
+		var groupNotices []Notice
+		groups, groupNotices = BuildGroupsView(entryNode.File, hosts, reconciled, present)
+		notices = append(notices, groupNotices...)
+	}
+
 	overview := Overview{
 		Entry:    NewFileRef(root, s.entryPath),
 		Hosts:    hosts,
+		Groups:   groups,
 		Metadata: reconciled,
 		Notices:  notices,
 	}
@@ -716,6 +735,50 @@ func (s *Service) destinationWillBeRead(graph *config.Graph, absolute, relative 
 //
 // A directory that is not a declared group is walked too, because being
 // undeclared is precisely what makes the files inside it unreachable.
+// presentGroupDirectories lists the directories under connections/, workspace
+// relative and slash separated, which is the vocabulary a group name uses.
+//
+// Being there is not what makes one a group — an Include line is — and that is
+// exactly why this list is needed: the difference between the two is what the
+// diagnostics report.
+func (s *Service) presentGroupDirectories() ([]string, error) {
+	root := s.workspace.Root()
+	base := filepath.Join(root, ConnectionsDirectory)
+	var present []string
+	var walk func(directory, prefix string, depth int) error
+	walk = func(directory, prefix string, depth int) error {
+		if depth > MaxGroupSegments {
+			return nil
+		}
+		entries, err := s.workspace.FileSystem().ReadDir(directory)
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			name := entry.Name()
+			if prefix != "" {
+				name = prefix + "/" + name
+			}
+			present = append(present, name)
+			if err := walk(filepath.Join(directory, entry.Name()), name, depth+1); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := walk(base, "", 1); err != nil {
+		return nil, err
+	}
+	sort.Strings(present)
+	return present, nil
+}
+
 func (s *Service) unreachedConnectionFiles(graph *config.Graph) []Notice {
 	root := s.workspace.Root()
 	base := filepath.Join(root, ConnectionsDirectory)

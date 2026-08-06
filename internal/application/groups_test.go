@@ -1,6 +1,8 @@
 package application
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"ssh-ui/internal/config"
@@ -179,4 +181,51 @@ func hasNotice(notices []Notice, code, detail string) bool {
 		}
 	}
 	return false
+}
+
+// The three group diagnostics reach the screen that shows groups.
+//
+// They were computed, tested, and served by nothing: a directory under
+// connections/ that no Include names, a declared group whose directory is gone,
+// and a declared group with nothing in it were all invisible. Each is a state
+// somebody has to act on, and the first is the one that silently does nothing.
+func TestTheOverviewCarriesTheGroupDiagnostics(t *testing.T) {
+	service, workspace := newTestService(t)
+	declareGroup(t, service, "work", "archive")
+	writeGroupFile(t, workspace, "work", "web.conf", "Host web-1\n\tHostName 203.0.113.10\n")
+	// archive is declared and its directory holds nothing.
+	// scratch is a directory nothing declares.
+	if err := os.MkdirAll(filepath.Join(workspace.Root(), "connections", "scratch"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// gone is declared and its directory is not there.
+	declareGroup(t, service, "work", "archive", "gone")
+	if err := os.RemoveAll(filepath.Join(workspace.Root(), "connections", "gone")); err != nil {
+		t.Fatal(err)
+	}
+
+	overview, err := service.Overview()
+	if err != nil {
+		t.Fatalf("Overview = %v", err)
+	}
+	for _, want := range []struct{ code, detail string }{
+		{NoticeGroupNotDeclared, "scratch"},
+		{NoticeGroupEmpty, "archive"},
+		{NoticeGroupDirectoryMissing, "gone"},
+	} {
+		if !hasNotice(overview.Notices, want.code, want.detail) {
+			t.Errorf("notices = %#v, want %s for %s", overview.Notices, want.code, want.detail)
+		}
+	}
+	// And the groups themselves travel, with what each holds.
+	byName := map[string]GroupView{}
+	for _, group := range overview.Groups {
+		byName[group.Name] = group
+	}
+	if got := byName["work"]; got.MemberCount != 1 || !got.DirectoryPresent {
+		t.Errorf("work = %#v, want one member and a directory", got)
+	}
+	if got := byName["gone"]; got.DirectoryPresent {
+		t.Errorf("gone reports a directory it does not have: %#v", got)
+	}
 }

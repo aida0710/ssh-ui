@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, type Problem } from "../api/client";
 import { configApi, type GroupMetadata, type Metadata, type Overview, type SavePreview } from "../api/config";
-import { SavePreviewPanel } from "../connections/SavePreview";
+import { NoticeList, SavePreviewPanel } from "../connections/SavePreview";
 import { formatValues, parseValues } from "../connections/values";
 import {
   Field,
@@ -131,6 +131,9 @@ export function GroupsPanel() {
   //
   // The draft is compared against what the server last returned, which is the
   // only honest source for "this is not written yet".
+  const groupNotices = (overview.notices ?? []).filter((notice) =>
+    ["group_not_declared", "group_directory_missing", "group_empty"].includes(notice.code),
+  );
   const savedGroups = new Set((overview.metadata.groups ?? []).map((group) => group.name));
   const unsaved = JSON.stringify(loaded) !== JSON.stringify(overview.metadata);
 
@@ -261,6 +264,12 @@ export function GroupsPanel() {
       </p>
       <p className="text-xs text-zinc-500">{t("groups.orderNote")}</p>
       {localError === "" ? null : <p role="alert" className="text-sm text-rose-300">{localError}</p>}
+      {/*
+        What the declaration and the disk say about each other. A directory
+        under connections/ that no Include names is the one worth showing here
+        above all: it looks like a group, and nothing in it is ever read.
+      */}
+      <NoticeList notices={groupNotices} />
 
       <ul aria-label={t("groups.listLabel")} className="flex flex-col gap-3">
         {groups.map((group) => (

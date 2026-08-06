@@ -20,6 +20,7 @@ const overview = {
     line: 1, patterns: ["bastion"], editable: true,
   }],
   metadata: { schemaVersion: 1 },
+  groups: [],
   diagnostics: [],
   notices: [],
 };

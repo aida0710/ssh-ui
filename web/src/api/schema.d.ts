@@ -1453,10 +1453,23 @@ export interface components {
             entry: components["schemas"]["FileRef"];
             files: components["schemas"]["FileNode"][];
             hosts: components["schemas"]["HostEntry"][];
+            groups: components["schemas"]["GroupView"][];
             metadata: components["schemas"]["Metadata"];
             diagnostics: components["schemas"]["Diagnostic"][];
             notices: components["schemas"]["Notice"][];
             pending?: components["schemas"]["PendingTransaction"][];
+        };
+        GroupView: {
+            name: string;
+            parent?: string;
+            directory: string;
+            keyDirectory: string;
+            colour?: string;
+            note?: string;
+            order?: number;
+            settings?: components["schemas"]["Setting"][];
+            memberCount: number;
+            directoryPresent: boolean;
         };
         FormField: {
             line: number;

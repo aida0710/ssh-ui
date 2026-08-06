@@ -37,6 +37,7 @@ const overview: Overview = {
     groups: [{ name: "home" }],
     hosts: [{ identity: { path: "connections/home/nas.conf", alias: "nas" }, favourite: true }],
   },
+  groups: [],
   diagnostics: [],
   notices: [],
 };

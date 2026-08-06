@@ -13,6 +13,7 @@ const overviewPayload = {
     editable: true,
   }],
   metadata: { schemaVersion: 1 },
+  groups: [],
   diagnostics: [],
   notices: [],
 };

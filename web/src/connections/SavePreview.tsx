@@ -23,6 +23,9 @@ const noticeKeys: Record<string, MessageKey> = {
   include_now_unreached: "notice.include_now_unreached",
   group_file_unreached: "notice.group_file_unreached",
   group_directory_leftover: "notice.group_directory_leftover",
+  group_not_declared: "notice.group_not_declared",
+  group_directory_missing: "notice.group_directory_missing",
+  group_empty: "notice.group_empty",
 };
 
 function DiffView({ lines }: { lines: DiffLine[] }) {

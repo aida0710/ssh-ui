@@ -39,6 +39,7 @@ const overview = {
     groups: [{ name: "company", settings: [{ keyword: "ServerAliveInterval", values: ["30"] }] }],
     hosts: [{ identity: { path: "connections/company/build.conf", alias: "build01" } }],
   },
+  groups: [],
   diagnostics: [],
   notices: [],
 };
@@ -279,5 +280,21 @@ describe("hiding a group from the connections tree", () => {
 
     expect(await screen.findByLabelText("Hide company from Connections")).toBeDisabled();
     expect(screen.getByText(/holds connections of its own/)).toBeInTheDocument();
+  });
+
+  // A directory under connections/ that no Include names looks like a group and
+  // is read by nothing. The engine has always known; nothing showed it.
+  it("shows a directory that looks like a group but is declared by nothing", async () => {
+    vi.mocked(configApi.overview).mockResolvedValue({
+      ...overview,
+      notices: [
+        { code: "group_not_declared", detail: "scratch", path: "connections/scratch" },
+        { code: "group_empty", detail: "archive", path: "connections/archive" },
+      ],
+    } as never);
+    render(<GroupsPanel />);
+
+    expect(await screen.findByText(/no Include line names it/)).toBeInTheDocument();
+    expect(screen.getByText(/declared and holds nothing/)).toBeInTheDocument();
   });
 });

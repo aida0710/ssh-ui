@@ -339,6 +339,20 @@ type GroupRenameRequest struct {
 	To   string `json:"to"`
 }
 
+// GroupView defines model for GroupView.
+type GroupView struct {
+	Colour           *string    `json:"colour,omitempty"`
+	Directory        string     `json:"directory"`
+	DirectoryPresent bool       `json:"directoryPresent"`
+	KeyDirectory     string     `json:"keyDirectory"`
+	MemberCount      int        `json:"memberCount"`
+	Name             string     `json:"name"`
+	Note             *string    `json:"note,omitempty"`
+	Order            *int       `json:"order,omitempty"`
+	Parent           *string    `json:"parent,omitempty"`
+	Settings         *[]Setting `json:"settings,omitempty"`
+}
+
 // HardwareCommandRequest defines model for HardwareCommandRequest.
 type HardwareCommandRequest struct {
 	Algorithm string  `json:"algorithm"`
@@ -621,6 +635,7 @@ type Overview struct {
 	Diagnostics []Diagnostic          `json:"diagnostics"`
 	Entry       FileRef               `json:"entry"`
 	Files       []FileNode            `json:"files"`
+	Groups      []GroupView           `json:"groups"`
 	Hosts       []HostEntry           `json:"hosts"`
 	Metadata    Metadata              `json:"metadata"`
 	Notices     []Notice              `json:"notices"`

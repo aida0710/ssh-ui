@@ -105,6 +105,11 @@ export const en = {
   "notice.orphan_metadata": "The host this note belonged to is gone. Re-associate it deliberately.",
   "notice.group_cycle": "This group's parents form a cycle, so it was skipped.",
   "notice.group_member_missing": "This group member has no host block in the configuration.",
+  "notice.group_not_declared":
+    "This directory is under connections/ but no Include line names it, so nothing in it is read. Declare it as a group, or move what is in it.",
+  "notice.group_directory_missing":
+    "This group is declared but its directory is not there. Nothing is read for it until something is put in one.",
+  "notice.group_empty": "This group is declared and holds nothing.",
   "notice.explained_values_only": "These values explain what this engine reads. Run ssh -G from the Diagnostics tab for the authoritative answer.",
   "notice.destination_not_included": "No Include reaches this file yet, so OpenSSH will not read the moved connection until you add one.",
   "notice.group_file_unreached":
@@ -776,6 +781,11 @@ export const ja: Record<MessageKey, string> = {
   "notice.orphan_metadata": "このメモが属していたホストがなくなりました。意識的に再関連付けしてください。",
   "notice.group_cycle": "このグループの親が循環しているため、スキップしました。",
   "notice.group_member_missing": "このグループのメンバーに対応する Host ブロックが設定にありません。",
+  "notice.group_not_declared":
+    "このディレクトリは connections/ の下にありますが、どの Include 行も名前を挙げていないため、中身は読まれていません。グループとして宣言するか、中身を移してください。",
+  "notice.group_directory_missing":
+    "このグループは宣言されていますが、ディレクトリがありません。何か置かれるまで、このグループについては何も読まれません。",
+  "notice.group_empty": "このグループは宣言されていますが、中身がありません。",
   "notice.explained_values_only": "これらの値はこのエンジンが読んだ内容の説明です。権威ある答えは Diagnostics タブの ssh -G で確認してください。",
   "notice.destination_not_included": "このファイルへ届く Include がまだないため、移動した接続を OpenSSH は読みません。Include を追加してください。",
   "notice.group_file_unreached":
