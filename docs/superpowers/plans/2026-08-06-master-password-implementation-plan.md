@@ -73,7 +73,7 @@ func (v *Vault) SetSync(SyncSettings)
 `Assign` refuses a name that does not exist in that kind, and `Delete` refuses a
 name with uses, returning them.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```go
 func TestVaultKeepsTheTwoNamespacesApart(t *testing.T) {
@@ -110,25 +110,25 @@ func TestAVersionOneDocumentIsRefused(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run them and watch them fail**
+- [x] **Step 2: Run them and watch them fail**
 
 ```
 go test ./internal/secret/
 ```
 
-- [ ] **Step 3: Implement the document**
+- [x] **Step 3: Implement the document**
 
 The sealed JSON is the shape in the spec: `version`, `passwords`,
 `keyPassphrases`, `hosts`, `keys`, `sync`. Keep the existing envelope, KDF and
 bounded cost exactly as they are — only the plaintext inside changes.
 
-- [ ] **Step 4: Run the tests, then the package**
+- [x] **Step 4: Run the tests, then the package**
 
 ```
 go test ./internal/secret/
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git commit -m "Give the vault two namespaces and names"
@@ -155,16 +155,16 @@ status. Added:
 
 `{kind}` is `password` or `key_passphrase`; anything else is `400`.
 
-- [ ] **Step 1: Write the failing handler tests**
+- [x] **Step 1: Write the failing handler tests**
 
 One per row above, plus: every one answers `409 vault_locked` with the vault
 shut, and **no response body contains the secret** — assert on the whole body,
 not on a field.
 
-- [ ] **Step 2: Run and watch fail**
-- [ ] **Step 3: Implement the service methods and the handlers**
-- [ ] **Step 4: `make generate`, run the tests, `make verify-generated`**
-- [ ] **Step 5: Commit** — `git commit -m "Serve credentials by name"`
+- [x] **Step 2: Run and watch fail**
+- [x] **Step 3: Implement the service methods and the handlers**
+- [x] **Step 4: `make generate`, run the tests, `make verify-generated`**
+- [x] **Step 5: Commit** — `git commit -m "Serve credentials by name"`
 
 ---
 
@@ -181,7 +181,7 @@ or the secret** — plus `locked`, so the screen can say why the form is empty.
 
 Push and pull take their credentials from the vault.
 
-- [ ] Steps 1–5 as above. The test that matters: `GET /api/v1/sync` never
+- [x] Steps 1–5 as above. The test that matters: `GET /api/v1/sync` never
       carries the access key, asserted on the whole body.
 
 ---
@@ -198,7 +198,7 @@ relative path, uses it. When it does not, the behaviour is exactly as today.
 The lookup is injected — `internal/keys` must not import `internal/secret`, the
 same way it does not import the configuration engine to ask what a group is.
 
-- [ ] Steps 1–5 as above.
+- [x] Steps 1–5 as above.
 
 ---
 
@@ -212,18 +212,18 @@ same way it does not import the configuration engine to ask what a group is.
   separation made visible.
 - Sync says it is locked and offers to unlock in place.
 
-- [ ] Steps 1–5 as above, per screen, with the vitest for each.
+- [x] Steps 1–5 as above, per screen, with the vitest for each.
 
 ---
 
 ### Task 6: End to end, the README, and the bundle
 
-- [ ] The end-to-end case from the spec: set a master password, store one
+- [x] The end-to-end case from the spec: set a master password, store one
       credential, point two aliases at it, and read the sealed file to confirm
       it carries neither alias nor secret.
-- [ ] Rewrite the README's passphrase boundary rather than leave it false, and
+- [x] Rewrite the README's passphrase boundary rather than leave it false, and
       record the trade the spec states.
-- [ ] `make build`, the whole gate, and the dependency check.
+- [x] `make build`, the whole gate, and the dependency check.
 
 ---
 
@@ -240,3 +240,18 @@ unlock: each is a spec decision with its reason recorded there.
 **Type consistency.** `Kind`, `KindPassword` and `KindKeyPassphrase` are defined
 in Task 1 and used in every later task, including as the `{kind}` path segment.
 `SyncSettings` is defined in Task 1 and consumed in Task 3.
+
+---
+
+## What was built beyond the plan
+
+- **The vault shuts itself after eight hours of not being used.** The plan
+  covered when the master password is asked for and never when it stops being
+  held. Reading the status deliberately does not count as use, or one forgotten
+  browser tab would hold the vault open for as long as the machine is on.
+- **A test that the sealed sync settings never travel in a snapshot.** The plan
+  moved them out of `ssh-ui/secrets` and stated why; nothing asserted it, so the
+  invariant rested on a literal list in `remotesync.Collect`.
+- **Two README corrections.** The passphrase boundary said passphrases are never
+  stored, and the security section still said this foundation does not read
+  `~/.ssh`. Both were security claims, and both were false.
