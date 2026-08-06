@@ -20,14 +20,21 @@ test("keeps the header and the primary navigation still while a panel scrolls", 
   ).toBeVisible();
 
   const header = page.getByRole("banner");
-  const main = page.getByRole("main");
+  const tree = page.getByRole("navigation", { name: "Connections" });
   const resting = await header.boundingBox();
   expect(resting).not.toBeNull();
 
-  // The panel must genuinely overflow. If it did not, every assertion after
-  // this one would hold on a shell that scrolls the header off screen.
-  const overflow = await main.evaluate((element) => element.scrollHeight - element.clientHeight);
-  expect(overflow, "the fixture is not tall enough to scroll the panel").toBeGreaterThan(0);
+  // The list is its own pane now, and scrolls on its own rather than taking the
+  // whole panel with it. Its scroller is the element the tree sits in.
+  //
+  // It must genuinely overflow. If it did not, every assertion after this one
+  // would hold on a shell that scrolls the header off screen.
+  const overflow = await tree.evaluate((element) => {
+    const scroller = element.parentElement;
+    if (scroller === null) return 0;
+    return scroller.scrollHeight - scroller.clientHeight;
+  });
+  expect(overflow, "the fixture is not tall enough to scroll the list").toBeGreaterThan(0);
 
   // The document itself must not scroll. This is the regression: a page-level
   // scroll is what carried the header and the section buttons away, and a
@@ -44,8 +51,8 @@ test("keeps the header and the primary navigation still while a panel scrolls", 
   });
   expect(windowOffset).toBe(0);
 
-  await main.evaluate((element) => element.scrollTo(0, element.scrollHeight));
-  expect(await main.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await tree.evaluate((element) => element.parentElement?.scrollTo(0, element.parentElement.scrollHeight));
+  expect(await tree.evaluate((element) => element.parentElement?.scrollTop ?? 0)).toBeGreaterThan(0);
 
   expect(await header.boundingBox()).toEqual(resting);
   await expect(page.getByRole("navigation", { name: "Primary" })).toBeInViewport();

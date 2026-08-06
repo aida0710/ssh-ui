@@ -523,6 +523,7 @@ export const en = {
 
   "tree.navLabel": "Connections",
   "tree.ungrouped": "Ungrouped",
+  "tree.arrangeBy": "Arrange connections by",
   "tree.byGroups": "Groups",
   "tree.byFiles": "Files",
   "tree.filter": "Filter connections",
@@ -1239,6 +1240,7 @@ export const ja: Record<MessageKey, string> = {
 
   "tree.navLabel": "接続一覧",
   "tree.ungrouped": "未分類",
+  "tree.arrangeBy": "接続の並べ方",
   "tree.byGroups": "グループ",
   "tree.byFiles": "ファイル",
   "tree.filter": "接続を絞り込む",

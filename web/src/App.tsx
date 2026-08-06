@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { apiClient, whenLocked, type HealthResponse } from "./api/client";
 import { integrationsApi, type PasswordVaultStatus } from "./api/integrations";
 import { configApi } from "./api/config";
@@ -119,12 +119,17 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
   // window rather than about a host.
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [inspector, setInspector] = useState<InspectorContent>(null);
+  // What the open section puts in the toolbar. The shell owns the strip; the
+  // section says what belongs in it.
+  const [toolbar, setToolbar] = useState<ReactNode>(null);
 
   // The pane's contents belong to whichever section is open; its open state
   // does not. Leaving a section therefore clears what is in the pane without
-  // closing it.
+  // closing it. The toolbar's contents go the same way, and have no state to
+  // keep.
   useEffect(() => {
     setInspector(null);
+    setToolbar(null);
   }, [section]);
 
   // The shell owns section switching, so a view that can only address a block
@@ -238,12 +243,23 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
   return (
     <div className="flex h-screen flex-col bg-canvas text-ink">
       <IconSprite />
-      <header className="flex shrink-0 items-center gap-3 border-b border-line bg-toolbar px-6 py-3">
-        <h1 className="text-base font-semibold">{t("shell.title")}</h1>
+      <header className="flex shrink-0 items-center gap-3 border-b border-line bg-toolbar px-6 py-2.5">
+        {/*
+          The application's name stays the h1 and the open section is shown
+          beside it without being a heading. Making the section a heading would
+          put "Known Hosts" and "Remote Keys" into the heading namespace twice —
+          once here and once on the panel — and Playwright matches accessible
+          names by substring, so the suite's page-level queries for those
+          headings would find two elements and fail.
+        */}
+        <h1 className="text-xs font-medium text-ink-muted">{t("shell.title")}</h1>
+        <span aria-hidden="true" className="text-xs text-ink-faint">/</span>
+        <p className="text-sm font-semibold">{t(sectionLabels[section])}</p>
         <p role="status" className="flex items-center gap-1.5 text-xs text-ink-muted">
           <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-live" />
           {state === "ready" ? t("shell.active", { version }) : t("shell.starting")}
         </p>
+        {toolbar === null ? null : <span className="ms-4">{toolbar}</span>}
         {inspector === null ? (
           <span className="ml-auto" />
         ) : (
@@ -331,7 +347,13 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
             </div>
           ))}
         </nav>
-        <main className="relative overflow-y-auto p-6">
+        {/*
+          No padding here. A section that wants to fill the window edge to edge
+          — Connections, whose list is a surface of its own — cannot do that
+          inside a padded box, so the padding is the section's to apply and
+          SectionView applies it for the nine that want it.
+        */}
+        <main className="relative overflow-hidden">
           {state === "ready" ? (
             <SectionView
               section={section}
@@ -340,6 +362,7 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
               onOpenFile={openFile}
               onLock={() => setState("locked")}
               onInspector={setInspector}
+              onToolbar={setToolbar}
             />
           ) : null}
         </main>
@@ -363,12 +386,26 @@ type SectionViewProps = {
   // A section supplies the right-hand pane's contents, or null when it has
   // nothing to inspect. Only Connections fills it today.
   onInspector: (content: InspectorContent) => void;
+  // What this section puts in the toolbar, or nothing.
+  onToolbar: (content: ReactNode) => void;
 };
 
-function SectionView({ section, fileTarget, groups, onOpenFile, onLock, onInspector }: SectionViewProps) {
-  if (section === "Connections") {
-    return <ConnectionsPage onOpenFile={onOpenFile} onInspector={onInspector} />;
+function SectionView(props: SectionViewProps) {
+  // Connections lays out its own panes to the window's edges. Every other
+  // section is a document, and a document wants a margin and a scrollbar.
+  if (props.section === "Connections") {
+    return (
+      <ConnectionsPage
+        onOpenFile={props.onOpenFile}
+        onInspector={props.onInspector}
+        onToolbar={props.onToolbar}
+      />
+    );
   }
+  return <div className="h-full overflow-y-auto p-6">{<PaddedSection {...props} />}</div>;
+}
+
+function PaddedSection({ section, fileTarget, groups, onOpenFile, onLock }: SectionViewProps) {
   if (section === "Config") {
     return <ConfigExplorer target={fileTarget} />;
   }

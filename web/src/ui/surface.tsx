@@ -74,6 +74,42 @@ export function Notice({ children, tone = "notice" }: { children: ReactNode; ton
   );
 }
 
+// A segmented control: two or three exclusive choices, shown as one control
+// rather than as separate buttons.
+//
+// The pressed state is `aria-pressed` on each segment rather than a radio
+// group, which is what this application already used for the same control and
+// what its tests address.
+export function Segmented<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div role="group" aria-label={label} className="flex gap-0.5 rounded-md bg-select-fill p-0.5">
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          aria-pressed={value === option.value}
+          onClick={() => onChange(option.value)}
+          className={`rounded px-2.5 py-0.5 text-xs ${
+            value === option.value ? "bg-card text-ink shadow-sm" : "text-ink-muted"
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 type ButtonProps = { kind?: "primary" | "secondary" | "danger" } & ButtonHTMLAttributes<HTMLButtonElement>;
 
 // type="button" by default because every button in this application is one:

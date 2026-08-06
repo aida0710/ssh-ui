@@ -73,7 +73,7 @@ const twoRulesOverview: Overview = {
 
 describe("ConnectionTree", () => {
   it("groups hosts by their primary group and marks favourites", () => {
-    render(<ConnectionTree overview={overview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />);
+    render(<ConnectionTree grouping="groups" overview={overview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />);
 
     expect(screen.getByRole("heading", { name: "home" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /nas/ })).toBeInTheDocument();
@@ -82,7 +82,7 @@ describe("ConnectionTree", () => {
   });
 
   it("shows a wildcard block as a pattern rule rather than a host", () => {
-    render(<ConnectionTree overview={overview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />);
+    render(<ConnectionTree grouping="groups" overview={overview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />);
 
     expect(screen.getByText("Host *")).toBeInTheDocument();
   });
@@ -92,7 +92,7 @@ describe("ConnectionTree", () => {
     const onSelect = vi.fn();
     const onOpenPatternRule = vi.fn();
     render(
-      <ConnectionTree overview={overview} selected={null} onSelect={onSelect} onOpenPatternRule={onOpenPatternRule} onDrop={vi.fn()} />,
+      <ConnectionTree grouping="groups" overview={overview} selected={null} onSelect={onSelect} onOpenPatternRule={onOpenPatternRule} onDrop={vi.fn()} />,
     );
 
     const rule = screen.getByRole("button", { name: /Host \*/ });
@@ -106,7 +106,7 @@ describe("ConnectionTree", () => {
 
   it("states plainly that a pattern rule outside ~/.ssh cannot be opened", () => {
     render(
-      <ConnectionTree overview={externalOverview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
+      <ConnectionTree grouping="groups" overview={externalOverview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
     );
 
     expect(screen.getByText("Host *")).toBeInTheDocument();
@@ -124,6 +124,7 @@ describe("ConnectionTree", () => {
         onSelect={vi.fn()}
         onOpenPatternRule={onOpenPatternRule}
         onDrop={vi.fn()}
+        grouping="groups"
       />,
     );
 
@@ -141,18 +142,17 @@ describe("ConnectionTree", () => {
     expect(onOpenPatternRule).toHaveBeenCalledWith("config", 14);
   });
 
-  it("switches to the Include file hierarchy", async () => {
-    const user = userEvent.setup();
-    render(<ConnectionTree overview={overview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />);
-
-    await user.click(screen.getByRole("button", { name: "Files" }));
+  it("switches to the Include file hierarchy", () => {
+    // Arranging by file is the page's state now, and the control that sets
+    // it is in the toolbar. This asks the tree for the arrangement directly.
+    render(<ConnectionTree grouping="files" overview={overview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />);
 
     expect(screen.getByRole("heading", { name: "connections/home/nas.conf" })).toBeInTheDocument();
   });
 
   it("filters hosts as the user searches and reports an empty result", async () => {
     const user = userEvent.setup();
-    render(<ConnectionTree overview={overview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />);
+    render(<ConnectionTree grouping="groups" overview={overview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />);
 
     await user.type(screen.getByRole("searchbox", { name: "Filter connections" }), "bast");
 
@@ -165,7 +165,7 @@ describe("ConnectionTree", () => {
     const onSelect = vi.fn();
     const onOpenPatternRule = vi.fn();
     render(
-      <ConnectionTree overview={overview} selected={null} onSelect={onSelect} onOpenPatternRule={onOpenPatternRule} onDrop={vi.fn()} />,
+      <ConnectionTree grouping="groups" overview={overview} selected={null} onSelect={onSelect} onOpenPatternRule={onOpenPatternRule} onDrop={vi.fn()} />,
     );
 
     await user.click(screen.getByRole("button", { name: /bastion/ }));
@@ -191,7 +191,7 @@ describe("ConnectionTree", () => {
       },
     };
     render(
-      <ConnectionTree overview={decorated} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
+      <ConnectionTree grouping="groups" overview={decorated} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
     );
 
     const row = screen.getByRole("button", { name: /nas/ });
@@ -218,7 +218,7 @@ describe("ConnectionTree", () => {
       },
     };
     render(
-      <ConnectionTree overview={ordered} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
+      <ConnectionTree grouping="groups" overview={ordered} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
     );
 
     const labels = screen.getAllByRole("button").map((button) => button.textContent ?? "");
@@ -239,19 +239,17 @@ describe("a group that holds nothing", () => {
   // removes the only thing it could be dragged back onto.
   it("still shows its heading", () => {
     render(
-      <ConnectionTree overview={withEmptyGroup} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
+      <ConnectionTree grouping="groups" overview={withEmptyGroup} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
     );
 
     expect(screen.getByRole("heading", { name: "work" })).toBeInTheDocument();
     expect(screen.getByText("No connection is in this group.")).toBeInTheDocument();
   });
 
-  it("does not do the same for a file, which is not a place anything can be put", async () => {
-    const user = userEvent.setup();
+  it("does not do the same for a file, which is not a place anything can be put", () => {
     render(
-      <ConnectionTree overview={withEmptyGroup} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
+      <ConnectionTree grouping="files" overview={withEmptyGroup} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
     );
-    await user.click(screen.getByRole("button", { name: "Files" }));
 
     expect(screen.queryByText("No connection is in this group.")).not.toBeInTheDocument();
   });
@@ -282,7 +280,7 @@ describe("dragging in the tree", () => {
     group: "home",
   };
 
-  function renderTree() {
+  function renderTree(grouping: "groups" | "files" = "groups") {
     const onDrop = vi.fn();
     render(
       <ConnectionTree
@@ -291,6 +289,7 @@ describe("dragging in the tree", () => {
         onSelect={vi.fn()}
         onOpenPatternRule={vi.fn()}
         onDrop={onDrop}
+        grouping={grouping}
       />,
     );
     return onDrop;
@@ -331,10 +330,8 @@ describe("dragging in the tree", () => {
     expect(onDrop).toHaveBeenCalledWith(payload, "home");
   });
 
-  it("does nothing while grouping by file, because a file is not a place", async () => {
-    const user = userEvent.setup();
-    const onDrop = renderTree();
-    await user.click(screen.getByRole("button", { name: "Files" }));
+  it("does nothing while grouping by file, because a file is not a place", () => {
+    const onDrop = renderTree("files");
 
     drag(screen.getByRole("button", { name: /nas/ }), screen.getByRole("heading", { name: "connections/home/nas.conf" }), nasPayload);
 
@@ -368,7 +365,7 @@ describe("the group hierarchy", () => {
 
   function renderNested(over: Overview = nested) {
     render(
-      <ConnectionTree overview={over} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
+      <ConnectionTree grouping="groups" overview={over} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
     );
   }
 
@@ -427,7 +424,7 @@ describe("a hidden group", () => {
 
   function renderContainer(over: Overview = container) {
     render(
-      <ConnectionTree overview={over} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
+      <ConnectionTree grouping="groups" overview={over} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
     );
   }
 
@@ -476,7 +473,7 @@ describe("dropping on a whole block", () => {
   function renderNested() {
     const onDrop = vi.fn();
     render(
-      <ConnectionTree overview={nested} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={onDrop} />,
+      <ConnectionTree grouping="groups" overview={nested} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={onDrop} />,
     );
     return onDrop;
   }

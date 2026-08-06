@@ -11,7 +11,7 @@ import {
   type Overview,
   type SavePreview,
 } from "../api/config";
-import { ConnectionTree, type HostSelection } from "./ConnectionTree";
+import { ConnectionTree, type Grouping, type HostSelection } from "./ConnectionTree";
 import type { DragPayload } from "./dragdrop";
 import { HostDetailPanel } from "./HostDetail";
 import { NoticeList } from "./SavePreview";
@@ -20,7 +20,8 @@ import { useTranslate } from "../i18n/context";
 import type { InspectorContent } from "../ui/Inspector";
 import { HostInspector, hostNeedsAttention } from "./HostInspector";
 import { control, fieldLabel, narrowControl } from "../ui/form";
-import { Button } from "../ui/surface";
+import { Button, Segmented } from "../ui/surface";
+import type { ReactNode } from "react";
 import { appendHostBlock, duplicateHostBlock, removeHostBlock } from "./blocks";
 
 // What the Groups screen reports, and this one does not.
@@ -49,9 +50,12 @@ type ConnectionsPageProps = {
   // The right-hand pane's contents, offered up to the shell. Null while no
   // connection is open: there is nothing to inspect until one is.
   onInspector: (content: InspectorContent) => void;
+  // Controls this screen puts in the window's toolbar. Same arrangement as the
+  // inspector: the shell owns the chrome, the section says what goes in it.
+  onToolbar: (content: ReactNode) => void;
 };
 
-export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProps) {
+export function ConnectionsPage({ onOpenFile, onInspector, onToolbar }: ConnectionsPageProps) {
   const t = useTranslate();
   const [overview, setOverview] = useState<Overview | null>(null);
   // Where a connection goes when it belongs to no group. The server reports the
@@ -67,6 +71,9 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [localError, setLocalError] = useState("");
   const [moveTarget, setMoveTarget] = useState("");
+  // The tree's arrangement, held here rather than in the tree, because the
+  // control that changes it is in the window's toolbar.
+  const [grouping, setGrouping] = useState<Grouping>("groups");
 
   const reload = useCallback(async () => {
     try {
@@ -79,6 +86,20 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  useEffect(() => {
+    onToolbar(
+      <Segmented
+        label={t("tree.arrangeBy")}
+        value={grouping}
+        options={[
+          { value: "groups", label: t("tree.byGroups") },
+          { value: "files", label: t("tree.byFiles") },
+        ]}
+        onChange={setGrouping}
+      />,
+    );
+  }, [grouping, onToolbar, t]);
 
   // The pane follows the open connection, and is empty until there is one — a
   // toggle with nothing behind it is worse than no toggle.
@@ -378,41 +399,55 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
   }
 
   return (
-    // minmax(0,…) so the detail column can narrow when the inspector opens.
-    // A bare 1fr is minmax(auto,1fr) and would keep its content's width,
-    // pushing the buttons out under the pane.
-    <div className="grid grid-cols-[18rem_minmax(0,1fr)] gap-6">
-      <div className="flex flex-col gap-2">
-        <label htmlFor="new-alias" className={fieldLabel}>{t("conn.newAlias")}</label>
-        <input
-          id="new-alias"
-          value={newAlias}
-          onChange={(event) => setNewAlias(event.target.value)}
-          className={control}
-        />
-        <label htmlFor="new-file" className={fieldLabel}>{t("conn.targetFile")}</label>
-        <select
-          id="new-file"
-          value={targetFile}
-          onChange={(event) => setTargetFile(event.target.value)}
-          className={control}
-        >
-          {overview.files
-            .filter((node) => node.editable && node.file.path !== undefined)
-            .map((node) => (
-              <option key={node.file.absolute} value={node.file.path}>{node.file.path}</option>
-            ))}
-        </select>
-        <Button onClick={() => void createHost()}>{t("conn.create")}</Button>
-        <ConnectionTree
-          overview={overview}
-          selected={selection}
-          onSelect={onSelect}
-          onOpenPatternRule={onOpenFile}
-          onDrop={(payload, target) => void onTreeDrop(payload, target)}
-        />
+    // Two panes that reach the window's edges, not two columns floating in a
+    // padded box: the list has its own surface, its own border and its own
+    // scrolling, the way a source list does.
+    //
+    // minmax(0,…) on the detail so it can narrow when the inspector opens. A
+    // bare 1fr is minmax(auto,1fr) and would keep its content's width, pushing
+    // the buttons out under the pane.
+    <div className="grid h-full grid-cols-[18rem_minmax(0,1fr)] grid-rows-[minmax(0,1fr)]">
+      <div className="flex min-h-0 flex-col border-r border-line bg-tree">
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          <ConnectionTree
+            overview={overview}
+            selected={selection}
+            onSelect={onSelect}
+            onOpenPatternRule={onOpenFile}
+            onDrop={(payload, target) => void onTreeDrop(payload, target)}
+            grouping={grouping}
+          />
+        </div>
+        {/*
+          Making a connection is the one thing you do *to* the list rather than
+          to something in it, so it sits at the list's foot — where a source
+          list keeps its "+" — instead of above the list and pushing it down.
+        */}
+        <div className="flex shrink-0 flex-col gap-2 border-t border-line p-3">
+          <label htmlFor="new-alias" className={fieldLabel}>{t("conn.newAlias")}</label>
+          <input
+            id="new-alias"
+            value={newAlias}
+            onChange={(event) => setNewAlias(event.target.value)}
+            className={control}
+          />
+          <label htmlFor="new-file" className={fieldLabel}>{t("conn.targetFile")}</label>
+          <select
+            id="new-file"
+            value={targetFile}
+            onChange={(event) => setTargetFile(event.target.value)}
+            className={control}
+          >
+            {overview.files
+              .filter((node) => node.editable && node.file.path !== undefined)
+              .map((node) => (
+                <option key={node.file.absolute} value={node.file.path}>{node.file.path}</option>
+              ))}
+          </select>
+          <Button onClick={() => void createHost()}>{t("conn.create")}</Button>
+        </div>
       </div>
-      <div className="flex flex-col gap-4">
+      <div className="flex min-h-0 flex-col gap-4 overflow-y-auto p-6">
         {/*
           The group-scoped notices are the Groups screen's, and the README says
           so: they describe what a declaration and the disk say about each

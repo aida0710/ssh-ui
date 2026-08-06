@@ -39,7 +39,15 @@ type ConnectionTreeProps = {
   // Where a dragged connection or group was dropped. The target is a group
   // name, or the empty string for the "no group" heading.
   onDrop: (payload: DragPayload, target: string) => void;
+  // Whether the tree is arranged by group or by file.
+  //
+  // The state is the page's rather than this component's, because the control
+  // that changes it lives in the window's toolbar — the tree is one pane of a
+  // screen now, not a rail that owns its own header.
+  grouping: Grouping;
 };
+
+export type Grouping = "groups" | "files";
 
 // The ungrouped bucket is keyed by a constant that never reaches the screen:
 // its label is translated, but matching a host to it must not depend on the
@@ -58,10 +66,16 @@ function matchesQuery(host: HostEntry, tags: string[], query: string): boolean {
   return tags.some((tag) => tag.toLowerCase().includes(needle));
 }
 
-export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule, onDrop }: ConnectionTreeProps) {
+export function ConnectionTree({
+  overview,
+  selected,
+  onSelect,
+  onOpenPatternRule,
+  onDrop,
+  grouping,
+}: ConnectionTreeProps) {
   const t = useTranslate();
   const [query, setQuery] = useState("");
-  const [grouping, setGrouping] = useState<"groups" | "files">("groups");
   // What is being dragged, held here rather than read back from the event. A
   // dragover handler may read dataTransfer.types but not getData — the data is
   // protected until the drop — so a target cannot inspect the drag in order to
@@ -400,25 +414,10 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
   }
 
   return (
-    // No padding and no right border. Both are left over from when this was the
-    // page's own left rail; it is now a block inside a column that already has
-    // the create-connection form above it, so the padding pushed every row 16px
-    // right of that form and the border drew a rule from halfway down the
-    // column that separated nothing.
+    // No chrome of its own. The pane around it draws the background and the
+    // border now, and the control that switches groups for files is in the
+    // window's toolbar.
     <nav aria-label={t("tree.navLabel")} className="flex h-full flex-col gap-3">
-      <div className="flex gap-2">
-        {(["groups", "files"] as const).map((mode) => (
-          <button
-            key={mode}
-            type="button"
-            onClick={() => setGrouping(mode)}
-            aria-pressed={grouping === mode}
-            className={`rounded px-2 py-1 text-xs ${grouping === mode ? "bg-select-fill text-ink" : "text-ink-muted"}`}
-          >
-            {mode === "groups" ? t("tree.byGroups") : t("tree.byFiles")}
-          </button>
-        ))}
-      </div>
       <label className="text-xs text-ink-muted" htmlFor="connection-filter">
         {t("tree.filter")}
       </label>
