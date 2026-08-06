@@ -66,6 +66,11 @@ func (s Security) Middleware(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 
 		isBootstrap := request.Method == http.MethodPost && request.URL.Path == "/api/v1/session/bootstrap"
+		// Renewing a CSRF token cannot present one: a reload has the cookie and
+		// nothing else. It is exempt from that check and from nothing else —
+		// the session below is still required, which the bootstrap's exemption
+		// cannot be.
+		isRenew := request.Method == http.MethodPost && request.URL.Path == "/api/v1/session/renew"
 		isStateChanging := request.Method != http.MethodGet && request.Method != http.MethodHead
 		if (isStateChanging || isBootstrap) && request.Header.Get(echo.HeaderOrigin) != s.ExpectedOrigin {
 			return problem(c, http.StatusForbidden, "cross_site_request")
@@ -84,7 +89,7 @@ func (s Security) Middleware(next echo.HandlerFunc) echo.HandlerFunc {
 		if _, ok := s.Sessions.Authenticate(cookie.Value); !ok {
 			return problem(c, http.StatusUnauthorized, "invalid_session")
 		}
-		if isStateChanging && !s.Sessions.VerifyCSRF(cookie.Value, request.Header.Get(CSRFHeader)) {
+		if isStateChanging && !isRenew && !s.Sessions.VerifyCSRF(cookie.Value, request.Header.Get(CSRFHeader)) {
 			return problem(c, http.StatusForbidden, "invalid_csrf")
 		}
 

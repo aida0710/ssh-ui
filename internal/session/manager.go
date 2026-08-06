@@ -92,6 +92,37 @@ func (m *Manager) Bootstrap(presented string) (Credentials, error) {
 	return Credentials{SessionID: sessionID, CSRFToken: csrf}, nil
 }
 
+// RenewCSRF mints a fresh CSRF token for a session that already exists.
+//
+// A reload loses the token, because it lived in the page; the cookie survives,
+// so the session does. Without this the application was dead until the binary
+// was started again, since a bootstrap fragment is spent on first use and only
+// a new process prints another.
+//
+// The token is minted rather than returned. This manager keeps a hash and never
+// the token, which is what stops a leak of its memory being a leak of every
+// session's token, and re-minting keeps that property. The old token stops
+// verifying, which is correct: there is one page per session, and a token still
+// working after another was issued for it would be a second key nobody is
+// holding on purpose.
+func (m *Manager) RenewCSRF(sessionID string) (string, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	key := sha256.Sum256([]byte(sessionID))
+	existing, ok := m.sessions[key]
+	if !ok {
+		return "", false
+	}
+	csrf, err := token(m.random)
+	if err != nil {
+		return "", false
+	}
+	existing.csrfHash = sha256.Sum256([]byte(csrf))
+	m.sessions[key] = existing
+	return csrf, true
+}
+
 func (m *Manager) Authenticate(sessionID string) (Session, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

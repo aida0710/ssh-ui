@@ -102,6 +102,7 @@ func New(options Options) (*Server, error) {
 
 	handlers := Handlers{Sessions: options.Sessions, Version: options.Version}
 	e.POST("/api/v1/session/bootstrap", handlers.Bootstrap)
+	e.POST("/api/v1/session/renew", handlers.Renew)
 	e.GET("/api/v1/health", handlers.Health)
 	if options.Config != nil {
 		registerConfigRoutes(e, ConfigHandlers{Service: options.Config, Keys: options.Keys})

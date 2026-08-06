@@ -1,4 +1,4 @@
-import { expect, openSection, sessionStatus, test } from "./support/environment";
+import { clickAndAwait, expect, openSection, sessionStatus, test } from "./support/environment";
 
 test("exchanges the fragment for a session and removes it from the address bar", async ({
   page,
@@ -135,12 +135,41 @@ test("keeps the chosen language across a reload, and translates the panels", asy
   await expect(page.getByRole("heading", { name: "鍵", level: 2 })).toBeVisible();
   await expect(page.getByRole("button", { name: "鍵を作成" })).toBeVisible();
 
-  // A reload cannot restore the session: the bootstrap fragment is one-time
-  // and was spent on the first load. What it does show is that the stored
-  // language outlived the page, because the refusal itself arrives in
-  // Japanese — the shell reads the choice back before it knows the session
-  // failed.
+  // The choice outlives the page, and so now does the session. This used to
+  // assert the opposite: a reload could not restore the session, and the proof
+  // that the language had survived was that the *refusal* arrived in Japanese.
+  // The refusal was a defect the test had written down as a fact.
   await page.reload();
-  await expect(page.getByRole("alert")).toContainText("ローカルセッションを開始できませんでした");
+  // The shell comes back in Japanese, which is the choice outliving the page,
+  // and it comes back at all, which is the session outliving it. The open
+  // section is not remembered and is not meant to be, so the panel is reached
+  // again rather than expected to still be there.
+  await expect(page.getByRole("button", { name: "鍵", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "鍵", exact: true }).click();
+  await expect(page.getByRole("button", { name: "鍵を作成" })).toBeVisible();
   expect(await page.evaluate(() => Object.keys(window.localStorage))).toEqual(["ssh-ui.language"]);
+});
+
+// The fragment is spent on first use and taken out of the address bar, so a
+// reload arrives with the cookie and nothing else. Until the session could be
+// renewed from that cookie, every reload left the application dead until the
+// binary was started again.
+test("survives a reload", async ({ page, installation }) => {
+  await page.goto(installation.url);
+  await openSection(page, "Connections");
+  await expect(page.getByRole("navigation", { name: "Connections" })).toBeVisible();
+
+  await page.reload();
+
+  await openSection(page, "Connections");
+  await expect(
+    page.getByRole("navigation", { name: "Connections" }).getByRole("button", { name: "bastion" }),
+  ).toBeVisible();
+
+  // And the renewed token works for a write, which is the half a reload used to
+  // lose: the cookie was always fine, the token was not.
+  await page.getByRole("navigation", { name: "Connections" }).getByRole("button", { name: "bastion" }).click();
+  await page.getByLabel("Port", { exact: true }).fill("2255");
+  expect(await clickAndAwait(page, "Save changes", "/api/v1/config/save")).toBe(200);
+  expect(await installation.read("config")).toContain("Port 2255");
 });

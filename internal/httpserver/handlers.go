@@ -15,6 +15,32 @@ type Handlers struct {
 	Version  string
 }
 
+// Renew mints a fresh CSRF token for the session the cookie already names.
+//
+// A reload loses the token, because it lived in the page, and the bootstrap
+// fragment that would have produced another is spent on first use. Without this
+// the application was dead after a reload until the binary was started again.
+//
+// It presents no CSRF token, because a reload has none — the same exemption the
+// bootstrap has, and guarded by the same things: the Host, the Origin, Fetch
+// Metadata and, unlike the bootstrap, a session that already exists. A
+// cross-site page can produce none of them: SameSite=Strict withholds the
+// cookie and Sec-Fetch-Site cannot be forged.
+func (h Handlers) Renew(c *echo.Context) error {
+	if h.Sessions == nil {
+		return problem(c, http.StatusInternalServerError, "bootstrap_failed")
+	}
+	cookie, err := c.Request().Cookie(SessionCookie)
+	if err != nil {
+		return problem(c, http.StatusUnauthorized, "session_required")
+	}
+	csrf, ok := h.Sessions.RenewCSRF(cookie.Value)
+	if !ok {
+		return problem(c, http.StatusUnauthorized, "invalid_session")
+	}
+	return c.JSON(http.StatusOK, api.BootstrapResponse{CsrfToken: csrf})
+}
+
 func (h Handlers) Bootstrap(c *echo.Context) error {
 	if h.Sessions == nil {
 		return problem(c, http.StatusInternalServerError, "bootstrap_failed")
