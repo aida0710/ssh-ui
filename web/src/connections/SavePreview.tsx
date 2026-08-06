@@ -2,6 +2,10 @@ import type { ConflictReport, DiffLine, FileDiff, Notice, SavePreview } from "..
 import type { Problem } from "../api/client";
 import { useTranslate } from "../i18n/context";
 import type { MessageKey } from "../i18n/messages";
+// `Notice` in this file is the engine's — the code and location it reports on a
+// line of configuration. The band that shows a failure is imported under
+// another name rather than shadowing it.
+import { Notice as Band } from "../ui/surface";
 
 const noticeKeys: Record<string, MessageKey> = {
   complex_external_rule: "notice.complex_external_rule",
@@ -103,7 +107,7 @@ export function SavePreviewPanel({
       <h3 id="preview-heading" className="text-sm font-medium">{t("preview.heading")}</h3>
 
       {problem === null ? null : (
-        <p role="alert" className="text-sm text-danger">
+        <Band tone="danger">
           {problem.code === "config_syntax_error"
             ? t("preview.syntaxError", {
                 path: problem.path ?? t("preview.theFile"),
@@ -117,7 +121,7 @@ export function SavePreviewPanel({
                 : problem.code in refusalKeys
                   ? t(refusalKeys[problem.code]!, { detail: problem.detail ?? "" })
                   : t("preview.rejected", { code: problem.code })}
-        </p>
+        </Band>
       )}
 
       {problem?.diagnostics === undefined ? null : (

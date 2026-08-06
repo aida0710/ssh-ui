@@ -20,7 +20,7 @@ import { useTranslate } from "../i18n/context";
 import type { InspectorContent } from "../ui/Inspector";
 import { HostInspector, hostNeedsAttention } from "./HostInspector";
 import { control, fieldLabel, narrowControl } from "../ui/form";
-import { Button, Segmented } from "../ui/surface";
+import { Button, Notice, Segmented } from "../ui/surface";
 import type { ReactNode } from "react";
 import { appendHostBlock, duplicateHostBlock, removeHostBlock } from "./blocks";
 
@@ -465,7 +465,7 @@ export function ConnectionsPage({ onOpenFile, onInspector, onToolbar }: Connecti
           <p role="status" className="text-sm text-ink-muted">{t("conn.select")}</p>
         ) : (
           <>
-            {localError === "" ? null : <p role="alert" className="text-sm text-danger">{localError}</p>}
+            {localError === "" ? null : <Notice tone="danger">{localError}</Notice>}
             <div className="flex flex-wrap items-center gap-2">
               <Button onClick={duplicateHost}>{t("conn.duplicate")}</Button>
               <label htmlFor="move-target" className="sr-only">{t("conn.moveToFile")}</label>

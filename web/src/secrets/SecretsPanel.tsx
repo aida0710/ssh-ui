@@ -22,6 +22,7 @@ import {
   sectionCard,
   sectionHeading,
 } from "../ui/form";
+import { Notice } from "../ui/surface";
 
 type SecretsPanelProps = {
   api?: IntegrationsApi;
@@ -122,7 +123,7 @@ export function SecretsPanel({ api = integrationsApi, onLock }: SecretsPanelProp
       <section aria-label={t("secrets.heading")} className={sectionCard}>
         <h3 className={sectionHeading}>{t("secrets.heading")}</h3>
         <p className={hintText}>{creating ? t("secrets.explainNew") : t("secrets.explainLocked")}</p>
-        {error === "" ? null : <p role="alert" className="text-sm text-danger">{error}</p>}
+        {error === "" ? null : <Notice tone="danger">{error}</Notice>}
         <PasswordField label={t("secrets.master")} value={master} onChange={setMaster} />
         <div>
           <button
@@ -168,7 +169,7 @@ export function SecretsPanel({ api = integrationsApi, onLock }: SecretsPanelProp
 
   return (
     <div className="flex flex-col gap-4">
-      {error === "" ? null : <p role="alert" className="text-sm text-danger">{error}</p>}
+      {error === "" ? null : <Notice tone="danger">{error}</Notice>}
       {changed === "" ? null : <p role="status" className="text-sm text-live">{changed}</p>}
       <div>
         <button
@@ -300,7 +301,7 @@ function LoginItemSection({ api }: { api: IntegrationsApi }) {
     <section aria-label={t("login.heading")} className={sectionCard}>
       <h3 className={sectionHeading}>{t("login.heading")}</h3>
       <p className={hintText}>{t("login.note")}</p>
-      {failed === "" ? null : <p role="alert" className="text-sm text-danger">{failed}</p>}
+      {failed === "" ? null : <Notice tone="danger">{failed}</Notice>}
       <CheckboxField
         label={t("login.enable")}
         checked={item.enabled}

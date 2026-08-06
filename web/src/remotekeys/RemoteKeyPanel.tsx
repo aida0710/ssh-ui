@@ -10,6 +10,7 @@ import {
   type RemoteKeysApi,
 } from "./api";
 import { CopyButton } from "../ui/CopyButton";
+import { Notice } from "../ui/surface";
 
 type RemoteKeyPanelProps = {
   api?: RemoteKeysApi;
@@ -147,9 +148,7 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
         {busy ? t("rk.waiting") : t("rk.idle")}
       </p>
       {error ? (
-        <p role="alert" className="text-sm text-danger">
-          {error}
-        </p>
+        <Notice tone="danger">{error}</Notice>
       ) : null}
 
       <div className="flex flex-col gap-2 text-sm">

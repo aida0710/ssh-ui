@@ -17,7 +17,7 @@ import {
   secondaryAction,
   sectionHeading,
 } from "../ui/form";
-import { Button, Card, Row } from "../ui/surface";
+import { Button, Card, Notice, Row } from "../ui/surface";
 import type { MessageKey } from "../i18n/messages";
 
 const tabs = ["Basic", "Jump", "Advanced", "Raw", "Effective", "Diagnostics"] as const;
@@ -187,7 +187,7 @@ export function HostDetailPanel({
         ))}
       </div>
 
-      {localError === "" ? null : <p role="alert" className="text-sm text-danger">{localError}</p>}
+      {localError === "" ? null : <Notice tone="danger">{localError}</Notice>}
 
       {tab === "Basic" || tab === "Jump" || tab === "Advanced" ? (
         <div className="flex flex-col gap-3">

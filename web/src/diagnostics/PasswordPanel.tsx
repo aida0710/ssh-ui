@@ -9,6 +9,7 @@ import {
 import { useTranslate } from "../i18n/context";
 import type { MessageKey } from "../i18n/messages";
 import { Field, control, dangerAction, hintText, primaryAction, secondaryAction, sectionCard, sectionHeading } from "../ui/form";
+import { Notice } from "../ui/surface";
 
 type PasswordPanelProps = {
   api?: IntegrationsApi;
@@ -154,7 +155,7 @@ export function PasswordPanel({ api = integrationsApi, alias }: PasswordPanelPro
         whether to use this should read that before the field, not after.
       */}
       <p className={hintText}>{t("password.warning")}</p>
-      {error === "" ? null : <p role="alert" className="text-sm text-danger">{error}</p>}
+      {error === "" ? null : <Notice tone="danger">{error}</Notice>}
 
       {!status.exists ? (
         <>

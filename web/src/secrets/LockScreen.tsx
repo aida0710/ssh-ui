@@ -4,6 +4,7 @@ import { integrationsApi, type IntegrationsApi } from "../api/integrations";
 import { useTranslate } from "../i18n/context";
 import { hintText, primaryAction } from "../ui/form";
 import { PasswordField } from "../ui/PasswordField";
+import { Notice } from "../ui/surface";
 
 type LockScreenProps = {
   // exists distinguishes the two things this screen does. They look the same
@@ -69,9 +70,7 @@ export function LockScreen({ exists, onOpen, api = integrationsApi }: LockScreen
       */}
       {exists ? null : <p className="text-sm text-notice-ink">{t("lock.noRecovery")}</p>}
       {error === "" ? null : (
-        <p role="alert" className="text-sm text-danger">
-          {error}
-        </p>
+        <Notice tone="danger">{error}</Notice>
       )}
 
       <form

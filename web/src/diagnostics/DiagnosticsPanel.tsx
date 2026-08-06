@@ -20,6 +20,7 @@ import {
   tableHeadRow,
 } from "../ui/form";
 import { useTranslate } from "../i18n/context";
+import { Notice } from "../ui/surface";
 
 type DiagnosticsPanelProps = {
   api?: IntegrationsApi;
@@ -133,9 +134,7 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
         {busy ? t("diag.running") : alias === "" ? t("diag.needsAlias") : t("diag.idle")}
       </p>
       {error ? (
-        <p role="alert" className="text-sm text-danger">
-          {error}
-        </p>
+        <Notice tone="danger">{error}</Notice>
       ) : null}
 
       <div className="flex flex-wrap items-end gap-2">

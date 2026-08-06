@@ -16,6 +16,7 @@ import {
   sectionHeading,
 } from "../ui/form";
 import { useTranslate } from "../i18n/context";
+import { Notice } from "../ui/surface";
 
 function toProblem(error: unknown): Problem {
   if (error instanceof ApiError && error.problem !== null) return error.problem;
@@ -273,7 +274,7 @@ export function GroupsPanel() {
         {t("groups.compileNote", { file: loaded.groupsFile ?? "groups.ssh-ui.conf" })}
       </p>
       <p className="text-xs text-ink-faint">{t("groups.orderNote")}</p>
-      {localError === "" ? null : <p role="alert" className="text-sm text-danger">{localError}</p>}
+      {localError === "" ? null : <Notice tone="danger">{localError}</Notice>}
       {/*
         What the declaration and the disk say about each other. A directory
         under connections/ that no Include names is the one worth showing here

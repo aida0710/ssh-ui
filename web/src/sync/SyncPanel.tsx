@@ -18,6 +18,7 @@ import {
   sectionCard,
   sectionHeading,
 } from "../ui/form";
+import { Notice } from "../ui/surface";
 
 type SyncPanelProps = { api?: IntegrationsApi };
 
@@ -99,7 +100,7 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
     return (
       <div className="flex flex-col gap-4">
         <h2 className="font-medium">{t("sync.heading")}</h2>
-        {error === "" ? null : <p role="alert" className="text-sm text-danger">{error}</p>}
+        {error === "" ? null : <Notice tone="danger">{error}</Notice>}
         <section className={sectionCard}>
           <h3 className={sectionHeading}>{t("sync.bucketHeading")}</h3>
           <p className="text-sm text-ink-muted">{t("sync.sealed")}</p>
@@ -148,7 +149,7 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
         between the bucket and them.
       */}
       <p className={hintText}>{t("sync.warning")}</p>
-      {error === "" ? null : <p role="alert" className="text-sm text-danger">{error}</p>}
+      {error === "" ? null : <Notice tone="danger">{error}</Notice>}
       {notice === "" ? null : <p role="status" className="text-sm text-ink-muted">{notice}</p>}
 
       <section className={sectionCard}>

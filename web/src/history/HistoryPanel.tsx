@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslate } from "../i18n/context";
 import { ApiError, type Problem } from "../api/client";
 import { configApi, type HistoryEntry, type PendingTransaction } from "../api/config";
+import { Notice } from "../ui/surface";
 
 function toProblem(error: unknown): Problem {
   if (error instanceof ApiError && error.problem !== null) return error.problem;
@@ -59,7 +60,7 @@ export function HistoryPanel() {
   return (
     <div className="flex flex-col gap-4">
       {problem === null ? null : (
-        <p role="alert" className="text-sm text-danger">{t("history.requestRejected", { code: problem.code })}</p>
+        <Notice tone="danger">{t("history.requestRejected", { code: problem.code })}</Notice>
       )}
       {message === "" ? null : <p role="status" className="text-sm text-live">{message}</p>}
 

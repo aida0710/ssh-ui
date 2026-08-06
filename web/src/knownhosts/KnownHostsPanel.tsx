@@ -8,6 +8,7 @@ import {
   type KnownHostEntry,
   type KnownHostsResponse,
 } from "../api/integrations";
+import { Notice } from "../ui/surface";
 
 type KnownHostsPanelProps = { api?: IntegrationsApi };
 
@@ -145,9 +146,7 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
         {status}
       </p>
       {error ? (
-        <p role="alert" className="text-sm text-danger">
-          {error}
-        </p>
+        <Notice tone="danger">{error}</Notice>
       ) : null}
 
       {/*
