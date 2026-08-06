@@ -363,6 +363,10 @@ export const en = {
   "groups.renameShort": "New name",
   "groups.rename": "Rename {name}",
   "groups.displayOrder": "Display order",
+  "groups.hideShort": "Hide from Connections",
+  "groups.hide": "Hide {name} from Connections",
+  "groups.hideOnlyContainers":
+    "This group holds connections of its own, so hiding it would hide them. Move them into a child group first.",
   "groups.remove": "Remove {name}",
   "groups.newName": "New group name",
   "groups.invalidName":
@@ -960,6 +964,10 @@ export const ja: Record<MessageKey, string> = {
   "groups.renameShort": "新しい名前",
   "groups.rename": "{name} の名前を変更",
   "groups.displayOrder": "表示順",
+  "groups.hideShort": "接続タブで非表示",
+  "groups.hide": "{name} を接続タブで非表示",
+  "groups.hideOnlyContainers":
+    "このグループは直下に接続を持っています。非表示にするとその接続まで見えなくなるので、先に子グループへ移してください。",
   "groups.remove": "{name} を削除",
   "groups.newName": "新しいグループ名",
   "groups.invalidName":

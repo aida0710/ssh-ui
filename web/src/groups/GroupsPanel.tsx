@@ -341,8 +341,29 @@ export function GroupsPanel() {
                     className={`${control} w-20`}
                   />
                 </label>
+                {/*
+                  Hiding is for a group whose purpose is to hold other groups.
+                  One with connections of its own would take them out of view
+                  with it, so the control is refused there rather than left to
+                  set a flag that quietly does nothing.
+                */}
+                <label htmlFor={`group-hidden-${group.name}`} className="flex flex-col gap-1">
+                  <span className={fieldLabel}>{t("groups.hideShort")}</span>
+                  <input
+                    id={`group-hidden-${group.name}`}
+                    type="checkbox"
+                    aria-label={t("groups.hide", { name: group.name })}
+                    checked={group.hidden === true}
+                    disabled={membersOf(group.name).length > 0}
+                    onChange={(event) => updateGroup(group.name, { hidden: event.target.checked })}
+                    className="size-4 self-center"
+                  />
+                </label>
               </div>
             </div>
+            {membersOf(group.name).length > 0 ? (
+              <p className={`mt-1 ${hintText}`}>{t("groups.hideOnlyContainers")}</p>
+            ) : null}
             <p className="mt-1 text-xs text-zinc-400">
               {t("groups.members")}{" "}
               <span>{membersOf(group.name).length === 0 ? t("groups.noMembers") : membersOf(group.name).join(", ")}</span>
