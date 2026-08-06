@@ -17,6 +17,7 @@ import {
   secondaryAction,
   sectionHeading,
 } from "../ui/form";
+import { Button, Card, Row } from "../ui/surface";
 import type { MessageKey } from "../i18n/messages";
 
 const tabs = ["Basic", "Jump", "Advanced", "Raw", "Effective", "Diagnostics"] as const;
@@ -190,43 +191,51 @@ export function HostDetailPanel({
 
       {tab === "Basic" || tab === "Jump" || tab === "Advanced" ? (
         <div className="flex flex-col gap-3">
-          {visibleFields.map((field) => (
-            <div key={fieldKey(field)} className="flex flex-col gap-1">
-              <label htmlFor={`field-${fieldKey(field)}`} className="text-xs text-ink-muted">
-                {field.keyword}
-              </label>
-              <div className="flex gap-2">
-                <input
-                  id={`field-${fieldKey(field)}`}
-                  value={draftFor(field)}
-                  disabled={!field.editable || removed.includes(field.line)}
-                  onChange={(event) => setDrafts({ ...drafts, [fieldKey(field)]: event.target.value })}
-                  className="flex-1 rounded border border-control-line bg-control px-2 py-1 text-sm"
-                />
-                <button
-                  type="button"
-                  onClick={() =>
-                    setRemoved(removed.includes(field.line)
-                      ? removed.filter((line) => line !== field.line)
-                      : [...removed, field.line])
+          {/*
+            One directive to a row: its keyword on the left, its value on the
+            right, hairlines between them and one border around the group. The
+            "Remove" button is the row's action rather than one of its children,
+            so it stays outside the label — inside it, pressing Remove would
+            also focus the field.
+          */}
+          {visibleFields.length === 0 ? null : (
+            <Card>
+              {visibleFields.map((field) => (
+                <Row
+                  key={fieldKey(field)}
+                  label={field.keyword}
+                  warning={
+                    [
+                      field.dangerous === true ? t("host.dangerousField", { keyword: field.keyword }) : "",
+                      field.duplicate === true ? t("host.duplicateKeyword") : "",
+                    ]
+                      .filter((part) => part !== "")
+                      .join(" ") || undefined
                   }
-                  className="rounded border border-control-line px-2 py-1 text-xs text-ink-muted"
+                  action={
+                    <Button
+                      className="px-2 py-1 text-xs"
+                      onClick={() =>
+                        setRemoved(removed.includes(field.line)
+                          ? removed.filter((line) => line !== field.line)
+                          : [...removed, field.line])
+                      }
+                    >
+                      {removed.includes(field.line) ? t("host.keep") : t("host.remove")}
+                    </Button>
+                  }
                 >
-                  {removed.includes(field.line) ? t("host.keep") : t("host.remove")}
-                </button>
-              </div>
-              {field.dangerous === true ? (
-                <p className="text-xs text-notice-ink">
-                  {t("host.dangerousField", { keyword: field.keyword })}
-                </p>
-              ) : null}
-              {field.duplicate === true ? (
-                <p className="text-xs text-notice-ink">
-                  A previous line in this block uses the same keyword. OpenSSH keeps the first one.
-                </p>
-              ) : null}
-            </div>
-          ))}
+                  <input
+                    id={`field-${fieldKey(field)}`}
+                    value={draftFor(field)}
+                    disabled={!field.editable || removed.includes(field.line)}
+                    onChange={(event) => setDrafts({ ...drafts, [fieldKey(field)]: event.target.value })}
+                    className={control}
+                  />
+                </Row>
+              ))}
+            </Card>
+          )}
 
           {tab === "Advanced" ? (
             <div className="flex flex-col gap-2 rounded border border-line p-3">
@@ -344,11 +353,28 @@ export function HostDetailPanel({
       <section className="flex flex-col gap-5 rounded-xl border border-line p-4">
         <h3 className={sectionHeading}>{t("host.organisation")}</h3>
 
-        <div className="flex flex-col gap-2">
-          <label htmlFor="host-group" className={fieldLabel}>{t("host.primaryGroup")}</label>
-          <p className={hintText}>{t("host.groupIsADirectory")}</p>
-          <p className={hintText}>{t("host.groupNoneMeans")}</p>
-          <div className="flex flex-wrap items-center gap-2">
+        {/*
+          The group and the alias are one line each, so they are rows. The
+          comment is not: it is three lines of prose, and a caption beside a
+          box that tall reads as a caption for the gap under it.
+        */}
+        <Card>
+          <Row
+            label={t("host.primaryGroup")}
+            hint={`${t("host.groupIsADirectory")} ${t("host.groupNoneMeans")}`}
+            action={
+              <Button
+                // Disabled only when the choice is where the connection already
+                // is. "None" used to be disabled too, which left no way at all —
+                // by mouse or by keyboard — to take a connection back out of a
+                // group.
+                disabled={moveTo === (detail.form.entry.group ?? "")}
+                onClick={() => onMoveToGroup(moveTo)}
+              >
+                {t("host.moveToGroup")}
+              </Button>
+            }
+          >
             <select
               id="host-group"
               value={moveTo}
@@ -360,20 +386,19 @@ export function HostDetailPanel({
                 <option key={group.name} value={group.name}>{group.name}</option>
               ))}
             </select>
-            <button
-              type="button"
-              // Disabled only when the choice is where the connection already
-              // is. "None" used to be disabled too, which left no way at all —
-              // by mouse or by keyboard — to take a connection back out of a
-              // group.
-              disabled={moveTo === (detail.form.entry.group ?? "")}
-              onClick={() => onMoveToGroup(moveTo)}
-              className={secondaryAction}
-            >
-              {t("host.moveToGroup")}
-            </button>
-          </div>
-        </div>
+          </Row>
+          <Row
+            label={t("host.renameAlias")}
+            action={<Button onClick={() => onRename(renameTo)}>{t("host.rename")}</Button>}
+          >
+            <input
+              id="host-rename"
+              value={renameTo}
+              onChange={(event) => setRenameTo(event.target.value)}
+              className={control}
+            />
+          </Row>
+        </Card>
 
         <div className="flex flex-col gap-2">
           <label htmlFor="host-comment" className={fieldLabel}>{t("host.comment")}</label>
@@ -389,25 +414,11 @@ export function HostDetailPanel({
               ? t("host.commentFromNote")
               : t("host.commentNote")}
           </p>
-          <button type="button" onClick={() => onComment(comment)} className={`self-start ${secondaryAction}`}>
+          <Button className="self-start" onClick={() => onComment(comment)}>
             {t("host.saveComment")}
-          </button>
+          </Button>
         </div>
 
-        <div className="flex flex-col gap-2">
-          <label htmlFor="host-rename" className={fieldLabel}>{t("host.renameAlias")}</label>
-          <div className="flex gap-2">
-            <input
-              id="host-rename"
-              value={renameTo}
-              onChange={(event) => setRenameTo(event.target.value)}
-              className={control}
-            />
-            <button type="button" onClick={() => onRename(renameTo)} className={secondaryAction}>
-              {t("host.rename")}
-            </button>
-          </div>
-        </div>
       </section>
 
       <SavePreviewPanel

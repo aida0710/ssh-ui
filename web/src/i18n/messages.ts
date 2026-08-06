@@ -26,6 +26,10 @@ export const en = {
   "shell.inspectorShow": "Show details",
   "shell.inspectorHide": "Hide details",
   "shell.inspectorAttention": "Needs attention",
+  // This sentence was written into HostDetail in English and never reached the
+  // catalogue, so it stayed English in Japanese.
+  "host.duplicateKeyword": "A previous line in this block uses the same keyword. OpenSSH keeps the first one.",
+
   "inspector.appOnly": "This application only",
   "inspector.notices": "Notices",
   "inspector.inherited": "Inherited values",
@@ -748,6 +752,8 @@ export const ja: Record<MessageKey, string> = {
   "shell.inspectorShow": "詳細を表示",
   "shell.inspectorHide": "詳細を隠す",
   "shell.inspectorAttention": "確認が必要な項目があります",
+  "host.duplicateKeyword": "このブロックの前の行が同じキーワードを使っています。OpenSSH は最初の 1 つを採用します。",
+
   "inspector.appOnly": "このアプリだけの情報",
   "inspector.notices": "注意",
   "inspector.inherited": "継承した値",

@@ -288,7 +288,13 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
       </header>
       <div
         className={`grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] ${
-          inspector !== null && inspectorOpen ? "grid-cols-[15rem_1fr_17rem]" : "grid-cols-[15rem_1fr]"
+          // minmax(0,…) on the middle track for the same reason min-h-0 is on
+          // the row: a bare 1fr is minmax(auto,1fr), so the column refuses to
+          // shrink below its content and the panel runs out under the
+          // inspector instead of narrowing to make room for it.
+          inspector !== null && inspectorOpen
+            ? "grid-cols-[15rem_minmax(0,1fr)_17rem]"
+            : "grid-cols-[15rem_minmax(0,1fr)]"
         }`}
       >
         <nav

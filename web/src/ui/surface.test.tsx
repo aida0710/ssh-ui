@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
 import { Button, Card, Notice, Row } from "./surface";
 
 describe("Row", () => {
@@ -29,6 +30,45 @@ describe("Row", () => {
 
     expect(screen.getByLabelText("Port")).toHaveValue("22");
     expect(screen.getByText("OpenSSH defaults to 22 when this is unset.")).toBeInTheDocument();
+  });
+});
+
+describe("Row's trailing action", () => {
+  // The action must sit outside the label element. Inside it, clicking
+  // "Remove" would activate the label and move focus into the input instead.
+  it("is a control of its own, not part of the field's label", async () => {
+    const onRemove = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <Card>
+        <Row label="Port" action={<button type="button" onClick={onRemove}>Remove</button>}>
+          <input defaultValue="22" />
+        </Row>
+      </Card>,
+    );
+
+    const field = screen.getByLabelText("Port");
+    await user.click(screen.getByRole("button", { name: "Remove" }));
+
+    expect(onRemove).toHaveBeenCalledOnce();
+    expect(field).not.toHaveFocus();
+    // And the action's own words stay out of the field's name.
+    expect(screen.getByLabelText("Port")).toHaveValue("22");
+  });
+});
+
+describe("Row's warning", () => {
+  it("is amber and announced, where a hint is neither", () => {
+    render(
+      <Card>
+        <Row label="ProxyCommand" warning="This directive runs a program.">
+          <input defaultValue="/usr/bin/nc %h %p" />
+        </Row>
+      </Card>,
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent("This directive runs a program.");
+    expect(screen.getByLabelText("ProxyCommand")).toHaveValue("/usr/bin/nc %h %p");
   });
 });
 

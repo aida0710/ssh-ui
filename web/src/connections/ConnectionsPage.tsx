@@ -365,7 +365,10 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
   }
 
   return (
-    <div className="grid grid-cols-[18rem_1fr] gap-6">
+    // minmax(0,…) so the detail column can narrow when the inspector opens.
+    // A bare 1fr is minmax(auto,1fr) and would keep its content's width,
+    // pushing the buttons out under the pane.
+    <div className="grid grid-cols-[18rem_minmax(0,1fr)] gap-6">
       <div className="flex flex-col gap-2">
         <label htmlFor="new-alias" className={fieldLabel}>{t("conn.newAlias")}</label>
         <input

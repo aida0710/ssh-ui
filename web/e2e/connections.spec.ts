@@ -323,3 +323,29 @@ test("moves a connection into a group by dragging it", async ({ page, installati
   }).toPass();
   expect(await installation.read("config")).not.toContain("Host bastion\n");
 });
+
+// Opening the inspector adds a third column. The middle one has to give up the
+// width for it, and a bare `1fr` will not: in CSS grid that means
+// minmax(auto, 1fr), so the track keeps its content's width and the detail runs
+// on underneath the pane instead. The buttons at the top of the detail were the
+// first thing to disappear under it.
+test("opening the inspector narrows the detail rather than hiding it under the pane", async ({
+  page,
+  installation,
+}) => {
+  await openBastion(page, installation.url);
+  await page.getByRole("button", { name: "Show details" }).click();
+
+  const pane = page.getByRole("complementary", { name: "Details" });
+  await expect(pane).toBeVisible();
+
+  const paneLeft = (await pane.boundingBox())?.x ?? 0;
+  expect(paneLeft).toBeGreaterThan(0);
+
+  // Every control the detail offers stays to the left of the pane's edge.
+  for (const name of ["Duplicate connection", "Move connection", "Delete connection", "Save changes"]) {
+    const box = await page.getByRole("button", { name, exact: true }).boundingBox();
+    expect(box, `${name} has no box`).not.toBeNull();
+    expect(box!.x + box!.width, `${name} runs under the inspector`).toBeLessThanOrEqual(paneLeft);
+  }
+});

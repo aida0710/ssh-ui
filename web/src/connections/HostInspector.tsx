@@ -35,9 +35,17 @@ export function HostInspector({
 
   return (
     <div className="flex flex-col gap-5">
+      {/*
+        Grouped in a card, but stacked inside it rather than label-left /
+        value-right. This pane is 17rem wide and these captions are sentences —
+        "Display order — lower sorts earlier; 0 leaves this host where the file
+        puts it" beside a control would leave the control a few characters
+        wide. Xcode's inspector stacks for the same reason.
+      */}
       <section className="flex flex-col gap-3">
         <h3 className={fieldLabel}>{t("inspector.appOnly")}</h3>
 
+        <div className="flex flex-col gap-3 rounded-xl border border-line bg-card p-3">
         <CheckboxField
           label={t("host.favourite")}
           checked={detail.metadata.favourite === true}
@@ -93,6 +101,7 @@ export function HostInspector({
             className={control}
           />
         </Field>
+        </div>
       </section>
 
       <section className="flex flex-col gap-2">

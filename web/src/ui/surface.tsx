@@ -14,14 +14,44 @@ export function Card({ children }: { children: ReactNode }) {
 // is how every form in this application already associates the two, so the
 // accessible name needs no id to be unique across a page that may show the
 // same keyword for two hosts.
-export function Row({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
+export function Row({
+  label,
+  children,
+  hint,
+  warning,
+  action,
+}: {
+  label: string;
+  children: ReactNode;
+  // `| undefined` is written out because this project sets
+  // exactOptionalPropertyTypes: without it a caller cannot compute "no hint"
+  // and pass the result, only omit the attribute entirely.
+  hint?: string | undefined;
+  // Amber, and announced. A hint is advice; a warning is the engine reporting
+  // something about this line.
+  warning?: string | undefined;
+  // A trailing control — "Remove", and its like.
+  //
+  // It is deliberately outside the label element. Inside it, clicking the
+  // button would also activate the label and move focus into the field, and
+  // the button's own word would join the field's accessible name.
+  action?: ReactNode;
+}) {
   return (
     <div className="border-t border-hairline first:border-t-0">
-      <label className="flex items-center gap-3 px-3 py-2">
-        <span className="w-32 shrink-0 text-sm text-ink-muted">{label}</span>
-        <span className="ml-auto flex min-w-0 flex-1 justify-end">{children}</span>
-      </label>
+      <div className="flex items-center gap-3 px-3 py-2">
+        <label className="flex min-w-0 flex-1 items-center gap-3">
+          <span className="w-32 shrink-0 text-sm text-ink-muted">{label}</span>
+          <span className="ml-auto flex min-w-0 flex-1 justify-end">{children}</span>
+        </label>
+        {action === undefined ? null : <span className="shrink-0">{action}</span>}
+      </div>
       {hint === undefined ? null : <p className={`px-3 pb-2 ${hintText}`}>{hint}</p>}
+      {warning === undefined ? null : (
+        <p role="status" className="px-3 pb-2 text-xs text-notice-ink">
+          {warning}
+        </p>
+      )}
     </div>
   );
 }
