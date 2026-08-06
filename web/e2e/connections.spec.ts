@@ -147,6 +147,12 @@ test("edits the display order it stores, and shows a favourite in the tree", asy
 }) => {
   await openBastion(page, installation.url);
 
+  // The colour, the tags, the favourite flag and the display order are the
+  // settings that exist only in metadata.json, so they live in the inspector
+  // rather than beside the directives that get written to a file. The pane is
+  // shut until asked for.
+  await page.getByRole("button", { name: "Show details" }).click();
+
   // Waiting on the write rather than polling the file: the metadata document
   // does not exist until the first save creates it.
   const [ordered] = await Promise.all([

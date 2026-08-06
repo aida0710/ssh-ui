@@ -18,6 +18,7 @@ import { NoticeList } from "./SavePreview";
 import { OrphanPanel } from "./OrphanPanel";
 import { useTranslate } from "../i18n/context";
 import type { InspectorContent } from "../ui/Inspector";
+import { HostInspector, hostNeedsAttention } from "./HostInspector";
 import { appendHostBlock, duplicateHostBlock, removeHostBlock } from "./blocks";
 
 function toProblem(error: unknown): Problem {
@@ -64,12 +65,23 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
     void reload();
   }, [reload]);
 
-  // Nothing to inspect until a connection is open. Task by task this becomes
-  // the metadata, the notices and the inherited values; for now it is what
-  // says the toggle should not be drawn.
+  // The pane follows the open connection, and is empty until there is one — a
+  // toggle with nothing behind it is worse than no toggle.
+  //
+  // The body is rebuilt on every overview as well as every detail, because
+  // onMetadata closes over the overview to preserve the other hosts' entries.
+  // A memoised body would keep editing a stale metadata document.
   useEffect(() => {
-    onInspector(null);
-  }, [onInspector]);
+    if (detail === null || overview === null) {
+      onInspector(null);
+      return;
+    }
+    onInspector({
+      attention: hostNeedsAttention(detail),
+      body: <HostInspector detail={detail} onMetadata={onMetadata} />,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail, overview, onInspector]);
 
   // The dependencies are the two values and not the selection object, because
   // a save reselects the host it has just written. An equal object with a new

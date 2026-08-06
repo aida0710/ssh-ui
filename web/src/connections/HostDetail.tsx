@@ -333,6 +333,12 @@ export function HostDetailPanel({
         out as a single column of alternating captions and controls with no
         grouping — a wall in which the caption for the next control read as the
         hint for the last. Each property is now its own row with its own gap.
+
+        What is left writes to a file: a group is a directory, so changing it
+        moves the block; a comment is the line above `Host`; a rename is the
+        `Host` line itself. The colour, the tags, the favourite flag and the
+        display order exist only in metadata.json, so they moved to the
+        inspector — which is the whole point of that pane.
       */}
       <section className="flex flex-col gap-5 rounded-xl border border-zinc-800 p-4">
         <h3 className={sectionHeading}>{t("host.organisation")}</h3>
@@ -368,12 +374,6 @@ export function HostDetailPanel({
           </div>
         </div>
 
-        <CheckboxField
-          label={t("host.favourite")}
-          checked={detail.metadata.favourite === true}
-          onChange={(checked) => onMetadata({ ...detail.metadata, favourite: checked })}
-        />
-
         <div className="flex flex-col gap-2">
           <label htmlFor="host-comment" className={fieldLabel}>{t("host.comment")}</label>
           <textarea
@@ -391,60 +391,6 @@ export function HostDetailPanel({
           <button type="button" onClick={() => onComment(comment)} className={`self-start ${secondaryAction}`}>
             {t("host.saveComment")}
           </button>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <label htmlFor="host-colour" className={fieldLabel}>{t("host.colour")}</label>
-          <div className="flex items-center gap-2">
-            <input
-              id="host-colour"
-              type="color"
-              // A colour input has no empty state, so "no colour" is the absence
-              // of the value in metadata and this control shows a neutral swatch
-              // for it. Clearing is a separate, explicit act.
-              value={detail.metadata.colour === undefined || detail.metadata.colour === "" ? "#71717a" : detail.metadata.colour}
-              onChange={(event) => onMetadata({ ...detail.metadata, colour: event.target.value })}
-              className="h-8 w-14 rounded border border-zinc-700 bg-zinc-900"
-            />
-            {detail.metadata.colour === undefined || detail.metadata.colour === "" ? null : (
-              <button
-                type="button"
-                onClick={() => onMetadata({ ...detail.metadata, colour: "" })}
-                className={secondaryAction}
-              >
-                {t("host.clearColour")}
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <label htmlFor="host-order" className={fieldLabel}>{t("host.displayOrder")}</label>
-          <input
-            id="host-order"
-            type="number"
-            value={String(detail.metadata.order ?? 0)}
-            onChange={(event) => onMetadata({ ...detail.metadata, order: Number(event.target.value) || 0 })}
-            className="w-24 rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
-          />
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <label htmlFor="host-tags" className={fieldLabel}>{t("host.tags")}</label>
-          <input
-            id="host-tags"
-            value={(detail.metadata.tags ?? []).join(", ")}
-            onChange={(event) =>
-              onMetadata({
-                ...detail.metadata,
-                tags: event.target.value
-                  .split(",")
-                  .map((tag) => tag.trim())
-                  .filter((tag) => tag !== ""),
-              })
-            }
-            className={control}
-          />
         </div>
 
         <div className="flex flex-col gap-2">
