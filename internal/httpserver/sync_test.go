@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/labstack/echo/v5"
 
+	"ssh-ui/internal/objectstore"
 	"ssh-ui/internal/remotesync"
 	"ssh-ui/internal/secret"
 	"ssh-ui/internal/storage"
@@ -36,11 +38,16 @@ func syncEngine(t *testing.T) (*echo.Echo, *remotesync.Service) {
 	)
 
 	engine := echo.New()
-	registerSyncRoutes(engine, SyncHandlers{Service: service})
+	registerSyncRoutes(engine, SyncHandlers{Service: service, Reach: reachable})
 	return engine, service
 }
 
 const syncTestPassphrase = "a master password for sync"
+
+// reachable stands in for the bucket. The question "does this bucket answer" is
+// remotesync's, and it is tested there against a real HTTP server; here it must
+// never be asked of a network.
+func reachable(context.Context, *objectstore.Client) error { return nil }
 
 func syncEngineWithVault(t *testing.T) (*echo.Echo, *remotesync.Service, *secret.Service) {
 	t.Helper()
@@ -61,7 +68,7 @@ func syncEngineWithVault(t *testing.T) (*echo.Echo, *remotesync.Service, *secret
 	secrets := secret.NewService(workspace, manager, time.Now)
 
 	engine := echo.New()
-	registerSyncRoutes(engine, SyncHandlers{Service: service, Secrets: secrets})
+	registerSyncRoutes(engine, SyncHandlers{Service: service, Secrets: secrets, Reach: reachable})
 	return engine, service, secrets
 }
 
@@ -231,5 +238,134 @@ func TestConfiguringRefusesAShutVault(t *testing.T) {
 	configure := `{"endpoint":"https://s3.example.invalid","bucket":"b","accessKeyId":"k","secretAccessKey":"s"}`
 	if code := sendSync(t, engine, http.MethodPut, "/api/v1/sync/settings", configure).Code; code != http.StatusConflict {
 		t.Errorf("configure while locked = %d, want 409", code)
+	}
+}
+
+// The endpoint is stored as it will be used, not as it was typed.
+//
+// A trailing slash produced "https://host//bucket" wherever the screen showed
+// where the snapshot goes. The request never carried it — the client replaces
+// the whole path — so this is about the value the user is shown and asked to
+// recognise as their bucket.
+func TestATrailingSlashOnTheEndpointIsRemoved(t *testing.T) {
+	engine, service, secrets := syncEngineWithVault(t)
+	if err := secrets.Initialise(syncTestPassphrase); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"endpoint":"https://s3.example.invalid/","bucket":"b","accessKeyId":"k","secretAccessKey":"s"}`
+	if code := sendSync(t, engine, http.MethodPut, "/api/v1/sync/settings", body).Code; code != http.StatusOK {
+		t.Fatalf("configure = %d", code)
+	}
+	endpoint, _ := service.Target()
+	if endpoint != "https://s3.example.invalid" {
+		t.Errorf("endpoint = %q, want the trailing slash gone", endpoint)
+	}
+}
+
+// An endpoint with a path is refused rather than silently truncated. The client
+// replaces the path with /bucket/key, so a pasted "…/my-bucket" would be
+// dropped without a word and the user would be looking for their objects in a
+// place this application never wrote to.
+func TestAnEndpointWithAPathIsRefused(t *testing.T) {
+	engine, _, secrets := syncEngineWithVault(t)
+	if err := secrets.Initialise(syncTestPassphrase); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"endpoint":"https://s3.example.invalid/my-bucket","bucket":"b","accessKeyId":"k","secretAccessKey":"s"}`
+	recorder := sendSync(t, engine, http.MethodPut, "/api/v1/sync/settings", body)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("configure with a path = %d, want 400", recorder.Code)
+	}
+	if !strings.Contains(recorder.Body.String(), "endpoint_must_have_no_path") {
+		t.Errorf("code = %s", recorder.Body.String())
+	}
+}
+
+// Settings are tried before they are kept.
+//
+// A bucket that will not answer is a bucket the user has mistyped, and storing
+// the mistake means the failure surfaces on the first push instead of on the
+// screen where it can be corrected. Nothing is stored and nothing is
+// configured: a half-applied refusal would be worse than none.
+func TestSettingsThatCannotReachTheBucketAreNotStored(t *testing.T) {
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, ".ssh"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := storage.NewWorkspace(storage.OSFileSystem{}, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := storage.NewManager(workspace, time.Now, rand.Reader)
+	service := remotesync.NewService(workspace, manager,
+		func() ([]string, error) { return []string{"config"}, nil },
+		func() string { return "2026-08-05T00:00:00Z" },
+		func() (string, error) { return "origin-test", nil })
+	secrets := secret.NewService(workspace, manager, time.Now)
+	if err := secrets.Initialise(syncTestPassphrase); err != nil {
+		t.Fatal(err)
+	}
+	engine := echo.New()
+	registerSyncRoutes(engine, SyncHandlers{
+		Service: service, Secrets: secrets,
+		Reach: func(context.Context, *objectstore.Client) error { return objectstore.ErrRefused },
+	})
+
+	body := `{"endpoint":"https://s3.example.invalid","bucket":"b","accessKeyId":"k","secretAccessKey":"s"}`
+	recorder := sendSync(t, engine, http.MethodPut, "/api/v1/sync/settings", body)
+	if recorder.Code != http.StatusBadGateway {
+		t.Fatalf("configure against an unreachable bucket = %d, want 502: %s", recorder.Code, recorder.Body.String())
+	}
+	if service.Configured() {
+		t.Error("the service was configured with settings that do not work")
+	}
+	if settings, err := secrets.SyncSettings(); err != nil || settings.Bucket != "" {
+		t.Errorf("the settings were stored anyway: %+v (%v)", settings, err)
+	}
+}
+
+// The snapshot is sealed with the master password, not a second one.
+//
+// Two passwords meant two things to remember, and the second one was typed into
+// a field that could not check it: a typo produced an archive nobody could ever
+// open, and said so on the next machine, months later. This is the check that
+// was missing.
+func TestPushRefusesAPasswordThatIsNotTheMasterOne(t *testing.T) {
+	engine, _, secrets := syncEngineWithVault(t)
+	if err := secrets.Initialise(syncTestPassphrase); err != nil {
+		t.Fatal(err)
+	}
+	if code := sendSync(t, engine, http.MethodPut, "/api/v1/sync/settings", settings("")).Code; code != http.StatusOK {
+		t.Fatalf("configure = %d", code)
+	}
+
+	recorder := sendSync(t, engine, http.MethodPost, "/api/v1/sync/push", `{"passphrase":"not the master password"}`)
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("push with the wrong password = %d, want 403: %s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "wrong_master_password") {
+		t.Errorf("code = %s", recorder.Body.String())
+	}
+	// And it stopped there. A handler that writes a refusal and then does the
+	// thing anyway leaves both answers in the body, and the first status is all
+	// the recorder reports — so the refusal is checked by what did not happen
+	// after it.
+	if strings.Contains(recorder.Body.String(), "sync_failed") {
+		t.Errorf("the push ran after being refused: %s", recorder.Body.String())
+	}
+}
+
+// A machine that has never made a vault is a machine doing its first pull. The
+// password it types is the key to the archive, nothing here can check it, and
+// the archive itself will.
+func TestPullOnAMachineWithNoVaultIsNotRefusedForTheWrongReason(t *testing.T) {
+	engine, _ := syncEngine(t)
+	if code := sendSync(t, engine, http.MethodPut, "/api/v1/sync/settings", settings("")).Code; code != http.StatusOK {
+		t.Fatalf("configure = %d", code)
+	}
+
+	recorder := sendSync(t, engine, http.MethodPost, "/api/v1/sync/pull", `{"passphrase":"a password for a vault that is not here"}`)
+	if recorder.Code == http.StatusForbidden && strings.Contains(recorder.Body.String(), "wrong_master_password") {
+		t.Errorf("a machine with no vault was told its master password was wrong: %s", recorder.Body.String())
 	}
 }

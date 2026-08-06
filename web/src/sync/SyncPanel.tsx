@@ -8,6 +8,7 @@ import {
   type SyncStatus,
 } from "../api/integrations";
 import { useTranslate } from "../i18n/context";
+import type { MessageKey } from "../i18n/messages";
 import {
   Field,
   control,
@@ -19,6 +20,17 @@ import {
 } from "../ui/form";
 
 type SyncPanelProps = { api?: IntegrationsApi };
+
+// The refusals this screen can meet, named. A code the server took the trouble
+// to distinguish is a code the user can act on, and "that could not be done"
+// sends them looking in the wrong place: a mistyped master password is not a
+// bucket problem, and an endpoint with a path is not a credentials problem.
+const refusals: Record<string, MessageKey> = {
+  wrong_master_password: "sync.wrongMaster",
+  bucket_refused: "sync.unreachable",
+  sync_failed: "sync.unreachable",
+  endpoint_must_have_no_path: "sync.endpointPath",
+};
 
 // The remote snapshot.
 //
@@ -66,7 +78,9 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
     try {
       apply(await operation());
     } catch (caught) {
-      setError(explain?.(failureCode(caught)) || failure);
+      const code = failureCode(caught);
+      const named = refusals[code];
+      setError(explain?.(code) || (named === undefined ? failure : t(named)));
     } finally {
       setBusy(false);
     }

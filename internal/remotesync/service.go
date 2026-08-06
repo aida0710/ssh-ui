@@ -138,6 +138,11 @@ func NewService(workspace *storage.Workspace, transactions *storage.Manager, fil
 func (s *Service) Configure(config Config, credentials objectstore.Credentials, client *objectstore.Client) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// A trailing slash never reached a request — the client replaces the whole
+	// path — but it reached every screen that showed where the snapshot goes,
+	// as "https://host//bucket". Trimming here rather than only where settings
+	// are stored also cleans the ones stored before this existed.
+	config.Endpoint = strings.TrimRight(config.Endpoint, "/")
 	s.config = config
 	s.creds = credentials
 	s.client = client
@@ -258,6 +263,32 @@ func (s *Service) walkKeys() ([]string, error) {
 		return nil, err
 	}
 	return found, nil
+}
+
+// Check asks the bucket one question, to find out whether these settings work.
+//
+// It is what stands between a typo and a configuration that looks right and
+// fails on the first push, hours later, with nobody near the screen where the
+// typo was. A bucket holding no snapshot yet answers "not found", and that is a
+// working bucket: the question is whether this endpoint, this bucket name and
+// these credentials reach a store that will answer, not whether anything has
+// been pushed to it.
+func (s *Service) Check(ctx context.Context) error {
+	client, err := s.store()
+	if err != nil {
+		return err
+	}
+	return Check(ctx, client)
+}
+
+// Check is the same question asked of a client this service does not hold, so
+// settings can be tried before they are stored. Registering settings that were
+// never tried is how a typo becomes a configuration that looks right.
+func Check(ctx context.Context, client *objectstore.Client) error {
+	if _, err := client.Head(ctx, ObjectKey); err != nil && !errors.Is(err, objectstore.ErrNotFound) {
+		return err
+	}
+	return nil
 }
 
 // Push seals this workspace and writes it, refusing if the remote moved.

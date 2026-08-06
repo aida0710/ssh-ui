@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/url"
@@ -24,6 +25,19 @@ type SyncHandlers struct {
 	// the key to the bucket must not be in the bucket. A nil one means the
 	// settings are per-run, which is what this did before they were stored.
 	Secrets *secret.Service
+	// Reach asks whether settings work before they are stored. It is injected
+	// because storing settings is this handler's job and reaching a bucket is
+	// not, and because no test in this package may touch a network. A nil one
+	// means the real check: a forgotten wiring must not become a silent
+	// "everything is fine".
+	Reach func(ctx context.Context, client *objectstore.Client) error
+}
+
+func (h SyncHandlers) reach(ctx context.Context, client *objectstore.Client) error {
+	if h.Reach == nil {
+		return remotesync.Check(ctx, client)
+	}
+	return h.Reach(ctx, client)
 }
 
 func registerSyncRoutes(engine *echo.Echo, handlers SyncHandlers) {
@@ -102,6 +116,16 @@ func (h SyncHandlers) Configure(c *echo.Context) error {
 	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
 		return problem(c, http.StatusBadRequest, "endpoint_must_be_https")
 	}
+	// The client replaces the whole path with /bucket/key, so a pasted
+	// ".../my-bucket" would be dropped without a word and the user would look
+	// for their objects somewhere this application never wrote. A bare slash is
+	// what a browser adds to a host and means nothing, so it is removed rather
+	// than refused — and removing it is also what stops the screen showing
+	// "https://host//bucket".
+	if strings.Trim(parsed.Path, "/") != "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return problem(c, http.StatusBadRequest, "endpoint_must_have_no_path")
+	}
+	endpoint := strings.TrimRight(request.Endpoint, "/")
 	if !safeBucketName(request.Bucket) {
 		return problem(c, http.StatusBadRequest, "unsafe_bucket_name")
 	}
@@ -123,13 +147,23 @@ func (h SyncHandlers) Configure(c *echo.Context) error {
 		SecretAccessKey: request.SecretAccessKey,
 	}
 	config := remotesync.Config{
-		Endpoint: request.Endpoint, Bucket: request.Bucket, Region: region, Direction: direction,
+		Endpoint: endpoint, Bucket: request.Bucket, Region: region, Direction: direction,
 	}
+	// Tried before it is stored. Settings that were never tried are settings
+	// whose typo surfaces on the first push, hours later and somewhere else,
+	// and this is the one screen where the user can still see what they typed.
+	client := &objectstore.Client{
+		Endpoint: config.Endpoint, Bucket: config.Bucket, Region: config.Region, Creds: credentials,
+	}
+	if err := h.reach(c.Request().Context(), client); err != nil {
+		return syncProblem(c, err)
+	}
+
 	// Stored before it is used, so the answer never claims a configuration that
 	// would be gone on the next run.
 	if h.Secrets != nil {
 		if err := h.Secrets.SetSyncSettings(secret.SyncSettings{
-			Endpoint: request.Endpoint, Bucket: request.Bucket, Region: region,
+			Endpoint: endpoint, Bucket: request.Bucket, Region: region,
 			AccessKeyID: request.AccessKeyId, SecretAccessKey: request.SecretAccessKey,
 			Direction: string(direction),
 		}); err != nil {
@@ -139,10 +173,38 @@ func (h SyncHandlers) Configure(c *echo.Context) error {
 			return problem(c, http.StatusInternalServerError, "vault_failed")
 		}
 	}
-	h.Service.Configure(config, credentials, &objectstore.Client{
-		Endpoint: config.Endpoint, Bucket: config.Bucket, Region: config.Region, Creds: credentials,
-	})
+	h.Service.Configure(config, credentials, client)
 	return h.status(c)
+}
+
+// masterPassword refuses a password that is not this workspace's master one.
+//
+// The snapshot is sealed with the master password rather than a second one, and
+// the field that takes it can therefore be checked. Without this a typo sealed
+// an archive nobody could ever open, and said so on the next machine, months
+// later.
+// It reports whether the request may go on. When it may not it has already
+// written the refusal, and the error it hands back is what the caller returns —
+// nil, because writing the response is how this application refuses. Returning
+// only that error would let the caller carry on and do the thing it just
+// refused, over the top of its own answer.
+func (h SyncHandlers) masterPassword(c *echo.Context, passphrase string) (bool, error) {
+	if h.Secrets == nil {
+		return true, nil
+	}
+	ok, err := h.Secrets.Verify(passphrase)
+	switch {
+	case errors.Is(err, secret.ErrNoVault):
+		// A machine that has never made a vault is a machine doing its first
+		// pull. What it typed is the key to the archive; nothing here can check
+		// it, and the archive itself will.
+		return true, nil
+	case err != nil:
+		return false, problem(c, http.StatusInternalServerError, "vault_unreadable")
+	case !ok:
+		return false, problem(c, http.StatusForbidden, "wrong_master_password")
+	}
+	return true, nil
 }
 
 func (h SyncHandlers) Push(c *echo.Context) error {
@@ -150,6 +212,9 @@ func (h SyncHandlers) Push(c *echo.Context) error {
 	var request api.PassphraseRequest
 	if err := decodeJSON(c, &request); err != nil {
 		return problem(c, http.StatusBadRequest, "invalid_request")
+	}
+	if allowed, err := h.masterPassword(c, request.Passphrase); !allowed {
+		return err
 	}
 	if err := h.Service.Push(c.Request().Context(), request.Passphrase); err != nil {
 		return syncProblem(c, err)
@@ -167,6 +232,9 @@ func (h SyncHandlers) Pull(c *echo.Context) error {
 	var request api.PullRequest
 	if err := decodeJSON(c, &request); err != nil {
 		return problem(c, http.StatusBadRequest, "invalid_request")
+	}
+	if allowed, err := h.masterPassword(c, request.Passphrase); !allowed {
+		return err
 	}
 	result, err := h.Service.Pull(c.Request().Context(), request.Passphrase)
 	if err != nil && !errors.Is(err, remotesync.ErrNothingToApply) {

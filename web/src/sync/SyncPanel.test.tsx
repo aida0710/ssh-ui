@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "../api/client";
 import { SyncPanel } from "./SyncPanel";
 import type { IntegrationsApi, PullResponse, SyncStatus } from "../api/integrations";
 
@@ -92,7 +93,7 @@ describe("SyncPanel", () => {
     });
     render(<SyncPanel api={api} />);
 
-    await userEvent.type(await screen.findByLabelText("Snapshot passphrase"), "correct horse battery staple");
+    await userEvent.type(await screen.findByLabelText("Master password"), "correct horse battery staple");
     await userEvent.click(screen.getByRole("button", { name: "Check for changes" }));
 
     await waitFor(() => expect(api.pullSnapshot).toHaveBeenCalledWith("correct horse battery staple", false));
@@ -114,7 +115,7 @@ describe("SyncPanel", () => {
     });
     render(<SyncPanel api={api} />);
 
-    await userEvent.type(await screen.findByLabelText("Snapshot passphrase"), "a passphrase");
+    await userEvent.type(await screen.findByLabelText("Master password"), "a passphrase");
     await userEvent.click(screen.getByRole("button", { name: "Check for changes" }));
 
     expect(await screen.findByText(/changed here and on the other machine/)).toBeInTheDocument();
@@ -125,7 +126,7 @@ describe("SyncPanel", () => {
     const api = buildApi(configured, nothingToDo);
     render(<SyncPanel api={api} />);
 
-    await userEvent.type(await screen.findByLabelText("Snapshot passphrase"), "a passphrase");
+    await userEvent.type(await screen.findByLabelText("Master password"), "a passphrase");
     await userEvent.click(screen.getByRole("button", { name: "Check for changes" }));
 
     expect(await screen.findByText(/already matches the snapshot/)).toBeInTheDocument();
@@ -153,7 +154,7 @@ describe("SyncPanel", () => {
     const api = buildApi({ ...configured, direction: "pull" }, nothingToDo);
     render(<SyncPanel api={api} />);
 
-    await userEvent.type(await screen.findByLabelText("Snapshot passphrase"), "a passphrase");
+    await userEvent.type(await screen.findByLabelText("Master password"), "a passphrase");
     expect(screen.getByRole("button", { name: "Push this workspace" })).toBeDisabled();
     // The reason stands beside the control. A disabled button with nothing
     // next to it reads as a fault rather than as a setting.
@@ -169,7 +170,7 @@ describe("SyncPanel", () => {
     });
     render(<SyncPanel api={api} />);
 
-    await userEvent.type(await screen.findByLabelText("Snapshot passphrase"), "a passphrase");
+    await userEvent.type(await screen.findByLabelText("Master password"), "a passphrase");
     await userEvent.click(screen.getByRole("button", { name: "Check for changes" }));
 
     // Looking is not moving. A machine that may not apply is still allowed to
@@ -185,7 +186,7 @@ describe("SyncPanel", () => {
     });
     render(<SyncPanel api={api} />);
 
-    await userEvent.type(await screen.findByLabelText("Snapshot passphrase"), "a passphrase");
+    await userEvent.type(await screen.findByLabelText("Master password"), "a passphrase");
     await userEvent.click(screen.getByRole("button", { name: "Push this workspace" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/pull first|could not be pushed/i);
@@ -220,5 +221,51 @@ describe("SyncPanel", () => {
 
     await waitFor(() => expect(api.unlockVault).toHaveBeenCalledWith("the master password"));
     expect(await screen.findByText("https://acc.r2.cloudflarestorage.com/ssh-ui")).toBeInTheDocument();
+  });
+  // The snapshot is sealed with the master password now, so a mistyped one is
+  // something this machine can catch. Before, it produced an archive nobody
+  // could open and said so on another machine, months later.
+  it("says the master password was wrong rather than blaming the bucket", async () => {
+    const api = buildApi(configured, nothingToDo, {
+      pushSnapshot: vi.fn().mockRejectedValue(new ApiError("wrong_master_password", 403, null)),
+    });
+    render(<SyncPanel api={api} />);
+
+    await userEvent.type(await screen.findByLabelText("Master password"), "not the master password");
+    await userEvent.click(screen.getByRole("button", { name: "Push this workspace" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/not this machine's master password/i);
+  });
+
+  // Settings are tried before they are kept, so the screen has to say that
+  // nothing was saved — otherwise the user leaves believing it was.
+  it("says nothing was saved when the bucket did not answer", async () => {
+    const api = buildApi(unconfigured, nothingToDo, {
+      configureSync: vi.fn().mockRejectedValue(new ApiError("bucket_refused", 502, null)),
+    });
+    render(<SyncPanel api={api} />);
+
+    await userEvent.type(await screen.findByLabelText("Endpoint"), "https://acc.r2.cloudflarestorage.com");
+    await userEvent.type(screen.getByLabelText("Bucket name"), "ssh-ui");
+    await userEvent.type(screen.getByLabelText("Access key ID"), "AKID");
+    await userEvent.type(screen.getByLabelText("Secret access key"), "the-secret");
+    await userEvent.click(screen.getByRole("button", { name: "Use this bucket" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Nothing was saved/i);
+  });
+
+  it("explains an endpoint that carries a path instead of just refusing it", async () => {
+    const api = buildApi(unconfigured, nothingToDo, {
+      configureSync: vi.fn().mockRejectedValue(new ApiError("endpoint_must_have_no_path", 400, null)),
+    });
+    render(<SyncPanel api={api} />);
+
+    await userEvent.type(await screen.findByLabelText("Endpoint"), "https://acc.r2.cloudflarestorage.com/ssh-ui");
+    await userEvent.type(screen.getByLabelText("Bucket name"), "ssh-ui");
+    await userEvent.type(screen.getByLabelText("Access key ID"), "AKID");
+    await userEvent.type(screen.getByLabelText("Secret access key"), "the-secret");
+    await userEvent.click(screen.getByRole("button", { name: "Use this bucket" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/no bucket name and no path/i);
   });
 });

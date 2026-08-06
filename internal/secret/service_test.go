@@ -562,3 +562,34 @@ func TestReadingTheStatusDoesNotHoldTheVaultOpen(t *testing.T) {
 		t.Error("polling the status held the vault open")
 	}
 }
+
+// Verify answers "is this the master password?" without changing anything.
+//
+// It is what lets the snapshot use the master password instead of a second one:
+// a typed password can be checked before it is used as a key, so a typo becomes
+// a refusal here rather than an archive nobody can open.
+func TestVerifyAnswersWhetherThatIsTheMasterPassword(t *testing.T) {
+	service, _ := newService(t)
+	if _, err := service.Verify(passphrase); !errors.Is(err, secret.ErrNoVault) {
+		t.Errorf("Verify with no vault = %v, want ErrNoVault", err)
+	}
+
+	if err := service.Initialise(passphrase); err != nil {
+		t.Fatal(err)
+	}
+	ok, err := service.Verify(passphrase)
+	if err != nil || !ok {
+		t.Errorf("Verify with the right password = %v, %v", ok, err)
+	}
+	ok, err = service.Verify("not the master password at all")
+	if err != nil || ok {
+		t.Errorf("Verify with the wrong password = %v, %v, want false and no error", ok, err)
+	}
+
+	// And it answers from the file, so a shut vault can still be asked. The
+	// screen that asks is the one that has just been told the vault is shut.
+	service.Lock()
+	if ok, err := service.Verify(passphrase); err != nil || !ok {
+		t.Errorf("Verify on a locked vault = %v, %v", ok, err)
+	}
+}

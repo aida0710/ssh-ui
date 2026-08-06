@@ -451,3 +451,59 @@ func TestASnapshotCarriesTheVaultAndNotTheKeyToItsOwnBucket(t *testing.T) {
 		t.Error("the settings are in the archive even though the manifest omits them")
 	}
 }
+
+// Registering a bucket asks the bucket first.
+//
+// Settings that were never tried are settings that look configured and fail on
+// the first push, hours later, with the user long past the screen where the
+// typo was. A bucket with no snapshot in it yet is a working bucket: 404 is the
+// answer a correct, empty configuration gives.
+func TestCheckAcceptsAnEmptyBucketAndRefusesABadKey(t *testing.T) {
+	bucket := &fakeBucket{}
+	installation := newInstallation(t, bucket, map[string]string{"config": "Host bastion\n"})
+
+	if err := installation.service.Check(context.Background()); err != nil {
+		t.Errorf("Check against an empty bucket = %v, want nil", err)
+	}
+	if err := installation.service.Push(context.Background(), syncPassphrase); err != nil {
+		t.Fatalf("Push = %v", err)
+	}
+	if err := installation.service.Check(context.Background()); err != nil {
+		t.Errorf("Check against a bucket holding a snapshot = %v, want nil", err)
+	}
+}
+
+func TestCheckRefusesABucketThatWillNotAnswer(t *testing.T) {
+	bucket := &fakeBucket{}
+	installation := newInstallation(t, bucket, map[string]string{"config": "Host bastion\n"})
+	// A client pointed at a host that is not there, which is what a typo in the
+	// endpoint looks like from here.
+	installation.service.Configure(
+		remotesync.Config{Endpoint: "https://127.0.0.1:1", Bucket: "ssh-ui", Region: "auto"},
+		installation.creds,
+		&objectstore.Client{Endpoint: "https://127.0.0.1:1", Bucket: "ssh-ui", Region: "auto", Creds: installation.creds},
+	)
+	if err := installation.service.Check(context.Background()); err == nil {
+		t.Error("Check against an unreachable endpoint returned nil")
+	}
+}
+
+func TestCheckSaysWhenNothingIsConfigured(t *testing.T) {
+	service := remotesync.NewService(nil, nil, nil, nil, nil)
+	if err := service.Check(context.Background()); !errors.Is(err, remotesync.ErrNotConfigured) {
+		t.Errorf("Check with no configuration = %v, want ErrNotConfigured", err)
+	}
+}
+
+// Settings stored before the endpoint was normalised still show correctly: the
+// service trims what it is given rather than trusting where it came from.
+func TestAStoredTrailingSlashIsTrimmedWhenItIsConfigured(t *testing.T) {
+	installation := newInstallation(t, &fakeBucket{}, map[string]string{"config": "Host bastion\n"})
+	installation.service.Configure(
+		remotesync.Config{Endpoint: "https://s3.example.invalid/", Bucket: "b", Region: "auto"},
+		installation.creds, installation.client)
+
+	if endpoint, _ := installation.service.Target(); endpoint != "https://s3.example.invalid" {
+		t.Errorf("endpoint = %q, want the trailing slash gone", endpoint)
+	}
+}

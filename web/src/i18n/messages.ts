@@ -223,9 +223,14 @@ export const en = {
   "sync.snapshotHeading": "Snapshot",
   "sync.neverSynced": "This machine has not synced yet.",
   "sync.lastSynced": "Last synced {at}, {count} files.",
-  "sync.passphrase": "Snapshot passphrase",
+  "sync.passphrase": "Master password",
   "sync.passphraseLost":
-    "Lose this and the snapshot cannot be recovered by anyone, including this application. Use the same passphrase on every machine that shares this bucket.",
+    "The snapshot is sealed with your master password, so there is only one to remember and this machine can tell you straight away if you mistype it. Lose it and the snapshot cannot be recovered by anyone, including this application. Every machine sharing this bucket uses the same one.",
+  "sync.wrongMaster": "That is not this machine's master password.",
+  "sync.unreachable":
+    "That bucket did not answer. Nothing was saved: check the endpoint, the bucket name and the keys.",
+  "sync.endpointPath":
+    "The endpoint is the account address only — no bucket name and no path. Put the bucket name in the field below.",
   "sync.push": "Push this workspace",
   "sync.pushed": "Pushed.",
   "sync.pushFailed": "The snapshot could not be pushed. If another machine has pushed since this one last synced, pull first.",
@@ -869,9 +874,14 @@ export const ja: Record<MessageKey, string> = {
   "sync.snapshotHeading": "スナップショット",
   "sync.neverSynced": "このマシンはまだ同期していません。",
   "sync.lastSynced": "最終同期 {at}、{count} ファイル。",
-  "sync.passphrase": "スナップショットのパスフレーズ",
+  "sync.passphrase": "マスターパスワード",
   "sync.passphraseLost":
-    "これを失うと、このアプリを含め誰もスナップショットを復元できません。このバケットを共有する全マシンで同じパスフレーズを使ってください。",
+    "スナップショットはマスターパスワードで封をします。覚えるものは 1 つで、打ち間違いはこのマシンがその場で教えます。失うと、このアプリを含め誰も復元できません。このバケットを共有する全マシンで同じものを使います。",
+  "sync.wrongMaster": "このマシンのマスターパスワードと違います。",
+  "sync.unreachable":
+    "そのバケットは応答しませんでした。何も保存していません。エンドポイント、バケット名、キーを確認してください。",
+  "sync.endpointPath":
+    "エンドポイントはアカウントのアドレスだけです。バケット名やパスは含めません。バケット名は下の欄に入れてください。",
   "sync.push": "このワークスペースを push",
   "sync.pushed": "push しました。",
   "sync.pushFailed": "push できませんでした。このマシンの最終同期より後に他のマシンが push している場合は、先に取得してください。",

@@ -162,6 +162,33 @@ func (s *Service) Initialise(passphrase string) error {
 	return s.write()
 }
 
+// Verify reports whether passphrase is this workspace's master password.
+//
+// It answers from the file and changes nothing, so a shut vault can still be
+// asked and a screen can find out whether what the user typed is the master
+// password before using it as one. That is what lets the snapshot be sealed
+// with the master password rather than a second one: a typo becomes a refusal
+// here instead of an archive nobody can ever open.
+//
+// It costs one derivation, which is the same cost as unlocking, and it is only
+// ever reached by an action a person asked for.
+func (s *Service) Verify(passphrase string) (bool, error) {
+	sealed, err := s.workspace.FileSystem().ReadFile(s.path())
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return false, ErrNoVault
+		}
+		return false, err
+	}
+	if _, err := Open(sealed, passphrase); err != nil {
+		if errors.Is(err, ErrWrongPassphrase) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 // Unlock opens the vault with passphrase.
 func (s *Service) Unlock(passphrase string) error {
 	sealed, err := s.workspace.FileSystem().ReadFile(s.path())
