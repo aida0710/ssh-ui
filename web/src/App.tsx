@@ -8,6 +8,7 @@ import { GroupsPanel } from "./groups/GroupsPanel";
 import { HistoryPanel } from "./history/HistoryPanel";
 import { KeysScreen } from "./keys/KeysScreen";
 import { DiagnosticsPanel } from "./diagnostics/DiagnosticsPanel";
+import { SecretsPanel } from "./secrets/SecretsPanel";
 import { SyncPanel } from "./sync/SyncPanel";
 import { KnownHostsPanel } from "./knownhosts/KnownHostsPanel";
 import { RemoteKeyPanel } from "./remotekeys/RemoteKeyPanel";
@@ -28,6 +29,7 @@ const sections = [
   "Known Hosts",
   "Remote Keys",
   "Diagnostics",
+  "Secrets",
   "Sync",
   "History",
 ] as const;
@@ -45,6 +47,7 @@ const sectionLabels: Record<Section, MessageKey> = {
   "Known Hosts": "section.knownHosts",
   "Remote Keys": "section.remoteKeys",
   Diagnostics: "section.diagnostics",
+  Secrets: "section.secrets",
   Sync: "section.sync",
   History: "section.history",
 };
@@ -204,6 +207,9 @@ function SectionView({ section, fileTarget, groups, onOpenFile }: SectionViewPro
   }
   if (section === "Groups") {
     return <GroupsPanel />;
+  }
+  if (section === "Secrets") {
+    return <SecretsPanel />;
   }
   if (section === "Sync") {
     return <SyncPanel />;
