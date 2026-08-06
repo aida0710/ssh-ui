@@ -122,8 +122,16 @@ already gives: they are the shell's routing vocabulary, and translating them
 would make which panel is open depend on the display language. The group
 headings are translated, because they are only headings.
 
-Structurally this adds `<h2>` and a second `<ul>` inside the existing `<nav>`.
-Every button keeps its role and its accessible name.
+Structurally this splits the one `<ul>` inside the existing `<nav>` into three,
+each with an `aria-label` and a visible label hidden from the accessibility
+tree. Every button keeps its role and its accessible name.
+
+**The group labels are not headings.** `e2e/bootstrap.spec.ts:137` asks for the
+level-2 heading named `鍵`, and Playwright matches accessible names by
+substring unless told otherwise — a heading named `鍵とホスト` makes that query
+match twice and fail on a strict-mode violation. A labelled list names the
+group for a screen reader without putting anything new in the heading
+namespace, which the panels own.
 
 ## The inspector
 
