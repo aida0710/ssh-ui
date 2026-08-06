@@ -8,9 +8,9 @@ import type { ReactNode } from "react";
 // asked for a file name, a comment and a passphrase in three fields nobody
 // could see. One definition here is what stops that happening again.
 export const control =
-  "w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 " +
-  "placeholder:text-zinc-500 focus:border-zinc-400 focus:outline-none " +
-  "disabled:border-zinc-800 disabled:text-zinc-500";
+  "w-full rounded-md border border-control-line bg-control px-2 py-1.5 text-sm text-ink " +
+  "placeholder:text-ink-faint focus:border-accent focus:outline-none " +
+  "disabled:border-line disabled:text-ink-faint";
 
 // A control that should not stretch: a number, a colour, a short name.
 export const narrowControl = control.replace("w-full", "w-40");
@@ -18,24 +18,29 @@ export const narrowControl = control.replace("w-full", "w-40");
 // A button label is a name, not a paragraph. Left to wrap, "Remove office"
 // broke across two lines the moment its row ran out of room and the button grew
 // a second storey. Wrapping the row is right; wrapping the word is not.
+// The accent lives here and nowhere else. A screen has one primary action, and
+// spending the colour on anything further — a selected row, an icon, a value —
+// is what stopped colour from meaning anything.
 export const primaryAction =
-  "whitespace-nowrap rounded bg-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-white " +
-  "disabled:bg-zinc-700 disabled:text-zinc-500";
+  "whitespace-nowrap rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-ink " +
+  "hover:brightness-110 disabled:bg-line disabled:text-ink-faint";
 
 export const secondaryAction =
-  "whitespace-nowrap rounded border border-zinc-700 px-3 py-1.5 text-sm hover:bg-zinc-800 disabled:text-zinc-600";
+  "whitespace-nowrap rounded-md border border-control-line bg-card px-3 py-1.5 text-sm text-ink " +
+  "hover:bg-select-fill disabled:text-ink-faint";
 
 export const dangerAction =
-  "whitespace-nowrap rounded border border-rose-700 px-3 py-1.5 text-sm text-rose-300 hover:bg-rose-950";
+  "whitespace-nowrap rounded-md border border-control-line px-3 py-1.5 text-sm text-danger " +
+  "hover:bg-select-fill";
 
-export const fieldLabel = "text-xs font-medium tracking-wide text-zinc-400";
-export const hintText = "text-xs text-zinc-500";
-export const sectionCard = "flex flex-col gap-4 rounded-xl border border-zinc-800 p-4";
-export const sectionHeading = "text-sm font-medium text-zinc-100";
+export const fieldLabel = "text-xs font-medium tracking-wide text-ink-muted";
+export const hintText = "text-xs text-ink-muted";
+export const sectionCard = "flex flex-col gap-4 rounded-xl border border-line bg-card p-4";
+export const sectionHeading = "text-sm font-medium text-ink";
 
 // Table cells had no padding at all, so a header sat against the value above
 // it and the columns ran together.
-export const tableHeadRow = "border-b border-zinc-700 text-xs uppercase tracking-wide text-zinc-400";
+export const tableHeadRow = "border-b border-line text-xs uppercase tracking-wide text-ink-muted";
 export const tableHeadCell = "py-2 pr-3 text-left font-medium";
 
 type FieldProps = {
@@ -77,12 +82,12 @@ type CheckboxFieldProps = {
 // to its middle.
 export function CheckboxField({ label, checked, onChange }: CheckboxFieldProps) {
   return (
-    <label className="flex items-start gap-2 text-sm text-zinc-300">
+    <label className="flex items-start gap-2 text-sm text-ink">
       <input
         type="checkbox"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
-        className="mt-0.5 h-4 w-4 shrink-0 accent-zinc-300"
+        className="mt-0.5 h-4 w-4 shrink-0 accent-accent"
       />
       <span>{label}</span>
     </label>
