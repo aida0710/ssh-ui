@@ -58,7 +58,7 @@ func syncEngineWithVault(t *testing.T) (*echo.Echo, *remotesync.Service, *secret
 		func() string { return "2026-08-05T00:00:00Z" },
 		func() (string, error) { return "origin-test", nil },
 	)
-	secrets := secret.NewService(workspace, manager)
+	secrets := secret.NewService(workspace, manager, time.Now)
 
 	engine := echo.New()
 	registerSyncRoutes(engine, SyncHandlers{Service: service, Secrets: secrets})

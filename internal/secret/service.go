@@ -41,6 +41,14 @@ const TokenTTL = 2 * time.Minute
 // user who opens many terminals cannot grow this map without limit.
 const MaxPendingTokens = 32
 
+// IdleTimeout is how long an open vault survives without being used.
+//
+// A vault that stayed open for the life of the process would be open while the
+// laptop is in a bag, and it holds every password and every key passphrase.
+// Eight hours is a working day: someone who uses it in the morning is not asked
+// again in the afternoon, and someone who stops for the night is.
+const IdleTimeout = 8 * time.Hour
+
 type pendingToken struct {
 	alias   string
 	expires time.Time
@@ -59,16 +67,50 @@ type Service struct {
 	mu     sync.Mutex
 	vault  *Vault
 	tokens map[string]pendingToken
+	// used is when a secret was last read or written. Reading the status is
+	// deliberately not use: an open browser tab asks for it whenever a screen
+	// mounts, and one forgotten tab must not hold the vault open for as long as
+	// the machine is on.
+	used time.Time
 }
 
 // NewService returns a locked service. Nothing can be read until Unlock.
-func NewService(workspace *storage.Workspace, transactions *storage.Manager) *Service {
+func NewService(workspace *storage.Workspace, transactions *storage.Manager, now func() time.Time) *Service {
 	return &Service{
 		workspace:    workspace,
 		transactions: transactions,
-		now:          time.Now,
+		now:          now,
 		tokens:       map[string]pendingToken{},
 	}
+}
+
+// open returns the vault, shutting it first if it has gone untouched for longer
+// than IdleTimeout.
+//
+// Every method that touches a secret goes through here rather than testing
+// s.vault itself, so there is one place that decides whether the vault is open
+// and no method can be written that forgets to ask.
+func (s *Service) open() *Vault {
+	if s.vault == nil {
+		return nil
+	}
+	if s.now().Sub(s.used) >= IdleTimeout {
+		s.vault = nil
+		s.tokens = map[string]pendingToken{}
+		return nil
+	}
+	return s.vault
+}
+
+// use returns the vault and puts the idle clock back to zero. It is what a
+// method calls when it is about to read or write a secret, as opposed to
+// reporting whether there is one.
+func (s *Service) use() *Vault {
+	vault := s.open()
+	if vault != nil {
+		s.used = s.now()
+	}
+	return vault
 }
 
 func (s *Service) path() string {
@@ -92,7 +134,7 @@ func (s *Service) Exists() (bool, error) {
 func (s *Service) Unlocked() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.vault != nil
+	return s.open() != nil
 }
 
 // Initialise creates a vault for a workspace that has none.
@@ -115,6 +157,7 @@ func (s *Service) Initialise(passphrase string) error {
 
 	s.mu.Lock()
 	s.vault = vault
+	s.used = s.now()
 	s.mu.Unlock()
 	return s.write()
 }
@@ -135,6 +178,7 @@ func (s *Service) Unlock(passphrase string) error {
 
 	s.mu.Lock()
 	s.vault = vault
+	s.used = s.now()
 	s.mu.Unlock()
 	return nil
 }
@@ -157,10 +201,11 @@ func (s *Service) Lock() {
 func (s *Service) Has(alias string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.vault == nil {
+	vault := s.open()
+	if vault == nil {
 		return false
 	}
-	_, ok := s.vault.SecretFor(KindPassword, alias)
+	_, ok := vault.SecretFor(KindPassword, alias)
 	return ok
 }
 
@@ -171,15 +216,16 @@ func (s *Service) Has(alias string) bool {
 // several hosts is done by assigning an existing name instead.
 func (s *Service) Set(alias, password string) error {
 	s.mu.Lock()
-	if s.vault == nil {
+	vault := s.use()
+	if vault == nil {
 		s.mu.Unlock()
 		return ErrLocked
 	}
-	if err := s.vault.Set(KindPassword, alias, password); err != nil {
+	if err := vault.Set(KindPassword, alias, password); err != nil {
 		s.mu.Unlock()
 		return err
 	}
-	if err := s.vault.Assign(KindPassword, alias, alias); err != nil {
+	if err := vault.Assign(KindPassword, alias, alias); err != nil {
 		s.mu.Unlock()
 		return err
 	}
@@ -190,14 +236,15 @@ func (s *Service) Set(alias, password string) error {
 // Remove forgets a password and writes the vault.
 func (s *Service) Remove(alias string) error {
 	s.mu.Lock()
-	if s.vault == nil {
+	vault := s.use()
+	if vault == nil {
 		s.mu.Unlock()
 		return ErrLocked
 	}
 	// The reference goes; the credential stays if anything else points at it,
 	// and goes with it when nothing does.
-	s.vault.Unassign(KindPassword, alias)
-	_ = s.vault.Delete(KindPassword, alias)
+	vault.Unassign(KindPassword, alias)
+	_ = vault.Delete(KindPassword, alias)
 	s.mu.Unlock()
 	return s.write()
 }
@@ -206,15 +253,16 @@ func (s *Service) Remove(alias string) error {
 // behind would file the password under a name nothing ever asks for again.
 func (s *Service) Rename(from, to string) error {
 	s.mu.Lock()
-	if s.vault == nil {
+	vault := s.use()
+	if vault == nil {
 		s.mu.Unlock()
 		return ErrLocked
 	}
-	if _, ok := s.vault.Assigned(KindPassword, from); !ok {
+	if _, ok := vault.Assigned(KindPassword, from); !ok {
 		s.mu.Unlock()
 		return nil
 	}
-	if err := s.vault.Rename(KindPassword, from, to); err != nil {
+	if err := vault.Rename(KindPassword, from, to); err != nil {
 		s.mu.Unlock()
 		return err
 	}
@@ -230,14 +278,15 @@ func (s *Service) Rename(from, to string) error {
 func (s *Service) Credentials() (map[Kind]map[string][]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.vault == nil {
+	vault := s.open()
+	if vault == nil {
 		return nil, ErrLocked
 	}
 	listed := map[Kind]map[string][]string{}
 	for _, kind := range []Kind{KindPassword, KindKeyPassphrase} {
 		listed[kind] = map[string][]string{}
-		for _, name := range s.vault.Names(kind) {
-			uses := s.vault.Uses(kind, name)
+		for _, name := range vault.Names(kind) {
+			uses := vault.Uses(kind, name)
 			if uses == nil {
 				uses = []string{}
 			}
@@ -253,11 +302,12 @@ func (s *Service) Credentials() (map[Kind]map[string][]string, error) {
 // name reads the new value, which is the whole reason names exist.
 func (s *Service) SetCredential(kind Kind, name, value string) error {
 	s.mu.Lock()
-	if s.vault == nil {
+	vault := s.use()
+	if vault == nil {
 		s.mu.Unlock()
 		return ErrLocked
 	}
-	if err := s.vault.Set(kind, name, value); err != nil {
+	if err := vault.Set(kind, name, value); err != nil {
 		s.mu.Unlock()
 		return err
 	}
@@ -268,11 +318,12 @@ func (s *Service) SetCredential(kind Kind, name, value string) error {
 // DeleteCredential forgets a credential, refusing while anything points at it.
 func (s *Service) DeleteCredential(kind Kind, name string) error {
 	s.mu.Lock()
-	if s.vault == nil {
+	vault := s.use()
+	if vault == nil {
 		s.mu.Unlock()
 		return ErrLocked
 	}
-	if err := s.vault.Delete(kind, name); err != nil {
+	if err := vault.Delete(kind, name); err != nil {
 		s.mu.Unlock()
 		return err
 	}
@@ -284,11 +335,12 @@ func (s *Service) DeleteCredential(kind Kind, name string) error {
 // is the guard: there is no map in which the other kind's names appear.
 func (s *Service) AssignCredential(kind Kind, subject, name string) error {
 	s.mu.Lock()
-	if s.vault == nil {
+	vault := s.use()
+	if vault == nil {
 		s.mu.Unlock()
 		return ErrLocked
 	}
-	if err := s.vault.Assign(kind, subject, name); err != nil {
+	if err := vault.Assign(kind, subject, name); err != nil {
 		s.mu.Unlock()
 		return err
 	}
@@ -299,11 +351,12 @@ func (s *Service) AssignCredential(kind Kind, subject, name string) error {
 // UnassignCredential forgets a subject's reference, leaving the credential.
 func (s *Service) UnassignCredential(kind Kind, subject string) error {
 	s.mu.Lock()
-	if s.vault == nil {
+	vault := s.use()
+	if vault == nil {
 		s.mu.Unlock()
 		return ErrLocked
 	}
-	s.vault.Unassign(kind, subject)
+	vault.Unassign(kind, subject)
 	s.mu.Unlock()
 	return s.write()
 }
@@ -312,10 +365,11 @@ func (s *Service) UnassignCredential(kind Kind, subject string) error {
 func (s *Service) AssignedCredential(kind Kind, subject string) (string, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.vault == nil {
+	vault := s.open()
+	if vault == nil {
 		return "", false
 	}
-	return s.vault.Assigned(kind, subject)
+	return vault.Assigned(kind, subject)
 }
 
 // PasswordFor resolves an alias to the value it should be given, or "" when
@@ -324,10 +378,11 @@ func (s *Service) AssignedCredential(kind Kind, subject string) (string, bool) {
 func (s *Service) PasswordFor(alias string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.vault == nil {
+	vault := s.use()
+	if vault == nil {
 		return ""
 	}
-	value, _ := s.vault.SecretFor(KindPassword, alias)
+	value, _ := vault.SecretFor(KindPassword, alias)
 	return value
 }
 
@@ -337,10 +392,11 @@ func (s *Service) PasswordFor(alias string) string {
 func (s *Service) KeyPassphraseFor(relativePath string) (string, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.vault == nil {
+	vault := s.use()
+	if vault == nil {
 		return "", false
 	}
-	return s.vault.SecretFor(KindKeyPassphrase, relativePath)
+	return vault.SecretFor(KindKeyPassphrase, relativePath)
 }
 
 // settingsPath is the sealed object store settings beside the vault.
@@ -357,7 +413,8 @@ func (s *Service) settingsPath() string {
 func (s *Service) SyncSettings() (SyncSettings, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.vault == nil {
+	vault := s.use()
+	if vault == nil {
 		return SyncSettings{}, ErrLocked
 	}
 	sealed, err := s.workspace.FileSystem().ReadFile(s.settingsPath())
@@ -367,17 +424,18 @@ func (s *Service) SyncSettings() (SyncSettings, error) {
 	if err != nil {
 		return SyncSettings{}, err
 	}
-	return s.vault.OpenSettings(sealed)
+	return vault.OpenSettings(sealed)
 }
 
 // SetSyncSettings replaces the object store settings.
 func (s *Service) SetSyncSettings(settings SyncSettings) error {
 	s.mu.Lock()
-	if s.vault == nil {
+	vault := s.use()
+	if vault == nil {
 		s.mu.Unlock()
 		return ErrLocked
 	}
-	sealed, err := s.vault.SealSettings(settings)
+	sealed, err := vault.SealSettings(settings)
 	s.mu.Unlock()
 	if err != nil {
 		return err
@@ -412,10 +470,11 @@ func (s *Service) IssueToken(alias string) (string, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.vault == nil {
+	vault := s.use()
+	if vault == nil {
 		return "", ErrLocked
 	}
-	if _, ok := s.vault.SecretFor(KindPassword, alias); !ok {
+	if _, ok := vault.SecretFor(KindPassword, alias); !ok {
 		return "", ErrNoPassword
 	}
 	s.expireLocked()
@@ -443,7 +502,8 @@ func (s *Service) IssueToken(alias string) (string, error) {
 func (s *Service) Redeem(token, alias, prompt string, answerable func(string) bool) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.vault == nil {
+	vault := s.use()
+	if vault == nil {
 		return "", ErrLocked
 	}
 	s.expireLocked()
@@ -457,7 +517,7 @@ func (s *Service) Redeem(token, alias, prompt string, answerable func(string) bo
 	if !answerable(prompt) {
 		return "", ErrUnknownToken
 	}
-	password, ok := s.vault.SecretFor(KindPassword, alias)
+	password, ok := vault.SecretFor(KindPassword, alias)
 	if !ok {
 		return "", ErrNoPassword
 	}
@@ -500,11 +560,12 @@ func (s *Service) expireLocked() {
 // the key vault applies to private keys.
 func (s *Service) write() error {
 	s.mu.Lock()
-	if s.vault == nil {
+	vault := s.use()
+	if vault == nil {
 		s.mu.Unlock()
 		return ErrLocked
 	}
-	sealed, err := s.vault.Seal()
+	sealed, err := vault.Seal()
 	s.mu.Unlock()
 	if err != nil {
 		return err
@@ -537,8 +598,9 @@ func (s *Service) write() error {
 func (s *Service) Aliases() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.vault == nil {
+	vault := s.open()
+	if vault == nil {
 		return nil
 	}
-	return s.vault.Subjects(KindPassword)
+	return vault.Subjects(KindPassword)
 }

@@ -205,7 +205,7 @@ func startServer(t *testing.T, home string) (*secret.Service, string, *countingL
 	if err != nil {
 		t.Fatal(err)
 	}
-	vault := secret.NewService(workspace, storage.NewManager(workspace, time.Now, rand.Reader))
+	vault := secret.NewService(workspace, storage.NewManager(workspace, time.Now, rand.Reader), time.Now)
 	if err := vault.Initialise(passphrase); err != nil {
 		t.Fatal(err)
 	}

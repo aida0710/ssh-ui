@@ -153,7 +153,7 @@ func Build(dependencies Dependencies, version string) (*httpserver.Server, strin
 	// The stored-password vault shares the configuration transaction manager:
 	// it is one more ordinary managed file under ~/.ssh, so one journal covers
 	// it, and it travels with everything else the workspace holds.
-	passwordService := secret.NewService(workspace, transactions)
+	passwordService := secret.NewService(workspace, transactions, time.Now)
 
 	// A key whose passphrase is stored is added to the agent in one action
 	// rather than two. The lookup is installed here rather than imported by

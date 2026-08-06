@@ -24,7 +24,22 @@ func newService(t *testing.T) (*secret.Service, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return secret.NewService(workspace, storage.NewManager(workspace, time.Now, rand.Reader)), home
+	return secret.NewService(workspace, storage.NewManager(workspace, time.Now, rand.Reader), time.Now), home
+}
+
+// newClockedService owns time, so an idle day can be a line of test rather
+// than a day of waiting.
+func newClockedService(t *testing.T, now func() time.Time) (*secret.Service, string) {
+	t.Helper()
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, ".ssh"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := storage.NewWorkspace(storage.OSFileSystem{}, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return secret.NewService(workspace, storage.NewManager(workspace, time.Now, rand.Reader), now), home
 }
 
 func vaultPath(home string) string {
@@ -89,7 +104,7 @@ func mustReopen(t *testing.T, home string) *secret.Service {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return secret.NewService(workspace, storage.NewManager(workspace, time.Now, rand.Reader))
+	return secret.NewService(workspace, storage.NewManager(workspace, time.Now, rand.Reader), time.Now)
 }
 
 func TestInitialiseRefusesToReplaceAnExistingVault(t *testing.T) {
@@ -468,5 +483,82 @@ func TestSyncSettingsRefuseAShutVault(t *testing.T) {
 	}
 	if err := service.SetSyncSettings(secret.SyncSettings{Bucket: "b"}); !errors.Is(err, secret.ErrLocked) {
 		t.Errorf("SetSyncSettings while locked = %v, want ErrLocked", err)
+	}
+}
+
+// A vault that stays open for the life of the process is a vault that is open
+// while the laptop is in a bag. Nothing is asked at startup, so the cost of
+// shutting it is one master password on the next use, and the reach of leaving
+// it open is every password and every key passphrase.
+func TestAVaultLeftUntouchedShutsItself(t *testing.T) {
+	clock := time.Date(2026, 8, 6, 9, 0, 0, 0, time.UTC)
+	service, _ := newClockedService(t, func() time.Time { return clock })
+	if err := service.Initialise(passphrase); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Set("bastion", "hunter2"); err != nil {
+		t.Fatal(err)
+	}
+
+	clock = clock.Add(secret.IdleTimeout + time.Minute)
+	if service.Unlocked() {
+		t.Error("the vault is still open after a whole idle day")
+	}
+	if _, err := service.IssueToken("bastion"); !errors.Is(err, secret.ErrLocked) {
+		t.Errorf("IssueToken after the idle timeout = %v, want ErrLocked", err)
+	}
+	// And it is the master password that opens it again, not merely asking.
+	if err := service.Unlock(passphrase); err != nil {
+		t.Fatalf("Unlock = %v", err)
+	}
+	if !service.Has("bastion") {
+		t.Error("the reopened vault lost what it held")
+	}
+}
+
+func TestUsingASecretPutsTheClockBackToZero(t *testing.T) {
+	clock := time.Date(2026, 8, 6, 9, 0, 0, 0, time.UTC)
+	service, _ := newClockedService(t, func() time.Time { return clock })
+	if err := service.Initialise(passphrase); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Set("bastion", "hunter2"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Three quarters of the way there, four times over: a working day of use
+	// is not an idle day, however long it adds up to.
+	for range 4 {
+		clock = clock.Add(secret.IdleTimeout - secret.IdleTimeout/4)
+		if got := service.PasswordFor("bastion"); got != "hunter2" {
+			t.Fatalf("PasswordFor = %q after %v, want the password", got, clock)
+		}
+	}
+	if !service.Unlocked() {
+		t.Error("a vault used all day shut itself anyway")
+	}
+}
+
+// An open browser tab reads the status every time a screen mounts. If that
+// counted as use, one forgotten tab would hold the vault open for as long as
+// the machine is on, which is the thing the timeout exists to stop.
+func TestReadingTheStatusDoesNotHoldTheVaultOpen(t *testing.T) {
+	clock := time.Date(2026, 8, 6, 9, 0, 0, 0, time.UTC)
+	service, _ := newClockedService(t, func() time.Time { return clock })
+	if err := service.Initialise(passphrase); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Set("bastion", "hunter2"); err != nil {
+		t.Fatal(err)
+	}
+
+	for range 4 {
+		clock = clock.Add(secret.IdleTimeout - secret.IdleTimeout/4)
+		service.Unlocked()
+		service.Aliases()
+		service.Has("bastion")
+	}
+	if service.Unlocked() {
+		t.Error("polling the status held the vault open")
 	}
 }

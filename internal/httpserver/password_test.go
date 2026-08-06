@@ -31,7 +31,7 @@ func passwordEngine(t *testing.T) (*echo.Echo, *secret.Service) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	service := secret.NewService(workspace, storage.NewManager(workspace, time.Now, rand.Reader))
+	service := secret.NewService(workspace, storage.NewManager(workspace, time.Now, rand.Reader), time.Now)
 
 	engine := echo.New()
 	registerPasswordRoutes(engine, PasswordHandlers{
@@ -221,7 +221,7 @@ func TestAskpassNeverAnswersWithoutAPromptRule(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	service := secret.NewService(workspace, storage.NewManager(workspace, time.Now, rand.Reader))
+	service := secret.NewService(workspace, storage.NewManager(workspace, time.Now, rand.Reader), time.Now)
 	if err := service.Initialise(testPassphrase); err != nil {
 		t.Fatal(err)
 	}
