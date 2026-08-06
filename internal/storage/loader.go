@@ -34,6 +34,10 @@ func NewResolver(workspace *Workspace) config.Resolver {
 		Loader: NewConfigLoader(workspace),
 		Home:   workspace.Home(),
 		Root:   workspace.Root(),
-		Tokens: map[byte]string{'d': workspace.Home()},
+		// '~' and '%d' expand to the home as it was given, and every judgement
+		// about the result is made against the resolved root. Normalise is what
+		// keeps those the same file.
+		Normalise: workspace.Normalise,
+		Tokens:    map[byte]string{'d': workspace.Home()},
 	}
 }

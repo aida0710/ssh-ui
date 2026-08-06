@@ -62,6 +62,38 @@ func (w *Workspace) Contains(candidate string) bool {
 	return cleaned == w.root || strings.HasPrefix(cleaned, w.root+string(filepath.Separator))
 }
 
+// Normalise rewrites a path expressed against the home directory as it was
+// given into one expressed against the resolved root.
+//
+// Root is resolved through EvalSymlinks and Home deliberately is not: Home is
+// the value this process and its children carry in HOME, which is what ssh
+// prints and therefore what SanitiseHomePaths has to match. So the two name the
+// same directory in two ways whenever ~/.ssh is reached through a link — a
+// dotfiles checkout, or every temporary directory on macOS, where /var is a
+// link to private/var.
+//
+// A caller that expands "~" or "%d" lands in the home's spelling. Comparing
+// that against Root said the path was outside the workspace when it was the
+// workspace, and the two places that ask — the key reference index and the
+// relocation that rewrites IdentityFile lines — both answered no. The visible
+// result was a key rename that moved the files and rewrote none of the
+// directives naming them, in silence, and a Keys screen reporting a whole
+// configuration as unresolvable.
+//
+// A path that is not under the home is returned cleaned and otherwise untouched.
+func (w *Workspace) Normalise(candidate string) string {
+	cleaned := filepath.Clean(candidate)
+	homeRoot := filepath.Join(w.home, ".ssh")
+	if cleaned == homeRoot {
+		return w.root
+	}
+	prefix := homeRoot + string(filepath.Separator)
+	if strings.HasPrefix(cleaned, prefix) {
+		return filepath.Join(w.root, strings.TrimPrefix(cleaned, prefix))
+	}
+	return cleaned
+}
+
 // ResolveForWrite validates that candidate is an absolute path below the root
 // whose parents are real directories and which is either absent or a regular
 // file. It returns the cleaned path.

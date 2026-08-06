@@ -543,7 +543,7 @@ func (s *Service) rewriteKeyReferences(members []keys.Item, relocations []keyRel
 				if strings.HasPrefix(argument.Raw, "#") {
 					break
 				}
-				from, moved := relocationFor(destinations, root, s.workspace.Home(), argument.Value)
+				from, moved := relocationFor(destinations, root, s.workspace, argument.Value)
 				if !moved {
 					continue
 				}
@@ -576,9 +576,9 @@ func (s *Service) rewriteKeyReferences(members []keys.Item, relocations []keyRel
 }
 
 // relocationFor reports which moved file a directive argument names.
-func relocationFor(destinations map[string]string, root, home, value string) (string, bool) {
+func relocationFor(destinations map[string]string, root string, workspace *storage.Workspace, value string) (string, bool) {
 	for from := range destinations {
-		if keys.ExpandsTo(value, home, filepath.Join(root, filepath.FromSlash(from))) {
+		if keys.ExpandsTo(workspace, value, filepath.Join(root, filepath.FromSlash(from))) {
 			return from, true
 		}
 	}

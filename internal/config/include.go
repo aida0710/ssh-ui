@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"path"
+	"path/filepath"
 	"strings"
 )
 
@@ -31,11 +32,20 @@ type Loader interface {
 // that are known before a destination host is chosen; any other token is
 // reported as an unsupported expansion.
 type Resolver struct {
-	Loader   Loader
-	Home     string
-	Root     string
-	Tokens   map[byte]string
-	MaxDepth int
+	Loader Loader
+	Home   string
+	Root   string
+	// Normalise reconciles a path built from Home with the spelling Root uses,
+	// for the caller that knows the two can differ. A workspace resolves its
+	// root through EvalSymlinks and keeps its home as given, so "~/.ssh/x" and
+	// "<root>/x" are the same file under two names whenever ~/.ssh is reached
+	// through a link — and without this every such Include was reported as
+	// outside the root and refused for editing.
+	//
+	// Optional: a resolver built without one behaves as it always did.
+	Normalise func(string) string
+	Tokens    map[byte]string
+	MaxDepth  int
 }
 
 func (r Resolver) maxDepth() int {
@@ -65,7 +75,11 @@ func (r Resolver) expandPattern(argument string) (string, error) {
 	case !strings.HasPrefix(expanded, "/"):
 		expanded = r.Root + "/" + expanded
 	}
-	return path.Clean(expanded), nil
+	cleaned := path.Clean(expanded)
+	if r.Normalise != nil {
+		cleaned = filepath.ToSlash(r.Normalise(filepath.FromSlash(cleaned)))
+	}
+	return cleaned, nil
 }
 
 func (r Resolver) expandTokens(argument string) (string, error) {
