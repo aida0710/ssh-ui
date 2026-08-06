@@ -98,21 +98,23 @@ test("deletes a file after a confirmation and offers it back in History", async 
 // A directory is where a file goes, so the explorer makes and removes one too.
 // An empty directory is in no Include graph, so the tree does not list it —
 // what proves it existed is that removing it works once and refuses twice.
+//
+// Every step waits on its own response. "No alert yet" is true before the
+// answer arrives as well as after a success, so asserting it raced the next
+// click and passed here while failing in CI.
 test("makes a directory and removes it", async ({ page, installation }) => {
   await openApplication(page, installation);
   await openSection(page, "Config");
 
   const path = page.getByLabel("New file path");
   await path.fill("conf.d/eu");
-  await page.getByRole("button", { name: "Create directory" }).click();
-  await expect(page.getByRole("alert")).toHaveCount(0);
+  expect(await clickAndAwait(page, "Create directory", "/api/v1/config/save")).toBe(200);
 
   await path.fill("conf.d/eu");
-  await page.getByRole("button", { name: "Delete directory" }).click();
-  await expect(page.getByRole("alert")).toHaveCount(0);
+  expect(await clickAndAwait(page, "Delete directory", "/api/v1/config/save")).toBe(200);
 
   // Gone: the second removal has nothing to remove.
   await path.fill("conf.d/eu");
-  await page.getByRole("button", { name: "Delete directory" }).click();
+  expect(await clickAndAwait(page, "Delete directory", "/api/v1/config/save")).toBe(404);
   await expect(page.getByRole("alert")).toBeVisible();
 });
