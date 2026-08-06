@@ -104,15 +104,34 @@ func TestAgainstARealBucketASnapshotTravelsBetweenTwoMachines(t *testing.T) {
 		"keys/work/id_ed25519": "-----BEGIN OPENSSH PRIVATE KEY-----\nnot really\n",
 		"ssh-ui/metadata.json": `{"schemaVersion":2}`,
 	})
+	// The object key is fixed, so a bucket that has been used before already
+	// holds a snapshot and the conditional write refuses. That is the client
+	// behaving correctly, and it used to make this test pass exactly once per
+	// container: the second run failed on the object the first run had left,
+	// which is not a test anyone can run often.
+	//
+	// A real machine meeting an occupied bucket pulls first, and so does this
+	// one. Pulling teaches it the ETag, which turns the push into the If-Match
+	// it should be. Pull answers ErrNothingToApply together with a complete
+	// result when the workspace already matches — that is the shape of the API,
+	// not a failure, and applying that result is what records the ETag.
+	result, err := first.service.Pull(context.Background(), syncPassphrase)
+	switch {
+	case err == nil, errors.Is(err, remotesync.ErrNothingToApply):
+		if err := first.service.Apply(result); err != nil && !errors.Is(err, remotesync.ErrNothingToApply) {
+			t.Fatalf("Apply of the snapshot already in the bucket = %v", err)
+		}
+	case errors.Is(err, objectstore.ErrNotFound):
+		// An empty bucket: there is nothing to learn, and the push creates it.
+	default:
+		t.Fatalf("Pull before push = %v", err)
+	}
 	if err := first.service.Push(context.Background(), syncPassphrase); err != nil {
-		// The very first run against an empty bucket may find an object from a
-		// previous run; the conditional write is what refuses, and that is
-		// reported honestly rather than worked around.
-		t.Fatalf("Push = %v (if this is ErrRemoteMoved the bucket already holds a snapshot from an earlier run)", err)
+		t.Fatalf("Push = %v", err)
 	}
 
 	second := realInstallation(t, map[string]string{})
-	result, err := second.service.Pull(context.Background(), syncPassphrase)
+	result, err = second.service.Pull(context.Background(), syncPassphrase)
 	if err != nil {
 		t.Fatalf("Pull = %v", err)
 	}
