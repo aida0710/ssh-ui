@@ -116,7 +116,10 @@ func (index *ReferenceIndex) record(
 		}
 	}
 
-	absolute, reason := expandKeyPath(value, workspace.Home())
+	// Expanded against Home, compared against Root: Normalise is what makes
+	// those the same space when ~/.ssh is reached through a link.
+	expanded, reason := expandKeyPath(value, workspace.Home())
+	absolute := workspace.Normalise(expanded)
 	if reason != "" {
 		index.unresolved = append(index.unresolved, UnresolvedReference{
 			Directive: directive, Value: value, ConfigPath: configPath, Line: line, Reason: reason,
@@ -200,7 +203,12 @@ func (inventory *Inventory) AttachReferences(index *ReferenceIndex) {
 // file. It is the one way another package may ask that question: expandKeyPath
 // stays unexported so the rule about what this engine refuses to guess — a
 // relative path, an unknown token — is decided in one place.
-func ExpandsTo(value, home, absolute string) bool {
-	expanded, reason := expandKeyPath(value, home)
-	return reason == "" && expanded == filepath.Clean(absolute)
+// The workspace rather than a bare home, because the answer is a comparison
+// against a path under the root and the two spellings have to be reconciled
+// before it is made. Passing the home alone let a caller compare an expanded
+// "~/.ssh/…" with a path built from the resolved root and be told they were
+// different files.
+func ExpandsTo(workspace *storage.Workspace, value, absolute string) bool {
+	expanded, reason := expandKeyPath(value, workspace.Home())
+	return reason == "" && workspace.Normalise(expanded) == workspace.Normalise(absolute)
 }

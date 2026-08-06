@@ -1,6 +1,7 @@
 package keys
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -104,5 +105,63 @@ func TestAttachReferencesNeverPointsAtEngineState(t *testing.T) {
 		if strings.HasPrefix(candidate.RelativePath, StateDirectoryName+string(filepath.Separator)) {
 			t.Fatalf("engine state was inventoried: %s", candidate.RelativePath)
 		}
+	}
+}
+
+// A home directory reached through a symbolic link is the shape this
+// application says it supports: "a user who keeps ~/.ssh on another volume
+// still works". It is also the shape every macOS temporary directory has, and
+// the ordinary shape for anyone whose ~/.ssh is a link into a dotfiles
+// checkout.
+//
+// Workspace resolves its root through EvalSymlinks and leaves Home as it was
+// given, so the two live in different path spaces. expandKeyPath builds from
+// Home and Contains compares against Root, so on such a machine every
+// IdentityFile ~/.ssh/… is filed as pointing outside the workspace: the key
+// screen reports the whole configuration as unresolved, and a key rename
+// rewrites none of the directives that name it, silently, because a reference
+// judged to be outside cannot be the key being moved.
+//
+// The workspace here is built from the link, exactly as cmd/ssh-ui builds one
+// from os.UserHomeDir. Every other test in this package resolves the temporary
+// directory first, which is why none of them sees this.
+func TestBuildReferenceIndexResolvesAKeyUnderASymlinkedHome(t *testing.T) {
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	real := filepath.Join(base, "real-home")
+	if err := os.MkdirAll(filepath.Join(real, ".ssh"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	home := filepath.Join(base, "linked-home")
+	if err := os.Symlink(real, home); err != nil {
+		t.Skipf("this filesystem does not support symbolic links: %v", err)
+	}
+
+	workspace, err := storage.NewWorkspace(storage.OSFileSystem{}, home)
+	if err != nil {
+		t.Fatalf("new workspace: %v", err)
+	}
+	privateKey, publicKey, _ := newKeyPairFixture(t, "")
+	writeFixture(t, workspace, "work", privateKey, 0o600)
+	writeFixture(t, workspace, "work.pub", publicKey, 0o644)
+	writeFixture(t, workspace, "config", []byte(
+		"Host build\n  IdentityFile ~/.ssh/work\n  CertificateFile %d/.ssh/work.pub\n"), 0o600)
+
+	graph, err := storage.NewResolver(workspace).Resolve(filepath.Join(workspace.Root(), "config"))
+	if err != nil {
+		t.Fatalf("Resolve error = %v", err)
+	}
+	index := BuildReferenceIndex(graph, workspace)
+
+	if got := len(index.For("work")); got != 1 {
+		t.Errorf("references for work = %d, want the IdentityFile line", got)
+	}
+	if got := len(index.For("work.pub")); got != 1 {
+		t.Errorf("references for work.pub = %d, want the CertificateFile line", got)
+	}
+	for _, unresolved := range index.Unresolved() {
+		t.Errorf("reported as unresolvable: %#v", unresolved)
 	}
 }
