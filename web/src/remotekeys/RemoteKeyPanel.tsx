@@ -10,7 +10,8 @@ import {
   type RemoteKeysApi,
 } from "./api";
 import { CopyButton } from "../ui/CopyButton";
-import { Notice } from "../ui/surface";
+import { Button, Card, Notice, Row } from "../ui/surface";
+import { Field, control } from "../ui/form";
 
 type RemoteKeyPanelProps = {
   api?: RemoteKeysApi;
@@ -151,14 +152,14 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
         <Notice tone="danger">{error}</Notice>
       ) : null}
 
-      <div className="flex flex-col gap-2 text-sm">
-        <label className="flex flex-col gap-1">
-          <span>{t("rk.pickFromSsh")}</span>
-          <select
-            value={chosen}
-            onChange={(event) => void choose(event.target.value)}
-            className="rounded border border-control-line bg-control px-2 py-1"
-          >
+      {/*
+        Three single-line settings are rows. The key line is not: it is a
+        wrapped blob of base64, and a caption beside a box that tall reads as a
+        caption for the gap under it.
+      */}
+      <Card>
+        <Row label={t("rk.pickFromSsh")}>
+          <select value={chosen} onChange={(event) => void choose(event.target.value)} className={control}>
             <option value="">{t("rk.typeInstead")}</option>
             {candidates.map((item) => (
               <option key={item.id} value={item.id}>
@@ -166,81 +167,80 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
               </option>
             ))}
           </select>
-        </label>
-        <label className="flex flex-col gap-1">
-          <span>{t("rk.hostAlias")}</span>
-          <input
-            value={alias}
-            onChange={(event) => edit(setAlias)(event.target.value)}
-            className="rounded border border-control-line bg-control px-2 py-1"
-          />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span>{t("rk.publicKeyFile")}</span>
+        </Row>
+        <Row label={t("rk.hostAlias")}>
+          <input value={alias} onChange={(event) => edit(setAlias)(event.target.value)} className={control} />
+        </Row>
+        <Row label={t("rk.publicKeyFile")}>
           <input
             value={keyPath}
             onChange={(event) => {
               setChosen("");
               edit(setKeyPath)(event.target.value);
             }}
-            className="rounded border border-control-line bg-control px-2 py-1"
+            className={control}
           />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span>{t("rk.publicKeyLine")}</span>
-          <textarea
-            value={publicKey}
-            onChange={(event) => {
-              setChosen("");
-              edit(setPublicKey)(event.target.value);
-            }}
-            rows={3}
-            className="rounded border border-control-line bg-control px-2 py-1 font-mono"
-          />
-        </label>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => void describe()}
-            className="rounded border border-control-line px-3 py-1"
-          >
-            {t("rk.showWhatWouldHappen")}
-          </button>
-          {manual ? null : (
-            <button
-              type="button"
-              disabled={blocked}
-              onClick={() => void register()}
-              className="rounded border border-notice-line px-3 py-1 disabled:border-line disabled:text-ink-faint"
-            >
-              {t("rk.register")}
-            </button>
-          )}
-        </div>
+        </Row>
+      </Card>
+
+      <Field label={t("rk.publicKeyLine")}>
+        <textarea
+          value={publicKey}
+          onChange={(event) => {
+            setChosen("");
+            edit(setPublicKey)(event.target.value);
+          }}
+          rows={3}
+          className={`${control} font-mono`}
+        />
+      </Field>
+
+      {/*
+        Registering is what this screen is for, so it is the one thing wearing
+        the accent. It used to wear an amber border, which is the colour this
+        application reserves for a notice rather than for an action.
+      */}
+      <div className="flex gap-2">
+        <Button onClick={() => void describe()}>{t("rk.showWhatWouldHappen")}</Button>
+        {manual ? null : (
+          <Button kind="primary" disabled={blocked} onClick={() => void register()}>
+            {t("rk.register")}
+          </Button>
+        )}
       </div>
 
       {plan ? (
-        <section
-          aria-labelledby="remote-key-plan-heading"
-          className="rounded border border-notice-line p-3 text-sm"
-        >
-          <h3 id="remote-key-plan-heading" className="font-medium text-notice-ink">
-            {t("rk.confirmHeading")}
-          </h3>
-          <dl className="mt-2 grid grid-cols-[12rem_1fr] gap-x-3 gap-y-1">
-            <dt className="text-ink-muted">{t("rk.alias")}</dt>
-            <dd>{plan.alias}</dd>
-            <dt className="text-ink-muted">{t("rk.effectiveUser")}</dt>
-            <dd>{plan.user === "" ? t("rk.noUser") : plan.user}</dd>
-            <dt className="text-ink-muted">{t("rk.destination")}</dt>
-            <dd>{`${plan.hostname}:${plan.port}`}</dd>
-            <dt className="text-ink-muted">{t("rk.valuesCameFrom")}</dt>
-            <dd>{plan.valuesFrom in valuesFromLabels ? t(valuesFromLabels[plan.valuesFrom]!) : plan.valuesFrom}</dd>
-            <dt className="text-ink-muted">{t("rk.keyFile")}</dt>
-            <dd>{plan.keyPath}</dd>
-            <dt className="text-ink-muted">{t("rk.fingerprint")}</dt>
-            <dd>{plan.fingerprint}</dd>
-          </dl>
+        <section aria-labelledby="remote-key-plan-heading" className="flex flex-col gap-3 text-sm">
+          <h3 id="remote-key-plan-heading" className="font-medium">{t("rk.confirmHeading")}</h3>
+
+          {/*
+            A description list, not rows: none of this is editable, and `Row`
+            wraps its contents in a label because everything it holds is. The
+            card and its hairlines are the same, so the two read alike.
+          */}
+          <Card>
+            <dl className="text-sm">
+              {[
+                [t("rk.alias"), plan.alias],
+                [t("rk.effectiveUser"), plan.user === "" ? t("rk.noUser") : plan.user],
+                [t("rk.destination"), `${plan.hostname}:${plan.port}`],
+                [
+                  t("rk.valuesCameFrom"),
+                  plan.valuesFrom in valuesFromLabels ? t(valuesFromLabels[plan.valuesFrom]!) : plan.valuesFrom,
+                ],
+                [t("rk.keyFile"), plan.keyPath],
+                [t("rk.fingerprint"), plan.fingerprint],
+              ].map(([caption, value]) => (
+                <div
+                  key={caption}
+                  className="flex items-baseline gap-3 border-t border-hairline px-3 py-2 first:border-t-0"
+                >
+                  <dt className="w-44 shrink-0 text-ink-muted">{caption}</dt>
+                  <dd className="min-w-0 break-all">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </Card>
 
           <p className="mt-3">
             {t("rk.appendTo", {
