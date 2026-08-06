@@ -59,6 +59,12 @@ const (
 	// included is a different thing from a file that is empty.
 	EditFileRename EditKind = "file_rename"
 	EditFileDelete EditKind = "file_delete"
+	// EditDirectoryCreate and EditDirectoryDelete are the explorer's directory
+	// operations. Renaming one is not here: it would have to carry the Include
+	// lines that name every file inside, which is the same work file_rename
+	// does for one file and needs those rewrites to accumulate.
+	EditDirectoryCreate EditKind = "directory_create"
+	EditDirectoryDelete EditKind = "directory_delete"
 )
 
 // EditRequest is one requested change.
@@ -527,6 +533,10 @@ func (s *Service) plan(request EditRequest) (planned, error) {
 		return s.planMoveHost(graph, request)
 	case EditFileRename:
 		return s.planFileRename(graph, request)
+	case EditDirectoryCreate:
+		return s.planDirectoryCreate(graph, request)
+	case EditDirectoryDelete:
+		return s.planDirectoryDelete(graph, request)
 	case EditFileDelete:
 		return s.planFileDelete(graph, request)
 	default:

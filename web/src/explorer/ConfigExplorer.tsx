@@ -4,6 +4,7 @@ import { ApiError, type Problem } from "../api/client";
 import { configApi, type FileContents, type Overview, type SavePreview } from "../api/config";
 import { SavePreviewPanel } from "../connections/SavePreview";
 import {
+  dangerAction,
   control,
   fieldLabel,
   hintText,
@@ -156,6 +157,34 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
     }
   }
 
+  // Directories are made and removed here too, because a directory is where a
+  // file goes and the explorer is where files live. Neither declares a group:
+  // that changes the entry file's generated region, which belongs to the Groups
+  // screen, and the server refuses a directory a generated Include names.
+  async function createDirectory() {
+    if (newPath === "") return;
+    try {
+      await configApi.save({ kind: "directory_create", path: newPath });
+      setNewPath("");
+      setProblem(null);
+      await reload();
+    } catch (error) {
+      setProblem(toProblem(error));
+    }
+  }
+
+  async function deleteDirectory() {
+    if (newPath === "") return;
+    try {
+      await configApi.save({ kind: "directory_delete", path: newPath });
+      setNewPath("");
+      setProblem(null);
+      await reload();
+    } catch (error) {
+      setProblem(toProblem(error));
+    }
+  }
+
   async function run(action: "preview" | "save") {
     if (file === null || file.file.path === undefined) return;
     const request = {
@@ -268,15 +297,34 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
             returned without doing anything, so the click was a no-op the
             interface had promised would work.
           */}
-          <button
-            type="button"
-            onClick={() => void createFile()}
-            disabled={newPath === ""}
-            className={`self-start ${secondaryAction}`}
-          >
-            {t("explorer.createFile")}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void createFile()}
+              disabled={newPath === ""}
+              className={secondaryAction}
+            >
+              {t("explorer.createFile")}
+            </button>
+            <button
+              type="button"
+              onClick={() => void createDirectory()}
+              disabled={newPath === ""}
+              className={secondaryAction}
+            >
+              {t("explorer.createDirectory")}
+            </button>
+            <button
+              type="button"
+              onClick={() => void deleteDirectory()}
+              disabled={newPath === ""}
+              className={dangerAction}
+            >
+              {t("explorer.deleteDirectory")}
+            </button>
+          </div>
           <p className={hintText}>{t("explorer.newFileNote")}</p>
+          <p className={hintText}>{t("explorer.directoryNote")}</p>
         </div>
 
         <h3 className={sectionHeading}>{t("explorer.diagnostics")}</h3>

@@ -105,6 +105,12 @@ export const en = {
   "notice.orphan_metadata": "The host this note belonged to is gone. Re-associate it deliberately.",
   "notice.group_cycle": "This group's parents form a cycle, so it was skipped.",
   "notice.group_member_missing": "This group member has no host block in the configuration.",
+  "refusal.directory_not_empty":
+    "That directory still holds something. Delete what is inside first, so the Include lines that name it travel with it.",
+  "refusal.not_a_directory": "That path is a file, not a directory.",
+  "refusal.group_is_declared":
+    "{detail} is a declared group. Rename or remove it on the Groups screen, where the operation also carries its connections, its settings and its keys.",
+  "refusal.destination_exists": "Something is already there.",
   "notice.group_not_declared":
     "This directory is under connections/ but no Include line names it, so nothing in it is read. Declare it as a group, or move what is in it.",
   "notice.group_directory_missing":
@@ -384,6 +390,10 @@ export const en = {
   "explorer.readOnly": "read only",
   "explorer.newFilePath": "New file path",
   "explorer.createFile": "Create file",
+  "explorer.createDirectory": "Create directory",
+  "explorer.deleteDirectory": "Delete directory",
+  "explorer.directoryNote":
+    "A directory is made and removed here too, but only an empty one is removed: delete the files inside first, so the Include lines that name them travel with them. A declared group is refused — its shape belongs to the Groups screen.",
   "explorer.fileOperations": "This file",
   "explorer.fileOperationsNote":
     "Renaming carries the Include lines that name this file. A pattern that matches by shape is left alone, and you are told when the file leaves its reach.",
@@ -781,6 +791,12 @@ export const ja: Record<MessageKey, string> = {
   "notice.orphan_metadata": "このメモが属していたホストがなくなりました。意識的に再関連付けしてください。",
   "notice.group_cycle": "このグループの親が循環しているため、スキップしました。",
   "notice.group_member_missing": "このグループのメンバーに対応する Host ブロックが設定にありません。",
+  "refusal.directory_not_empty":
+    "そのディレクトリにはまだ中身があります。先に中のファイルを削除してください（そうすれば、それを指す Include 行も一緒に処理されます）。",
+  "refusal.not_a_directory": "そのパスはディレクトリではなくファイルです。",
+  "refusal.group_is_declared":
+    "{detail} は宣言済みのグループです。Groups 画面で改名・削除してください。そちらなら接続・共通設定・鍵も一緒に運ばれます。",
+  "refusal.destination_exists": "そこには既に何かあります。",
   "notice.group_not_declared":
     "このディレクトリは connections/ の下にありますが、どの Include 行も名前を挙げていないため、中身は読まれていません。グループとして宣言するか、中身を移してください。",
   "notice.group_directory_missing":
@@ -1054,6 +1070,10 @@ export const ja: Record<MessageKey, string> = {
   "explorer.readOnly": "読み取り専用",
   "explorer.newFilePath": "新しいファイルのパス",
   "explorer.createFile": "ファイルを作成",
+  "explorer.createDirectory": "ディレクトリを作成",
+  "explorer.deleteDirectory": "ディレクトリを削除",
+  "explorer.directoryNote":
+    "ディレクトリの作成と削除もここで行えますが、削除は空のもののみです。中のファイルを先に削除してください（そうすれば、それを指す Include 行も一緒に処理されます）。宣言済みグループは拒否します。グループの形は Groups 画面の担当です。",
   "explorer.fileOperations": "このファイル",
   "explorer.fileOperationsNote":
     "リネームは、このファイルを名指ししている Include 行も一緒に書き換えます。ワイルドカードのパターンはそのまま残し、届かなくなる場合は知らせます。",

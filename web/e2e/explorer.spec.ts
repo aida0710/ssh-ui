@@ -94,3 +94,25 @@ test("deletes a file after a confirmation and offers it back in History", async 
   await openSection(page, "History");
   await expect(page.getByText("work/lon.conf").first()).toBeVisible();
 });
+
+// A directory is where a file goes, so the explorer makes and removes one too.
+// An empty directory is in no Include graph, so the tree does not list it —
+// what proves it existed is that removing it works once and refuses twice.
+test("makes a directory and removes it", async ({ page, installation }) => {
+  await openApplication(page, installation);
+  await openSection(page, "Config");
+
+  const path = page.getByLabel("New file path");
+  await path.fill("conf.d/eu");
+  await page.getByRole("button", { name: "Create directory" }).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+
+  await path.fill("conf.d/eu");
+  await page.getByRole("button", { name: "Delete directory" }).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+
+  // Gone: the second removal has nothing to remove.
+  await path.fill("conf.d/eu");
+  await page.getByRole("button", { name: "Delete directory" }).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+});

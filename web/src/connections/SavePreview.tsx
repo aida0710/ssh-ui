@@ -61,6 +61,16 @@ function FileDiffView({ diff }: { diff: FileDiff }) {
   );
 }
 
+// The refusals worth a sentence rather than a code. A code the server took the
+// trouble to distinguish is one the user can act on, and "rejected: x" sends
+// them looking for what x means.
+const refusalKeys: Record<string, MessageKey> = {
+  directory_not_empty: "refusal.directory_not_empty",
+  not_a_directory: "refusal.not_a_directory",
+  group_is_declared: "refusal.group_is_declared",
+  destination_exists: "refusal.destination_exists",
+};
+
 export function NoticeList({ notices }: { notices: Notice[] }) {
   const t = useTranslate();
   if (notices.length === 0) return null;
@@ -102,7 +112,9 @@ export function SavePreviewPanel({
               ? t("preview.graphError")
               : problem.code === "config_conflict"
                 ? t("preview.conflictError")
-                : t("preview.rejected", { code: problem.code })}
+                : problem.code in refusalKeys
+                  ? t(refusalKeys[problem.code]!, { detail: problem.detail ?? "" })
+                  : t("preview.rejected", { code: problem.code })}
         </p>
       )}
 

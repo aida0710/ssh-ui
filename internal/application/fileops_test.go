@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"ssh-ui/internal/storage"
 )
 
 // newFileOpsService builds a workspace whose entry file names one included file
@@ -258,5 +260,73 @@ func TestPreviewOfADeleteWritesNothing(t *testing.T) {
 	}
 	if got := readWorkspace(t, root, "config"); got != entry {
 		t.Error("Preview edited the entry file")
+	}
+}
+
+// The explorer can make a directory, journalled like everything else.
+func TestDirectoryCreateMakesOneAndRefusesAnExistingPath(t *testing.T) {
+	service, workspace := newTestService(t)
+
+	if _, err := service.Save(EditRequest{Kind: EditDirectoryCreate, Path: "conf.d/eu"}); err != nil {
+		t.Fatalf("Save = %v", err)
+	}
+	info, err := os.Stat(filepath.Join(workspace.Root(), "conf.d", "eu"))
+	if err != nil || !info.IsDir() {
+		t.Fatalf("the directory is not there: %v", err)
+	}
+	if _, err := service.Save(EditRequest{Kind: EditDirectoryCreate, Path: "conf.d/eu"}); !errors.Is(err, ErrDestinationExists) {
+		t.Errorf("creating it twice = %v, want ErrDestinationExists", err)
+	}
+}
+
+// An empty directory goes; one holding a configuration file does not, because
+// the files have a delete of their own that rewrites the Include lines naming
+// them and this one looks at nothing.
+func TestDirectoryDeleteTakesAnEmptyOneAndRefusesAFullOne(t *testing.T) {
+	service, workspace := newTestService(t)
+	if err := os.MkdirAll(filepath.Join(workspace.Root(), "conf.d", "empty"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(workspace.Root(), "conf.d", "full"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workspace.Root(), "conf.d", "full", "a.conf"), []byte("Host a\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := service.Save(EditRequest{Kind: EditDirectoryDelete, Path: "conf.d/empty"}); err != nil {
+		t.Fatalf("Save = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(workspace.Root(), "conf.d", "empty")); !os.IsNotExist(err) {
+		t.Errorf("the empty directory is still there: %v", err)
+	}
+
+	if _, err := service.Save(EditRequest{Kind: EditDirectoryDelete, Path: "conf.d/full"}); !errors.Is(err, storage.ErrDirectoryNotEmpty) {
+		t.Errorf("deleting a full directory = %v, want ErrDirectoryNotEmpty", err)
+	}
+	if _, err := os.Stat(filepath.Join(workspace.Root(), "conf.d", "full", "a.conf")); err != nil {
+		t.Errorf("the file inside was touched: %v", err)
+	}
+}
+
+// A declared group is refused here and named, so the interface can send the
+// user where that operation lives. Deleting one moves its connections,
+// rewrites the generated region, the group settings and the metadata; two
+// screens calling it would be two places for it to drift.
+func TestDirectoryDeleteRefusesADeclaredGroupAndSaysWhichOne(t *testing.T) {
+	service, workspace := newTestService(t)
+	declareGroup(t, service, "work")
+	writeGroupFile(t, workspace, "work", "web.conf", "Host web-1\n")
+
+	_, err := service.Save(EditRequest{Kind: EditDirectoryDelete, Path: "connections/work"})
+	var declared *GroupDeclaredError
+	if !errors.As(err, &declared) {
+		t.Fatalf("deleting a declared group = %v, want GroupDeclaredError", err)
+	}
+	if declared.Group != "work" {
+		t.Errorf("group = %q, want work", declared.Group)
+	}
+	if _, statErr := os.Stat(filepath.Join(workspace.Root(), "connections", "work")); statErr != nil {
+		t.Errorf("the group directory was touched: %v", statErr)
 	}
 }

@@ -56,6 +56,16 @@ type problemPayload struct {
 	Blockers []string `json:"blockers,omitempty"`
 }
 
+// declaredGroup names the group a refused directory operation was aimed at, or
+// an empty string when the refusal was something else.
+func declaredGroup(err error) string {
+	var declared *application.GroupDeclaredError
+	if errors.As(err, &declared) {
+		return declared.Group
+	}
+	return ""
+}
+
 func problemWith(c *echo.Context, status int, payload problemPayload) error {
 	if payload.Message == "" {
 		payload.Message = "request rejected"
@@ -139,7 +149,8 @@ func validateEditRequest(request application.EditRequest) error {
 	switch request.Kind {
 	case application.EditHostFields, application.EditBlockRaw, application.EditFileRaw,
 		application.EditRename, application.EditMove, application.EditComment,
-		application.EditFileRename, application.EditFileDelete:
+		application.EditFileRename, application.EditFileDelete,
+		application.EditDirectoryCreate, application.EditDirectoryDelete:
 		if err := validatePathParameter(request.Path); err != nil {
 			return err
 		}
@@ -288,6 +299,12 @@ func serviceProblem(c *echo.Context, err error) error {
 			Path:     report.Path,
 			Conflict: &report,
 		})
+	case declaredGroup(err) != "":
+		// Named, so the interface can send the user to the screen where that
+		// operation lives rather than only refusing.
+		return problemWith(c, http.StatusConflict, problemPayload{
+			Code: "group_is_declared", Detail: declaredGroup(err),
+		})
 	case errors.Is(err, application.ErrHostNotFound), errors.Is(err, storage.ErrUnknownTransaction),
 		errors.Is(err, application.ErrFileNotFound):
 		return problemWith(c, http.StatusNotFound, problemPayload{Code: "not_found"})
@@ -301,6 +318,10 @@ func serviceProblem(c *echo.Context, err error) error {
 		return problemWith(c, http.StatusUnprocessableEntity, problemPayload{Code: "group_not_declared"})
 	case errors.Is(err, application.ErrGroupExists):
 		return problemWith(c, http.StatusConflict, problemPayload{Code: "group_exists"})
+	case errors.Is(err, storage.ErrDirectoryNotEmpty):
+		return problemWith(c, http.StatusConflict, problemPayload{Code: "directory_not_empty"})
+	case errors.Is(err, application.ErrNotADirectory):
+		return problemWith(c, http.StatusBadRequest, problemPayload{Code: "not_a_directory"})
 	case errors.Is(err, application.ErrExternalPath), errors.Is(err, storage.ErrOutsideWorkspace),
 		errors.Is(err, storage.ErrSymlinkPath), errors.Is(err, storage.ErrNotRegularFile),
 		// A path naming a directory that does not exist, or a component that is

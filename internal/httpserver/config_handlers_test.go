@@ -404,3 +404,46 @@ func TestSaveRejectsAnUnknownJSONFieldAndAnOversizedBody(t *testing.T) {
 		t.Fatalf("oversized raw = %d", got)
 	}
 }
+
+// The kinds the application understands and this file rejects are the kinds
+// nobody can reach.
+//
+// The directory operations were written, tested against the service, and
+// refused here with invalid_request, because the per-kind validation is a
+// second gate that a service-level test walks straight past.
+func TestEveryEditKindTheApplicationAcceptsPassesValidation(t *testing.T) {
+	for _, kind := range []application.EditKind{
+		application.EditHostFields, application.EditBlockRaw, application.EditFileRaw,
+		application.EditRename, application.EditMove, application.EditComment,
+		application.EditFileRename, application.EditFileDelete,
+		application.EditDirectoryCreate, application.EditDirectoryDelete,
+		application.EditGroups, application.EditMetadata,
+	} {
+		request := application.EditRequest{Kind: kind, Path: "conf.d/10-home.conf"}
+		// Only the shape each kind needs beyond a path, so the failure below is
+		// about the kind being known rather than about a missing field.
+		switch kind {
+		case application.EditHostFields:
+			request.Alias = "nas"
+			request.Fields = []application.FieldEdit{{
+				Action: application.ActionAdd, Keyword: "Port", Values: []string{"22"},
+			}}
+		case application.EditBlockRaw, application.EditFileRaw:
+			request.Alias, request.Raw = "nas", "Host nas\n"
+		case application.EditRename:
+			request.Alias, request.NewAlias = "nas", "nas2"
+		case application.EditMove:
+			request.Alias, request.DestinationGroup = "nas", "work"
+		case application.EditComment:
+			request.Alias = "nas"
+		case application.EditFileRename:
+			request.DestinationPath = "conf.d/20-home.conf"
+		case application.EditGroups, application.EditMetadata:
+			metadata := application.NewMetadata()
+			request.Metadata, request.Path = &metadata, ""
+		}
+		if err := validateEditRequest(request); err != nil {
+			t.Errorf("validateEditRequest(%q) = %v, so no request of that kind can reach the application", kind, err)
+		}
+	}
+}

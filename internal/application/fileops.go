@@ -3,6 +3,7 @@ package application
 import (
 	"bytes"
 	"errors"
+	"io/fs"
 	"path/filepath"
 	"strings"
 
@@ -22,7 +23,16 @@ var (
 	ErrSamePath = errors.New("the destination is the file itself")
 	// ErrFileNotFound reports that the file named is not there to operate on.
 	ErrFileNotFound = errors.New("no such file in the workspace")
+	// ErrNotADirectory refuses a directory operation aimed at a file.
+	ErrNotADirectory = errors.New("that path is not a directory")
 )
+
+// GroupDeclaredError refuses a directory operation on a declared group and says
+// which group it is, so the interface can send the user where that operation
+// actually lives.
+type GroupDeclaredError struct{ Group string }
+
+func (e *GroupDeclaredError) Error() string { return "that directory is a declared group" }
 
 const (
 	// NoticeIncludeNoLongerMatches warns that a pattern which used to reach
@@ -38,6 +48,11 @@ const (
 	// NoticeIncludeNowUnreached warns that a rename has put the file
 	// somewhere no Include reaches.
 	NoticeIncludeNowUnreached = "include_now_unreached"
+	// NoticeDirectoryCreated and NoticeDirectoryRemoved report what a directory
+	// operation did, so the preview has something to show: a directory has no
+	// contents to diff.
+	NoticeDirectoryCreated = "directory_created"
+	NoticeDirectoryRemoved = "directory_removed"
 )
 
 // hasGlobMetacharacter reports whether a pattern selects by shape rather than
@@ -355,4 +370,86 @@ func anyPatternStillMatches(graph *config.Graph, root, absolute, to string) bool
 		}
 	}
 	return false
+}
+
+// planDirectoryCreate makes one directory, journalled like everything else.
+//
+// It does not declare a group. A directory under connections/ that no Include
+// names is read by nothing, and the overview says so as group_not_declared —
+// which is the honest answer, because declaring one changes the entry file's
+// generated region and that belongs to the Groups screen.
+func (s *Service) planDirectoryCreate(graph *config.Graph, request EditRequest) (planned, error) {
+	target, err := AbsolutePath(s.workspace.Root(), request.Path)
+	if err != nil {
+		return planned{}, err
+	}
+	if _, statErr := s.workspace.FileSystem().Lstat(target); statErr == nil {
+		return planned{}, ErrDestinationExists
+	} else if !errors.Is(statErr, fs.ErrNotExist) {
+		return planned{}, statErr
+	}
+	return planned{
+		operation:   "config." + string(EditDirectoryCreate),
+		directories: []string{target},
+		base:        map[string][]byte{},
+		baseline:    diagnosticBaseline(graph),
+		preview: SavePreview{
+			Operation: "config." + string(EditDirectoryCreate),
+			Notices:   []Notice{{Code: NoticeDirectoryCreated, Path: request.Path}},
+		},
+	}, nil
+}
+
+// planDirectoryDelete removes one empty directory.
+//
+// Empty only: removing a tree would mean deleting configuration files whose
+// Include lines this transaction never looked at, and the files have a delete
+// of their own that does look. A directory a generated Include line declares as
+// a group is refused outright — that removal moves connections, rewrites the
+// region, the group settings and the metadata, and the Groups screen is where
+// that operation lives. Two screens calling it would be two places for it to
+// drift apart.
+func (s *Service) planDirectoryDelete(graph *config.Graph, request EditRequest) (planned, error) {
+	target, err := AbsolutePath(s.workspace.Root(), request.Path)
+	if err != nil {
+		return planned{}, err
+	}
+	info, statErr := s.workspace.FileSystem().Lstat(target)
+	if errors.Is(statErr, fs.ErrNotExist) {
+		return planned{}, ErrFileNotFound
+	}
+	if statErr != nil {
+		return planned{}, statErr
+	}
+	if !info.IsDir() {
+		return planned{}, ErrNotADirectory
+	}
+	if name, declared := s.declaredGroupAt(graph, request.Path); declared {
+		return planned{}, &GroupDeclaredError{Group: name}
+	}
+	return planned{
+		operation:         "config." + string(EditDirectoryDelete),
+		removeDirectories: []string{filepath.ToSlash(request.Path)},
+		base:              map[string][]byte{},
+		baseline:          diagnosticBaseline(graph),
+		preview: SavePreview{
+			Operation: "config." + string(EditDirectoryDelete),
+			Notices:   []Notice{{Code: NoticeDirectoryRemoved, Path: request.Path}},
+		},
+	}, nil
+}
+
+// declaredGroupAt reports whether this path is a group the entry file declares.
+func (s *Service) declaredGroupAt(graph *config.Graph, relative string) (string, bool) {
+	node := graph.Nodes[s.entryPath]
+	if node == nil || node.File == nil {
+		return "", false
+	}
+	cleaned := filepath.ToSlash(filepath.Clean(relative))
+	for _, name := range DeclaredGroups(node.File) {
+		if GroupDirectory(name) == cleaned || GroupKeyDirectory(name) == cleaned {
+			return name, true
+		}
+	}
+	return "", false
 }
