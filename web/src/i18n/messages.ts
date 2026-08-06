@@ -22,6 +22,10 @@ export const en = {
   "shell.language": "Language",
   "shell.languageEnglish": "English",
   "shell.languageJapanese": "日本語",
+  "shell.theme": "Appearance",
+  "shell.themeSystem": "System",
+  "shell.themeLight": "Light",
+  "shell.themeDark": "Dark",
 
   "section.connections": "Connections",
   "section.config": "Config",
@@ -728,6 +732,10 @@ export const ja: Record<MessageKey, string> = {
   "shell.language": "言語",
   "shell.languageEnglish": "English",
   "shell.languageJapanese": "日本語",
+  "shell.theme": "外観",
+  "shell.themeSystem": "システムに合わせる",
+  "shell.themeLight": "ライト",
+  "shell.themeDark": "ダーク",
 
   "section.connections": "接続",
   "section.config": "設定ファイル",

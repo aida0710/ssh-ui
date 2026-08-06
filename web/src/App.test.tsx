@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 // The application is behind the master password, so every test that expects a
 // shell has to be given an open vault. The lock screen has tests of its own.
@@ -9,6 +9,7 @@ const openVault = () =>
   Promise.resolve({ exists: true, unlocked: true, aliases: [] as string[], minPassphraseLength: 12 });
 import { App } from "./App";
 import { LanguageProvider } from "./i18n/context";
+import { ThemeProvider } from "./theme/context";
 import { ja } from "./i18n/messages";
 
 vi.mock("./connections/ConnectionsPage", () => ({
@@ -33,7 +34,33 @@ vi.mock("./remotekeys/RemoteKeyPanel", () => ({ RemoteKeyPanel: () => <div>remot
 
 const csrfToken = "c".repeat(43);
 
+afterEach(() => {
+  window.localStorage.clear();
+  document.documentElement.removeAttribute("data-theme");
+});
+
 describe("App", () => {
+  it("offers the three appearances and remembers the chosen one", async () => {
+    const user = userEvent.setup();
+    render(
+      <ThemeProvider>
+        <App
+          bootstrap={vi.fn().mockResolvedValue({ csrfToken })}
+          health={vi.fn().mockResolvedValue({ status: "ok", version: "0.1.0" })}
+          vault={openVault}
+        />
+      </ThemeProvider>,
+    );
+
+    const control = await screen.findByLabelText("Appearance");
+    expect(control).toHaveValue("system");
+
+    await user.selectOptions(control, "dark");
+
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+    expect(window.localStorage.getItem("ssh-ui.theme")).toBe("dark");
+  });
+
   it("shows the starting status before session setup completes", () => {
     render(<App bootstrap={() => new Promise(() => undefined)} health={vi.fn()} vault={openVault} />);
 

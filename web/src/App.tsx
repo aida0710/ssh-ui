@@ -16,6 +16,8 @@ import { KnownHostsPanel } from "./knownhosts/KnownHostsPanel";
 import { RemoteKeyPanel } from "./remotekeys/RemoteKeyPanel";
 import { LanguageProvider, useLanguage } from "./i18n/context";
 import { locales, type Locale } from "./i18n/locale";
+import { useTheme } from "./theme/context";
+import { themes, type Theme } from "./theme/theme";
 import type { MessageKey } from "./i18n/messages";
 
 type AppProps = {
@@ -63,8 +65,15 @@ const localeLabels: Record<Locale, MessageKey> = {
   ja: "shell.languageJapanese",
 };
 
+const themeLabels: Record<Theme, MessageKey> = {
+  system: "shell.themeSystem",
+  light: "shell.themeLight",
+  dark: "shell.themeDark",
+};
+
 export function App({ bootstrap, health, vault = integrationsApi.passwordVault }: AppProps) {
   const { t, locale, setLocale } = useLanguage();
+  const { theme, setTheme } = useTheme();
   // "locked" is the whole application, not a screen inside it. Every write
   // keeps a backup sealed with the master password, so there is no usable state
   // in which the vault is shut.
@@ -187,14 +196,29 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
         <p role="status" className="text-sm text-zinc-300">
           {state === "ready" ? t("shell.active", { version }) : t("shell.starting")}
         </p>
-        <label htmlFor="language" className="ml-auto text-sm text-zinc-400">
+        <label htmlFor="appearance" className="ml-auto text-sm text-ink-muted">
+          {t("shell.theme")}
+        </label>
+        <select
+          id="appearance"
+          value={theme}
+          onChange={(event) => setTheme(event.target.value as Theme)}
+          className="rounded border border-control-line bg-control px-2 py-1 text-sm text-ink"
+        >
+          {themes.map((candidate) => (
+            <option key={candidate} value={candidate}>
+              {t(themeLabels[candidate])}
+            </option>
+          ))}
+        </select>
+        <label htmlFor="language" className="text-sm text-ink-muted">
           {t("shell.language")}
         </label>
         <select
           id="language"
           value={locale}
           onChange={(event) => setLocale(event.target.value as Locale)}
-          className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
+          className="rounded border border-control-line bg-control px-2 py-1 text-sm text-ink"
         >
           {locales.map((candidate) => (
             <option key={candidate} value={candidate}>

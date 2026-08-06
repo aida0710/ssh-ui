@@ -110,15 +110,42 @@ test("keeps no secret in persistent browser storage", async ({ page, installatio
   // An allowlist rather than a count. A count would have passed just as well
   // with a session token in place of the language, and checking the value is
   // what makes that impossible: nothing but "en" or "ja" may be stored, and
-  // nothing but that one key may exist.
+  // nothing but the two preference keys may exist.
   const stored = await page.evaluate(() => ({
-    keys: Object.keys(window.localStorage),
+    keys: Object.keys(window.localStorage).sort(),
     language: window.localStorage.getItem("ssh-ui.language"),
     session: window.sessionStorage.length,
   }));
   expect(stored.keys).toEqual(["ssh-ui.language"]);
   expect(["en", "ja"]).toContain(stored.language);
   expect(stored.session).toBe(0);
+});
+
+test("keeps the chosen appearance, and writes nothing else", async ({ page, installation }) => {
+  await openApplication(page, installation);
+  await expect(sessionStatus(page)).toContainText("Local session active");
+
+  // The application starts following the system, which is a choice not to
+  // store anything.
+  expect(await page.evaluate(() => Object.keys(window.localStorage))).toEqual([]);
+
+  await page.getByLabel("Appearance").selectOption("dark");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+
+  // Returning to System is reachable, which is why the control has three
+  // values rather than two.
+  await page.getByLabel("Appearance").selectOption("system");
+  await page.getByLabel("Language").selectOption("ja");
+
+  const stored = await page.evaluate(() => ({
+    keys: Object.keys(window.localStorage).sort(),
+    theme: window.localStorage.getItem("ssh-ui.theme"),
+  }));
+  expect(stored.keys).toEqual(["ssh-ui.language", "ssh-ui.theme"]);
+  expect(stored.theme).toBe("system");
 });
 
 test("keeps the chosen language across a reload, and translates the panels", async ({
@@ -149,7 +176,7 @@ test("keeps the chosen language across a reload, and translates the panels", asy
   await expect(page.getByRole("button", { name: "鍵", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "鍵", exact: true }).click();
   await expect(page.getByRole("button", { name: "鍵を作成" })).toBeVisible();
-  expect(await page.evaluate(() => Object.keys(window.localStorage))).toEqual(["ssh-ui.language"]);
+  expect(await page.evaluate(() => Object.keys(window.localStorage).sort())).toEqual(["ssh-ui.language"]);
 });
 
 // The fragment is spent on first use and taken out of the address bar, so a
