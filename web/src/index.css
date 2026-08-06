@@ -1,8 +1,103 @@
 @import "tailwindcss";
 
+/* The palette, given once per theme.
+ *
+ * Names say what a value is for, not what colour it is: a token called
+ * `zinc-800` cannot be given a different value in the other theme, and a token
+ * called `card` can. Components reference these through Tailwind utilities —
+ * `bg-card`, `text-ink-muted`, `border-line` — and never carry a `dark:`
+ * variant, because the variant is this file.
+ *
+ * The rule these encode: the accent belongs to the one action a screen is for.
+ * Amber is a notice, red destroys something, green means the local session is
+ * alive. Nothing else is coloured, so colour on screen means something
+ * happened.
+ */
 :root {
+  color-scheme: light;
+
+  --ui-canvas: #f5f5f7;
+  --ui-sidebar: #f4f4f6;
+  --ui-tree: #fafafc;
+  --ui-toolbar: #fbfbfd;
+  --ui-card: #ffffff;
+  --ui-line: #e5e5ea;
+  --ui-hairline: #f0f0f3;
+  --ui-control: #ffffff;
+  --ui-control-line: #dcdce1;
+  --ui-select-fill: rgb(0 0 0 / 0.07);
+  --ui-ink: #1d1d1f;
+  --ui-ink-muted: #6e6e73;
+  --ui-ink-faint: #a1a1a6;
+  --ui-accent: #007aff;
+  --ui-accent-ink: #ffffff;
+  --ui-notice: #fff6e5;
+  --ui-notice-line: #f5dfae;
+  --ui-notice-ink: #7a5a10;
+  --ui-danger: #d70015;
+  --ui-live: #34794a;
+}
+
+[data-theme="dark"] {
   color-scheme: dark;
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #09090b;
-  color: #f4f4f5;
+
+  --ui-canvas: #1c1c1e;
+  --ui-sidebar: #252527;
+  --ui-tree: #1f1f21;
+  --ui-toolbar: #2a2a2c;
+  --ui-card: #2c2c2e;
+  --ui-line: #3a3a3c;
+  --ui-hairline: #3a3a3c;
+  --ui-control: #1c1c1e;
+  --ui-control-line: #48484a;
+  --ui-select-fill: rgb(140 140 150 / 0.26);
+  --ui-ink: #f5f5f7;
+  --ui-ink-muted: #98989d;
+  --ui-ink-faint: #6e6e73;
+  --ui-accent: #0a84ff;
+  --ui-accent-ink: #ffffff;
+  --ui-notice: rgb(255 159 10 / 0.13);
+  --ui-notice-line: rgb(255 159 10 / 0.32);
+  --ui-notice-ink: #f0b429;
+  --ui-danger: #ff6961;
+  --ui-live: #5fd88a;
+}
+
+@theme inline {
+  --color-canvas: var(--ui-canvas);
+  --color-sidebar: var(--ui-sidebar);
+  --color-tree: var(--ui-tree);
+  --color-toolbar: var(--ui-toolbar);
+  --color-card: var(--ui-card);
+  --color-line: var(--ui-line);
+  --color-hairline: var(--ui-hairline);
+  --color-control: var(--ui-control);
+  --color-control-line: var(--ui-control-line);
+  --color-select-fill: var(--ui-select-fill);
+  --color-ink: var(--ui-ink);
+  --color-ink-muted: var(--ui-ink-muted);
+  --color-ink-faint: var(--ui-ink-faint);
+  --color-accent: var(--ui-accent);
+  --color-accent-ink: var(--ui-accent-ink);
+  --color-notice: var(--ui-notice);
+  --color-notice-line: var(--ui-notice-line);
+  --color-notice-ink: var(--ui-notice-ink);
+  --color-danger: var(--ui-danger);
+  --color-live: var(--ui-live);
+}
+
+:root {
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  background: var(--ui-canvas);
+  color: var(--ui-ink);
+}
+
+/* The inspector is the only thing that moves, and it stops moving here. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
