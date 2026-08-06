@@ -3,6 +3,22 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { KeysScreen } from "./KeysScreen";
 import type { KeyInventoryResponse, KeysApi } from "./api";
+import type { IntegrationsApi } from "../api/integrations";
+
+// The vault, seen from the keys screen: names of both kinds, because the point
+// of the test is that only one kind reaches the picker.
+function buildSecrets(overrides: Partial<IntegrationsApi> = {}): IntegrationsApi {
+  return {
+    credentials: vi.fn().mockResolvedValue({
+      credentials: [
+        { kind: "key_passphrase", name: "build-key", uses: [] },
+        { kind: "password", name: "office-vm", uses: ["web-1"] },
+      ],
+    }),
+    assignCredential: vi.fn().mockResolvedValue({ credentials: [] }),
+    ...overrides,
+  } as unknown as IntegrationsApi;
+}
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -718,5 +734,53 @@ describe("taking a key back out of the agent", () => {
 
     const workRow = await screen.findByRole("row", { name: /id_work/ });
     expect(within(workRow).queryByRole("button", { name: "Remove from agent" })).not.toBeInTheDocument();
+  });
+
+  // The separation made visible on this side. An account password offered here
+  // would be a remote host's login password handed to a local key, and the
+  // format keeps the two apart precisely so no screen has to.
+  it("offers a stored passphrase for the key, and never an account password", async () => {
+    const api = buildApi({ inventory: vi.fn().mockResolvedValue(inventoryWithAgent()) });
+    render(<KeysScreen api={api} secrets={buildSecrets()} />);
+
+    const workRow = await screen.findByRole("row", { name: /id_work/ });
+    await userEvent.click(within(workRow).getByRole("button", { name: "Add to agent" }));
+
+    const picker = await screen.findByLabelText("Use a stored passphrase");
+    expect(picker).toHaveTextContent("build-key");
+    expect(picker).not.toHaveTextContent("office-vm");
+  });
+
+  it("points a key at a stored passphrase, so adding it is one action", async () => {
+    const api = buildApi({ inventory: vi.fn().mockResolvedValue(inventoryWithAgent()) });
+    const secrets = buildSecrets();
+    render(<KeysScreen api={api} secrets={secrets} />);
+
+    const workRow = await screen.findByRole("row", { name: /id_work/ });
+    await userEvent.click(within(workRow).getByRole("button", { name: "Add to agent" }));
+    await userEvent.selectOptions(await screen.findByLabelText("Use a stored passphrase"), "build-key");
+    await userEvent.click(screen.getByRole("button", { name: "Use this passphrase" }));
+
+    await waitFor(() =>
+      expect(secrets.assignCredential).toHaveBeenCalledWith("key_passphrase", "id_work", "build-key"),
+    );
+  });
+
+  it("says the stored passphrase will be used when the field is left empty", async () => {
+    const api = buildApi({ inventory: vi.fn().mockResolvedValue(inventoryWithAgent()) });
+    const secrets = buildSecrets({
+      credentials: vi.fn().mockResolvedValue({
+        credentials: [{ kind: "key_passphrase", name: "build-key", uses: ["id_work"] }],
+      }),
+    });
+    render(<KeysScreen api={api} secrets={secrets} />);
+
+    const workRow = await screen.findByRole("row", { name: /id_work/ });
+    await userEvent.click(within(workRow).getByRole("button", { name: "Add to agent" }));
+
+    expect(await screen.findByText(/uses the stored passphrase named build-key/)).toBeInTheDocument();
+    // Typed always wins, so the field stays: the person at the keyboard is more
+    // current than the file.
+    expect(screen.getByLabelText("Key passphrase")).toBeEnabled();
   });
 });

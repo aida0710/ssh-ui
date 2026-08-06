@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   integrationsApi,
+  type Credential,
   type IntegrationsApi,
   type PasswordEligibility,
   type PasswordVaultStatus,
@@ -42,6 +43,8 @@ export function PasswordPanel({ api = integrationsApi, alias }: PasswordPanelPro
   const t = useTranslate();
   const [status, setStatus] = useState<PasswordVaultStatus | null>(null);
   const [eligibility, setEligibility] = useState<PasswordEligibility | null>(null);
+  const [credentials, setCredentials] = useState<Credential[]>([]);
+  const [chosen, setChosen] = useState("");
   const [passphrase, setPassphrase] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -49,7 +52,11 @@ export function PasswordPanel({ api = integrationsApi, alias }: PasswordPanelPro
 
   const reload = useCallback(async () => {
     try {
-      setStatus(await api.passwordVault());
+      const vault = await api.passwordVault();
+      setStatus(vault);
+      // A shut vault is not asked for its names. Nothing is asked at startup
+      // either: this panel asks for itself, when the host it belongs to is open.
+      setCredentials(vault.unlocked ? (await api.credentials()).credentials : []);
     } catch {
       setError(t("password.statusFailed"));
     }
@@ -87,16 +94,37 @@ export function PasswordPanel({ api = integrationsApi, alias }: PasswordPanelPro
   useEffect(() => {
     setPassphrase("");
     setPassword("");
+    setChosen("");
     setError("");
   }, [alias]);
 
+  // The vault status and the names are two documents, and an action on one of
+  // them changes the other: storing a password adds a name, pointing a host at
+  // a name adds a subject. So each action keeps the answer it was given and
+  // fetches the other half, rather than re-reading both and contradicting the
+  // answer it just got.
   async function run(operation: () => Promise<PasswordVaultStatus>, failure: string) {
     setError("");
     setBusy(true);
     try {
-      setStatus(await operation());
+      const vault = await operation();
+      setStatus(vault);
+      setCredentials(vault.unlocked ? (await api.credentials()).credentials : []);
       setPassphrase("");
       setPassword("");
+    } catch {
+      setError(failure);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runNames(operation: () => Promise<{ credentials: Credential[] }>, failure: string) {
+    setError("");
+    setBusy(true);
+    try {
+      setCredentials((await operation()).credentials);
+      setStatus(await api.passwordVault());
     } catch {
       setError(failure);
     } finally {
@@ -110,6 +138,12 @@ export function PasswordPanel({ api = integrationsApi, alias }: PasswordPanelPro
 
   const stored = status.aliases.includes(alias);
   const minimum = status.minPassphraseLength ?? 12;
+  // Account passwords only. A picker that offered a key's passphrase would let
+  // one press send that passphrase to a remote host as a login password, which
+  // is the reason the two namespaces are two namespaces.
+  const sharable = credentials.filter((credential) => credential.kind === "password");
+  const uses = sharable.find((credential) => credential.uses.includes(alias));
+  const blocked = (eligibility?.blockers ?? []).length > 0;
 
   return (
     <section aria-label={t("password.heading")} className={sectionCard}>
@@ -169,6 +203,15 @@ export function PasswordPanel({ api = integrationsApi, alias }: PasswordPanelPro
       ) : stored ? (
         <>
           <p className="text-sm text-zinc-300">{t("password.stored", { alias })}</p>
+          {/*
+            Which name, when it is not this host's own. A shared secret is the
+            reason names exist, and someone about to forget it here should know
+            whether they are removing one host's password or their own reference
+            to a password several hosts use.
+          */}
+          {uses === undefined || uses.name === alias ? null : (
+            <p className={hintText}>{t("password.usesName", { name: uses.name })}</p>
+          )}
           <p className={hintText}>{t("password.armedNote")}</p>
           <div className="flex flex-wrap gap-2">
             <button
@@ -214,19 +257,55 @@ export function PasswordPanel({ api = integrationsApi, alias }: PasswordPanelPro
               ))}
             </ul>
           )}
+          {/*
+            An existing name first, because the second field makes a new secret
+            and the first makes this host share one that already exists.
+          */}
+          {sharable.length === 0 ? null : (
+            <div className="flex flex-wrap items-end gap-3">
+              <Field label={t("password.useStored")} hint={t("password.shareNote")}>
+                <select
+                  value={chosen}
+                  onChange={(event) => setChosen(event.target.value)}
+                  disabled={blocked}
+                  className={control}
+                >
+                  <option value="">{t("password.chooseName")}</option>
+                  {sharable.map((credential) => (
+                    <option key={credential.name} value={credential.name}>
+                      {credential.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <button
+                type="button"
+                disabled={busy || chosen === "" || blocked}
+                onClick={() =>
+                  void runNames(
+                    () => api.assignCredential("password", alias, chosen),
+                    t("password.assignFailed"),
+                  )
+                }
+                className={primaryAction}
+              >
+                {t("password.useThis")}
+              </button>
+            </div>
+          )}
           <Field label={t("password.password", { alias })}>
             <input
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              disabled={(eligibility?.blockers ?? []).length > 0}
+              disabled={blocked}
               className={control}
             />
           </Field>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              disabled={busy || password === "" || (eligibility?.blockers ?? []).length > 0}
+              disabled={busy || password === "" || blocked}
               onClick={() => void run(() => api.storePassword(alias, password), t("password.storeFailed"))}
               className={primaryAction}
             >

@@ -157,4 +157,52 @@ describe("PasswordPanel", () => {
     expect(screen.getByRole("button", { name: "Store the password" })).toBeDisabled();
     expect(api.storePassword).not.toHaveBeenCalled();
   });
+
+  // The point of naming a secret: one entry, several machines. Before this the
+  // only way to give two hosts the same password was to type it twice, and
+  // rotating it meant remembering which hosts shared it.
+  it("points this host at a password that already has a name", async () => {
+    const api = buildApi(unlocked, {
+      credentials: vi.fn().mockResolvedValue({
+        credentials: [{ kind: "password", name: "office-vm", uses: ["web-1"] }],
+      }),
+    });
+    render(<PasswordPanel api={api} alias="bastion" />);
+
+    await userEvent.selectOptions(await screen.findByLabelText("Use a stored password"), "office-vm");
+    await userEvent.click(screen.getByRole("button", { name: "Use this password" }));
+
+    await waitFor(() =>
+      expect(api.assignCredential).toHaveBeenCalledWith("password", "bastion", "office-vm"),
+    );
+  });
+
+  // The separation made visible. Picking a key's passphrase here would send it
+  // to a remote host as a login password, so this picker cannot offer one.
+  it("never offers a key passphrase as a host password", async () => {
+    const api = buildApi(unlocked, {
+      credentials: vi.fn().mockResolvedValue({
+        credentials: [
+          { kind: "password", name: "office-vm", uses: [] },
+          { kind: "key_passphrase", name: "build-key", uses: ["keys/work/id_work"] },
+        ],
+      }),
+    });
+    render(<PasswordPanel api={api} alias="bastion" />);
+
+    const picker = await screen.findByLabelText("Use a stored password");
+    expect(picker).toHaveTextContent("office-vm");
+    expect(picker).not.toHaveTextContent("build-key");
+  });
+
+  it("says which shared password this host already uses", async () => {
+    const api = buildApi(withPassword, {
+      credentials: vi.fn().mockResolvedValue({
+        credentials: [{ kind: "password", name: "office-vm", uses: ["bastion", "web-1"] }],
+      }),
+    });
+    render(<PasswordPanel api={api} alias="bastion" />);
+
+    expect(await screen.findByText(/office-vm/)).toBeInTheDocument();
+  });
 });

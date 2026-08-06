@@ -15,6 +15,7 @@ import {
   tableHeadRow,
 } from "../ui/form";
 import type { MessageKey } from "../i18n/messages";
+import { integrationsApi, type Credential, type IntegrationsApi } from "../api/integrations";
 import {
   keysApi,
   type KeyCertificate,
@@ -29,9 +30,21 @@ import {
 // groups are the declared group names, supplied by the shell from the overview.
 // The Keys screen never infers them: a directory is a group because a line in
 // ~/.ssh/config says so, and only the configuration engine reads that line.
-type KeysScreenProps = { api?: KeysApi; groups?: string[] };
+//
+// secrets is the vault, and it is a second surface rather than a few more
+// methods on the first: what a key is belongs to this package, and where a
+// passphrase lives belongs to the vault, which is the same separation the
+// server keeps between the key service and the secret service.
+type KeysScreenProps = { api?: KeysApi; groups?: string[]; secrets?: IntegrationsApi };
 
 type ScreenState = "loading" | "ready" | "error";
+
+// storedFor is the passphrase this key already points at, if any. The vault
+// answers names and what uses them, never values, so this is the only thing the
+// screen can know — and it is enough to say the field may be left empty.
+function storedFor(phrases: Credential[], item: KeyItem): Credential | undefined {
+  return phrases.find((credential) => credential.uses.includes(item.relativePath));
+}
 
 // certificateLines describes an OpenSSH certificate in the terms that decide
 // whether it is usable: who it names, who it is for, and whether it has run
@@ -152,7 +165,7 @@ function agentHolds(inventory: KeyInventoryResponse, item: KeyItem): boolean {
   return inventory.agentIdentities.some((identity) => identity.fingerprint === item.fingerprint);
 }
 
-export function KeysScreen({ api = keysApi, groups = [] }: KeysScreenProps) {
+export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsApi }: KeysScreenProps) {
   const t = useTranslate();
   const [state, setState] = useState<ScreenState>("loading");
   const [inventory, setInventory] = useState<KeyInventoryResponse | null>(null);
@@ -170,6 +183,8 @@ export function KeysScreen({ api = keysApi, groups = [] }: KeysScreenProps) {
   const [newPassphrase, setNewPassphrase] = useState("");
   const [removePassphrase, setRemovePassphrase] = useState(false);
   const [registering, setRegistering] = useState<KeyItem | null>(null);
+  const [phrases, setPhrases] = useState<Credential[]>([]);
+  const [chosenPhrase, setChosenPhrase] = useState("");
   const [agentPassphrase, setAgentPassphrase] = useState("");
   const [agentLifetime, setAgentLifetime] = useState(0);
   const [storeInKeychain, setStoreInKeychain] = useState(false);
@@ -278,7 +293,31 @@ export function KeysScreen({ api = keysApi, groups = [] }: KeysScreenProps) {
     setAgentPassphrase("");
     setAgentLifetime(0);
     setStoreInKeychain(false);
+    setChosenPhrase("");
+    setPhrases([]);
     setRegistering(null);
+  }
+
+  // The names are read when the form opens and not before. Nothing is asked at
+  // startup, and a screen that never registers a key never touches the vault.
+  // A shut vault answers nothing, which shows as no picker rather than an
+  // error: this form works without one, and always did.
+  async function loadPhrases() {
+    try {
+      const listed = await secrets.credentials();
+      setPhrases(listed.credentials.filter((credential) => credential.kind === "key_passphrase"));
+    } catch {
+      setPhrases([]);
+    }
+  }
+
+  async function assignPhrase(item: KeyItem) {
+    try {
+      await secrets.assignCredential("key_passphrase", item.relativePath, chosenPhrase);
+      await loadPhrases();
+    } catch {
+      setFailure(t("keys.assignPassphraseFailed"));
+    }
   }
 
   // Registration holds the passphrase exactly as long as the change-passphrase
@@ -487,6 +526,7 @@ export function KeysScreen({ api = keysApi, groups = [] }: KeysScreenProps) {
                         closePassphraseForm();
                         closeAgentForm();
                         setRegistering(item);
+                        if (item.encrypted) void loadPhrases();
                       }}
                     >
                       {t("keys.addToAgent")}
@@ -734,7 +774,10 @@ export function KeysScreen({ api = keysApi, groups = [] }: KeysScreenProps) {
               // "Key passphrase", not "Passphrase": the generation form below
               // has a field of its own, and two controls with one name are two
               // controls a user cannot tell apart.
-              <Field label={t("keys.keyPassphrase")}>
+              <Field
+                label={t("keys.keyPassphrase")}
+                {...(storedFor(phrases, registering) === undefined ? {} : { hint: t("keys.typedWins") })}
+              >
                 <input
                   className={control}
                   type="password"
@@ -756,6 +799,43 @@ export function KeysScreen({ api = keysApi, groups = [] }: KeysScreenProps) {
               </select>
             </Field>
           </div>
+          {/*
+            A stored passphrase turns adding a key into one action rather than
+            two. Only key passphrases appear here: an account password offered
+            in this picker would be a remote host's login credential handed to a
+            local key, which is why the vault keeps the two namespaces apart.
+          */}
+          {registering.encrypted && storedFor(phrases, registering) !== undefined && (
+            <p className={hintText}>
+              {t("keys.usesStoredPassphrase", { name: storedFor(phrases, registering)!.name })}
+            </p>
+          )}
+          {registering.encrypted && phrases.length > 0 && (
+            <div className="flex flex-wrap items-end gap-3">
+              <Field label={t("keys.useStoredPassphrase")}>
+                <select
+                  className={control}
+                  value={chosenPhrase}
+                  onChange={(event) => setChosenPhrase(event.target.value)}
+                >
+                  <option value="">{t("keys.choosePassphraseName")}</option>
+                  {phrases.map((credential) => (
+                    <option key={credential.name} value={credential.name}>
+                      {credential.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <button
+                type="button"
+                className={secondaryAction}
+                disabled={chosenPhrase === ""}
+                onClick={() => void assignPhrase(registering)}
+              >
+                {t("keys.useThisPassphrase")}
+              </button>
+            </div>
+          )}
           <CheckboxField
             label={t("keys.storeInKeychain")}
             checked={storeInKeychain}
