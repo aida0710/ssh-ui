@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"ssh-ui/internal/application"
@@ -231,7 +232,7 @@ func Build(dependencies Dependencies, version string) (*httpserver.Server, strin
 		Passwords:     passwordService,
 		Sync:          syncService,
 		AskpassHelper: dependencies.AskpassHelper,
-		Answerable:    dependencies.Answerable,
+		Answerable:    boundPrompt(dependencies.Answerable, projectionOf(diagnosticsService)),
 	})
 	if err != nil {
 		listener.Close()
@@ -311,5 +312,50 @@ func newOrigin(random io.Reader) func() (string, error) {
 			return "", err
 		}
 		return hex.EncodeToString(raw), nil
+	}
+}
+
+// boundPrompt turns the prompt rule from a check on the shape of a question
+// into a check on who is asking it.
+//
+// The shape rule is right and not enough: a keyboard-interactive prompt is
+// written by the remote server, so a server that sends "admin's password: "
+// gets a stored password without password authentication being in use at all.
+// What this adds is the projection — the user and hostname this alias resolves
+// to — and a requirement that the prompt name them, which is what OpenSSH's own
+// password prompt does.
+//
+// When the configuration cannot be projected the shape rule stands alone. That
+// is the state of a host this application cannot read, and refusing every
+// connection to it would be a worse answer than the one it had before.
+func boundPrompt(
+	shape func(prompt string) bool,
+	projection func(alias string) (user, hostname string, ok bool),
+) func(alias, prompt string) bool {
+	return func(alias, prompt string) bool {
+		if shape == nil || !shape(prompt) {
+			return false
+		}
+		if projection == nil {
+			return true
+		}
+		user, hostname, ok := projection(alias)
+		if !ok {
+			return true
+		}
+		return strings.Contains(strings.ToLower(prompt), strings.ToLower(user+"@"+hostname))
+	}
+}
+
+// projectionOf reads the user and hostname an alias resolves to, which is what
+// OpenSSH puts in its own password prompt.
+func projectionOf(service *diagnostics.Service) func(string) (string, string, bool) {
+	return func(alias string) (string, string, bool) {
+		user, hasUser := service.ProjectedValue(alias, "user")
+		hostname, _, err := service.Destination(alias)
+		if !hasUser || user == "" || err != nil || hostname == "" {
+			return "", "", false
+		}
+		return user, hostname, true
 	}
 }

@@ -145,7 +145,7 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
         {status}
       </p>
       {error ? (
-        <p role="alert" className="text-sm text-red-400">
+        <p role="alert" className="text-sm text-danger">
           {error}
         </p>
       ) : null}
@@ -275,7 +275,7 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
       ) : null}
 
       {pending ? (
-        <div className="rounded border border-red-700 p-3 text-sm">
+        <div className="rounded border border-control-line p-3 text-sm">
           <p>
             {t("kh.confirmRemove", { line: pending.line, fingerprint: pending.fingerprint })}
           </p>
@@ -283,7 +283,7 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
             <button
               type="button"
               onClick={() => void confirmDelete()}
-              className="rounded border border-red-600 px-3 py-1"
+              className="rounded border border-control-line px-3 py-1"
             >
               {t("kh.confirmDelete")}
             </button>

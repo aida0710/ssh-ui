@@ -300,7 +300,7 @@ function LoginItemSection({ api }: { api: IntegrationsApi }) {
     <section aria-label={t("login.heading")} className={sectionCard}>
       <h3 className={sectionHeading}>{t("login.heading")}</h3>
       <p className={hintText}>{t("login.note")}</p>
-      {failed === "" ? null : <p role="alert" className="text-sm text-rose-300">{failed}</p>}
+      {failed === "" ? null : <p role="alert" className="text-sm text-danger">{failed}</p>}
       <CheckboxField
         label={t("login.enable")}
         checked={item.enabled}

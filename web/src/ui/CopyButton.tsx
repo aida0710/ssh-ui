@@ -61,7 +61,7 @@ export function CopyButton({ value, label, className }: CopyButtonProps) {
         aria-live rather than role="status": the shell owns the single status
         region, and a second one would compete with it.
       */}
-      <span aria-live="polite" className={state === "failed" ? "text-xs text-red-300" : "text-xs text-ink-muted"}>
+      <span aria-live="polite" className={state === "failed" ? "text-xs text-danger" : "text-xs text-ink-muted"}>
         {state === "copied" ? t("copy.done") : state === "failed" ? t("copy.refused") : ""}
       </span>
     </span>

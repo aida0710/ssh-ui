@@ -49,7 +49,7 @@ type PasswordHandlers struct {
 	// Answerable is the prompt rule. It is injected rather than imported so
 	// that the rule and the helper that also applies it cannot drift into two
 	// different rules without a test noticing.
-	Answerable func(prompt string) bool
+	Answerable func(alias, prompt string) bool
 	// ResealSnapshot pushes the workspace again under a new master password, so
 	// the bucket's live snapshot stops being one only the old password opens.
 	// It is injected because where a snapshot goes belongs to the object store,

@@ -64,20 +64,27 @@ test("enforces the content security policy in the browser, not only in the heade
   const response = await openApplication(page, installation);
   expect(response?.headers()["content-security-policy"]).toBe(
     "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; " +
-      "form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'",
+      "form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; require-trusted-types-for 'script'",
   );
 
   // An inline script must not run. Appending a script element with textContent
-  // injects an inline script, which script-src 'self' refuses.
+  // injects one, and there are now two things in the way: require-trusted-types
+  // refuses the assignment itself, and script-src 'self' would refuse to run
+  // the result. Either is a pass; what must not happen is the script running.
   const inlineRan = await page.evaluate(async () => {
     const marker = "__ssh_ui_inline_marker";
-    const element = document.createElement("script");
-    element.textContent = `window.${marker} = true;`;
-    document.head.appendChild(element);
+    try {
+      const element = document.createElement("script");
+      element.textContent = `window.${marker} = true;`;
+      document.head.appendChild(element);
+    } catch {
+      // Refused before it was even a script element with content in it.
+      return false;
+    }
     await new Promise((done) => setTimeout(done, 100));
     return Boolean((window as unknown as Record<string, unknown>)[marker]);
   });
-  expect(inlineRan, "an inline script executed despite script-src 'self'").toBe(false);
+  expect(inlineRan, "an inline script executed despite the policy").toBe(false);
 
   // connect-src 'self' must block a fetch to another origin before it leaves
   // the machine, so this assertion needs no network.

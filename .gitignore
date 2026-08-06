@@ -10,3 +10,4 @@
 /.claude/worktrees/
 
 /.superpowers/
+.integration-s3.json

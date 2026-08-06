@@ -15,7 +15,7 @@ const (
 	CSRFHeader        = "X-SSH-UI-CSRF"
 	SessionContextKey = "ssh-ui-session"
 
-	contentSecurityPolicy = "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'"
+	contentSecurityPolicy = "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; require-trusted-types-for 'script'"
 
 	// spaFallbackRoute is the pattern the single-page application is served
 	// under. A request that matched only this one matched no API route.
@@ -115,7 +115,7 @@ func (s Security) Middleware(next echo.HandlerFunc) echo.HandlerFunc {
 		if s.Sessions == nil {
 			return problem(c, http.StatusUnauthorized, "invalid_session")
 		}
-		if _, ok := s.Sessions.Authenticate(cookie.Value); !ok {
+		if !s.Sessions.Authenticate(cookie.Value) {
 			return problem(c, http.StatusUnauthorized, "invalid_session")
 		}
 		// The token is required on reads as well as writes. A cookie is not

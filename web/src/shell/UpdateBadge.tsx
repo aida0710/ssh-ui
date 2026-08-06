@@ -42,12 +42,12 @@ export function UpdateBadge({ api = integrationsApi }: UpdateBadgeProps) {
     <div className="border-t border-line px-2 py-2 text-xs text-ink-muted">
       <p>{t("update.version", { version: status.current })}</p>
       {failed === "" ? null : (
-        <p role="alert" className="mt-1 text-rose-300">
+        <p role="alert" className="mt-1 text-danger">
           {failed}
         </p>
       )}
       {status.restartRequired ? (
-        <p className="mt-1 text-amber-300">{t("update.restart")}</p>
+        <p className="mt-1 text-notice-ink">{t("update.restart")}</p>
       ) : status.available ? (
         <>
           <p className="mt-1 text-ink">{t("update.available", { version: status.latest ?? "" })}</p>

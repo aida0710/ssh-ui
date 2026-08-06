@@ -246,7 +246,7 @@ func startServer(t *testing.T, home string) (*secret.Service, string, *countingL
 // main package and cannot be imported. A test that used a laxer rule would
 // prove nothing about the shipped one, so this is the same predicate: the
 // prompt ends in OpenSSH's password suffix and mentions nothing else.
-func answerable(prompt string) bool {
+func answerable(_ string, prompt string) bool {
 	trimmed := strings.ToLower(strings.TrimRight(prompt, " \t\r\n"))
 	for _, marker := range []string{"passphrase", "continue connecting", "fingerprint", "yes/no"} {
 		if strings.Contains(trimmed, marker) {

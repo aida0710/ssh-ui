@@ -504,7 +504,11 @@ func (s *Service) Pull(ctx context.Context, passphrase string) (PullResult, erro
 		}
 		return PullResult{}, err
 	}
-	archive, _, err := envelope.Open(object.Body, passphrase)
+	// The parameters in this envelope were chosen by whoever wrote it, which is
+	// not necessarily this installation. A stranger's snapshot must not be able
+	// to make this machine spend a gigabyte and sixteen threads before finding
+	// out the passphrase is wrong.
+	archive, _, err := envelope.OpenWithin(object.Body, passphrase, envelope.AcceptedFromRemote)
 	if err != nil {
 		return PullResult{}, err
 	}

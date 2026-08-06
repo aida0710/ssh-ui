@@ -170,7 +170,7 @@ func Read(archive []byte) (Manifest, map[string][]byte, error) {
 			// meaning here and is not something to interpret charitably.
 			return Manifest{}, nil, ErrUnsafePath
 		}
-		if len(contents) > MaxEntries {
+		if len(contents) >= MaxEntries {
 			return Manifest{}, nil, ErrSnapshotTooLarge
 		}
 		body, err := io.ReadAll(io.LimitReader(reader, MaxSnapshotBytes+1))

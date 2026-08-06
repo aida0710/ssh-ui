@@ -89,7 +89,7 @@ export function RevealDialog({ keyId, relativePath, api, onClose }: RevealDialog
         </>
       )}
       {state === "error" && (
-        <p role="alert" className="mt-2 text-sm text-red-300">
+        <p role="alert" className="mt-2 text-sm text-danger">
           {t("reveal.failed")}
         </p>
       )}

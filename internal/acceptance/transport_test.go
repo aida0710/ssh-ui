@@ -19,7 +19,7 @@ import (
 // stray 'unsafe-inline' cannot arrive unnoticed.
 const expectedContentSecurityPolicy = "default-src 'self'; base-uri 'none'; object-src 'none'; " +
 	"frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; " +
-	"img-src 'self' data:; connect-src 'self'"
+	"img-src 'self' data:; connect-src 'self'; require-trusted-types-for 'script'"
 
 // transportProblemCodes are the only refusals this suite accepts as proof that
 // the transport check under test did the refusing.

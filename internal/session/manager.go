@@ -145,20 +145,28 @@ func (m *Manager) RenewCSRF(sessionID string) (string, bool) {
 	return csrf, true
 }
 
-func (m *Manager) Authenticate(sessionID string) (Session, bool) {
+// Authenticate reports whether a session exists, and nothing else.
+//
+// It used to return the Session itself, whose actions map is the live one this
+// manager guards: every caller happened to discard it, so nothing raced, but a
+// caller who kept it would have been reading a map under another goroutine's
+// writes with no way to know.
+func (m *Manager) Authenticate(sessionID string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	_, ok := m.sessions[sha256.Sum256([]byte(sessionID))]
+	return ok
+}
+
+func (m *Manager) VerifyCSRF(sessionID, csrf string) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	sessionValue, ok := m.sessions[sha256.Sum256([]byte(sessionID))]
-	return sessionValue, ok
-}
-
-func (m *Manager) VerifyCSRF(sessionID, csrf string) bool {
-	sessionValue, ok := m.Authenticate(sessionID)
 	if !ok {
 		return false
 	}
-
 	presentedHash := sha256.Sum256([]byte(csrf))
 	return subtle.ConstantTimeCompare(presentedHash[:], sessionValue.csrfHash[:]) == 1
 }

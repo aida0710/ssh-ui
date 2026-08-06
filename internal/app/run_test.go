@@ -361,3 +361,46 @@ func (listener *trackingListener) Close() error {
 	listener.closed = true
 	return listener.Listener.Close()
 }
+
+// The prompt rule asks who is asking, not only what shape the question is.
+//
+// A keyboard-interactive prompt is written by the remote server, so the shape
+// rule alone hands a stored password to any server that sends something ending
+// in "password:". Requiring the prompt to name the user and host this alias
+// resolves to is what OpenSSH's own password prompt does.
+func TestTheBoundPromptRequiresTheProjectedHost(t *testing.T) {
+	shape := func(prompt string) bool { return strings.HasSuffix(prompt, "password: ") }
+	// With nothing to project, the shape rule stands alone: a host this
+	// application cannot read is not a host it refuses to connect to.
+	unprojected := boundPrompt(shape, func(string) (string, string, bool) { return "", "", false })
+	if !unprojected("bastion", "ops@203.0.113.10's password: ") {
+		t.Error("an unprojectable host was refused")
+	}
+	if unprojected("bastion", "Are you sure you want to continue connecting? ") {
+		t.Error("the shape rule stopped applying")
+	}
+
+	// With a projection, the prompt has to name it. A keyboard-interactive
+	// prompt is written by the remote server, and this is what stops one
+	// shaped like a password question from collecting a password for a
+	// different account.
+	projected := boundPrompt(shape, func(string) (string, string, bool) {
+		return "ops", "203.0.113.10", true
+	})
+	if !projected("bastion", "ops@203.0.113.10's password: ") {
+		t.Error("OpenSSH's own prompt was refused")
+	}
+	if projected("bastion", "admin's password: ") {
+		t.Error("a prompt naming another account was answered")
+	}
+	if projected("bastion", "ops@elsewhere.invalid's password: ") {
+		t.Error("a prompt naming another host was answered")
+	}
+}
+
+// A nil shape rule answers nothing. A missing rule must never mean "allow".
+func TestTheBoundPromptWithNoShapeRuleAnswersNothing(t *testing.T) {
+	if boundPrompt(nil, nil)("bastion", "ops@host's password: ") {
+		t.Error("a nil shape rule allowed a prompt")
+	}
+}

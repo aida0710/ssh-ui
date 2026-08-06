@@ -60,7 +60,7 @@ type Options struct {
 	AskpassHelper string
 	// Answerable is the prompt rule, injected so the server and the helper
 	// cannot drift into two different rules.
-	Answerable func(prompt string) bool
+	Answerable func(alias, prompt string) bool
 	// Sync carries the workspace to an object store. A nil service leaves
 	// every sync route unregistered.
 	Sync *remotesync.Service

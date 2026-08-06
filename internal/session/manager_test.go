@@ -21,7 +21,7 @@ func TestBootstrapCreatesAuthenticatedSessionOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := manager.Authenticate(credentials.SessionID); !ok {
+	if ok := manager.Authenticate(credentials.SessionID); !ok {
 		t.Fatal("new session was not authenticated")
 	}
 	if !manager.VerifyCSRF(credentials.SessionID, credentials.CSRFToken) {
@@ -66,7 +66,7 @@ func TestBootstrapPropagatesSessionRandomFailure(t *testing.T) {
 	if _, err := manager.Bootstrap(bootstrap); !errors.Is(err, errRandom) {
 		t.Fatalf("Bootstrap error = %v", err)
 	}
-	if _, ok := manager.Authenticate(""); ok {
+	if ok := manager.Authenticate(""); ok {
 		t.Fatal("failed bootstrap created a session")
 	}
 }
@@ -160,7 +160,7 @@ func TestReissueMintsAWayInWithoutDisturbingTheSessions(t *testing.T) {
 	}
 	// The session that already existed is untouched: this is a way in for a
 	// browser that has none, not a way to end the ones that do.
-	if _, ok := manager.Authenticate(established.SessionID); !ok {
+	if ok := manager.Authenticate(established.SessionID); !ok {
 		t.Error("an established session was lost")
 	}
 }

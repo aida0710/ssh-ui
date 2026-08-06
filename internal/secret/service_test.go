@@ -180,8 +180,8 @@ func TestLockForgetsTheKeyAndEveryPendingToken(t *testing.T) {
 	}
 }
 
-func alwaysAnswerable(string) bool { return true }
-func neverAnswerable(string) bool  { return false }
+func alwaysAnswerable(_, _ string) bool { return true }
+func neverAnswerable(_, _ string) bool  { return false }
 
 func TestATokenIsSpentByItsFirstUse(t *testing.T) {
 	service := unlockedWithPassword(t)
@@ -734,5 +734,48 @@ func TestChangingTheMasterPasswordRefusesTheWrongCurrentOne(t *testing.T) {
 	// And it still opens with the one it had.
 	if err := service.Unlock(passphrase); err != nil {
 		t.Errorf("the vault was disturbed by a refused change: %v", err)
+	}
+}
+
+// Wrong guesses get slower.
+//
+// The vault file can be copied and attacked offline, so this is not what stands
+// between an attacker and the contents — Argon2id is. What it stops is the
+// cheap case: a local process trying passwords against a running application as
+// fast as it can answer.
+func TestWrongMasterPasswordsAreAnsweredMoreSlowly(t *testing.T) {
+	clock := time.Date(2026, 8, 6, 9, 0, 0, 0, time.UTC)
+	var waited []time.Duration
+	service, _ := newClockedService(t, func() time.Time { return clock })
+	service.SetSleep(func(d time.Duration) { waited = append(waited, d) })
+	if err := service.Initialise(passphrase); err != nil {
+		t.Fatal(err)
+	}
+
+	for range 4 {
+		if err := service.Unlock("not the master password"); !errors.Is(err, secret.ErrWrongPassphrase) {
+			t.Fatalf("Unlock = %v", err)
+		}
+	}
+	if len(waited) != 4 {
+		t.Fatalf("waits = %v, want one per refusal", waited)
+	}
+	// Each refusal waits longer than the one before, up to a ceiling.
+	for index := 1; index < len(waited); index++ {
+		if waited[index] < waited[index-1] {
+			t.Errorf("wait %d (%v) is shorter than wait %d (%v)", index, waited[index], index-1, waited[index-1])
+		}
+	}
+	if waited[len(waited)-1] > secret.MaxUnlockDelay {
+		t.Errorf("the wait grew past its ceiling: %v", waited[len(waited)-1])
+	}
+
+	// A correct one is answered at once, and clears what the wrong ones built.
+	waited = nil
+	if err := service.Unlock(passphrase); err != nil {
+		t.Fatalf("Unlock with the right password = %v", err)
+	}
+	if len(waited) != 0 {
+		t.Errorf("a correct password waited: %v", waited)
 	}
 }

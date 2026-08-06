@@ -444,7 +444,7 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
         {t("keys.heading")}
       </h2>
       {failure !== "" && (
-        <p role="alert" className="rounded-md border border-red-800 p-3 text-sm text-red-300">
+        <p role="alert" className="rounded-md border border-control-line p-3 text-sm text-danger">
           {failure}
         </p>
       )}
@@ -472,7 +472,7 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
                 {item.certificate === undefined ? null : (
                   <ul className="text-xs text-ink-muted">
                     {certificateLines(item.certificate, now, t).map((line) => (
-                      <li key={line.text} className={line.expired ? "text-red-300" : undefined}>
+                      <li key={line.text} className={line.expired ? "text-danger" : undefined}>
                         {line.text}
                       </li>
                     ))}
@@ -490,7 +490,7 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
               </td>
               <td className="py-2 pr-3">
                 {item.permission}
-                {item.permissionRisk && <span className="ml-2 text-red-300">{t("keys.permissionRisk")}</span>}
+                {item.permissionRisk && <span className="ml-2 text-notice-ink">{t("keys.permissionRisk")}</span>}
               </td>
               <td className="py-2 pr-3">
                 {item.references.map((reference) => reference.hostPatterns.join(" ")).join(", ")}

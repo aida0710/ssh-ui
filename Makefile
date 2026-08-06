@@ -126,6 +126,9 @@ integration-sshd-relax:
 	done
 	@echo "sshd accepts repeated connections from one address"
 
+# The credentials the integration containers use are written at start and are
+# fixtures, not secrets. The file is ignored rather than committed so its name
+# never becomes a place somebody puts a real key.
 integration-down:
 	docker rm -f ssh-ui-s3 ssh-ui-sshd >/dev/null 2>&1 || true
 	rm -f .integration-s3.json

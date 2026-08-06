@@ -92,6 +92,27 @@ const (
 	maxSaltLength   = 64
 )
 
+// Limits are the parameters an envelope may ask for.
+//
+// There are two sets, because there are two kinds of envelope and only one of
+// them is ours. A file this installation wrote asks for what Derive chose; a
+// snapshot fetched from a bucket asks for whatever whoever wrote it chose, and
+// that is a number a stranger picked. The ceiling for the second is close to
+// what we would have written, so a snapshot cannot make this machine spend a
+// gigabyte and sixteen threads before finding out the passphrase is wrong.
+type Limits struct {
+	Time      uint32
+	MemoryKiB uint32
+	Threads   uint8
+}
+
+// Accepted is what an envelope this installation wrote may ask for.
+var Accepted = Limits{Time: maxKDFTime, MemoryKiB: maxKDFMemoryKiB, Threads: maxKDFThreads}
+
+// AcceptedFromRemote is what an envelope that arrived over a network may ask
+// for: a little above what Derive writes, and no more.
+var AcceptedFromRemote = Limits{Time: 8, MemoryKiB: 256 << 10, Threads: 8}
+
 var magic = [magicLength]byte{'s', 's', 'h', '-', 'u', 'i', '-', 'e', 'n', 'v', 'e', 'l', 'o', 'p', 'e', 0}
 
 // Params are the key-derivation parameters of one sealed blob.
@@ -122,8 +143,35 @@ func Derive(passphrase string) (Key, error) {
 	return Key{material: derive(passphrase, params), params: params}, nil
 }
 
+// MaxConcurrentDerivations is how many key derivations may run at once.
+//
+// Each one is deliberately expensive — tens of megabytes and several threads —
+// and every unlock, push and pull performs one. Without a bound, a page with a
+// few tabs asks for dozens at once and the process allocates gigabytes for no
+// reason. Two is enough that nobody waiting on one notices, because this is a
+// local interface with one person pressing things.
+const MaxConcurrentDerivations = 2
+
+var derivations = make(chan struct{}, MaxConcurrentDerivations)
+
+// OnDerive wraps each derivation. It exists for the test that counts how many
+// run at once and is nil everywhere else.
+var OnDerive func(step func())
+
 func derive(passphrase string, params Params) []byte {
-	return argon2.IDKey([]byte(passphrase), params.Salt, params.Time, params.Memory, params.Threads, derivedKeyLength)
+	derivations <- struct{}{}
+	defer func() { <-derivations }()
+
+	var key []byte
+	step := func() {
+		key = argon2.IDKey([]byte(passphrase), params.Salt, params.Time, params.Memory, params.Threads, derivedKeyLength)
+	}
+	if OnDerive != nil {
+		OnDerive(step)
+	} else {
+		step()
+	}
+	return key
 }
 
 // Seal encrypts plaintext under key. Each call uses a fresh nonce, so two
@@ -181,9 +229,18 @@ func (k Key) Open(sealed []byte) ([]byte, error) {
 // Open decrypts sealed with passphrase and returns the plaintext along with
 // the key, so the caller can re-seal without deriving again.
 func Open(sealed []byte, passphrase string) ([]byte, Key, error) {
+	return OpenWithin(sealed, passphrase, Accepted)
+}
+
+// OpenWithin is Open with the ceiling named, for a caller that did not write
+// the envelope it is opening.
+func OpenWithin(sealed []byte, passphrase string, limits Limits) ([]byte, Key, error) {
 	header, params, rest, err := readHeader(sealed)
 	if err != nil {
 		return nil, Key{}, err
+	}
+	if params.Time > limits.Time || params.Memory > limits.MemoryKiB || params.Threads > limits.Threads {
+		return nil, Key{}, ErrCostRefused
 	}
 	if len(rest) < nonceLength {
 		return nil, Key{}, ErrNotAnEnvelope

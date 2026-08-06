@@ -43,7 +43,7 @@ func passwordEngineIn(t *testing.T) (*echo.Echo, *secret.Service, string) {
 	engine := echo.New()
 	registerPasswordRoutes(engine, PasswordHandlers{
 		Service:    service,
-		Answerable: func(prompt string) bool { return strings.HasSuffix(prompt, "password: ") },
+		Answerable: func(_ string, prompt string) bool { return strings.HasSuffix(prompt, "password: ") },
 	})
 	return engine, service, home
 }
@@ -260,7 +260,7 @@ func TestStoreRefusesAPasswordTheHostWouldNeverBeOffered(t *testing.T) {
 	}
 	registerPasswordRoutes(engine, PasswordHandlers{
 		Service:    service,
-		Answerable: func(prompt string) bool { return strings.HasSuffix(prompt, "password: ") },
+		Answerable: func(_ string, prompt string) bool { return strings.HasSuffix(prompt, "password: ") },
 		Eligibility: func(alias string) (application.PasswordEligibility, error) {
 			return application.PasswordEligibility{
 				Alias:    alias,

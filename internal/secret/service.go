@@ -65,9 +65,16 @@ type Service struct {
 	transactions *storage.Manager
 	now          func() time.Time
 
-	mu     sync.Mutex
-	vault  *Vault
-	tokens map[string]pendingToken
+	// sleep is how a refusal waits. Injected so a test can watch the backoff
+	// without spending it.
+	sleep func(time.Duration)
+
+	mu    sync.Mutex
+	vault *Vault
+	// refusals counts consecutive wrong master passwords, and is what makes
+	// each one answered more slowly than the last.
+	refusals int
+	tokens   map[string]pendingToken
 	// used is when a secret was last read or written. Reading the status is
 	// deliberately not use: an open browser tab asks for it whenever a screen
 	// mounts, and one forgotten tab must not hold the vault open for as long as
@@ -190,6 +197,36 @@ func (s *Service) Verify(passphrase string) (bool, error) {
 	return true, nil
 }
 
+// MaxUnlockDelay is how long a refusal will ever wait.
+//
+// The vault file can be copied and attacked offline, so this is not what stands
+// between an attacker and its contents — Argon2id is. What it stops is the
+// cheap case: a local process trying passwords against a running application as
+// fast as it can answer them.
+const MaxUnlockDelay = 4 * time.Second
+
+// SetSleep installs how a refusal waits. It is for the test that watches the
+// backoff rather than spending it.
+func (s *Service) SetSleep(sleep func(time.Duration)) { s.sleep = sleep }
+
+// refuse waits for as long as this run's consecutive refusals have earned.
+func (s *Service) refuse() {
+	s.mu.Lock()
+	s.refusals++
+	count := s.refusals
+	s.mu.Unlock()
+
+	delay := time.Duration(count) * 250 * time.Millisecond
+	if delay > MaxUnlockDelay {
+		delay = MaxUnlockDelay
+	}
+	sleep := s.sleep
+	if sleep == nil {
+		sleep = time.Sleep
+	}
+	sleep(delay)
+}
+
 // Unlock opens the vault with passphrase.
 func (s *Service) Unlock(passphrase string) error {
 	sealed, err := s.workspace.FileSystem().ReadFile(s.path())
@@ -201,12 +238,17 @@ func (s *Service) Unlock(passphrase string) error {
 	}
 	vault, err := Open(sealed, passphrase)
 	if err != nil {
+		if errors.Is(err, ErrWrongPassphrase) {
+			s.refuse()
+		}
 		return err
 	}
 
 	s.mu.Lock()
 	s.vault = vault
 	s.used = s.now()
+	// A password that worked clears what the wrong ones built up.
+	s.refusals = 0
 	s.mu.Unlock()
 	return nil
 }
@@ -552,7 +594,7 @@ func (s *Service) IssueToken(alias string) (string, error) {
 // this application has not agreed to answer. The token is spent whether or not
 // the prompt is acceptable, so a wrong prompt cannot be retried with a right
 // one.
-func (s *Service) Redeem(token, alias, prompt string, answerable func(string) bool) (string, error) {
+func (s *Service) Redeem(token, alias, prompt string, answerable func(alias, prompt string) bool) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	vault := s.use()
@@ -567,7 +609,7 @@ func (s *Service) Redeem(token, alias, prompt string, answerable func(string) bo
 	}
 	delete(s.tokens, token)
 
-	if !answerable(prompt) {
+	if !answerable(alias, prompt) {
 		return "", ErrUnknownToken
 	}
 	password, ok := vault.SecretFor(KindPassword, alias)

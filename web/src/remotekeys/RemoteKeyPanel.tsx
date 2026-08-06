@@ -147,7 +147,7 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
         {busy ? t("rk.waiting") : t("rk.idle")}
       </p>
       {error ? (
-        <p role="alert" className="text-sm text-red-400">
+        <p role="alert" className="text-sm text-danger">
           {error}
         </p>
       ) : null}
