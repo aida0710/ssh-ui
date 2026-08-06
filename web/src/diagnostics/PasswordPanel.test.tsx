@@ -14,6 +14,11 @@ function buildApi(status: PasswordVaultStatus, overrides: Partial<IntegrationsAp
     initialiseVault: vi.fn().mockResolvedValue({ ...status, exists: true, unlocked: true }),
     unlockVault: vi.fn().mockResolvedValue({ ...status, unlocked: true }),
     lockVault: vi.fn().mockResolvedValue({ ...status, unlocked: false }),
+    credentials: vi.fn().mockResolvedValue({ credentials: [] }),
+    storeCredential: vi.fn().mockResolvedValue({ credentials: [] }),
+    deleteCredential: vi.fn().mockResolvedValue({ credentials: [] }),
+    assignCredential: vi.fn().mockResolvedValue({ credentials: [] }),
+    unassignCredential: vi.fn().mockResolvedValue({ credentials: [] }),
     passwordEligibility: vi.fn().mockResolvedValue({
       alias: "bastion", storable: true, blockers: [], warnings: [],
     }),

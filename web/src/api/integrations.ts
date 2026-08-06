@@ -15,6 +15,11 @@ export type KnownHostCandidate = components["schemas"]["KnownHostCandidate"];
 export type IssueActionResponse = components["schemas"]["IssueActionResponse"];
 export type PasswordVaultStatus = components["schemas"]["PasswordVaultStatus"];
 export type PasswordEligibility = components["schemas"]["PasswordEligibility"];
+export type Credential = components["schemas"]["Credential"];
+export type CredentialList = components["schemas"]["CredentialList"];
+// The two namespaces, as a type rather than a string, so a call site cannot
+// invent a third or transpose the two.
+export type CredentialKind = "password" | "key_passphrase";
 export type SyncStatus = components["schemas"]["SyncStatus"];
 export type SyncSettingsRequest = components["schemas"]["SyncSettingsRequest"];
 export type SyncDirection = components["schemas"]["SyncDirection"];
@@ -58,6 +63,16 @@ export type IntegrationsApi = {
   unlockVault(passphrase: string): Promise<PasswordVaultStatus>;
   lockVault(): Promise<PasswordVaultStatus>;
   passwordEligibility(alias: string): Promise<PasswordEligibility>;
+  // Credentials are named secrets. A host references an account password and a
+  // key references a passphrase, and the two namespaces never mix: picking the
+  // wrong one would send a key's passphrase to a remote host as a login
+  // password, so the kind is part of every call rather than a field to get
+  // right.
+  credentials(): Promise<CredentialList>;
+  storeCredential(kind: CredentialKind, name: string, secret: string): Promise<CredentialList>;
+  deleteCredential(kind: CredentialKind, name: string): Promise<CredentialList>;
+  assignCredential(kind: CredentialKind, subject: string, name: string): Promise<CredentialList>;
+  unassignCredential(kind: CredentialKind, subject: string): Promise<CredentialList>;
   storePassword(alias: string, password: string): Promise<PasswordVaultStatus>;
   forgetPassword(alias: string): Promise<PasswordVaultStatus>;
   // The remote snapshot. No method returns a credential or a file's contents:
@@ -274,6 +289,23 @@ function validateVaultStatus(value: unknown): PasswordVaultStatus {
   return record as unknown as PasswordVaultStatus;
 }
 
+// The kind is a path segment, so it is built here from a closed set rather than
+// interpolated from whatever a caller passed.
+function credentialPath(kind: CredentialKind, name: string): string {
+  return `/api/v1/credentials/${kind}/${encodeURIComponent(name)}`;
+}
+
+function validateCredentialList(value: unknown): CredentialList {
+  const record = asRecord(value);
+  for (const credential of asArray(record.credentials)) {
+    const entry = asRecord(credential);
+    asString(entry.kind);
+    asString(entry.name);
+    for (const use of asArray(entry.uses)) asString(use);
+  }
+  return record as unknown as CredentialList;
+}
+
 function validatePasswordEligibility(value: unknown): PasswordEligibility {
   const record = asRecord(value);
   asString(record.alias);
@@ -369,6 +401,40 @@ export const integrationsApi: IntegrationsApi = {
   async forgetPassword(alias) {
     return validateVaultStatus(
       await apiClient.mutate<unknown>(`/api/v1/passwords/${encodeURIComponent(alias)}`, { method: "DELETE" }),
+    );
+  },
+  async credentials() {
+    return validateCredentialList(await apiClient.read("/api/v1/credentials"));
+  },
+  async storeCredential(kind, name, secret) {
+    return validateCredentialList(
+      await apiClient.mutate<unknown>(credentialPath(kind, name), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ secret }),
+      }),
+    );
+  },
+  async deleteCredential(kind, name) {
+    return validateCredentialList(
+      await apiClient.mutate<unknown>(credentialPath(kind, name), { method: "DELETE" }),
+    );
+  },
+  async assignCredential(kind, subject, name) {
+    return validateCredentialList(
+      await apiClient.mutate<unknown>(`/api/v1/credentials/${kind}/assign`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subject, name }),
+      }),
+    );
+  },
+  async unassignCredential(kind, subject) {
+    return validateCredentialList(
+      await apiClient.mutate<unknown>(
+        `/api/v1/credentials/${kind}/assign/${encodeURIComponent(subject)}`,
+        { method: "DELETE" },
+      ),
     );
   },
   async syncStatus() {

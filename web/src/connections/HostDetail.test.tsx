@@ -30,6 +30,11 @@ function buildIntegrations(overrides: Partial<IntegrationsApi> = {}): Integratio
     initialiseVault: vi.fn().mockResolvedValue({ exists: true, unlocked: true, aliases: [] }),
     unlockVault: vi.fn().mockResolvedValue({ exists: true, unlocked: true, aliases: [] }),
     lockVault: vi.fn().mockResolvedValue({ exists: true, unlocked: false, aliases: [] }),
+    credentials: vi.fn().mockResolvedValue({ credentials: [] }),
+    storeCredential: vi.fn().mockResolvedValue({ credentials: [] }),
+    deleteCredential: vi.fn().mockResolvedValue({ credentials: [] }),
+    assignCredential: vi.fn().mockResolvedValue({ credentials: [] }),
+    unassignCredential: vi.fn().mockResolvedValue({ credentials: [] }),
     passwordEligibility: vi.fn().mockResolvedValue({
       alias: "bastion", storable: true, blockers: [], warnings: [],
     }),
