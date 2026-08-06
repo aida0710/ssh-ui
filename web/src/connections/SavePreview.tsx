@@ -26,6 +26,7 @@ const noticeKeys: Record<string, MessageKey> = {
   group_not_declared: "notice.group_not_declared",
   group_directory_missing: "notice.group_directory_missing",
   group_empty: "notice.group_empty",
+  generated_region_damaged: "notice.generated_region_damaged",
 };
 
 function DiffView({ lines }: { lines: DiffLine[] }) {
@@ -69,6 +70,7 @@ const refusalKeys: Record<string, MessageKey> = {
   not_a_directory: "refusal.not_a_directory",
   group_is_declared: "refusal.group_is_declared",
   destination_exists: "refusal.destination_exists",
+  region_damaged: "refusal.region_damaged",
 };
 
 export function NoticeList({ notices }: { notices: Notice[] }) {

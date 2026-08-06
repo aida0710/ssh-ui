@@ -3,6 +3,7 @@ package application
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"ssh-ui/internal/config"
@@ -227,5 +228,41 @@ func TestTheOverviewCarriesTheGroupDiagnostics(t *testing.T) {
 	}
 	if got := byName["gone"]; got.DirectoryPresent {
 		t.Errorf("gone reports a directory it does not have: %#v", got)
+	}
+}
+
+// A region with one marker is a damaged region, and saying which four
+// directories are "not declared" is not what happened.
+//
+// The Include lines are there and OpenSSH reads them. What is missing is the
+// end marker, so this application cannot tell where its own generated lines
+// stop — and every group therefore looked undeclared. Four misleading notices
+// replaced by the one true one.
+func TestADamagedRegionIsReportedAsItselfRatherThanAsUndeclaredGroups(t *testing.T) {
+	service, workspace := newTestService(t)
+	declareGroup(t, service, "work")
+	writeGroupFile(t, workspace, "work", "web.conf", "Host web-1\n")
+
+	// Take the end marker out, which is the state a hand edit leaves behind.
+	entry := readFile(t, workspace, "config")
+	damaged := strings.ReplaceAll(entry, RegionEndMarker+"\n", "")
+	if damaged == entry {
+		t.Fatalf("the fixture has no end marker to remove: %q", entry)
+	}
+	if err := os.WriteFile(filepath.Join(workspace.Root(), "config"), []byte(damaged), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	overview, err := service.Overview()
+	if err != nil {
+		t.Fatalf("Overview = %v", err)
+	}
+	if !hasNotice(overview.Notices, NoticeRegionDamaged, "") {
+		t.Errorf("notices = %#v, want %s", overview.Notices, NoticeRegionDamaged)
+	}
+	for _, notice := range overview.Notices {
+		if notice.Code == NoticeGroupNotDeclared {
+			t.Errorf("a damaged region was reported as an undeclared group: %#v", notice)
+		}
 	}
 }

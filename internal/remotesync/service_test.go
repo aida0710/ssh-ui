@@ -614,3 +614,31 @@ func TestEveryPushLeavesADatedCopyBesideTheLiveObject(t *testing.T) {
 		t.Error("the dated copy is not the snapshot that was pushed")
 	}
 }
+
+// Renaming the object, or moving it to another path, must not strand a machine
+// that has already synced.
+//
+// The state records the ETag of the last snapshot this machine saw. It did not
+// record which object that was, so after the key changed the next push sent
+// If-Match for a generation of an object that does not exist — refused as
+// "another machine pushed, pull first" — and the pull then found nothing to
+// pull. There was no way out of that but deleting the state file by hand.
+func TestChangingTheObjectKeyDoesNotStrandAMachineThatHasSynced(t *testing.T) {
+	bucket := &fakeBucket{}
+	installation := newInstallation(t, bucket, map[string]string{"config": "Host bastion\n"})
+	if err := installation.service.Push(context.Background(), syncPassphrase); err != nil {
+		t.Fatalf("the first push = %v", err)
+	}
+
+	// The settings now name a path, so the live object is somewhere else.
+	config := installation.config
+	config.Path = "laptops"
+	installation.service.Configure(config, installation.creds, installation.client)
+
+	if err := installation.service.Push(context.Background(), syncPassphrase); err != nil {
+		t.Fatalf("the push after the key changed = %v", err)
+	}
+	if got := bucket.object("laptops/" + remotesync.ObjectName); got == nil {
+		t.Errorf("nothing was written to the new key: %v", bucket.keys())
+	}
+}

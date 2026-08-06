@@ -141,6 +141,13 @@ type state struct {
 	// ETag identifies the snapshot this machine last pushed or pulled. It is
 	// the generation the next conditional write is compared against.
 	ETag string `json:"etag"`
+	// Key is the object that ETag belongs to. A generation is a fact about one
+	// object, so pointing the settings at a different one — a new path, or the
+	// rename that gave the object an honest name — makes the stored generation
+	// meaningless. Without this the next push asked for a generation of an
+	// object that does not exist, was refused as "another machine pushed", and
+	// the pull it advised then found nothing to pull.
+	Key string `json:"key,omitempty"`
 	// Base is the manifest of that snapshot, which is what tells a later pull
 	// the difference between "deleted on the other machine" and "created here
 	// since the last sync".
@@ -399,6 +406,13 @@ func (s *Service) Push(ctx context.Context, passphrase string) error {
 		return err
 	}
 
+	objectKey := s.objectKey()
+	if current.Key != objectKey {
+		// A generation of another object says nothing about this one. Falling
+		// back to If-None-Match means the push creates the object and refuses
+		// to write over one somebody else has already put there.
+		current.ETag = ""
+	}
 	ifMatch, ifNoneMatch := current.ETag, ""
 	if ifMatch == "" {
 		ifNoneMatch = "*"
@@ -415,14 +429,14 @@ func (s *Service) Push(ctx context.Context, passphrase string) error {
 		return err
 	}
 
-	etag, err := client.Put(ctx, s.objectKey(), sealed, ifMatch, ifNoneMatch)
+	etag, err := client.Put(ctx, objectKey, sealed, ifMatch, ifNoneMatch)
 	if err != nil {
 		if errors.Is(err, objectstore.ErrPreconditionFailed) {
 			return ErrRemoteMoved
 		}
 		return err
 	}
-	return s.writeState(state{ETag: etag, Base: &manifest, Origin: current.Origin})
+	return s.writeState(state{ETag: etag, Key: objectKey, Base: &manifest, Origin: current.Origin})
 }
 
 // PullResult is what a pull would do, before it is applied.
@@ -518,7 +532,7 @@ func (s *Service) Apply(result PullResult) error {
 		}
 	}
 	manifest := result.Manifest
-	return s.writeState(state{ETag: result.ETag, Base: &manifest, Origin: origin})
+	return s.writeState(state{ETag: result.ETag, Key: s.objectKey(), Base: &manifest, Origin: origin})
 }
 
 // localDigests hashes every path either side knows about, so a file that is on

@@ -111,11 +111,15 @@ export const en = {
   "refusal.group_is_declared":
     "{detail} is a declared group. Rename or remove it on the Groups screen, where the operation also carries its connections, its settings and its keys.",
   "refusal.destination_exists": "Something is already there.",
+  "refusal.region_damaged":
+    "~/.ssh/config has one of the two markers around this application's generated block. It will not guess where its own lines stop, so nothing was written.",
   "notice.group_not_declared":
     "This directory is under connections/ but no Include line names it, so nothing in it is read. Declare it as a group, or move what is in it.",
   "notice.group_directory_missing":
     "This group is declared but its directory is not there. Nothing is read for it until something is put in one.",
   "notice.group_empty": "This group is declared and holds nothing.",
+  "notice.generated_region_damaged":
+    "~/.ssh/config has the opening marker of this application's generated block but not its closing one, so it cannot tell where its own lines stop. The Include lines in it still work; groups cannot be saved until the closing marker is put back. Add a line reading “# <<< ssh-ui groups” after the last generated Include, or delete the whole block and save the groups again.",
   "notice.explained_values_only": "These values explain what this engine reads. Run ssh -G from the Diagnostics tab for the authoritative answer.",
   "notice.destination_not_included": "No Include reaches this file yet, so OpenSSH will not read the moved connection until you add one.",
   "notice.group_file_unreached":
@@ -797,11 +801,15 @@ export const ja: Record<MessageKey, string> = {
   "refusal.group_is_declared":
     "{detail} は宣言済みのグループです。Groups 画面で改名・削除してください。そちらなら接続・共通設定・鍵も一緒に運ばれます。",
   "refusal.destination_exists": "そこには既に何かあります。",
+  "refusal.region_damaged":
+    "~/.ssh/config にある、このアプリが生成するブロックのマーカーが片方しかありません。自分の行がどこまでかを推測はしないので、何も書き込んでいません。",
   "notice.group_not_declared":
     "このディレクトリは connections/ の下にありますが、どの Include 行も名前を挙げていないため、中身は読まれていません。グループとして宣言するか、中身を移してください。",
   "notice.group_directory_missing":
     "このグループは宣言されていますが、ディレクトリがありません。何か置かれるまで、このグループについては何も読まれません。",
   "notice.group_empty": "このグループは宣言されていますが、中身がありません。",
+  "notice.generated_region_damaged":
+    "~/.ssh/config に、このアプリが生成するブロックの開始マーカーはありますが終了マーカーがありません。自分が書いた行がどこまでかを判断できない状態です。中の Include 行は今も有効ですが、終了マーカーを戻すまでグループの保存はできません。生成された最後の Include 行の次に「# <<< ssh-ui groups」という行を足すか、ブロックごと削除してからグループを保存し直してください。",
   "notice.explained_values_only": "これらの値はこのエンジンが読んだ内容の説明です。権威ある答えは Diagnostics タブの ssh -G で確認してください。",
   "notice.destination_not_included": "このファイルへ届く Include がまだないため、移動した接続を OpenSSH は読みません。Include を追加してください。",
   "notice.group_file_unreached":

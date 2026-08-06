@@ -316,6 +316,10 @@ func serviceProblem(c *echo.Context, err error) error {
 		return problemWith(c, http.StatusBadRequest, problemPayload{Code: "invalid_request"})
 	case errors.Is(err, application.ErrGroupNotDeclared):
 		return problemWith(c, http.StatusUnprocessableEntity, problemPayload{Code: "group_not_declared"})
+	case errors.Is(err, application.ErrRegionDamaged):
+		// Not an internal fault: the file has one of the two markers this
+		// application writes, and it will not guess where its own lines stop.
+		return problemWith(c, http.StatusConflict, problemPayload{Code: "region_damaged"})
 	case errors.Is(err, application.ErrGroupExists):
 		return problemWith(c, http.StatusConflict, problemPayload{Code: "group_exists"})
 	case errors.Is(err, storage.ErrDirectoryNotEmpty):

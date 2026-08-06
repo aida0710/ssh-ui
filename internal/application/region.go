@@ -27,7 +27,13 @@ var (
 // Notice codes the region planner produces.
 const (
 	NoticeGroupIncludePresent = "group_include_already_present"
-	NoticeRegionDamaged       = "generated_region_damaged"
+	// NoticeRegionDamaged reports a generated region with one of its two
+	// markers. It is its own fact and not a group problem: DeclaredGroups reads
+	// the region, and a damaged one declares nothing, so without this notice
+	// every declared group looks undeclared and the screen fills with "no
+	// Include line names this directory" for directories whose Include lines
+	// are right there and working.
+	NoticeRegionDamaged = "generated_region_damaged"
 )
 
 // RegionPlan describes the edit that installs the region.

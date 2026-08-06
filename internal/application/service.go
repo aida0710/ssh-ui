@@ -272,13 +272,23 @@ func (s *Service) Overview() (Overview, error) {
 	entryNode := graph.Nodes[s.entryPath]
 	var groups []GroupView
 	if entryNode != nil && entryNode.File != nil {
-		present, presentErr := s.presentGroupDirectories()
-		if presentErr != nil {
-			return Overview{}, presentErr
+		// A region with one marker declares nothing as far as this application
+		// can tell, which would make every group look undeclared. That is not
+		// what happened, and saying it four times over would send the user
+		// looking at four directories whose Include lines are right there.
+		if _, _, _, regionErr := FindRegion(entryNode.File); errors.Is(regionErr, ErrRegionDamaged) {
+			notices = append(notices, Notice{
+				Code: NoticeRegionDamaged, Path: s.displayPath(s.entryPath),
+			})
+		} else {
+			present, presentErr := s.presentGroupDirectories()
+			if presentErr != nil {
+				return Overview{}, presentErr
+			}
+			var groupNotices []Notice
+			groups, groupNotices = BuildGroupsView(entryNode.File, hosts, reconciled, present)
+			notices = append(notices, groupNotices...)
 		}
-		var groupNotices []Notice
-		groups, groupNotices = BuildGroupsView(entryNode.File, hosts, reconciled, present)
-		notices = append(notices, groupNotices...)
 	}
 
 	overview := Overview{
