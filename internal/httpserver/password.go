@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"sort"
 
 	"github.com/labstack/echo/v5"
 
@@ -57,6 +58,11 @@ func registerPasswordRoutes(engine *echo.Echo, handlers PasswordHandlers) {
 	engine.GET("/api/v1/passwords/:alias/eligibility", handlers.Eligible)
 	engine.PUT("/api/v1/passwords/:alias", handlers.Store)
 	engine.DELETE("/api/v1/passwords/:alias", handlers.Forget)
+	engine.GET("/api/v1/credentials", handlers.ListCredentials)
+	engine.PUT("/api/v1/credentials/:kind/assign", handlers.AssignCredential)
+	engine.DELETE("/api/v1/credentials/:kind/assign/:subject", handlers.UnassignCredential)
+	engine.PUT("/api/v1/credentials/:kind/:name", handlers.SetCredential)
+	engine.DELETE("/api/v1/credentials/:kind/:name", handlers.DeleteCredential)
 	engine.POST(AskpassPath, handlers.Askpass)
 }
 
@@ -167,6 +173,113 @@ func eligibilityNotice(notice application.Notice) api.Notice {
 		described.Detail = &detail
 	}
 	return described
+}
+
+// kindOf reads the namespace out of the path. There are two and there will not
+// quietly be a third: an unknown one is refused here rather than defaulted,
+// because defaulting would mean a typo silently chose a namespace.
+func kindOf(c *echo.Context) (secret.Kind, bool) {
+	kind := secret.Kind(c.Param("kind"))
+	return kind, secret.ValidKind(kind)
+}
+
+// credentialProblem maps the vault's refusals onto answers a screen can act on.
+func credentialProblem(c *echo.Context, err error, uses []string) error {
+	switch {
+	case errors.Is(err, secret.ErrLocked):
+		return problem(c, http.StatusConflict, "vault_locked")
+	case errors.Is(err, secret.ErrCredentialInUse):
+		return problemWith(c, http.StatusConflict, problemPayload{Code: "credential_in_use", Blockers: uses})
+	case errors.Is(err, secret.ErrUnknownCredential):
+		return problem(c, http.StatusNotFound, "unknown_credential")
+	case errors.Is(err, secret.ErrUnsafeName), errors.Is(err, secret.ErrEmptySecret),
+		errors.Is(err, secret.ErrUnknownKind):
+		return problem(c, http.StatusBadRequest, "invalid_request")
+	default:
+		return problem(c, http.StatusInternalServerError, "vault_failed")
+	}
+}
+
+// listCredentials answers names and what uses them. Never a value: a screen
+// that could read a secret would be a screen a compromised browser could read
+// it from, and choosing needs only the name.
+func (h PasswordHandlers) listCredentials(c *echo.Context) error {
+	listed, err := h.Service.Credentials()
+	if err != nil {
+		return credentialProblem(c, err, nil)
+	}
+	answer := api.CredentialList{Credentials: []api.Credential{}}
+	for _, kind := range []secret.Kind{secret.KindPassword, secret.KindKeyPassphrase} {
+		names := make([]string, 0, len(listed[kind]))
+		for name := range listed[kind] {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			answer.Credentials = append(answer.Credentials, api.Credential{
+				Kind: string(kind), Name: name, Uses: listed[kind][name],
+			})
+		}
+	}
+	return c.JSON(http.StatusOK, answer)
+}
+
+func (h PasswordHandlers) ListCredentials(c *echo.Context) error {
+	return h.listCredentials(c)
+}
+
+func (h PasswordHandlers) SetCredential(c *echo.Context) error {
+	kind, ok := kindOf(c)
+	if !ok {
+		return problem(c, http.StatusBadRequest, "invalid_request")
+	}
+	var request api.StoreCredentialRequest
+	if err := decodeJSON(c, &request); err != nil {
+		return problem(c, http.StatusBadRequest, "invalid_request")
+	}
+	if err := h.Service.SetCredential(kind, c.Param("name"), request.Secret); err != nil {
+		return credentialProblem(c, err, nil)
+	}
+	return h.listCredentials(c)
+}
+
+func (h PasswordHandlers) DeleteCredential(c *echo.Context) error {
+	kind, ok := kindOf(c)
+	if !ok {
+		return problem(c, http.StatusBadRequest, "invalid_request")
+	}
+	name := c.Param("name")
+	if err := h.Service.DeleteCredential(kind, name); err != nil {
+		uses, _ := h.Service.Credentials()
+		return credentialProblem(c, err, uses[kind][name])
+	}
+	return h.listCredentials(c)
+}
+
+func (h PasswordHandlers) AssignCredential(c *echo.Context) error {
+	kind, ok := kindOf(c)
+	if !ok {
+		return problem(c, http.StatusBadRequest, "invalid_request")
+	}
+	var request api.AssignCredentialRequest
+	if err := decodeJSON(c, &request); err != nil {
+		return problem(c, http.StatusBadRequest, "invalid_request")
+	}
+	if err := h.Service.AssignCredential(kind, request.Subject, request.Name); err != nil {
+		return credentialProblem(c, err, nil)
+	}
+	return h.listCredentials(c)
+}
+
+func (h PasswordHandlers) UnassignCredential(c *echo.Context) error {
+	kind, ok := kindOf(c)
+	if !ok {
+		return problem(c, http.StatusBadRequest, "invalid_request")
+	}
+	if err := h.Service.UnassignCredential(kind, c.Param("subject")); err != nil {
+		return credentialProblem(c, err, nil)
+	}
+	return h.listCredentials(c)
 }
 
 func (h PasswordHandlers) Store(c *echo.Context) error {

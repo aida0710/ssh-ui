@@ -319,3 +319,119 @@ func TestEligibilityIsReadableAndCarriesTheWarnings(t *testing.T) {
 		t.Errorf("warning = %#v", report.Warnings[0])
 	}
 }
+
+func credentialPath(kind, rest string) string {
+	return "/api/v1/credentials/" + kind + rest
+}
+
+// The sweep that must not be allowed to rot, extended to the routes that carry
+// credentials. Every one of them is asked, including the ones that write, and
+// none of their bodies may contain a value.
+func TestNoCredentialRouteEverReturnsASecret(t *testing.T) {
+	engine, service := passwordEngine(t)
+	if err := service.Initialise(testPassphrase); err != nil {
+		t.Fatal(err)
+	}
+
+	responses := []*httptest.ResponseRecorder{
+		send(t, engine, http.MethodPut, credentialPath("password", "/office"), `{"secret":"hunter2"}`, nil),
+		send(t, engine, http.MethodPut, credentialPath("key_passphrase", "/build"), `{"secret":"phrase-2"}`, nil),
+		send(t, engine, http.MethodGet, "/api/v1/credentials", "", nil),
+		send(t, engine, http.MethodPut, credentialPath("password", "/assign"), `{"subject":"web-1","name":"office"}`, nil),
+		send(t, engine, http.MethodGet, "/api/v1/credentials", "", nil),
+		send(t, engine, http.MethodDelete, credentialPath("password", "/assign/web-1"), "", nil),
+		send(t, engine, http.MethodDelete, credentialPath("password", "/office"), "", nil),
+	}
+	for index, response := range responses {
+		for _, absent := range []string{"hunter2", "phrase-2", testPassphrase} {
+			if strings.Contains(response.Body.String(), absent) {
+				t.Errorf("response %d carries %q: %s", index, absent, response.Body.String())
+			}
+		}
+	}
+}
+
+func TestCredentialsListNamesAndUses(t *testing.T) {
+	engine, service := passwordEngine(t)
+	if err := service.Initialise(testPassphrase); err != nil {
+		t.Fatal(err)
+	}
+	send(t, engine, http.MethodPut, credentialPath("password", "/office"), `{"secret":"hunter2"}`, nil)
+	send(t, engine, http.MethodPut, credentialPath("password", "/assign"), `{"subject":"web-1","name":"office"}`, nil)
+	send(t, engine, http.MethodPut, credentialPath("password", "/assign"), `{"subject":"web-2","name":"office"}`, nil)
+
+	response := send(t, engine, http.MethodGet, "/api/v1/credentials", "", nil)
+	if response.Code != http.StatusOK {
+		t.Fatalf("list = %d: %s", response.Code, response.Body.String())
+	}
+	body := response.Body.String()
+	for _, want := range []string{"office", "web-1", "web-2"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("list does not carry %q: %s", want, body)
+		}
+	}
+}
+
+// Deleting a name two machines still point at would break both of them, later,
+// somewhere else. The refusal says which.
+func TestDeletingACredentialInUseIsRefusedWithItsUses(t *testing.T) {
+	engine, service := passwordEngine(t)
+	if err := service.Initialise(testPassphrase); err != nil {
+		t.Fatal(err)
+	}
+	send(t, engine, http.MethodPut, credentialPath("password", "/office"), `{"secret":"hunter2"}`, nil)
+	send(t, engine, http.MethodPut, credentialPath("password", "/assign"), `{"subject":"web-1","name":"office"}`, nil)
+
+	response := send(t, engine, http.MethodDelete, credentialPath("password", "/office"), "", nil)
+	if response.Code != http.StatusConflict {
+		t.Fatalf("delete of a used credential = %d, want 409: %s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), "web-1") {
+		t.Errorf("the refusal does not say what uses it: %s", response.Body.String())
+	}
+}
+
+// The separation, at the boundary a browser actually reaches.
+func TestAHostCannotBePointedAtAKeyPassphraseThroughTheAPI(t *testing.T) {
+	engine, service := passwordEngine(t)
+	if err := service.Initialise(testPassphrase); err != nil {
+		t.Fatal(err)
+	}
+	send(t, engine, http.MethodPut, credentialPath("key_passphrase", "/build"), `{"secret":"phrase"}`, nil)
+
+	response := send(t, engine, http.MethodPut, credentialPath("password", "/assign"), `{"subject":"web-1","name":"build"}`, nil)
+	if response.Code == http.StatusOK {
+		t.Error("a host was pointed at a key passphrase through the API")
+	}
+}
+
+func TestAnUnknownCredentialKindIsRefused(t *testing.T) {
+	engine, service := passwordEngine(t)
+	if err := service.Initialise(testPassphrase); err != nil {
+		t.Fatal(err)
+	}
+
+	if code := send(t, engine, http.MethodPut, credentialPath("wallet", "/x"), `{"secret":"y"}`, nil).Code; code != http.StatusBadRequest {
+		t.Errorf("an unknown kind = %d, want 400", code)
+	}
+}
+
+func TestEveryCredentialRouteRefusesALockedVault(t *testing.T) {
+	engine, service := passwordEngine(t)
+	if err := service.Initialise(testPassphrase); err != nil {
+		t.Fatal(err)
+	}
+	service.Lock()
+
+	for _, call := range []struct{ method, path, body string }{
+		{http.MethodGet, "/api/v1/credentials", ""},
+		{http.MethodPut, credentialPath("password", "/office"), `{"secret":"x"}`},
+		{http.MethodDelete, credentialPath("password", "/office"), ""},
+		{http.MethodPut, credentialPath("password", "/assign"), `{"subject":"web-1","name":"office"}`},
+		{http.MethodDelete, credentialPath("password", "/assign/web-1"), ""},
+	} {
+		if code := send(t, engine, call.method, call.path, call.body, nil).Code; code != http.StatusConflict {
+			t.Errorf("%s %s while locked = %d, want 409", call.method, call.path, code)
+		}
+	}
+}

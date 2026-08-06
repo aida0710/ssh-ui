@@ -44,6 +44,12 @@ type AliasRequest struct {
 	Alias string `json:"alias"`
 }
 
+// AssignCredentialRequest defines model for AssignCredentialRequest.
+type AssignCredentialRequest struct {
+	Name    string `json:"name"`
+	Subject string `json:"subject"`
+}
+
 // AuthenticationRequest defines model for AuthenticationRequest.
 type AuthenticationRequest struct {
 	AcknowledgeExecutable bool   `json:"acknowledgeExecutable"`
@@ -122,6 +128,18 @@ type ConflictReport struct {
 	ExternalChange []DiffLine `json:"externalChange"`
 	LocalChange    []DiffLine `json:"localChange"`
 	Path           string     `json:"path"`
+}
+
+// Credential defines model for Credential.
+type Credential struct {
+	Kind string   `json:"kind"`
+	Name string   `json:"name"`
+	Uses []string `json:"uses"`
+}
+
+// CredentialList defines model for CredentialList.
+type CredentialList struct {
+	Credentials []Credential `json:"credentials"`
 }
 
 // Diagnostic defines model for Diagnostic.
@@ -850,6 +868,11 @@ type Source struct {
 	Path      *string `json:"path,omitempty"`
 }
 
+// StoreCredentialRequest defines model for StoreCredentialRequest.
+type StoreCredentialRequest struct {
+	Secret string `json:"secret"`
+}
+
 // StorePasswordRequest defines model for StorePasswordRequest.
 type StorePasswordRequest struct {
 	Password string `json:"password"`
@@ -1004,6 +1027,12 @@ type PreviewConfigEditJSONRequestBody = EditRequest
 
 // SaveConfigEditJSONRequestBody defines body for SaveConfigEdit for application/json ContentType.
 type SaveConfigEditJSONRequestBody = EditRequest
+
+// AssignCredentialJSONRequestBody defines body for AssignCredential for application/json ContentType.
+type AssignCredentialJSONRequestBody = AssignCredentialRequest
+
+// StoreCredentialJSONRequestBody defines body for StoreCredential for application/json ContentType.
+type StoreCredentialJSONRequestBody = StoreCredentialRequest
 
 // TestAuthenticationJSONRequestBody defines body for TestAuthentication for application/json ContentType.
 type TestAuthenticationJSONRequestBody = AuthenticationRequest

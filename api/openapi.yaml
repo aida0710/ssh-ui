@@ -450,6 +450,91 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/credentials:
+    get:
+      operationId: listCredentials
+      responses:
+        "200":
+          description: Credential names and what uses them, never a value
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CredentialList" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/credentials/{kind}/assign:
+    put:
+      operationId: assignCredential
+      parameters:
+        - { name: kind, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssignCredentialRequest" }
+      responses:
+        "200":
+          description: The credential lists after the change
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CredentialList" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/credentials/{kind}/assign/{subject}:
+    delete:
+      operationId: unassignCredential
+      parameters:
+        - { name: kind, in: path, required: true, schema: { type: string } }
+        - { name: subject, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The credential lists after the change
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CredentialList" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/credentials/{kind}/{name}:
+    put:
+      operationId: storeCredential
+      parameters:
+        - { name: kind, in: path, required: true, schema: { type: string } }
+        - { name: name, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StoreCredentialRequest" }
+      responses:
+        "200":
+          description: The credential lists after the change
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CredentialList" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteCredential
+      parameters:
+        - { name: kind, in: path, required: true, schema: { type: string } }
+        - { name: name, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The credential lists after the change
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CredentialList" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
   /api/v1/keys:
     get:
       operationId: listKeys
@@ -1028,6 +1113,35 @@ components:
         fingerprint: { type: string }
         comment: { type: string }
         algorithm: { type: string }
+    Credential:
+      type: object
+      additionalProperties: false
+      required: [kind, name, uses]
+      properties:
+        kind: { type: string }
+        name: { type: string }
+        # What points at this credential: aliases for a password, key paths for
+        # a passphrase. Never the value.
+        uses: { type: array, items: { type: string } }
+    CredentialList:
+      type: object
+      additionalProperties: false
+      required: [credentials]
+      properties:
+        credentials: { type: array, items: { $ref: "#/components/schemas/Credential" } }
+    StoreCredentialRequest:
+      type: object
+      additionalProperties: false
+      required: [secret]
+      properties:
+        secret: { type: string, minLength: 1, maxLength: 1024 }
+    AssignCredentialRequest:
+      type: object
+      additionalProperties: false
+      required: [subject, name]
+      properties:
+        subject: { type: string, minLength: 1, maxLength: 4096 }
+        name: { type: string, minLength: 1, maxLength: 128 }
     AgentIdentitiesResponse:
       type: object
       additionalProperties: false

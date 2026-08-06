@@ -420,6 +420,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listCredentials"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/credentials/{kind}/assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["assignCredential"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/credentials/{kind}/assign/{subject}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["unassignCredential"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/credentials/{kind}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["storeCredential"];
+        post?: never;
+        delete: operations["deleteCredential"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/keys": {
         parameters: {
             query?: never;
@@ -864,6 +928,21 @@ export interface components {
             fingerprint: string;
             comment: string;
             algorithm: string;
+        };
+        Credential: {
+            kind: string;
+            name: string;
+            uses: string[];
+        };
+        CredentialList: {
+            credentials: components["schemas"]["Credential"][];
+        };
+        StoreCredentialRequest: {
+            secret: string;
+        };
+        AssignCredentialRequest: {
+            subject: string;
+            name: string;
         };
         AgentIdentitiesResponse: {
             id: string;
@@ -2226,6 +2305,145 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PasswordVaultStatus"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    listCredentials: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Credential names and what uses them, never a value */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CredentialList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    assignCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignCredentialRequest"];
+            };
+        };
+        responses: {
+            /** @description The credential lists after the change */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CredentialList"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    unassignCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+                subject: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The credential lists after the change */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CredentialList"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    storeCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoreCredentialRequest"];
+            };
+        };
+        responses: {
+            /** @description The credential lists after the change */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CredentialList"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    deleteCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The credential lists after the change */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CredentialList"];
                 };
             };
             400: components["responses"]["Problem"];
