@@ -951,6 +951,88 @@ func TestMoveHostRefusesBothADestinationGroupAndAPath(t *testing.T) {
 	}
 }
 
+func TestASecondConnectionCanBeMovedIntoAGroupThatAlreadyHoldsOne(t *testing.T) {
+	// The bug, reported from a real workspace: the first connection into a
+	// group worked and every one after it failed with "this file was changed
+	// outside the application", naming an external edit that had not happened.
+	//
+	// A move that names a group does not name a destination file, so the client
+	// never read one and could not send its bytes. The empty base it sent
+	// instead was compared against the group file on disk, which by then held
+	// the first connection — so the comparison was between "nothing" and "the
+	// work this application had just done itself".
+	service, workspace := newTestService(t)
+	declareGroup(t, service, "work")
+
+	const both = "Host nas\n\tUser aida\n\nHost printer\n\tHostName 198.51.100.30\n"
+	if err := os.WriteFile(
+		filepath.Join(workspace.Root(), filepath.FromSlash("conf.d/10-home.conf")), []byte(both), 0o600,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := service.Save(EditRequest{
+		Kind: EditMove, Path: "conf.d/10-home.conf", Base: both,
+		Alias: "nas", DestinationGroup: "work",
+	}); err != nil {
+		t.Fatalf("the first move = %v", err)
+	}
+
+	remaining := readFile(t, workspace, "conf.d/10-home.conf")
+	if _, err := service.Save(EditRequest{
+		Kind: EditMove, Path: "conf.d/10-home.conf", Base: remaining,
+		Alias: "printer", DestinationGroup: "work",
+	}); err != nil {
+		t.Fatalf("the second move into the same group = %v", err)
+	}
+
+	// Both are in the group file, and the first was not overwritten by the
+	// second — which is the other way this could have been "fixed".
+	moved := readFile(t, workspace, "connections/work/10-home.conf")
+	if !strings.Contains(moved, "Host nas") || !strings.Contains(moved, "Host printer") {
+		t.Errorf("the group file holds %q, want both connections", moved)
+	}
+	if readFile(t, workspace, "conf.d/10-home.conf") != "" {
+		t.Errorf("the source still holds something: %q", readFile(t, workspace, "conf.d/10-home.conf"))
+	}
+}
+
+func TestAGroupMoveStillRefusesAFileThatChangedUnderIt(t *testing.T) {
+	// Reading the destination rather than trusting a base the client never had
+	// must not become "write regardless". The source base is still the client's
+	// and is still checked, and the digest read for the destination is the
+	// precondition storage verifies while committing.
+	service, workspace := newTestService(t)
+	declareGroup(t, service, "work")
+
+	const both = "Host nas\n\tUser aida\n\nHost printer\n\tHostName 198.51.100.30\n"
+	if err := os.WriteFile(
+		filepath.Join(workspace.Root(), filepath.FromSlash("conf.d/10-home.conf")), []byte(both), 0o600,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Save(EditRequest{
+		Kind: EditMove, Path: "conf.d/10-home.conf", Base: both,
+		Alias: "nas", DestinationGroup: "work",
+	}); err != nil {
+		t.Fatalf("the first move = %v", err)
+	}
+
+	// The second move carries the base from before the first one, which is what
+	// a second browser tab would send.
+	var conflict *ConflictError
+	_, err := service.Save(EditRequest{
+		Kind: EditMove, Path: "conf.d/10-home.conf", Base: both,
+		Alias: "printer", DestinationGroup: "work",
+	})
+	if !errors.As(err, &conflict) {
+		t.Fatalf("Save = %v, want a conflict on the stale source", err)
+	}
+	if conflict.Report.Path != "conf.d/10-home.conf" {
+		t.Errorf("the conflict names %q, want the source", conflict.Report.Path)
+	}
+}
+
 // A rename that lands on an alias something else already declares does not
 // create a second host: it creates a second claim on one name, and OpenSSH
 // gives the name to whichever block it reads first. The move path has refused
