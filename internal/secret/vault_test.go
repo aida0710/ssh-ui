@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"ssh-ui/internal/envelope"
 	"ssh-ui/internal/secret"
 )
 
@@ -22,8 +23,13 @@ func sealedVault(t *testing.T, entries map[string]string) []byte {
 		t.Fatalf("Create = %v", err)
 	}
 	for alias, password := range entries {
-		if err := vault.Set(alias, password); err != nil {
+		// "store a password for this host" is a credential named after the
+		// alias, plus the alias pointing at it.
+		if err := vault.Set(secret.KindPassword, alias, password); err != nil {
 			t.Fatalf("Set(%q) = %v", alias, err)
+		}
+		if err := vault.Assign(secret.KindPassword, alias, alias); err != nil {
+			t.Fatalf("Assign(%q) = %v", alias, err)
 		}
 	}
 	sealed, err := vault.Seal()
@@ -41,14 +47,14 @@ func TestSealThenOpenRoundTrips(t *testing.T) {
 		t.Fatalf("Open = %v", err)
 	}
 	// A password may legitimately end in a space. Nothing here may trim it.
-	if got, ok := vault.Password("bastion"); !ok || got != "hunter2 " {
+	if got, ok := vault.SecretFor(secret.KindPassword, "bastion"); !ok || got != "hunter2 " {
 		t.Errorf("Password(bastion) = %q, %v", got, ok)
 	}
-	if got, _ := vault.Password("nas"); got != "p@ss word" {
+	if got, _ := vault.SecretFor(secret.KindPassword, "nas"); got != "p@ss word" {
 		t.Errorf("Password(nas) = %q", got)
 	}
-	if !slices.Equal(vault.Aliases(), []string{"bastion", "nas"}) {
-		t.Errorf("Aliases = %#v", vault.Aliases())
+	if !slices.Equal(vault.Subjects(secret.KindPassword), []string{"bastion", "nas"}) {
+		t.Errorf("Aliases = %#v", vault.Subjects(secret.KindPassword))
 	}
 }
 
@@ -99,7 +105,7 @@ func TestSealUsesAFreshNonceEveryTime(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create = %v", err)
 	}
-	if err := vault.Set("bastion", "hunter2"); err != nil {
+	if err := vault.Set(secret.KindPassword, "bastion", "hunter2"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -196,12 +202,18 @@ func TestSetRefusesAnUnsafeAliasAndAnEmptyPassword(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The alias rule moved with the thing it describes. A credential is named
+	// after what it is for — "the office VMs" is a fine name — so Set no longer
+	// judges aliases; Assign does, because that is where an alias appears.
+	if err := vault.Set(secret.KindPassword, "shared", "x"); err != nil {
+		t.Fatalf("Set = %v", err)
+	}
 	for _, alias := range []string{"", "has space", "has\nnewline", "-U"} {
-		if err := vault.Set(alias, "x"); !errors.Is(err, secret.ErrUnsafeName) {
-			t.Errorf("Set(%q) = %v, want ErrUnsafeName", alias, err)
+		if err := vault.Assign(secret.KindPassword, alias, "shared"); !errors.Is(err, secret.ErrUnsafeName) {
+			t.Errorf("Assign(%q) = %v, want ErrUnsafeName", alias, err)
 		}
 	}
-	if err := vault.Set("bastion", ""); !errors.Is(err, secret.ErrEmptySecret) {
+	if err := vault.Set(secret.KindPassword, "bastion", ""); !errors.Is(err, secret.ErrEmptySecret) {
 		t.Errorf("Set with an empty password = %v, want ErrEmptySecret", err)
 	}
 }
@@ -214,20 +226,23 @@ func TestRenameCarriesThePasswordAndLeavesNothingBehind(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := vault.Set("bastion", "hunter2"); err != nil {
+	if err := vault.Set(secret.KindPassword, "bastion", "hunter2"); err != nil {
 		t.Fatal(err)
 	}
-	if err := vault.Rename("bastion", "edge"); err != nil {
+	if err := vault.Assign(secret.KindPassword, "bastion", "bastion"); err != nil {
+		t.Fatal(err)
+	}
+	if err := vault.Rename(secret.KindPassword, "bastion", "edge"); err != nil {
 		t.Fatalf("Rename = %v", err)
 	}
 
-	if vault.Has("bastion") {
+	if func() bool { _, ok := vault.SecretFor(secret.KindPassword, "bastion"); return ok }() {
 		t.Error("the old alias still has a password")
 	}
-	if got, ok := vault.Password("edge"); !ok || got != "hunter2" {
+	if got, ok := vault.SecretFor(secret.KindPassword, "edge"); !ok || got != "hunter2" {
 		t.Errorf("Password(edge) = %q, %v", got, ok)
 	}
-	if err := vault.Rename("absent", "elsewhere"); err != nil {
+	if err := vault.Rename(secret.KindPassword, "absent", "elsewhere"); err != nil {
 		t.Errorf("renaming an alias with no password = %v, want nil", err)
 	}
 }
@@ -277,4 +292,106 @@ func headerOf(t *testing.T) []byte {
 	t.Helper()
 	sealed := sealedVault(t, map[string]string{"a": "b"})
 	return sealed[:44]
+}
+
+// One namespace would let a host's password picker offer a key's passphrase,
+// and picking it would send that passphrase to a remote host as a login
+// password. The separation is asserted rather than commented, because a comment
+// cannot refuse anything.
+func TestVaultKeepsTheTwoNamespacesApart(t *testing.T) {
+	vault, err := secret.Create(passphrase)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := vault.Set(secret.KindPassword, "office", "s3cret"); err != nil {
+		t.Fatal(err)
+	}
+	if err := vault.Set(secret.KindKeyPassphrase, "build", "phrase"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := vault.Assign(secret.KindPassword, "web-1", "build"); err == nil {
+		t.Error("a host referenced a key passphrase")
+	}
+	if err := vault.Assign(secret.KindKeyPassphrase, "keys/id_work", "office"); err == nil {
+		t.Error("a key referenced an account password")
+	}
+	if err := vault.Assign(secret.KindPassword, "web-1", "office"); err != nil {
+		t.Errorf("a host could not reference an account password: %v", err)
+	}
+	if err := vault.Assign(secret.KindKeyPassphrase, "keys/id_work", "build"); err != nil {
+		t.Errorf("a key could not reference a key passphrase: %v", err)
+	}
+}
+
+// The point of naming a secret is that twenty machines share one entry, so the
+// one entry cannot be removed while any of them still points at it.
+func TestVaultRefusesToDeleteACredentialInUseAndSaysWhatUsesIt(t *testing.T) {
+	vault, err := secret.Create(passphrase)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = vault.Set(secret.KindPassword, "office", "s3cret")
+	_ = vault.Assign(secret.KindPassword, "web-1", "office")
+	_ = vault.Assign(secret.KindPassword, "web-2", "office")
+
+	err = vault.Delete(secret.KindPassword, "office")
+	if !errors.Is(err, secret.ErrCredentialInUse) {
+		t.Fatalf("Delete error = %v, want ErrCredentialInUse", err)
+	}
+	if uses := vault.Uses(secret.KindPassword, "office"); !slices.Equal(uses, []string{"web-1", "web-2"}) {
+		t.Errorf("uses = %#v, want both aliases", uses)
+	}
+
+	vault.Unassign(secret.KindPassword, "web-1")
+	vault.Unassign(secret.KindPassword, "web-2")
+	if err := vault.Delete(secret.KindPassword, "office"); err != nil {
+		t.Errorf("Delete of an unused credential = %v", err)
+	}
+}
+
+// A version 1 document held a password per alias and no names. There is at most
+// one in the world; a migration would be larger than the thing it migrates, so
+// it is refused with an error the screen can turn into "set them again".
+func TestAVersionOneDocumentIsRefused(t *testing.T) {
+	key, err := envelope.Derive(passphrase)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sealed, err := key.Seal([]byte(`{"schemaVersion":1,"passwords":{"web-1":"s3cret"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := secret.Open(sealed, passphrase); !errors.Is(err, secret.ErrOldVault) {
+		t.Fatalf("Open error = %v, want ErrOldVault", err)
+	}
+}
+
+func TestSealedBytesCarryNothingFromEitherNamespace(t *testing.T) {
+	vault, err := secret.Create(passphrase)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = vault.Set(secret.KindPassword, "office-vm", "s3cret-password")
+	_ = vault.Assign(secret.KindPassword, "web-1", "office-vm")
+	_ = vault.Set(secret.KindKeyPassphrase, "build-key", "s3cret-phrase")
+	_ = vault.Assign(secret.KindKeyPassphrase, "keys/id_work", "build-key")
+	vault.SetSync(secret.SyncSettings{
+		Endpoint: "https://s3.example", Bucket: "b", AccessKeyID: "AKIAEXAMPLE", SecretAccessKey: "s3cret-key",
+	})
+
+	sealed, err := vault.Seal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, absent := range []string{
+		"office-vm", "s3cret-password", "web-1",
+		"build-key", "s3cret-phrase", "keys/id_work",
+		"AKIAEXAMPLE", "s3cret-key", "s3.example",
+	} {
+		if bytes.Contains(sealed, []byte(absent)) {
+			t.Errorf("the sealed file carries %q", absent)
+		}
+	}
 }

@@ -157,17 +157,29 @@ func (s *Service) Lock() {
 func (s *Service) Has(alias string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.vault != nil && s.vault.Has(alias)
+	if s.vault == nil {
+		return false
+	}
+	_, ok := s.vault.SecretFor(KindPassword, alias)
+	return ok
 }
 
-// Set stores a password and writes the vault.
+// Set stores a password for one alias and writes the vault.
+//
+// The credential takes the alias as its name, which is what "just store a
+// password for this host" means now that secrets have names. Sharing one across
+// several hosts is done by assigning an existing name instead.
 func (s *Service) Set(alias, password string) error {
 	s.mu.Lock()
 	if s.vault == nil {
 		s.mu.Unlock()
 		return ErrLocked
 	}
-	if err := s.vault.Set(alias, password); err != nil {
+	if err := s.vault.Set(KindPassword, alias, password); err != nil {
+		s.mu.Unlock()
+		return err
+	}
+	if err := s.vault.Assign(KindPassword, alias, alias); err != nil {
 		s.mu.Unlock()
 		return err
 	}
@@ -182,7 +194,10 @@ func (s *Service) Remove(alias string) error {
 		s.mu.Unlock()
 		return ErrLocked
 	}
-	s.vault.Remove(alias)
+	// The reference goes; the credential stays if anything else points at it,
+	// and goes with it when nothing does.
+	s.vault.Unassign(KindPassword, alias)
+	_ = s.vault.Delete(KindPassword, alias)
 	s.mu.Unlock()
 	return s.write()
 }
@@ -195,11 +210,11 @@ func (s *Service) Rename(from, to string) error {
 		s.mu.Unlock()
 		return ErrLocked
 	}
-	if !s.vault.Has(from) {
+	if _, ok := s.vault.Assigned(KindPassword, from); !ok {
 		s.mu.Unlock()
 		return nil
 	}
-	if err := s.vault.Rename(from, to); err != nil {
+	if err := s.vault.Rename(KindPassword, from, to); err != nil {
 		s.mu.Unlock()
 		return err
 	}
@@ -220,7 +235,7 @@ func (s *Service) IssueToken(alias string) (string, error) {
 	if s.vault == nil {
 		return "", ErrLocked
 	}
-	if !s.vault.Has(alias) {
+	if _, ok := s.vault.SecretFor(KindPassword, alias); !ok {
 		return "", ErrNoPassword
 	}
 	s.expireLocked()
@@ -262,7 +277,7 @@ func (s *Service) Redeem(token, alias, prompt string, answerable func(string) bo
 	if !answerable(prompt) {
 		return "", ErrUnknownToken
 	}
-	password, ok := s.vault.Password(alias)
+	password, ok := s.vault.SecretFor(KindPassword, alias)
 	if !ok {
 		return "", ErrNoPassword
 	}
@@ -345,5 +360,5 @@ func (s *Service) Aliases() []string {
 	if s.vault == nil {
 		return nil
 	}
-	return s.vault.Aliases()
+	return s.vault.Subjects(KindPassword)
 }
