@@ -906,6 +906,7 @@ type SyncStatus struct {
 	Endpoint     string        `json:"endpoint"`
 	FileCount    *int          `json:"fileCount,omitempty"`
 	LastSyncedAt *string       `json:"lastSyncedAt,omitempty"`
+	Locked       bool          `json:"locked"`
 	Origin       *string       `json:"origin,omitempty"`
 	Synced       bool          `json:"synced"`
 }

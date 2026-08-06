@@ -4,14 +4,17 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/labstack/echo/v5"
 
 	"ssh-ui/internal/remotesync"
+	"ssh-ui/internal/secret"
 	"ssh-ui/internal/storage"
 )
 
@@ -35,6 +38,36 @@ func syncEngine(t *testing.T) (*echo.Echo, *remotesync.Service) {
 	engine := echo.New()
 	registerSyncRoutes(engine, SyncHandlers{Service: service})
 	return engine, service
+}
+
+const syncTestPassphrase = "a master password for sync"
+
+func syncEngineWithVault(t *testing.T) (*echo.Echo, *remotesync.Service, *secret.Service) {
+	t.Helper()
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, ".ssh"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := storage.NewWorkspace(storage.OSFileSystem{}, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := storage.NewManager(workspace, time.Now, rand.Reader)
+	service := remotesync.NewService(workspace, manager,
+		func() ([]string, error) { return []string{"config"}, nil },
+		func() string { return "2026-08-05T00:00:00Z" },
+		func() (string, error) { return "origin-test", nil },
+	)
+	secrets := secret.NewService(workspace, manager)
+
+	engine := echo.New()
+	registerSyncRoutes(engine, SyncHandlers{Service: service, Secrets: secrets})
+	return engine, service, secrets
+}
+
+func sendSync(t *testing.T, engine *echo.Echo, method, path, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	return send(t, engine, method, path, body, nil)
 }
 
 func settings(direction string) string {
@@ -143,5 +176,60 @@ func TestARefusedDirectionIsAConflictAndNotAGatewayFailure(t *testing.T) {
 	// user looking at their bucket for a refusal this machine made.
 	if body.Code != "sync_push_refused" {
 		t.Errorf("code = %q, want sync_push_refused", body.Code)
+	}
+}
+
+// The settings are stored, so a second run has them. What must never travel
+// back out is the access key: the status is what the screen reads, and it says
+// where the bucket is and whether the vault is shut, and nothing else.
+func TestSyncStatusNeverCarriesTheAccessKey(t *testing.T) {
+	engine, service, secrets := syncEngineWithVault(t)
+	_ = service
+	if err := secrets.Initialise(syncTestPassphrase); err != nil {
+		t.Fatal(err)
+	}
+
+	configure := `{"endpoint":"https://s3.example.invalid","bucket":"b","region":"auto",` +
+		`"accessKeyId":"AKIAEXAMPLE","secretAccessKey":"s3cret-key"}`
+	if code := sendSync(t, engine, http.MethodPut, "/api/v1/sync/settings", configure).Code; code != http.StatusOK {
+		t.Fatalf("configure = %d", code)
+	}
+
+	response := sendSync(t, engine, http.MethodGet, "/api/v1/sync", "")
+	for _, absent := range []string{"AKIAEXAMPLE", "s3cret-key"} {
+		if strings.Contains(response.Body.String(), absent) {
+			t.Errorf("the status carries %q: %s", absent, response.Body.String())
+		}
+	}
+	if !strings.Contains(response.Body.String(), "s3.example.invalid") {
+		t.Errorf("the status does not say where the bucket is: %s", response.Body.String())
+	}
+}
+
+// Nothing is asked at startup, so the screen has to be able to say why its form
+// is empty rather than showing an empty form that looks configured-and-broken.
+func TestSyncStatusSaysWhenTheVaultIsShut(t *testing.T) {
+	engine, _, secrets := syncEngineWithVault(t)
+	if err := secrets.Initialise(syncTestPassphrase); err != nil {
+		t.Fatal(err)
+	}
+	secrets.Lock()
+
+	response := sendSync(t, engine, http.MethodGet, "/api/v1/sync", "")
+	if !strings.Contains(response.Body.String(), `"locked":true`) {
+		t.Errorf("the status does not say the vault is shut: %s", response.Body.String())
+	}
+}
+
+func TestConfiguringRefusesAShutVault(t *testing.T) {
+	engine, _, secrets := syncEngineWithVault(t)
+	if err := secrets.Initialise(syncTestPassphrase); err != nil {
+		t.Fatal(err)
+	}
+	secrets.Lock()
+
+	configure := `{"endpoint":"https://s3.example.invalid","bucket":"b","accessKeyId":"k","secretAccessKey":"s"}`
+	if code := sendSync(t, engine, http.MethodPut, "/api/v1/sync/settings", configure).Code; code != http.StatusConflict {
+		t.Errorf("configure while locked = %d, want 409", code)
 	}
 }

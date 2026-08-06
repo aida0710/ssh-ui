@@ -13,11 +13,17 @@ import (
 	"ssh-ui/internal/envelope"
 	"ssh-ui/internal/objectstore"
 	"ssh-ui/internal/remotesync"
+	"ssh-ui/internal/secret"
 )
 
 // SyncHandlers serves the remote snapshot.
 type SyncHandlers struct {
 	Service *remotesync.Service
+	// Secrets holds the object store settings, sealed with the master password
+	// and kept beside the vault rather than inside it — the vault travels, and
+	// the key to the bucket must not be in the bucket. A nil one means the
+	// settings are per-run, which is what this did before they were stored.
+	Secrets *secret.Service
 }
 
 func registerSyncRoutes(engine *echo.Echo, handlers SyncHandlers) {
@@ -27,7 +33,37 @@ func registerSyncRoutes(engine *echo.Echo, handlers SyncHandlers) {
 	engine.POST("/api/v1/sync/pull", handlers.Pull)
 }
 
+// restore configures the client from the stored settings, so unlocking is all
+// it takes for the screen to be filled in and a push to work.
+//
+// A shut vault is not an error here: the status says so and the form says why
+// it is empty. Nothing is asked at startup, and this is the screen asking for
+// itself when it needs to.
+func (h SyncHandlers) restore() {
+	if h.Secrets == nil || !h.Secrets.Unlocked() || h.Service.Configured() {
+		return
+	}
+	settings, err := h.Secrets.SyncSettings()
+	if err != nil || settings.Bucket == "" {
+		return
+	}
+	direction, ok := remotesync.ParseDirection(settings.Direction)
+	if !ok {
+		direction = remotesync.DirectionBoth
+	}
+	credentials := objectstore.Credentials{
+		AccessKeyID: settings.AccessKeyID, SecretAccessKey: settings.SecretAccessKey,
+	}
+	config := remotesync.Config{
+		Endpoint: settings.Endpoint, Bucket: settings.Bucket, Region: settings.Region, Direction: direction,
+	}
+	h.Service.Configure(config, credentials, &objectstore.Client{
+		Endpoint: config.Endpoint, Bucket: config.Bucket, Region: config.Region, Creds: credentials,
+	})
+}
+
 func (h SyncHandlers) status(c *echo.Context) error {
+	h.restore()
 	endpoint, bucket := h.Service.Target()
 	synced, at, origin, files := h.Service.LastSync()
 	response := api.SyncStatus{
@@ -36,6 +72,9 @@ func (h SyncHandlers) status(c *echo.Context) error {
 		Bucket:     bucket,
 		Synced:     synced,
 		Direction:  api.SyncDirection(h.Service.Direction()),
+		// Why the form is empty, when it is. Never the access key or the
+		// secret: those go one way, into the sealed file.
+		Locked: h.Secrets != nil && !h.Secrets.Unlocked(),
 	}
 	if synced {
 		response.LastSyncedAt = &at
@@ -86,6 +125,20 @@ func (h SyncHandlers) Configure(c *echo.Context) error {
 	config := remotesync.Config{
 		Endpoint: request.Endpoint, Bucket: request.Bucket, Region: region, Direction: direction,
 	}
+	// Stored before it is used, so the answer never claims a configuration that
+	// would be gone on the next run.
+	if h.Secrets != nil {
+		if err := h.Secrets.SetSyncSettings(secret.SyncSettings{
+			Endpoint: request.Endpoint, Bucket: request.Bucket, Region: region,
+			AccessKeyID: request.AccessKeyId, SecretAccessKey: request.SecretAccessKey,
+			Direction: string(direction),
+		}); err != nil {
+			if errors.Is(err, secret.ErrLocked) {
+				return problem(c, http.StatusConflict, "vault_locked")
+			}
+			return problem(c, http.StatusInternalServerError, "vault_failed")
+		}
+	}
 	h.Service.Configure(config, credentials, &objectstore.Client{
 		Endpoint: config.Endpoint, Bucket: config.Bucket, Region: config.Region, Creds: credentials,
 	})
@@ -93,6 +146,7 @@ func (h SyncHandlers) Configure(c *echo.Context) error {
 }
 
 func (h SyncHandlers) Push(c *echo.Context) error {
+	h.restore()
 	var request api.PassphraseRequest
 	if err := decodeJSON(c, &request); err != nil {
 		return problem(c, http.StatusBadRequest, "invalid_request")
@@ -109,6 +163,7 @@ func (h SyncHandlers) Push(c *echo.Context) error {
 // bytes would put a private key in a response body, and the per-file preview
 // the user approves is assembled from files this application can already read.
 func (h SyncHandlers) Pull(c *echo.Context) error {
+	h.restore()
 	var request api.PullRequest
 	if err := decodeJSON(c, &request); err != nil {
 		return problem(c, http.StatusBadRequest, "invalid_request")

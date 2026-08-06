@@ -1208,6 +1208,7 @@ export interface components {
         SyncDirection: "both" | "push" | "pull";
         SyncStatus: {
             configured: boolean;
+            locked: boolean;
             endpoint: string;
             bucket: string;
             synced: boolean;

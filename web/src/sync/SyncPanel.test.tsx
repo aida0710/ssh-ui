@@ -10,6 +10,7 @@ afterEach(() => {
 
 const unconfigured: SyncStatus = {
   configured: false,
+  locked: false,
   endpoint: "",
   bucket: "",
   synced: false,
@@ -17,6 +18,7 @@ const unconfigured: SyncStatus = {
 };
 const configured: SyncStatus = {
   configured: true,
+  locked: false,
   endpoint: "https://acc.r2.cloudflarestorage.com",
   bucket: "ssh-ui",
   synced: true,

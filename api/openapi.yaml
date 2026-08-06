@@ -1560,9 +1560,13 @@ components:
     SyncStatus:
       type: object
       additionalProperties: false
-      required: [configured, endpoint, bucket, synced, direction]
+      required: [configured, locked, endpoint, bucket, synced, direction]
       properties:
         configured: { type: boolean }
+        # Why the form is empty, when it is: the settings are sealed with the
+        # master password and cannot be read until it is given. Never the access
+        # key or the secret — those go one way, into the sealed file.
+        locked: { type: boolean }
         # The endpoint and the bucket are shown back so the user can see what
         # this is pointed at. The access key and the secret never are.
         endpoint: { type: string }

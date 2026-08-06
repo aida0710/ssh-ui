@@ -162,7 +162,7 @@ func New(options Options) (*Server, error) {
 		})
 	}
 	if options.Sync != nil {
-		registerSyncRoutes(e, SyncHandlers{Service: options.Sync})
+		registerSyncRoutes(e, SyncHandlers{Service: options.Sync, Secrets: options.Passwords})
 	}
 	if len(registry) > 0 {
 		registerActionRoutes(e, actions)
