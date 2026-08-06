@@ -23,6 +23,19 @@ import { control, fieldLabel, narrowControl } from "../ui/form";
 import { Button } from "../ui/surface";
 import { appendHostBlock, duplicateHostBlock, removeHostBlock } from "./blocks";
 
+// What the Groups screen reports, and this one does not.
+//
+// `group_empty` is not in it because it is not reported anywhere as a notice
+// any more: a declared group holding nothing is the state every group is in
+// the moment after it is made, and the Groups screen says "Members: none" on
+// the row itself.
+const groupNoticeCodes = new Set([
+  "group_not_declared",
+  "group_directory_missing",
+  "group_empty",
+  "group_directory_leftover",
+]);
+
 function toProblem(error: unknown): Problem {
   if (error instanceof ApiError && error.problem !== null) return error.problem;
   if (error instanceof ApiError) return { code: error.code, message: "request rejected" };
@@ -400,7 +413,14 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
         />
       </div>
       <div className="flex flex-col gap-4">
-        <NoticeList notices={overview.notices} />
+        {/*
+          The group-scoped notices are the Groups screen's, and the README says
+          so: they describe what a declaration and the disk say about each
+          other, which is not something this screen can act on. They were
+          arriving here because this list was handed every notice the overview
+          carried.
+        */}
+        <NoticeList notices={overview.notices.filter((notice) => !groupNoticeCodes.has(notice.code))} />
         <OrphanPanel
           metadata={overview.metadata}
           hosts={overview.hosts}

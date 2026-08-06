@@ -295,6 +295,11 @@ describe("hiding a group from the connections tree", () => {
     render(<GroupsPanel />);
 
     expect(await screen.findByText(/no Include line names it/)).toBeInTheDocument();
-    expect(screen.getByText(/declared and holds nothing/)).toBeInTheDocument();
+
+    // An empty group is not one of them. It is the state every group is in for
+    // the moment after it is made, and the row below already reads
+    // "Members: none" — reporting it again in amber spent the colour that is
+    // supposed to mean something happened, on nothing happening.
+    expect(screen.queryByText(/declared and holds nothing/)).toBeNull();
   });
 });

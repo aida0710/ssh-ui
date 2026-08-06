@@ -131,8 +131,18 @@ export function GroupsPanel() {
   //
   // The draft is compared against what the server last returned, which is the
   // only honest source for "this is not written yet".
+  // `group_empty` is deliberately not among them.
+  //
+  // A declared group with nothing in it is not a fault, it is the state every
+  // group is in for the moment after it is made and again when its last
+  // connection moves out. OpenSSH is untroubled by an Include that matches no
+  // file. Reporting it in amber beside two genuine faults — a declaration with
+  // no directory, and a directory nothing declares — spent the colour that is
+  // supposed to mean something happened, on nothing happening. The emptiness
+  // was never hidden by dropping it either: each group's own row already reads
+  // "Members: none", so the notice was saying it a second time in amber.
   const groupNotices = (overview.notices ?? []).filter((notice) =>
-    ["group_not_declared", "group_directory_missing", "group_empty"].includes(notice.code),
+    ["group_not_declared", "group_directory_missing"].includes(notice.code),
   );
   const savedGroups = new Set((overview.metadata.groups ?? []).map((group) => group.name));
   const unsaved = JSON.stringify(loaded) !== JSON.stringify(overview.metadata);
