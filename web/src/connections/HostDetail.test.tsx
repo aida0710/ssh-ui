@@ -32,6 +32,8 @@ function buildIntegrations(overrides: Partial<IntegrationsApi> = {}): Integratio
     lockVault: vi.fn().mockResolvedValue({ exists: true, unlocked: false, aliases: [] }),
     changeMasterPassword: vi.fn(),
     loginItem: vi.fn().mockResolvedValue({ enabled: false, supported: true }),
+    updateStatus: vi.fn().mockResolvedValue({ current: "dev", available: false, restartRequired: false }),
+    applyUpdate: vi.fn().mockResolvedValue({ current: "dev", available: false, restartRequired: true }),
     setLoginItem: vi.fn().mockResolvedValue({ enabled: true, supported: true }),
     credentials: vi.fn().mockResolvedValue({ credentials: [] }),
     storeCredential: vi.fn().mockResolvedValue({ credentials: [] }),

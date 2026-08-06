@@ -12,12 +12,14 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 
 	"ssh-ui/internal/app"
 	"ssh-ui/internal/platform"
 	"ssh-ui/internal/platform/macos"
+	"ssh-ui/internal/selfupdate"
 	"ssh-ui/internal/ui"
 )
 
@@ -156,6 +158,14 @@ func main() {
 		// Off unless the user turns it on, from the interface. Nothing here
 		// registers anything; this only makes the switch reachable.
 		LoginItem: macos.LoginItem{Runner: runner, Home: home},
+		// The one place this application contacts a host other than itself,
+		// and only when somebody presses the button.
+		Updates: &selfupdate.Checker{
+			API:          "https://api.github.com/repos/aida0710/ssh-ui/releases/latest",
+			AssetName:    "ssh-ui-" + runtime.GOOS + "-" + runtime.GOARCH,
+			ChecksumName: "checksums.txt",
+			HTTP:         &http.Client{Timeout: 5 * time.Minute},
+		},
 		Listen:    net.Listen,
 		UI:        assets,
 		Logger:    logger,

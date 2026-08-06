@@ -10,6 +10,7 @@ import { HistoryPanel } from "./history/HistoryPanel";
 import { KeysScreen } from "./keys/KeysScreen";
 import { DiagnosticsPanel } from "./diagnostics/DiagnosticsPanel";
 import { LockScreen } from "./secrets/LockScreen";
+import { UpdateBadge } from "./shell/UpdateBadge";
 import { SecretsPanel } from "./secrets/SecretsPanel";
 import { SyncPanel } from "./sync/SyncPanel";
 import { KnownHostsPanel } from "./knownhosts/KnownHostsPanel";
@@ -315,8 +316,9 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
       >
         <nav
           aria-label={t("shell.primaryNavigation")}
-          className="relative overflow-y-auto border-r border-line bg-sidebar p-2"
+          className="relative flex flex-col overflow-y-auto border-r border-line bg-sidebar p-2"
         >
+          <div className="grow">
           {navGroups.map((group) => (
             <div key={group.label} className="mb-2">
               <span aria-hidden="true" className="block px-2 pt-2 pb-1 text-xs font-semibold text-ink-muted">
@@ -346,6 +348,12 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
               </ul>
             </div>
           ))}
+          </div>
+          {/*
+            The version sits at the foot of the navigation, where a thing you
+            look at rarely belongs, with the one control that changes it.
+          */}
+          <UpdateBadge />
         </nav>
         {/*
           No padding here. A section that wants to fill the window edge to edge

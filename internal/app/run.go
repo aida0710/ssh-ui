@@ -22,6 +22,7 @@ import (
 	"ssh-ui/internal/remotekey"
 	"ssh-ui/internal/remotesync"
 	"ssh-ui/internal/secret"
+	"ssh-ui/internal/selfupdate"
 	"ssh-ui/internal/session"
 	"ssh-ui/internal/storage"
 )
@@ -58,6 +59,9 @@ type Dependencies struct {
 	// stored secret is not something to arrange on somebody's behalf. A nil one
 	// reports the setting unsupported.
 	LoginItem httpserver.LoginItemController
+	// Updates looks at the project's releases. Nil offers nothing, which is
+	// what a build that is not a release should do.
+	Updates *selfupdate.Checker
 	// Answerable is the prompt rule the askpass endpoint applies. A nil rule
 	// means no prompt is ever answered, which is the safe default.
 	Answerable func(prompt string) bool
@@ -205,6 +209,7 @@ func Build(dependencies Dependencies, version string) (*httpserver.Server, strin
 		Listener:  listener,
 		CLISecret: cliSecret,
 		LoginItem: dependencies.LoginItem,
+		Updates:   dependencies.Updates,
 		// The alias is checked here as well as on the command line, so what a
 		// terminal is told about a host this will not launch is the same
 		// sentence the screen shows.

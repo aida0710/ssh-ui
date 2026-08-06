@@ -378,6 +378,28 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/update:
+    get:
+      operationId: checkForUpdate
+      responses:
+        "200":
+          description: What is installed and what is published
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UpdateStatus" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "502": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: applyUpdate
+      responses:
+        "200":
+          description: The binary was replaced
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UpdateStatus" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "502": { $ref: "#/components/responses/Problem" }
   /api/v1/login-item:
     get:
       operationId: getLoginItem
@@ -1173,6 +1195,23 @@ components:
       required: [credentials]
       properties:
         credentials: { type: array, items: { $ref: "#/components/schemas/Credential" } }
+    UpdateStatus:
+      type: object
+      additionalProperties: false
+      required: [current, available, restartRequired]
+      properties:
+        current: { type: string }
+        # Empty until something is published, or until the check has run.
+        latest: { type: string }
+        available: { type: boolean }
+        # Where a person can read what changed and download it by hand, which
+        # is the alternative to letting this replace anything.
+        pageUrl: { type: string }
+        # True once the binary on disk is newer than the one running. Replacing
+        # a file does not replace what is already in memory.
+        restartRequired: { type: boolean }
+        # The path that was or would be replaced, so it is never a surprise.
+        path: { type: string }
     LoginItem:
       type: object
       additionalProperties: false

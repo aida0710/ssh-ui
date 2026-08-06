@@ -22,6 +22,7 @@ import (
 	"ssh-ui/internal/remotekey"
 	"ssh-ui/internal/remotesync"
 	"ssh-ui/internal/secret"
+	"ssh-ui/internal/selfupdate"
 	"ssh-ui/internal/session"
 )
 
@@ -35,7 +36,11 @@ type Options struct {
 	ConnectWarnings func(alias string) []string
 	// LoginItem turns "start at login" on and off. A nil one reports the
 	// setting unsupported, which is what a platform without launchd is.
-	LoginItem   LoginItemController
+	LoginItem LoginItemController
+	// Updates looks at the project's releases. A nil one reports the version
+	// and offers nothing, which is what a build with no release to compare
+	// itself against should do.
+	Updates     *selfupdate.Checker
 	Listener    net.Listener
 	Sessions    *session.Manager
 	UI          fs.FS
@@ -190,6 +195,11 @@ func New(options Options) (*Server, error) {
 	// `ssh-ui <alias>` asks here for what one connection needs. The secret is
 	// what the caller must have read out of the state directory; without one
 	// this route refuses everything.
+	registerUpdateRoutes(e, &UpdateHandlers{
+		Current: options.Version,
+		Checker: options.Updates,
+		Path:    options.AskpassHelper,
+	})
 	registerLoginItemRoutes(e, LoginItemHandlers{
 		Controller: options.LoginItem,
 		Program:    options.AskpassHelper,

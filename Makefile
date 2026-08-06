@@ -1,4 +1,4 @@
-.PHONY: generate test build fuzz e2e verify-generated integration integration-up integration-down integration-sshd-relax install uninstall
+.PHONY: generate test build fuzz e2e verify-generated integration integration-up integration-down integration-sshd-relax install uninstall update
 
 # FUZZTIME is per target. `make fuzz` is a campaign, not a single run, so the
 # default is short enough to be part of an ordinary verification pass; raise it
@@ -43,10 +43,15 @@ e2e: build
 verify-generated: generate
 	git diff --exit-code -- internal/api/models.gen.go web/src/api/schema.d.ts
 
+# VERSION is what the built binary reports and what the update check compares
+# against. A build with no tag says "dev", which is told there is a release and
+# never told how far behind it is.
+VERSION ?= $(shell git describe --tags --exact-match 2>/dev/null || echo dev)
+
 build:
 	npm run build --prefix web
 	mkdir -p bin
-	go build -trimpath -o bin/ssh-ui ./cmd/ssh-ui
+	go build -trimpath -ldflags "-X main.version=$(VERSION)" -o bin/ssh-ui ./cmd/ssh-ui
 
 # The integration suite runs against a real S3 implementation and a real sshd,
 # in containers. It answers two questions the hermetic suite cannot: what a
@@ -154,6 +159,17 @@ install: build
 		*":$(INSTALL_DIR):"*) ;; \
 		*) echo "note: $(INSTALL_DIR) is not on PATH; add it to run 'ssh-ui <alias>' by name" ;; \
 	esac
+
+# For a source checkout, updating is fetching and installing again. It is not
+# the same thing as the application's own update button: that one replaces a
+# released binary for somebody who has no source to build from.
+#
+# --ff-only refuses rather than inventing a merge commit when the local branch
+# has moved on, because "make update" should never be the thing that writes a
+# commit nobody asked for.
+update:
+	git pull --ff-only
+	$(MAKE) install
 
 uninstall:
 	rm -f "$(INSTALL_DIR)/ssh-ui"

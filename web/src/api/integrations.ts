@@ -15,6 +15,7 @@ export type KnownHostCandidate = components["schemas"]["KnownHostCandidate"];
 export type IssueActionResponse = components["schemas"]["IssueActionResponse"];
 export type ChangeMasterPasswordResult = components["schemas"]["ChangeMasterPasswordResult"];
 export type LoginItem = components["schemas"]["LoginItem"];
+export type UpdateStatus = components["schemas"]["UpdateStatus"];
 export type PasswordVaultStatus = components["schemas"]["PasswordVaultStatus"];
 export type PasswordEligibility = components["schemas"]["PasswordEligibility"];
 export type Credential = components["schemas"]["Credential"];
@@ -65,6 +66,8 @@ export type IntegrationsApi = {
   unlockVault(passphrase: string): Promise<PasswordVaultStatus>;
   lockVault(): Promise<PasswordVaultStatus>;
   changeMasterPassword(current: string, next: string): Promise<ChangeMasterPasswordResult>;
+  updateStatus(): Promise<UpdateStatus>;
+  applyUpdate(): Promise<UpdateStatus>;
   loginItem(): Promise<LoginItem>;
   setLoginItem(enabled: boolean): Promise<LoginItem>;
   passwordEligibility(alias: string): Promise<PasswordEligibility>;
@@ -90,6 +93,22 @@ export type IntegrationsApi = {
 
 // The generated types describe the contract; these guards check the payload the
 // UI actually received, because a type assertion proves nothing at runtime.
+function validateUpdate(value: unknown): UpdateStatus {
+  const record = asRecord(value);
+  if (typeof record.current !== "string" || typeof record.available !== "boolean" ||
+      typeof record.restartRequired !== "boolean") {
+    throw new Error("invalid_response");
+  }
+  return {
+    current: record.current,
+    available: record.available,
+    restartRequired: record.restartRequired,
+    ...(typeof record.latest === "string" ? { latest: record.latest } : {}),
+    ...(typeof record.pageUrl === "string" ? { pageUrl: record.pageUrl } : {}),
+    ...(typeof record.path === "string" ? { path: record.path } : {}),
+  };
+}
+
 function validateLoginItem(value: unknown): LoginItem {
   const record = asRecord(value);
   if (typeof record.enabled !== "boolean" || typeof record.supported !== "boolean") {
@@ -396,6 +415,14 @@ export const integrationsApi: IntegrationsApi = {
   },
   async lockVault() {
     return validateVaultStatus(await postJSON<unknown>("/api/v1/passwords/lock", {}));
+  },
+  async updateStatus() {
+    return validateUpdate(await apiClient.read("/api/v1/update"));
+  },
+  async applyUpdate() {
+    return validateUpdate(
+      await apiClient.mutate("/api/v1/update", { method: "POST", headers: jsonHeaders, body: "{}" }),
+    );
   },
   async loginItem() {
     return validateLoginItem(await apiClient.read("/api/v1/login-item"));

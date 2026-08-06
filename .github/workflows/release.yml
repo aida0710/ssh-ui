@@ -1,0 +1,55 @@
+name: Release
+
+# A tag is the whole trigger. Nothing here runs on a push to a branch: a
+# release is a deliberate act, and the version the binary reports is the tag it
+# was built from.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install web dependencies
+        run: npm ci --prefix web
+
+      # The same gate as every other push. A tag that cannot pass it is a tag
+      # nobody should be able to install.
+      - name: Verify
+        run: make test
+
+      - name: Build
+        run: make build VERSION=${{ github.ref_name }}
+
+      # The checksum is published beside the binary so a download can be
+      # checked for a truncated transfer. It says nothing about whether this
+      # release is honest — it comes from the same place as the binary — and the
+      # README says so rather than implying otherwise.
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp bin/ssh-ui "dist/ssh-ui-darwin-arm64"
+          cd dist && shasum -a 256 ssh-ui-darwin-arm64 > checksums.txt
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "${{ github.ref_name }}" \
+            --generate-notes \
+            dist/ssh-ui-darwin-arm64 dist/checksums.txt
