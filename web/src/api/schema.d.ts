@@ -1333,6 +1333,7 @@ export interface components {
             colour?: string;
             note?: string;
             order?: number;
+            hidden?: boolean;
             settings?: components["schemas"]["Setting"][];
         };
         Metadata: {

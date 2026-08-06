@@ -90,10 +90,16 @@ func (host HostMetadata) Alias() string { return host.Identity.Alias }
 // itself is a directory and its hierarchy is its name; this is what a directory
 // cannot carry. Settings are compiled into an ordinary Host block.
 type GroupMetadata struct {
-	Name     string    `json:"name"`
-	Colour   string    `json:"colour,omitempty"`
-	Note     string    `json:"note,omitempty"`
-	Order    int       `json:"order,omitempty"`
+	Name   string `json:"name"`
+	Colour string `json:"colour,omitempty"`
+	Note   string `json:"note,omitempty"`
+	Order  int    `json:"order,omitempty"`
+	// Hidden takes the group's own heading out of the connections tree, for a
+	// group whose purpose is to hold other groups and which therefore has
+	// nothing of its own to show there. It is presentation, like Colour and
+	// Order: this engine carries it and never reads it. The Include line, the
+	// directory and every answer ssh gives are untouched.
+	Hidden   bool      `json:"hidden,omitempty"`
 	Settings []Setting `json:"settings,omitempty"`
 }
 
