@@ -894,6 +894,7 @@ type SyncSettingsRequest struct {
 	Bucket          string         `json:"bucket"`
 	Direction       *SyncDirection `json:"direction,omitempty"`
 	Endpoint        string         `json:"endpoint"`
+	Path            *string        `json:"path,omitempty"`
 	Region          *string        `json:"region,omitempty"`
 	SecretAccessKey string         `json:"secretAccessKey"`
 }
@@ -908,6 +909,7 @@ type SyncStatus struct {
 	LastSyncedAt *string       `json:"lastSyncedAt,omitempty"`
 	Locked       bool          `json:"locked"`
 	Origin       *string       `json:"origin,omitempty"`
+	Path         *string       `json:"path,omitempty"`
 	Synced       bool          `json:"synced"`
 }
 

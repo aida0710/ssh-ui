@@ -108,8 +108,10 @@ func ValidKind(kind Kind) bool {
 // passphrase, would gain the live bucket and every future snapshot rather than
 // the one they already had.
 type SyncSettings struct {
-	Endpoint        string `json:"endpoint,omitempty"`
-	Bucket          string `json:"bucket,omitempty"`
+	Endpoint string `json:"endpoint,omitempty"`
+	Bucket   string `json:"bucket,omitempty"`
+	// Path is the prefix every object goes under, empty for the bucket root.
+	Path            string `json:"path,omitempty"`
 	Region          string `json:"region,omitempty"`
 	AccessKeyID     string `json:"accessKeyId,omitempty"`
 	SecretAccessKey string `json:"secretAccessKey,omitempty"`

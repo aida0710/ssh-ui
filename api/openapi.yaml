@@ -1571,6 +1571,8 @@ components:
         # this is pointed at. The access key and the secret never are.
         endpoint: { type: string }
         bucket: { type: string }
+        # The prefix every object goes under, empty for the bucket root.
+        path: { type: string }
         synced: { type: boolean }
         direction: { $ref: "#/components/schemas/SyncDirection" }
         lastSyncedAt: { type: string }
@@ -1583,6 +1585,10 @@ components:
       properties:
         endpoint: { type: string, minLength: 1, maxLength: 2048 }
         bucket: { type: string, minLength: 1, maxLength: 255 }
+        # Where in the bucket the objects go. Empty, the default, is its root:
+        # a bucket is usually named for this application already, and a folder
+        # inside it repeating the name is one level of nothing.
+        path: { type: string, maxLength: 255 }
         region: { type: string, maxLength: 64 }
         accessKeyId: { type: string, minLength: 1, maxLength: 512 }
         secretAccessKey: { type: string, minLength: 1, maxLength: 512 }

@@ -42,6 +42,7 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
   const [status, setStatus] = useState<SyncStatus | null>(null);
   const [endpoint, setEndpoint] = useState("");
   const [bucket, setBucket] = useState("");
+  const [path, setPath] = useState("");
   const [accessKeyId, setAccessKeyId] = useState("");
   const [secretAccessKey, setSecretAccessKey] = useState("");
   const [direction, setDirection] = useState<SyncDirection>("both");
@@ -153,7 +154,9 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
       <section className={sectionCard}>
         <h3 className={sectionHeading}>{t("sync.bucketHeading")}</h3>
         {status.configured ? (
-          <p className="font-mono text-xs text-zinc-400">{`${status.endpoint}/${status.bucket}`}</p>
+          <p className="font-mono text-xs text-zinc-400">
+            {[status.endpoint, status.bucket, status.path].filter((part) => part !== "" && part !== undefined).join("/")}
+          </p>
         ) : (
           <p className="text-sm text-zinc-300">{t("sync.notConfigured")}</p>
         )}
@@ -168,6 +171,14 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
           </Field>
           <Field label={t("sync.bucket")}>
             <input value={bucket} onChange={(event) => setBucket(event.target.value)} className={control} />
+          </Field>
+          {/*
+            Empty means the bucket root, which is the common case: a bucket is
+            usually named for this application already, and a folder inside it
+            repeating the name is one level of nothing.
+          */}
+          <Field label={t("sync.path")} hint={t("sync.pathHint")}>
+            <input value={path} onChange={(event) => setPath(event.target.value)} className={control} />
           </Field>
           <Field label={t("sync.accessKeyId")}>
             <input
@@ -214,7 +225,7 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
           disabled={busy || endpoint === "" || bucket === "" || accessKeyId === "" || secretAccessKey === ""}
           onClick={() =>
             void run(
-              () => api.configureSync({ endpoint, bucket, accessKeyId, secretAccessKey, direction }),
+              () => api.configureSync({ endpoint, bucket, path, accessKeyId, secretAccessKey, direction }),
               (next) => {
                 setStatus(next);
                 setAccessKeyId("");

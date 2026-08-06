@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"ssh-ui/internal/envelope"
 	"ssh-ui/internal/objectstore"
@@ -21,8 +22,54 @@ import (
 // other file, so the record of what was synced cannot be left half-written.
 const StatePath = "ssh-ui/sync-state.json"
 
-// ObjectKey is the single object this application reads and writes.
-const ObjectKey = "ssh-ui/workspace.snapshot"
+// archiveSuffix names what the bytes are: a tar.gz inside an encrypted
+// envelope. Both the live object and every dated copy carry it.
+const archiveSuffix = "tar.gz.enc"
+
+// ObjectName is the live snapshot, under whatever path the settings name.
+//
+// It says what it is: inside the envelope the archive is a tar.gz, and the
+// object itself is ciphertext. The old name — workspace.snapshot — said
+// neither, and an extension nothing recognises invites somebody to download it
+// and conclude the file is damaged.
+const ObjectName = "workspace." + archiveSuffix
+
+// SnapshotPrefix holds a dated copy of every push, beside the live object.
+//
+// The live object keeps a fixed key because the conditional write needs one
+// object to condition on, and that condition is the only thing stopping one
+// machine silently clobbering another's work. These copies are for reading by
+// hand; nothing in this application reads them, and a bucket lifecycle rule is
+// what keeps them from accumulating without end.
+const SnapshotPrefix = "snapshots/"
+
+// datedLayout names a copy for the moment its snapshot was built, sortable and
+// unambiguous to the second: two pushes in one minute must not collide.
+const datedLayout = "2006-01-02-150405"
+
+// joinKey puts one path segment under the configured path, which is empty by
+// default and means the bucket root.
+func joinKey(path, name string) string {
+	trimmed := strings.Trim(path, "/")
+	if trimmed == "" {
+		return name
+	}
+	return trimmed + "/" + name
+}
+
+// ObjectKeyFor is where the live snapshot lives for these settings.
+func ObjectKeyFor(config Config) string {
+	return joinKey(config.Path, ObjectName)
+}
+
+// SnapshotKeyFor is where the dated copy of a snapshot built at createdAt lives.
+func SnapshotKeyFor(config Config, createdAt string) (string, error) {
+	moment, err := time.Parse(time.RFC3339, createdAt)
+	if err != nil {
+		return "", err
+	}
+	return joinKey(config.Path, SnapshotPrefix+moment.UTC().Format(datedLayout)+"."+archiveSuffix), nil
+}
 
 var (
 	// ErrNotConfigured reports that no bucket has been set up.
@@ -79,9 +126,13 @@ func ParseDirection(name string) (Direction, bool) {
 
 // Config is what the user supplies once.
 type Config struct {
-	Endpoint  string
-	Bucket    string
-	Region    string
+	Endpoint string
+	Bucket   string
+	Region   string
+	// Path is the prefix every object goes under, empty for the bucket root.
+	// A bucket is usually named for this application already, so a folder
+	// inside it repeating the name is one level of nothing.
+	Path      string
 	Direction Direction
 }
 
@@ -143,9 +194,17 @@ func (s *Service) Configure(config Config, credentials objectstore.Credentials, 
 	// as "https://host//bucket". Trimming here rather than only where settings
 	// are stored also cleans the ones stored before this existed.
 	config.Endpoint = strings.TrimRight(config.Endpoint, "/")
+	config.Path = strings.Trim(config.Path, "/")
 	s.config = config
 	s.creds = credentials
 	s.client = client
+}
+
+// configuration is a copy of the settings this run points at.
+func (s *Service) configuration() Config {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.config
 }
 
 // Configured reports whether a bucket and credentials are set.
@@ -278,14 +337,21 @@ func (s *Service) Check(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return Check(ctx, client)
+	return Check(ctx, client, s.objectKey())
+}
+
+// objectKey is where this machine's live snapshot lives.
+func (s *Service) objectKey() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return ObjectKeyFor(s.config)
 }
 
 // Check is the same question asked of a client this service does not hold, so
 // settings can be tried before they are stored. Registering settings that were
 // never tried is how a typo becomes a configuration that looks right.
-func Check(ctx context.Context, client *objectstore.Client) error {
-	if _, err := client.Head(ctx, ObjectKey); err != nil && !errors.Is(err, objectstore.ErrNotFound) {
+func Check(ctx context.Context, client *objectstore.Client, key string) error {
+	if _, err := client.Head(ctx, key); err != nil && !errors.Is(err, objectstore.ErrNotFound) {
 		return err
 	}
 	return nil
@@ -337,7 +403,19 @@ func (s *Service) Push(ctx context.Context, passphrase string) error {
 	if ifMatch == "" {
 		ifNoneMatch = "*"
 	}
-	etag, err := client.Put(ctx, ObjectKey, sealed, ifMatch, ifNoneMatch)
+	// The dated copy goes first. If it fails the push fails with nothing
+	// half-done; if the live write then loses the race, what is left behind is
+	// a snapshot this machine genuinely built at that moment, which is what the
+	// folder says it holds.
+	dated, err := SnapshotKeyFor(s.configuration(), manifest.CreatedAt)
+	if err != nil {
+		return err
+	}
+	if _, err := client.Put(ctx, dated, sealed, "", ""); err != nil {
+		return err
+	}
+
+	etag, err := client.Put(ctx, s.objectKey(), sealed, ifMatch, ifNoneMatch)
 	if err != nil {
 		if errors.Is(err, objectstore.ErrPreconditionFailed) {
 			return ErrRemoteMoved
@@ -365,7 +443,7 @@ func (s *Service) Pull(ctx context.Context, passphrase string) (PullResult, erro
 	if err != nil {
 		return PullResult{}, err
 	}
-	object, err := client.Get(ctx, ObjectKey)
+	object, err := client.Get(ctx, s.objectKey())
 	if err != nil {
 		if errors.Is(err, objectstore.ErrNotFound) {
 			return PullResult{}, ErrNoSnapshot
@@ -524,10 +602,10 @@ func (s *Service) writeState(next state) error {
 
 // Target returns the endpoint and bucket this run points at, for display. The
 // access key and the secret are never returned by anything.
-func (s *Service) Target() (endpoint, bucket string) {
+func (s *Service) Target() (endpoint, bucket, path string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.config.Endpoint, s.config.Bucket
+	return s.config.Endpoint, s.config.Bucket, s.config.Path
 }
 
 // LastSync reports what this machine last synced, from the state file.

@@ -30,14 +30,14 @@ type SyncHandlers struct {
 	// not, and because no test in this package may touch a network. A nil one
 	// means the real check: a forgotten wiring must not become a silent
 	// "everything is fine".
-	Reach func(ctx context.Context, client *objectstore.Client) error
+	Reach func(ctx context.Context, client *objectstore.Client, key string) error
 }
 
-func (h SyncHandlers) reach(ctx context.Context, client *objectstore.Client) error {
+func (h SyncHandlers) reach(ctx context.Context, client *objectstore.Client, key string) error {
 	if h.Reach == nil {
-		return remotesync.Check(ctx, client)
+		return remotesync.Check(ctx, client, key)
 	}
-	return h.Reach(ctx, client)
+	return h.Reach(ctx, client, key)
 }
 
 func registerSyncRoutes(engine *echo.Echo, handlers SyncHandlers) {
@@ -69,7 +69,8 @@ func (h SyncHandlers) restore() {
 		AccessKeyID: settings.AccessKeyID, SecretAccessKey: settings.SecretAccessKey,
 	}
 	config := remotesync.Config{
-		Endpoint: settings.Endpoint, Bucket: settings.Bucket, Region: settings.Region, Direction: direction,
+		Endpoint: settings.Endpoint, Bucket: settings.Bucket, Path: settings.Path,
+		Region: settings.Region, Direction: direction,
 	}
 	h.Service.Configure(config, credentials, &objectstore.Client{
 		Endpoint: config.Endpoint, Bucket: config.Bucket, Region: config.Region, Creds: credentials,
@@ -78,12 +79,13 @@ func (h SyncHandlers) restore() {
 
 func (h SyncHandlers) status(c *echo.Context) error {
 	h.restore()
-	endpoint, bucket := h.Service.Target()
+	endpoint, bucket, path := h.Service.Target()
 	synced, at, origin, files := h.Service.LastSync()
 	response := api.SyncStatus{
 		Configured: h.Service.Configured(),
 		Endpoint:   endpoint,
 		Bucket:     bucket,
+		Path:       &path,
 		Synced:     synced,
 		Direction:  api.SyncDirection(h.Service.Direction()),
 		// Why the form is empty, when it is. Never the access key or the
@@ -146,8 +148,15 @@ func (h SyncHandlers) Configure(c *echo.Context) error {
 		AccessKeyID:     request.AccessKeyId,
 		SecretAccessKey: request.SecretAccessKey,
 	}
+	path := ""
+	if request.Path != nil {
+		path = strings.Trim(*request.Path, "/")
+	}
+	if !safeObjectPath(path) {
+		return problem(c, http.StatusBadRequest, "unsafe_object_path")
+	}
 	config := remotesync.Config{
-		Endpoint: endpoint, Bucket: request.Bucket, Region: region, Direction: direction,
+		Endpoint: endpoint, Bucket: request.Bucket, Path: path, Region: region, Direction: direction,
 	}
 	// Tried before it is stored. Settings that were never tried are settings
 	// whose typo surfaces on the first push, hours later and somewhere else,
@@ -155,7 +164,7 @@ func (h SyncHandlers) Configure(c *echo.Context) error {
 	client := &objectstore.Client{
 		Endpoint: config.Endpoint, Bucket: config.Bucket, Region: config.Region, Creds: credentials,
 	}
-	if err := h.reach(c.Request().Context(), client); err != nil {
+	if err := h.reach(c.Request().Context(), client, remotesync.ObjectKeyFor(config)); err != nil {
 		return syncProblem(c, err)
 	}
 
@@ -163,7 +172,7 @@ func (h SyncHandlers) Configure(c *echo.Context) error {
 	// would be gone on the next run.
 	if h.Secrets != nil {
 		if err := h.Secrets.SetSyncSettings(secret.SyncSettings{
-			Endpoint: endpoint, Bucket: request.Bucket, Region: region,
+			Endpoint: endpoint, Bucket: request.Bucket, Path: path, Region: region,
 			AccessKeyID: request.AccessKeyId, SecretAccessKey: request.SecretAccessKey,
 			Direction: string(direction),
 		}); err != nil {
@@ -272,6 +281,24 @@ func (h SyncHandlers) Pull(c *echo.Context) error {
 		response.Applied = true
 	}
 	return c.JSON(http.StatusOK, response)
+}
+
+// safeObjectPath is as narrow as the bucket name, and for the same reason: the
+// path becomes segments in a URL this application signs, so anything that could
+// add a segment of its own or escape upwards is refused rather than escaped.
+func safeObjectPath(path string) bool {
+	if path == "" {
+		return true
+	}
+	if len(path) > 255 || strings.Contains(path, "..") {
+		return false
+	}
+	for _, segment := range strings.Split(path, "/") {
+		if segment == "" || !safeBucketName(segment) {
+			return false
+		}
+	}
+	return true
 }
 
 // safeBucketName is deliberately narrow. The name becomes a path segment in a

@@ -181,7 +181,7 @@ func TestAgainstARealBucketTheObjectIsCiphertext(t *testing.T) {
 	}
 
 	client, _ := integrationBucket(t)
-	object, err := client.Get(context.Background(), remotesync.ObjectKey)
+	object, err := client.Get(context.Background(), remotesync.ObjectName)
 	if err != nil {
 		t.Fatalf("Get = %v", err)
 	}

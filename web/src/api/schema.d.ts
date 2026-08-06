@@ -1211,6 +1211,7 @@ export interface components {
             locked: boolean;
             endpoint: string;
             bucket: string;
+            path?: string;
             synced: boolean;
             direction: components["schemas"]["SyncDirection"];
             lastSyncedAt?: string;
@@ -1220,6 +1221,7 @@ export interface components {
         SyncSettingsRequest: {
             endpoint: string;
             bucket: string;
+            path?: string;
             region?: string;
             accessKeyId: string;
             secretAccessKey: string;

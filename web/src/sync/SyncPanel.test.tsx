@@ -64,6 +64,7 @@ describe("SyncPanel", () => {
       expect(api.configureSync).toHaveBeenCalledWith({
         endpoint: "https://acc.r2.cloudflarestorage.com",
         bucket: "ssh-ui",
+        path: "",
         accessKeyId: "AKID",
         secretAccessKey: "the-secret",
         direction: "both",

@@ -1,6 +1,7 @@
 package remotesync_test
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -21,13 +23,16 @@ import (
 
 const syncPassphrase = "correct horse battery staple"
 
-// fakeBucket is one object with an ETag, and the conditional-write rules the
-// whole design rests on. It is deliberately a real HTTP server rather than a
-// stub client, so the condition is asserted where it actually travels.
+// fakeBucket is a set of objects with ETags, and the conditional-write rules
+// the whole design rests on. It is deliberately a real HTTP server rather than
+// a stub client, so the condition is asserted where it actually travels.
+//
+// It became a set when every push started leaving a dated copy beside the live
+// object: a single-object fake would have shown the two writes as one and
+// proved nothing about either.
 type fakeBucket struct {
 	mu         sync.Mutex
-	body       []byte
-	etag       string
+	objects    map[string]storedObject
 	generation int
 	// refuseConditional makes every conditional PUT fail, which is how the
 	// fallback in the plan would be exercised if R2 turned out not to support
@@ -35,19 +40,61 @@ type fakeBucket struct {
 	refuseConditional bool
 }
 
+type storedObject struct {
+	body []byte
+	etag string
+}
+
+// key strips the bucket name, so what the fake stores is what this application
+// calls the object.
+func (b *fakeBucket) key(path string) string {
+	return strings.TrimPrefix(strings.TrimPrefix(path, "/"), "ssh-ui/")
+}
+
+func (b *fakeBucket) keys() []string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	names := make([]string, 0, len(b.objects))
+	for name := range b.objects {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// replace stands in for another machine having written the object.
+func (b *fakeBucket) replace(key, etag string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	stored := b.objects[key]
+	stored.etag = etag
+	b.objects[key] = stored
+}
+
+func (b *fakeBucket) object(key string) []byte {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.objects[key].body
+}
+
 func (b *fakeBucket) handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		b.mu.Lock()
 		defer b.mu.Unlock()
+		if b.objects == nil {
+			b.objects = map[string]storedObject{}
+		}
+		key := b.key(r.URL.Path)
+		stored, present := b.objects[key]
 		switch r.Method {
 		case http.MethodGet, http.MethodHead:
-			if b.body == nil {
+			if !present {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
-			w.Header().Set("ETag", b.etag)
+			w.Header().Set("ETag", stored.etag)
 			if r.Method == http.MethodGet {
-				_, _ = w.Write(b.body)
+				_, _ = w.Write(stored.body)
 			}
 		case http.MethodPut:
 			ifMatch, ifNone := r.Header.Get("If-Match"), r.Header.Get("If-None-Match")
@@ -55,11 +102,11 @@ func (b *fakeBucket) handler() http.HandlerFunc {
 				w.WriteHeader(http.StatusPreconditionFailed)
 				return
 			}
-			if ifNone == "*" && b.body != nil {
+			if ifNone == "*" && present {
 				w.WriteHeader(http.StatusPreconditionFailed)
 				return
 			}
-			if ifMatch != "" && ifMatch != b.etag {
+			if ifMatch != "" && ifMatch != stored.etag {
 				w.WriteHeader(http.StatusPreconditionFailed)
 				return
 			}
@@ -72,10 +119,10 @@ func (b *fakeBucket) handler() http.HandlerFunc {
 					break
 				}
 			}
-			b.body = body
 			b.generation++
-			b.etag = `"` + string(rune('a'+b.generation)) + `"`
-			w.Header().Set("ETag", b.etag)
+			etag := `"` + string(rune('a'+b.generation)) + `"`
+			b.objects[key] = storedObject{body: body, etag: etag}
+			w.Header().Set("ETag", etag)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
@@ -211,7 +258,7 @@ func TestTheObjectInTheBucketIsCiphertext(t *testing.T) {
 	}
 
 	for _, plaintext := range []string{"PRIVATE KEY MATERIAL", "bastion", "203.0.113.10", "manifest", "id_ed25519"} {
-		if strings.Contains(string(bucket.body), plaintext) {
+		if strings.Contains(string(bucket.object(remotesync.ObjectName)), plaintext) {
 			t.Errorf("the uploaded object contains %q in clear", plaintext)
 		}
 	}
@@ -237,9 +284,8 @@ func TestAPushCannotOverwriteAnotherMachine(t *testing.T) {
 	if err := first.service.Push(context.Background(), syncPassphrase); err != nil {
 		t.Fatalf("a second push from the same machine = %v", err)
 	}
-	bucket.mu.Lock()
-	bucket.etag = `"somebody else"`
-	bucket.mu.Unlock()
+	// Another machine wrote the live object, so this one's ETag is stale.
+	bucket.replace(remotesync.ObjectName, `"somebody else"`)
 	if err := first.service.Push(context.Background(), syncPassphrase); !errors.Is(err, remotesync.ErrRemoteMoved) {
 		t.Fatalf("a stale push = %v, want ErrRemoteMoved", err)
 	}
@@ -370,8 +416,8 @@ func TestAReceiveOnlyMachineWillNotPush(t *testing.T) {
 		t.Fatalf("Push = %v, want ErrPushRefused", err)
 	}
 	// Refused before the request, not after it: nothing reached the bucket.
-	if bucket.body != nil {
-		t.Error("the bucket holds an object a receive-only machine pushed")
+	if keys := bucket.keys(); len(keys) != 0 {
+		t.Errorf("the bucket holds %v, pushed by a receive-only machine", keys)
 	}
 }
 
@@ -503,7 +549,68 @@ func TestAStoredTrailingSlashIsTrimmedWhenItIsConfigured(t *testing.T) {
 		remotesync.Config{Endpoint: "https://s3.example.invalid/", Bucket: "b", Region: "auto"},
 		installation.creds, installation.client)
 
-	if endpoint, _ := installation.service.Target(); endpoint != "https://s3.example.invalid" {
+	if endpoint, _, _ := installation.service.Target(); endpoint != "https://s3.example.invalid" {
 		t.Errorf("endpoint = %q, want the trailing slash gone", endpoint)
+	}
+}
+
+// The objects go where the user says, and are named for what they are.
+func TestTheKeysFollowTheConfiguredPath(t *testing.T) {
+	for _, test := range []struct{ path, object, dated string }{
+		// The default is the bucket root: the bucket is usually named for this
+		// application already, and a folder inside it repeating the name is one
+		// level of nothing.
+		{"", "workspace.tar.gz.enc", "snapshots/2026-08-05-000000.tar.gz.enc"},
+		{"ssh-ui", "ssh-ui/workspace.tar.gz.enc", "ssh-ui/snapshots/2026-08-05-000000.tar.gz.enc"},
+		// However it is spelled, it means one thing.
+		{"/laptops/", "laptops/workspace.tar.gz.enc", "laptops/snapshots/2026-08-05-000000.tar.gz.enc"},
+	} {
+		config := remotesync.Config{Endpoint: "https://example.invalid", Bucket: "b", Path: test.path}
+		if got := remotesync.ObjectKeyFor(config); got != test.object {
+			t.Errorf("ObjectKeyFor(%q) = %q, want %q", test.path, got, test.object)
+		}
+		got, err := remotesync.SnapshotKeyFor(config, "2026-08-05T00:00:00Z")
+		if err != nil {
+			t.Fatalf("SnapshotKeyFor(%q) = %v", test.path, err)
+		}
+		if got != test.dated {
+			t.Errorf("SnapshotKeyFor(%q) = %q, want %q", test.path, got, test.dated)
+		}
+	}
+}
+
+// Every push leaves a dated copy beside the live object. The live one keeps its
+// fixed key, because the conditional write needs one object to condition on:
+// dated names instead of a fixed one would remove the only thing stopping one
+// machine silently clobbering another's work.
+func TestEveryPushLeavesADatedCopyBesideTheLiveObject(t *testing.T) {
+	bucket := &fakeBucket{}
+	installation := newInstallation(t, bucket, map[string]string{"config": "Host bastion\n"})
+
+	if err := installation.service.Push(context.Background(), syncPassphrase); err != nil {
+		t.Fatalf("Push = %v", err)
+	}
+
+	keys := bucket.keys()
+	if len(keys) != 2 {
+		t.Fatalf("the bucket holds %v, want the live object and one dated copy", keys)
+	}
+	live, dated := "", ""
+	for _, key := range keys {
+		if strings.Contains(key, "snapshots/") {
+			dated = key
+			continue
+		}
+		live = key
+	}
+	if !strings.HasSuffix(live, "workspace.tar.gz.enc") {
+		t.Errorf("the live object is %q", live)
+	}
+	if !strings.HasSuffix(dated, ".tar.gz.enc") || !strings.Contains(dated, "2026-08-05") {
+		t.Errorf("the dated copy is %q", dated)
+	}
+	// The same bytes, so the copy costs one upload and no second sealing.
+	if !bytes.Equal(bucket.object(live), bucket.object(dated)) {
+		t.Error("the dated copy is not the snapshot that was pushed")
 	}
 }

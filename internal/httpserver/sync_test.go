@@ -47,7 +47,7 @@ const syncTestPassphrase = "a master password for sync"
 // reachable stands in for the bucket. The question "does this bucket answer" is
 // remotesync's, and it is tested there against a real HTTP server; here it must
 // never be asked of a network.
-func reachable(context.Context, *objectstore.Client) error { return nil }
+func reachable(context.Context, *objectstore.Client, string) error { return nil }
 
 func syncEngineWithVault(t *testing.T) (*echo.Echo, *remotesync.Service, *secret.Service) {
 	t.Helper()
@@ -256,7 +256,7 @@ func TestATrailingSlashOnTheEndpointIsRemoved(t *testing.T) {
 	if code := sendSync(t, engine, http.MethodPut, "/api/v1/sync/settings", body).Code; code != http.StatusOK {
 		t.Fatalf("configure = %d", code)
 	}
-	endpoint, _ := service.Target()
+	endpoint, _, _ := service.Target()
 	if endpoint != "https://s3.example.invalid" {
 		t.Errorf("endpoint = %q, want the trailing slash gone", endpoint)
 	}
@@ -308,7 +308,7 @@ func TestSettingsThatCannotReachTheBucketAreNotStored(t *testing.T) {
 	engine := echo.New()
 	registerSyncRoutes(engine, SyncHandlers{
 		Service: service, Secrets: secrets,
-		Reach: func(context.Context, *objectstore.Client) error { return objectstore.ErrRefused },
+		Reach: func(context.Context, *objectstore.Client, string) error { return objectstore.ErrRefused },
 	})
 
 	body := `{"endpoint":"https://s3.example.invalid","bucket":"b","accessKeyId":"k","secretAccessKey":"s"}`
@@ -367,5 +367,38 @@ func TestPullOnAMachineWithNoVaultIsNotRefusedForTheWrongReason(t *testing.T) {
 	recorder := sendSync(t, engine, http.MethodPost, "/api/v1/sync/pull", `{"passphrase":"a password for a vault that is not here"}`)
 	if recorder.Code == http.StatusForbidden && strings.Contains(recorder.Body.String(), "wrong_master_password") {
 		t.Errorf("a machine with no vault was told its master password was wrong: %s", recorder.Body.String())
+	}
+}
+
+// The path is stored and reported back, and it is as narrow as the bucket name:
+// both become segments in a URL this application signs.
+func TestTheObjectPathIsStoredAndRefusedWhenItCouldEscape(t *testing.T) {
+	engine, service, secrets := syncEngineWithVault(t)
+	if err := secrets.Initialise(syncTestPassphrase); err != nil {
+		t.Fatal(err)
+	}
+
+	body := `{"endpoint":"https://s3.example.invalid","bucket":"b","path":"/laptops/","accessKeyId":"k","secretAccessKey":"s"}`
+	recorder := sendSync(t, engine, http.MethodPut, "/api/v1/sync/settings", body)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("configure = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if _, _, path := service.Target(); path != "laptops" {
+		t.Errorf("path = %q, want it trimmed to laptops", path)
+	}
+	if !strings.Contains(recorder.Body.String(), `"path":"laptops"`) {
+		t.Errorf("the status does not report the path: %s", recorder.Body.String())
+	}
+
+	for _, unsafe := range []string{"../elsewhere", "a//b", "a b"} {
+		escaping := `{"endpoint":"https://s3.example.invalid","bucket":"b","path":"` + unsafe +
+			`","accessKeyId":"k","secretAccessKey":"s"}`
+		if code := sendSync(t, engine, http.MethodPut, "/api/v1/sync/settings", escaping).Code; code != http.StatusBadRequest {
+			t.Errorf("configure with path %q = %d, want 400", unsafe, code)
+		}
+	}
+	// And the refusals changed nothing.
+	if _, _, path := service.Target(); path != "laptops" {
+		t.Errorf("path = %q after refusals, want laptops", path)
 	}
 }

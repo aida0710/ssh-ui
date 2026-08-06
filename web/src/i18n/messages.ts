@@ -211,6 +211,8 @@ export const en = {
   "sync.endpoint": "Endpoint",
   "sync.endpointHint": "Must be https. For R2 this is https://<account>.r2.cloudflarestorage.com.",
   "sync.bucket": "Bucket name",
+  "sync.path": "Path in the bucket",
+  "sync.pathHint": "Optional. Empty puts the snapshot at the root of the bucket.",
   "sync.accessKeyId": "Access key ID",
   "sync.secretAccessKey": "Secret access key",
   "sync.credentialsNote":
@@ -876,6 +878,8 @@ export const ja: Record<MessageKey, string> = {
   "sync.endpoint": "エンドポイント",
   "sync.endpointHint": "https である必要があります。R2 では https://<account>.r2.cloudflarestorage.com です。",
   "sync.bucket": "バケット名",
+  "sync.path": "バケット内のパス",
+  "sync.pathHint": "任意です。空ならバケットのルートに置きます。",
   "sync.accessKeyId": "アクセスキー ID",
   "sync.secretAccessKey": "シークレットアクセスキー",
   "sync.credentialsNote":
