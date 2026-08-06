@@ -349,3 +349,155 @@ describe("dragging in the tree", () => {
     expect(rule).not.toHaveAttribute("draggable", "true");
   });
 });
+
+// A group name carries its hierarchy — work/eu is inside work — and the tree
+// drew every group as a flat peer anyway, so a group made only to hold other
+// groups read as an empty sibling of its own children.
+describe("the group hierarchy", () => {
+  const lon: HostEntry = {
+    identity: { path: "connections/work/eu/lon.conf", alias: "lon" },
+    file: { path: "connections/work/eu/lon.conf", absolute: "/home/tester/.ssh/connections/work/eu/lon.conf" },
+    line: 1, patterns: ["lon"], editable: true, group: "work/eu",
+  };
+  const nested: Overview = {
+    ...overview,
+    hosts: [lon],
+    metadata: { ...overview.metadata, groups: [{ name: "work" }, { name: "work/eu" }] },
+  };
+
+  function renderNested(over: Overview = nested) {
+    render(
+      <ConnectionTree overview={over} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
+    );
+  }
+
+  it("draws a child group inside its parent, not beside it", () => {
+    renderNested();
+
+    const parent = screen.getByRole("region", { name: "work" });
+    expect(within(parent).getByRole("heading", { name: "eu" })).toBeInTheDocument();
+  });
+
+  // The heading shows the segment, not the path: the rest is the route the
+  // reader has already walked to get there.
+  it("names a child by its own segment", () => {
+    renderNested();
+
+    expect(screen.getByRole("heading", { name: "eu" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "work/eu" })).not.toBeInTheDocument();
+  });
+
+  it("collapses a parent, taking its children and their connections with it", async () => {
+    const user = userEvent.setup();
+    renderNested();
+
+    await user.click(screen.getByRole("button", { name: "Collapse work" }));
+
+    expect(screen.queryByRole("heading", { name: "eu" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /lon/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Expand work" })).toBeInTheDocument();
+  });
+
+  // A group whose parent no Include line declares is a root. Inventing the
+  // parent here would draw a heading for something that is not a group.
+  it("roots a group whose parent is not declared", () => {
+    const orphan: Overview = {
+      ...nested,
+      metadata: { ...overview.metadata, groups: [{ name: "work/eu" }] },
+    };
+    renderNested(orphan);
+
+    expect(screen.getByRole("region", { name: "work/eu" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "work" })).not.toBeInTheDocument();
+  });
+});
+
+describe("a hidden group", () => {
+  const lon: HostEntry = {
+    identity: { path: "connections/work/eu/lon.conf", alias: "lon" },
+    file: { path: "connections/work/eu/lon.conf", absolute: "/home/tester/.ssh/connections/work/eu/lon.conf" },
+    line: 1, patterns: ["lon"], editable: true, group: "work/eu",
+  };
+  const container: Overview = {
+    ...overview,
+    hosts: [lon],
+    metadata: { ...overview.metadata, groups: [{ name: "work", hidden: true }, { name: "work/eu" }] },
+  };
+
+  function renderContainer(over: Overview = container) {
+    render(
+      <ConnectionTree overview={over} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
+    );
+  }
+
+  it("loses its own heading", () => {
+    renderContainer();
+
+    expect(screen.queryByRole("region", { name: "work" })).not.toBeInTheDocument();
+  });
+
+  it("keeps its children, and the connections inside them", () => {
+    renderContainer();
+
+    expect(screen.getByRole("region", { name: "work/eu" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /lon/ })).toBeInTheDocument();
+  });
+
+  // The flag is ignored rather than merely un-settable in the Groups panel,
+  // because metadata.json is a file a user may edit by hand, and a heading that
+  // vanished with connections under it is the failure this guards against.
+  it("is drawn anyway while it holds connections of its own", () => {
+    renderContainer({ ...container, hosts: [lon, { ...nas, group: "work" }] });
+
+    expect(screen.getByRole("region", { name: "work" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /nas/ })).toBeInTheDocument();
+  });
+});
+
+describe("dropping on a whole block", () => {
+  const lonHost: HostEntry = {
+    identity: { path: "connections/work/eu/lon.conf", alias: "lon" },
+    file: { path: "connections/work/eu/lon.conf", absolute: "/home/tester/.ssh/connections/work/eu/lon.conf" },
+    line: 1, patterns: ["lon"], editable: true, group: "work/eu",
+  };
+  const nested: Overview = {
+    ...overview,
+    hosts: [nas, lonHost],
+    metadata: {
+      ...overview.metadata,
+      groups: [{ name: "home" }, { name: "work" }, { name: "work/eu" }],
+    },
+  };
+  const payload: DragPayload = {
+    kind: "connection", path: "connections/home/nas.conf", alias: "nas", group: "home",
+  };
+
+  function renderNested() {
+    const onDrop = vi.fn();
+    render(
+      <ConnectionTree overview={nested} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={onDrop} />,
+    );
+    return onDrop;
+  }
+
+  it("accepts a drop anywhere in a group's block, not only on its heading", () => {
+    const onDrop = renderNested();
+
+    fireEvent.dragStart(screen.getByRole("button", { name: /nas/ }), { dataTransfer: transfer(payload) });
+    fireEvent.drop(screen.getByRole("region", { name: "work" }), { dataTransfer: transfer(payload) });
+
+    expect(onDrop).toHaveBeenCalledWith(payload, "work");
+  });
+
+  // Blocks nest now, so a drop inside a child reaches its parent too unless the
+  // child stops it. Which one won would otherwise be an accident of bubbling.
+  it("gives a drop in a child block to the child, not to its parent", () => {
+    const onDrop = renderNested();
+
+    fireEvent.dragStart(screen.getByRole("button", { name: /nas/ }), { dataTransfer: transfer(payload) });
+    fireEvent.drop(screen.getByRole("region", { name: "work/eu" }), { dataTransfer: transfer(payload) });
+
+    expect(onDrop).toHaveBeenCalledTimes(1);
+    expect(onDrop).toHaveBeenCalledWith(payload, "work/eu");
+  });
+});
