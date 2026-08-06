@@ -70,3 +70,61 @@ func TestBootstrapPropagatesSessionRandomFailure(t *testing.T) {
 		t.Fatal("failed bootstrap created a session")
 	}
 }
+
+// A reload loses the CSRF token, because it lived in the page. The cookie
+// survives, so the session does; without a way to get a token for it the
+// application was dead until the binary was started again, which is not what a
+// reload should cost.
+//
+// The token is re-minted rather than returned: the manager keeps a hash and not
+// the token, which is the property that stops a leak of its memory being a leak
+// of every session's token, and re-minting keeps it.
+// countingReader never repeats a byte pattern, so two tokens drawn from it
+// differ for the reason tokens differ in production.
+type countingReader struct{ next byte }
+
+func (r *countingReader) Read(p []byte) (int, error) {
+	for index := range p {
+		r.next++
+		p[index] = r.next
+	}
+	return len(p), nil
+}
+
+func TestRenewCSRFIssuesAWorkingTokenAndRetiresTheOld(t *testing.T) {
+	// A varying source: a constant one makes every token identical, which would
+	// let this test pass on an implementation that handed the old token back.
+	manager, bootstrap, err := NewManager(&countingReader{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	credentials, err := manager.Bootstrap(bootstrap)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	renewed, ok := manager.RenewCSRF(credentials.SessionID)
+	if !ok || renewed == "" {
+		t.Fatalf("RenewCSRF = %q, %v", renewed, ok)
+	}
+	if renewed == credentials.CSRFToken {
+		t.Error("the renewed token is the old one")
+	}
+	if !manager.VerifyCSRF(credentials.SessionID, renewed) {
+		t.Error("the renewed token does not verify")
+	}
+	if manager.VerifyCSRF(credentials.SessionID, credentials.CSRFToken) {
+		t.Error("the retired token still verifies")
+	}
+}
+
+func TestRenewCSRFRefusesASessionThatIsNotThere(t *testing.T) {
+	manager, _, err := NewManager(bytes.NewReader(bytes.Repeat([]byte{0x32}, 4096)))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, ok := manager.RenewCSRF("not a session"); ok {
+		t.Error("RenewCSRF answered for a session that does not exist")
+	}
+}

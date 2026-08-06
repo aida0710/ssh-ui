@@ -3,6 +3,7 @@ package httpserver
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net"
@@ -11,6 +12,8 @@ import (
 	"testing"
 	"testing/fstest"
 	"time"
+
+	"github.com/labstack/echo/v5"
 
 	"ssh-ui/internal/session"
 )
@@ -221,3 +224,91 @@ type fakeAddr string
 
 func (address fakeAddr) Network() string { return string(address) }
 func (address fakeAddr) String() string  { return string(address) }
+
+// A reload has a cookie and no CSRF token, so renewing one cannot itself
+// require one. It is exempt from that check exactly as the bootstrap is, and
+// guarded by everything else: a valid session, the Origin, and Fetch Metadata —
+// none of which a cross-site page can produce, because SameSite=Strict withholds
+// the cookie and Sec-Fetch-Site cannot be forged.
+func newRenewServer(t *testing.T) (*echo.Echo, session.Credentials) {
+	t.Helper()
+	// A varying source: a constant one makes every token identical, which would
+	// let this pass on an implementation that handed the old token back.
+	manager, bootstrap, err := session.NewManager(&varyingReader{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	credentials, err := manager.Bootstrap(bootstrap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine := echo.New()
+	engine.Use((Security{
+		ExpectedHost:   renewTestHost,
+		ExpectedOrigin: "http://" + renewTestHost,
+		Sessions:       manager,
+	}).Middleware)
+	engine.POST("/api/v1/session/renew", Handlers{Sessions: manager}.Renew)
+	return engine, credentials
+}
+
+const renewTestHost = "127.0.0.1:43199"
+
+type varyingReader struct{ next byte }
+
+func (r *varyingReader) Read(p []byte) (int, error) {
+	for index := range p {
+		r.next++
+		p[index] = r.next
+	}
+	return len(p), nil
+}
+
+func sendRenewRequest(t *testing.T, engine *echo.Echo, target, sessionID, csrf string) *httptest.ResponseRecorder {
+	t.Helper()
+	request := httptest.NewRequest(http.MethodPost, target, nil)
+	request.Host = renewTestHost
+	request.Header.Set("Sec-Fetch-Site", "same-origin")
+	request.Header.Set(echo.HeaderOrigin, "http://"+renewTestHost)
+	if sessionID != "" {
+		request.AddCookie(&http.Cookie{Name: SessionCookie, Value: sessionID})
+	}
+	if csrf != "" {
+		request.Header.Set(CSRFHeader, csrf)
+	}
+	response := httptest.NewRecorder()
+	engine.ServeHTTP(response, request)
+	return response
+}
+
+func TestRenewIssuesATokenWithoutPresentingOne(t *testing.T) {
+	engine, credentials := newRenewServer(t)
+
+	response := sendRenewRequest(t, engine, "/api/v1/session/renew", credentials.SessionID, "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("renew = %d, want 200: %s", response.Code, response.Body.String())
+	}
+	var answer struct {
+		CSRFToken string `json:"csrfToken"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &answer); err != nil {
+		t.Fatal(err)
+	}
+	if answer.CSRFToken == "" || answer.CSRFToken == credentials.CSRFToken {
+		t.Fatalf("csrfToken = %q, want a fresh one", answer.CSRFToken)
+	}
+	// The retired one no longer verifies, which the renew route itself shows:
+	// a second renew presenting the old token is still fine, but the manager
+	// has moved on.
+	if sendRenewRequest(t, engine, "/api/v1/session/renew", credentials.SessionID, "").Code != http.StatusOK {
+		t.Error("a second renew was refused")
+	}
+}
+
+func TestRenewRefusesWithoutASession(t *testing.T) {
+	engine, _ := newRenewServer(t)
+
+	if code := sendRenewRequest(t, engine, "/api/v1/session/renew", "", "").Code; code != http.StatusUnauthorized {
+		t.Errorf("renew with no session = %d, want 401", code)
+	}
+}

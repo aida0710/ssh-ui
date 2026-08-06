@@ -22,6 +22,22 @@ paths:
               schema: { $ref: "#/components/schemas/BootstrapResponse" }
         "401": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/session/renew:
+    post:
+      # A reload loses the CSRF token, which lived in the page, and the
+      # bootstrap fragment that would have produced another is spent on first
+      # use. This mints one for the session the cookie already names. It
+      # presents no CSRF token because a reload has none; the session, the
+      # Origin and Fetch Metadata are what guard it.
+      operationId: renewSession
+      responses:
+        "200":
+          description: A fresh CSRF token for the existing session
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BootstrapResponse" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
   /api/v1/health:
     get:
       operationId: getHealth
