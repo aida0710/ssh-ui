@@ -265,3 +265,36 @@ describe("KnownHostsPanel", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/could not/i);
   });
 });
+
+describe("where the scan control sits", () => {
+  // Scanning is what a user comes to this panel to do; reading the file is what
+  // they do to check the result. The control was below the whole listing, so
+  // reaching it meant scrolling past every host already known.
+  it("puts the host to scan above the search box and the listing", async () => {
+    render(<KnownHostsPanel api={buildApi()} />);
+    await screen.findByRole("row", { name: /bastion\.example\.com/ });
+
+    const scan = screen.getByLabelText("Host to scan");
+    const search = screen.getByLabelText("Search");
+    const listing = screen.getByRole("table", { name: "~/.ssh/known_hosts" });
+
+    expect(scan.compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(scan.compareDocumentPosition(listing) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  // The results have to follow the control that produced them. Leaving them
+  // where they were would have put the candidate list below the file the user
+  // was scanning to add to.
+  it("keeps the scanned candidates with the control that asked for them", async () => {
+    const user = userEvent.setup();
+    render(<KnownHostsPanel api={buildApi()} />);
+    await screen.findByRole("row", { name: /bastion\.example\.com/ });
+
+    await user.type(screen.getByLabelText("Host to scan"), "nas.example.com");
+    await user.click(screen.getByRole("button", { name: "Scan" }));
+
+    const candidates = await screen.findByRole("table", { name: "Scan candidates" });
+    const search = screen.getByLabelText("Search");
+    expect(candidates.compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
