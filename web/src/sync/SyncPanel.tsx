@@ -15,10 +15,9 @@ import {
   hintText,
   primaryAction,
   secondaryAction,
-  sectionCard,
   sectionHeading,
 } from "../ui/form";
-import { Notice } from "../ui/surface";
+import { Card, Notice, Row } from "../ui/surface";
 
 type SyncPanelProps = { api?: IntegrationsApi };
 
@@ -101,7 +100,7 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
       <div className="flex flex-col gap-4">
         <h2 className="font-medium">{t("sync.heading")}</h2>
         {error === "" ? null : <Notice tone="danger">{error}</Notice>}
-        <section className={sectionCard}>
+        <section className="flex flex-col gap-3">
           <h3 className={sectionHeading}>{t("sync.bucketHeading")}</h3>
           <p className="text-sm text-ink-muted">{t("sync.sealed")}</p>
           <Field label={t("secrets.master")}>
@@ -152,7 +151,7 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
       {error === "" ? null : <Notice tone="danger">{error}</Notice>}
       {notice === "" ? null : <p role="status" className="text-sm text-ink-muted">{notice}</p>}
 
-      <section className={sectionCard}>
+      <section className="flex flex-col gap-3">
         <h3 className={sectionHeading}>{t("sync.bucketHeading")}</h3>
         {status.configured ? (
           <p className="font-mono text-xs text-ink-muted">
@@ -161,47 +160,52 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
         ) : (
           <p className="text-sm text-ink-muted">{t("sync.notConfigured")}</p>
         )}
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label={t("sync.endpoint")} hint={t("sync.endpointHint")}>
+        {/*
+          One card of rows rather than a two-column grid of stacked fields.
+          The hints here are whole sentences; beside a control they were
+          squeezed into half a column, and under a row they have the width.
+        */}
+        <Card>
+          <Row label={t("sync.endpoint")} hint={t("sync.endpointHint")}>
             <input
               value={endpoint}
               onChange={(event) => setEndpoint(event.target.value)}
               placeholder="https://<account>.r2.cloudflarestorage.com"
               className={control}
             />
-          </Field>
-          <Field label={t("sync.bucket")}>
+          </Row>
+          <Row label={t("sync.bucket")}>
             <input value={bucket} onChange={(event) => setBucket(event.target.value)} className={control} />
-          </Field>
+          </Row>
           {/*
             Empty means the bucket root, which is the common case: a bucket is
             usually named for this application already, and a folder inside it
             repeating the name is one level of nothing.
           */}
-          <Field label={t("sync.path")} hint={t("sync.pathHint")}>
+          <Row label={t("sync.path")} hint={t("sync.pathHint")}>
             <input value={path} onChange={(event) => setPath(event.target.value)} className={control} />
-          </Field>
-          <Field label={t("sync.accessKeyId")}>
+          </Row>
+          <Row label={t("sync.accessKeyId")}>
             <input
               value={accessKeyId}
               onChange={(event) => setAccessKeyId(event.target.value)}
               className={control}
             />
-          </Field>
+          </Row>
           {/*
             The credentials are sealed with the master password and kept beside
             the vault rather than inside it. The vault travels; the key to the
             bucket must not, because anyone who obtained one snapshot could
             otherwise fetch every later one.
           */}
-          <Field label={t("sync.secretAccessKey")} hint={t("sync.credentialsNote")}>
+          <Row label={t("sync.secretAccessKey")} hint={t("sync.credentialsNote")}>
             <input
               type="password"
               value={secretAccessKey}
               onChange={(event) => setSecretAccessKey(event.target.value)}
               className={control}
             />
-          </Field>
+          </Row>
           {/*
             Which way this machine may move data. It governs the two writes: a
             machine set to send never has another machine's bytes applied to it,
@@ -209,7 +213,7 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
             available either way, so a machine that may not apply can still be
             told how far behind it is.
           */}
-          <Field label={t("sync.direction")} hint={t(`sync.direction.${direction}.hint`)}>
+          <Row label={t("sync.direction")} hint={t(`sync.direction.${direction}.hint`)}>
             <select
               value={direction}
               onChange={(event) => setDirection(event.target.value as SyncDirection)}
@@ -219,8 +223,8 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
               <option value="push">{t("sync.direction.push")}</option>
               <option value="pull">{t("sync.direction.pull")}</option>
             </select>
-          </Field>
-        </div>
+          </Row>
+        </Card>
         <button
           type="button"
           disabled={busy || endpoint === "" || bucket === "" || accessKeyId === "" || secretAccessKey === ""}
@@ -241,21 +245,23 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
         </button>
       </section>
 
-      <section className={sectionCard}>
+      <section className="flex flex-col gap-3">
         <h3 className={sectionHeading}>{t("sync.snapshotHeading")}</h3>
         <p className={hintText}>
           {status.synced
             ? t("sync.lastSynced", { at: status.lastSyncedAt ?? "", count: status.fileCount ?? 0 })
             : t("sync.neverSynced")}
         </p>
-        <Field label={t("sync.passphrase")} hint={t("sync.passphraseLost")}>
+        <Card>
+          <Row label={t("sync.passphrase")} hint={t("sync.passphraseLost")}>
           <input
             type="password"
             value={passphrase}
             onChange={(event) => setPassphrase(event.target.value)}
             className={control}
           />
-        </Field>
+          </Row>
+        </Card>
         {status.direction === "both" ? null : (
           // The refusal is stated where the button is, not only when it is
           // pressed: a disabled control with no reason beside it reads as a
@@ -308,7 +314,7 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
       </section>
 
       {preview === null ? null : (
-        <section className={sectionCard}>
+        <section className="flex flex-col gap-3">
           <h3 className={sectionHeading}>{t("sync.previewHeading")}</h3>
           {conflicted ? (
             <>
