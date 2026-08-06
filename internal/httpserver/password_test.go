@@ -22,6 +22,13 @@ import (
 const testPassphrase = "correct horse battery staple"
 
 func passwordEngine(t *testing.T) (*echo.Echo, *secret.Service) {
+	engine, service, _ := passwordEngineIn(t)
+	return engine, service
+}
+
+// passwordEngineIn also hands back the home, for the tests that read what was
+// actually written rather than what the API said it wrote.
+func passwordEngineIn(t *testing.T) (*echo.Echo, *secret.Service, string) {
 	t.Helper()
 	home := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(home, ".ssh"), 0o700); err != nil {
@@ -38,7 +45,7 @@ func passwordEngine(t *testing.T) (*echo.Echo, *secret.Service) {
 		Service:    service,
 		Answerable: func(prompt string) bool { return strings.HasSuffix(prompt, "password: ") },
 	})
-	return engine, service
+	return engine, service, home
 }
 
 func send(t *testing.T, engine *echo.Echo, method, path, body string, headers map[string]string) *httptest.ResponseRecorder {
@@ -432,6 +439,69 @@ func TestEveryCredentialRouteRefusesALockedVault(t *testing.T) {
 	} {
 		if code := send(t, engine, call.method, call.path, call.body, nil).Code; code != http.StatusConflict {
 			t.Errorf("%s %s while locked = %d, want 409", call.method, call.path, code)
+		}
+	}
+}
+
+// The whole arrangement, end to end.
+//
+// One secret under a name, two hosts pointing at it, and a file on disk that
+// names neither the hosts nor the secret. This is what naming secrets bought:
+// before it, the same password for two machines was two copies, and changing it
+// was two edits with no way to tell they were the same password.
+func TestOneNamedSecretServesTwoHostsAndTheFileNamesNeither(t *testing.T) {
+	engine, _, home := passwordEngineIn(t)
+
+	if code := send(t, engine, http.MethodPost, "/api/v1/passwords/initialise",
+		`{"passphrase":"`+testPassphrase+`"}`, nil).Code; code != http.StatusOK {
+		t.Fatalf("initialise = %d", code)
+	}
+	if code := send(t, engine, http.MethodPut, "/api/v1/credentials/password/office-vm",
+		`{"secret":"hunter2"}`, nil).Code; code != http.StatusOK {
+		t.Fatalf("store = %d", code)
+	}
+	for _, alias := range []string{"web-1", "web-2"} {
+		body := `{"subject":"` + alias + `","name":"office-vm"}`
+		if code := send(t, engine, http.MethodPut, "/api/v1/credentials/password/assign", body, nil).Code; code != http.StatusOK {
+			t.Fatalf("assign %s = %d", alias, code)
+		}
+	}
+
+	listed := send(t, engine, http.MethodGet, "/api/v1/credentials", "", nil)
+	var answer api.CredentialList
+	if err := json.Unmarshal(listed.Body.Bytes(), &answer); err != nil {
+		t.Fatal(err)
+	}
+	if len(answer.Credentials) != 1 || len(answer.Credentials[0].Uses) != 2 {
+		t.Fatalf("the list does not say one name serves two hosts: %s", listed.Body.String())
+	}
+	if strings.Contains(listed.Body.String(), "hunter2") {
+		t.Error("the list carries the secret itself")
+	}
+
+	sealed, err := os.ReadFile(filepath.Join(home, ".ssh", filepath.FromSlash(secret.WorkspacePath)))
+	if err != nil {
+		t.Fatalf("the vault was not written: %v", err)
+	}
+	for _, absent := range []string{"hunter2", "office-vm", "web-1", "web-2"} {
+		if strings.Contains(string(sealed), absent) {
+			t.Errorf("the sealed file contains %q in clear", absent)
+		}
+	}
+
+	// A second service over the same workspace is the next run of the
+	// application, which is the case the whole file format exists for.
+	workspace, err := storage.NewWorkspace(storage.OSFileSystem{}, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reopened := secret.NewService(workspace, storage.NewManager(workspace, time.Now, rand.Reader), time.Now)
+	if err := reopened.Unlock(testPassphrase); err != nil {
+		t.Fatalf("Unlock = %v", err)
+	}
+	for _, alias := range []string{"web-1", "web-2"} {
+		if got := reopened.PasswordFor(alias); got != "hunter2" {
+			t.Errorf("PasswordFor(%q) = %q, want the one secret both point at", alias, got)
 		}
 	}
 }
