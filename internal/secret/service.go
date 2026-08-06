@@ -222,6 +222,150 @@ func (s *Service) Rename(from, to string) error {
 	return s.write()
 }
 
+// Credentials lists every credential name of both kinds with what uses it.
+//
+// Names and uses, never values. This is what the screens read, and a screen
+// that could read a secret would be a screen a compromised browser could read
+// it from.
+func (s *Service) Credentials() (map[Kind]map[string][]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.vault == nil {
+		return nil, ErrLocked
+	}
+	listed := map[Kind]map[string][]string{}
+	for _, kind := range []Kind{KindPassword, KindKeyPassphrase} {
+		listed[kind] = map[string][]string{}
+		for _, name := range s.vault.Names(kind) {
+			uses := s.vault.Uses(kind, name)
+			if uses == nil {
+				uses = []string{}
+			}
+			listed[kind][name] = uses
+		}
+	}
+	return listed, nil
+}
+
+// SetCredential creates a credential or replaces its value.
+//
+// Replacing is how a shared secret is rotated: every subject pointing at the
+// name reads the new value, which is the whole reason names exist.
+func (s *Service) SetCredential(kind Kind, name, value string) error {
+	s.mu.Lock()
+	if s.vault == nil {
+		s.mu.Unlock()
+		return ErrLocked
+	}
+	if err := s.vault.Set(kind, name, value); err != nil {
+		s.mu.Unlock()
+		return err
+	}
+	s.mu.Unlock()
+	return s.write()
+}
+
+// DeleteCredential forgets a credential, refusing while anything points at it.
+func (s *Service) DeleteCredential(kind Kind, name string) error {
+	s.mu.Lock()
+	if s.vault == nil {
+		s.mu.Unlock()
+		return ErrLocked
+	}
+	if err := s.vault.Delete(kind, name); err != nil {
+		s.mu.Unlock()
+		return err
+	}
+	s.mu.Unlock()
+	return s.write()
+}
+
+// AssignCredential points a subject at a credential of the same kind. The kind
+// is the guard: there is no map in which the other kind's names appear.
+func (s *Service) AssignCredential(kind Kind, subject, name string) error {
+	s.mu.Lock()
+	if s.vault == nil {
+		s.mu.Unlock()
+		return ErrLocked
+	}
+	if err := s.vault.Assign(kind, subject, name); err != nil {
+		s.mu.Unlock()
+		return err
+	}
+	s.mu.Unlock()
+	return s.write()
+}
+
+// UnassignCredential forgets a subject's reference, leaving the credential.
+func (s *Service) UnassignCredential(kind Kind, subject string) error {
+	s.mu.Lock()
+	if s.vault == nil {
+		s.mu.Unlock()
+		return ErrLocked
+	}
+	s.vault.Unassign(kind, subject)
+	s.mu.Unlock()
+	return s.write()
+}
+
+// AssignedCredential reports the name a subject references.
+func (s *Service) AssignedCredential(kind Kind, subject string) (string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.vault == nil {
+		return "", false
+	}
+	return s.vault.Assigned(kind, subject)
+}
+
+// PasswordFor resolves an alias to the value it should be given, or "" when
+// there is none and when the vault is shut. The caller that matters — the
+// askpass answer — distinguishes the two through Redeem's errors.
+func (s *Service) PasswordFor(alias string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.vault == nil {
+		return ""
+	}
+	value, _ := s.vault.SecretFor(KindPassword, alias)
+	return value
+}
+
+// KeyPassphraseFor resolves a key's workspace-relative path to its stored
+// passphrase. It is what lets a key be added to the agent in one action rather
+// than two, and it is injected into the key vault rather than imported by it.
+func (s *Service) KeyPassphraseFor(relativePath string) (string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.vault == nil {
+		return "", false
+	}
+	return s.vault.SecretFor(KindKeyPassphrase, relativePath)
+}
+
+// SyncSettings returns the object store settings, secrets included. Only the
+// caller that builds a client asks; the screen is answered without them.
+func (s *Service) SyncSettings() (SyncSettings, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.vault == nil {
+		return SyncSettings{}, ErrLocked
+	}
+	return s.vault.Sync(), nil
+}
+
+// SetSyncSettings replaces the object store settings and writes the vault.
+func (s *Service) SetSyncSettings(settings SyncSettings) error {
+	s.mu.Lock()
+	if s.vault == nil {
+		s.mu.Unlock()
+		return ErrLocked
+	}
+	s.vault.SetSync(settings)
+	s.mu.Unlock()
+	return s.write()
+}
+
 // IssueToken mints a single-use token for one alias.
 //
 // It is issued when the user asks to open a terminal and is spent by the

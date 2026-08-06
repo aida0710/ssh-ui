@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -326,4 +327,69 @@ func unlockedWithPassword(t *testing.T) *secret.Service {
 		t.Fatal(err)
 	}
 	return service
+}
+
+// The service's credential surface, which is what every screen and every route
+// goes through. A locked vault answers ErrLocked rather than an empty list,
+// because "we cannot see" and "there is none" are different facts.
+func TestCredentialsThroughTheService(t *testing.T) {
+	service, _ := newService(t)
+	if err := service.Initialise(passphrase); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := service.SetCredential(secret.KindPassword, "office", "s3cret"); err != nil {
+		t.Fatalf("SetCredential = %v", err)
+	}
+	if err := service.AssignCredential(secret.KindPassword, "web-1", "office"); err != nil {
+		t.Fatalf("AssignCredential = %v", err)
+	}
+	if err := service.AssignCredential(secret.KindPassword, "web-2", "office"); err != nil {
+		t.Fatal(err)
+	}
+
+	listed, err := service.Credentials()
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, ok := listed[secret.KindPassword]["office"]
+	if !ok || !slices.Equal(entry, []string{"web-1", "web-2"}) {
+		t.Fatalf("credentials = %#v, want office used by both", listed)
+	}
+
+	// The whole point of a name: one entry, rotated once, for both machines.
+	if err := service.SetCredential(secret.KindPassword, "office", "rotated"); err != nil {
+		t.Fatal(err)
+	}
+	for _, alias := range []string{"web-1", "web-2"} {
+		if got := service.PasswordFor(alias); got != "rotated" {
+			t.Errorf("%s reads %q after one rotation", alias, got)
+		}
+	}
+
+	if err := service.DeleteCredential(secret.KindPassword, "office"); !errors.Is(err, secret.ErrCredentialInUse) {
+		t.Errorf("DeleteCredential of a used name = %v, want ErrCredentialInUse", err)
+	}
+
+	service.Lock()
+	if _, err := service.Credentials(); !errors.Is(err, secret.ErrLocked) {
+		t.Errorf("Credentials while locked = %v, want ErrLocked", err)
+	}
+	if err := service.SetCredential(secret.KindPassword, "x", "y"); !errors.Is(err, secret.ErrLocked) {
+		t.Errorf("SetCredential while locked = %v, want ErrLocked", err)
+	}
+}
+
+// The separation, again at the service, because a route reaches this and not
+// the vault directly.
+func TestTheServiceWillNotCrossTheNamespaces(t *testing.T) {
+	service, _ := newService(t)
+	if err := service.Initialise(passphrase); err != nil {
+		t.Fatal(err)
+	}
+	_ = service.SetCredential(secret.KindKeyPassphrase, "build", "phrase")
+
+	if err := service.AssignCredential(secret.KindPassword, "web-1", "build"); err == nil {
+		t.Error("a host was pointed at a key passphrase through the service")
+	}
 }
