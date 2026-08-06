@@ -400,7 +400,12 @@ export function ConnectionTree({ overview, selected, onSelect, onOpenPatternRule
   }
 
   return (
-    <nav aria-label={t("tree.navLabel")} className="flex h-full flex-col gap-3 border-r border-line p-4">
+    // No padding and no right border. Both are left over from when this was the
+    // page's own left rail; it is now a block inside a column that already has
+    // the create-connection form above it, so the padding pushed every row 16px
+    // right of that form and the border drew a rule from halfway down the
+    // column that separated nothing.
+    <nav aria-label={t("tree.navLabel")} className="flex h-full flex-col gap-3">
       <div className="flex gap-2">
         {(["groups", "files"] as const).map((mode) => (
           <button
