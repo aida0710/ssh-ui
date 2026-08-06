@@ -21,7 +21,7 @@ var (
 	ErrGroupSelfNesting = errors.New("a group cannot be nested inside itself")
 )
 
-// NoticeGroupDirectoryLeftover names a directory a rename emptied.
+// NoticeGroupDirectoryLeftover names a directory a rename could not remove.
 //
 // storage.Move moves files. Renaming the directory itself would need a journal
 // action with a precondition for a thing that has no digest and a rollback
@@ -72,21 +72,11 @@ func (s *Service) commitGroupPlan(plan func(*config.Graph) (planned, error)) (Sa
 	if err := s.metadata.EnsureDirectory(); err != nil {
 		return SaveResult{}, err
 	}
-	for _, directory := range prepared.directories {
-		if err := s.workspace.EnsureDirectory(directory); err != nil {
-			return SaveResult{}, err
-		}
-	}
-
 	s.pendingBase = prepared.base
 	s.pendingBaseline = prepared.baseline
 	defer func() { s.pendingBase, s.pendingBaseline = nil, nil }()
 
-	result, err := s.manager.Commit(storage.Request{
-		Operation: prepared.operation,
-		Changes:   prepared.changes,
-		Moves:     prepared.moves,
-	})
+	result, err := s.manager.Commit(s.requestFor(prepared))
 	var conflict *storage.ConflictError
 	if errors.As(err, &conflict) {
 		cleaned := filepath.Clean(conflict.Path)
@@ -388,9 +378,27 @@ func (s *Service) planGroupLayout(
 	prepared.preview.Diffs = append(prepared.preview.Diffs,
 		BuildFileDiff(s.displayPath(metadataChange.Path), previousMetadata, metadataChange.Contents))
 
+	// The directories this operation empties go with it, deepest first, in the
+	// same transaction. One that still holds something is left alone and said
+	// out loud: the files in a group move with it, but a directory nothing
+	// declares does not, because nothing knows where it should end up.
+	sources := make([]string, 0, len(renamed)*2)
 	for name := range renamed {
+		sources = append(sources, GroupDirectory(name), GroupKeyDirectory(name))
+	}
+	moving := map[string]bool{}
+	for _, relocation := range append(append([]groupRelocation{}, connectionMoves...), keyMoves...) {
+		moving[relocation.from] = true
+	}
+	emptied, left, err := s.emptiedDirectories(sources, moving)
+	if err != nil {
+		return planned{}, err
+	}
+	prepared.removeDirectories = append(prepared.removeDirectories, emptied...)
+	for _, directory := range left {
+		name := strings.TrimPrefix(strings.TrimPrefix(directory, ConnectionsDirectory+"/"), KeysDirectory+"/")
 		prepared.preview.Notices = appendNotice(prepared.preview.Notices, Notice{
-			Code: NoticeGroupDirectoryLeftover, Detail: name, Path: GroupDirectory(name),
+			Code: NoticeGroupDirectoryLeftover, Detail: name, Path: directory,
 		})
 	}
 	// A delete with no destination lands its connections directly under
@@ -504,4 +512,81 @@ func (s *Service) resolveOverlay(pending map[string][]byte, gone map[string]bool
 	resolver := s.resolver
 	resolver.Loader = overlayLoader{base: s.resolver.Loader, pending: pending, gone: gone}
 	return resolver.Resolve(s.entryPath)
+}
+
+// emptiedDirectories works out which of these directories this transaction
+// leaves empty, and which still hold something.
+//
+// Removable ones come back deepest first, which is the order the journal
+// applies them in and the only order that can work: a parent is empty only once
+// its children are gone. A directory that is not there at all is neither.
+func (s *Service) emptiedDirectories(sources []string, moving map[string]bool) (removable, left []string, err error) {
+	root := s.workspace.Root()
+	// Only the directories this operation is vacating are candidates. A
+	// subdirectory nobody declared is not one, even when it happens to be
+	// empty: it is not this operation's to remove, and it keeps the group
+	// directory above it alive.
+	ours := map[string]bool{}
+	for _, source := range sources {
+		ours[source] = true
+	}
+	seen := map[string]bool{}
+	var visit func(relative string) (bool, error)
+	visit = func(relative string) (bool, error) {
+		absolute := filepath.Join(root, filepath.FromSlash(relative))
+		entries, readErr := s.workspace.FileSystem().ReadDir(absolute)
+		if errors.Is(readErr, fs.ErrNotExist) {
+			return false, nil
+		}
+		if readErr != nil {
+			return false, readErr
+		}
+		empties := true
+		for _, entry := range entries {
+			child := relative + "/" + entry.Name()
+			if !entry.IsDir() {
+				// A file this transaction is not moving keeps the directory.
+				if !moving[child] {
+					empties = false
+				}
+				continue
+			}
+			if !ours[child] {
+				empties = false
+				continue
+			}
+			childEmpties, childErr := visit(child)
+			if childErr != nil {
+				return false, childErr
+			}
+			if !childEmpties {
+				empties = false
+			}
+		}
+		if !empties {
+			return false, nil
+		}
+		if !seen[relative] {
+			seen[relative] = true
+			// Deepest first: this runs after its children have been appended.
+			removable = append(removable, relative)
+		}
+		return true, nil
+	}
+
+	sort.Strings(sources)
+	for _, source := range sources {
+		empties, visitErr := visit(source)
+		if visitErr != nil {
+			return nil, nil, visitErr
+		}
+		if !empties {
+			absolute := filepath.Join(root, filepath.FromSlash(source))
+			if _, statErr := s.workspace.FileSystem().Lstat(absolute); statErr == nil {
+				left = append(left, source)
+			}
+		}
+	}
+	sort.Strings(left)
+	return removable, left, nil
 }

@@ -8,6 +8,8 @@ import (
 	"io"
 	"io/fs"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -432,11 +434,21 @@ func (m *Manager) Commit(request Request) (Result, error) {
 	}
 
 	// Directory removals last, and each must be empty by the time it runs. The
-	// check here is against the disk as it stands, which is deliberately
-	// conservative: a directory emptied by this very request is still full
-	// now, so a caller removing a tree lists its files as Removals in one
-	// transaction and its directories in the next.
-	for _, removal := range request.RemoveDirectories {
+	// check is against the disk as this request will leave it: an entry this
+	// same request moves away, removes, or removes as a directory of its own
+	// does not keep its parent alive. It used to be against the disk as it
+	// stands, which meant a caller had to empty a tree in one transaction and
+	// remove it in the next — so an operation could not finish what it started,
+	// and a crash between the two left the empty shell behind.
+	//
+	// Deepest first is the only order that can work, and sorting here is what
+	// stops a caller having to know that.
+	ordered := append([]DirectoryRemoval(nil), request.RemoveDirectories...)
+	sort.SliceStable(ordered, func(i, j int) bool {
+		return strings.Count(ordered[i].Path, string(filepath.Separator)) >
+			strings.Count(ordered[j].Path, string(filepath.Separator))
+	})
+	for _, removal := range ordered {
 		target, err := m.workspace.ResolveDirectory(removal.Path)
 		if err != nil {
 			return Result{}, err
@@ -460,8 +472,13 @@ func (m *Manager) Commit(request Request) (Result, error) {
 		if err != nil {
 			return Result{}, err
 		}
-		if len(contents) > 0 {
-			return Result{}, ErrDirectoryNotEmpty
+		for _, entry := range contents {
+			// claimed holds every path this request has already taken
+			// responsibility for: the source of a move, a removal, and a
+			// directory removal listed deeper than this one.
+			if !claimed[filepath.Join(target, entry.Name())] {
+				return Result{}, ErrDirectoryNotEmpty
+			}
 		}
 		entries = append(entries, journalEntry{
 			Action:      actionRemoveDir,

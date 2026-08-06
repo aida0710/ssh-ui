@@ -366,18 +366,73 @@ func (s *Service) FileContents(relative string) (FileContents, error) {
 
 // planned is one prepared transaction: the exact changes, the base contents the
 // validator compares against, and the preview the caller sees.
+// directoryCreates and directoryRemovals put the planned directories into the
+// shapes the journal takes. Creation is by absolute path already; removal is
+// planned in workspace-relative terms, which is the vocabulary the notices and
+// the group names use.
+// requestFor is the one place a planned transaction becomes a storage request.
+//
+// There were two, and the group path quietly dropped whatever the save path
+// had that it did not: the removals, and then the directory removals a rename
+// needs to finish what it started. One function cannot drift from itself.
+func (s *Service) requestFor(prepared planned) storage.Request {
+	return storage.Request{
+		Operation:         prepared.operation,
+		Directories:       directoryCreates(prepared.directories),
+		Changes:           prepared.changes,
+		Moves:             prepared.moves,
+		Removals:          prepared.removals,
+		RemoveDirectories: directoryRemovals(s.workspace.Root(), prepared.removeDirectories),
+	}
+}
+
+// Both deduplicate. The planners append a destination directory once per file
+// that lands in it, which was harmless while directories were created outside
+// the journal and is a duplicate path inside it.
+func directoryCreates(absolute []string) []storage.DirectoryCreate {
+	creates := make([]storage.DirectoryCreate, 0, len(absolute))
+	seen := map[string]bool{}
+	for _, path := range absolute {
+		cleaned := filepath.Clean(path)
+		if seen[cleaned] {
+			continue
+		}
+		seen[cleaned] = true
+		creates = append(creates, storage.DirectoryCreate{Path: cleaned})
+	}
+	return creates
+}
+
+func directoryRemovals(root string, relative []string) []storage.DirectoryRemoval {
+	removals := make([]storage.DirectoryRemoval, 0, len(relative))
+	seen := map[string]bool{}
+	for _, path := range relative {
+		absolute := filepath.Join(root, filepath.FromSlash(path))
+		if seen[absolute] {
+			continue
+		}
+		seen[absolute] = true
+		removals = append(removals, storage.DirectoryRemoval{Path: absolute})
+	}
+	return removals
+}
+
 type planned struct {
 	operation string
 	changes   []storage.Change
 	// moves and removals travel in the same transaction as the changes, so a
 	// file relocation and the configuration that names it land together or not
 	// at all. directories are created before Commit resolves its write paths.
-	moves       []storage.Move
-	removals    []storage.Removal
-	directories []string
-	base        map[string][]byte
-	baseline    map[string]bool
-	preview     SavePreview
+	moves    []storage.Move
+	removals []storage.Removal
+	// directories are created before anything is written and removed after
+	// everything else, both inside the transaction: a mkdir or an rmdir outside
+	// the journal is a filesystem effect with no recovery record.
+	directories       []string
+	removeDirectories []string
+	base              map[string][]byte
+	baseline          map[string]bool
+	preview           SavePreview
 }
 
 // Preview prepares a transaction and returns its diffs without writing.
@@ -411,22 +466,11 @@ func (s *Service) Save(request EditRequest) (SaveResult, error) {
 			return SaveResult{}, err
 		}
 	}
-	for _, directory := range prepared.directories {
-		if err := s.workspace.EnsureDirectory(directory); err != nil {
-			return SaveResult{}, err
-		}
-	}
-
 	s.pendingBase = prepared.base
 	s.pendingBaseline = prepared.baseline
 	defer func() { s.pendingBase, s.pendingBaseline = nil, nil }()
 
-	result, err := s.manager.Commit(storage.Request{
-		Operation: prepared.operation,
-		Changes:   prepared.changes,
-		Moves:     prepared.moves,
-		Removals:  prepared.removals,
-	})
+	result, err := s.manager.Commit(s.requestFor(prepared))
 	var conflict *storage.ConflictError
 	if errors.As(err, &conflict) {
 		cleaned := filepath.Clean(conflict.Path)

@@ -762,3 +762,82 @@ func unsealForTest(sealed []byte) ([]byte, error) {
 }
 
 var testSealMarker = []byte("sealed:")
+
+// A directory this very request empties can be removed by it.
+//
+// The check used to be against the disk as it stands, so a caller had to move
+// the files out in one transaction and remove the directory in the next — which
+// meant a group rename could not finish what it started, and a crash between
+// the two left the empty shell behind. It is now against the disk as this
+// request will leave it.
+func TestADirectoryEmptiedByTheSameRequestIsRemoved(t *testing.T) {
+	manager, workspace := newTestManager(t)
+	from := writeWorkspaceFile(t, workspace, "connections/work/web.conf", "Host web\n", 0o600)
+	nested := writeWorkspaceFile(t, workspace, "connections/work/eu/lon.conf", "Host lon\n", 0o600)
+
+	if _, err := manager.Commit(Request{
+		Operation: "config.group_rename",
+		Directories: []DirectoryCreate{
+			{Path: filepath.Join(workspace.Root(), "connections", "client-a", "eu")},
+		},
+		Moves: []Move{
+			{
+				From:         from,
+				To:           filepath.Join(workspace.Root(), "connections", "client-a", "web.conf"),
+				Precondition: Precondition{Exists: true, Digest: Digest([]byte("Host web\n"))},
+			},
+			{
+				From:         nested,
+				To:           filepath.Join(workspace.Root(), "connections", "client-a", "eu", "lon.conf"),
+				Precondition: Precondition{Exists: true, Digest: Digest([]byte("Host lon\n"))},
+			},
+		},
+		// Listed parent first on purpose: the order that can work is deepest
+		// first, and the caller should not have to know that.
+		RemoveDirectories: []DirectoryRemoval{
+			{Path: filepath.Join(workspace.Root(), "connections", "work")},
+			{Path: filepath.Join(workspace.Root(), "connections", "work", "eu")},
+		},
+	}); err != nil {
+		t.Fatalf("Commit = %v", err)
+	}
+
+	for _, gone := range []string{"connections/work/eu", "connections/work"} {
+		if _, err := os.Stat(filepath.Join(workspace.Root(), filepath.FromSlash(gone))); !os.IsNotExist(err) {
+			t.Errorf("%s is still there: %v", gone, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(workspace.Root(), "connections", "client-a", "eu", "lon.conf")); err != nil {
+		t.Errorf("the nested file did not arrive: %v", err)
+	}
+}
+
+// A directory holding something this request does not touch is still refused.
+// The rule that changed is what counts as empty, not whether emptiness matters.
+func TestADirectoryHoldingSomethingElseIsStillRefused(t *testing.T) {
+	manager, workspace := newTestManager(t)
+	from := writeWorkspaceFile(t, workspace, "connections/work/web.conf", "Host web\n", 0o600)
+	writeWorkspaceFile(t, workspace, "connections/work/notes.txt", "not ours\n", 0o600)
+
+	_, err := manager.Commit(Request{
+		Operation: "config.group_rename",
+		Directories: []DirectoryCreate{
+			{Path: filepath.Join(workspace.Root(), "connections", "client-a")},
+		},
+		Moves: []Move{{
+			From:         from,
+			To:           filepath.Join(workspace.Root(), "connections", "client-a", "web.conf"),
+			Precondition: Precondition{Exists: true, Digest: Digest([]byte("Host web\n"))},
+		}},
+		RemoveDirectories: []DirectoryRemoval{
+			{Path: filepath.Join(workspace.Root(), "connections", "work")},
+		},
+	})
+	if !errors.Is(err, ErrDirectoryNotEmpty) {
+		t.Fatalf("Commit = %v, want ErrDirectoryNotEmpty", err)
+	}
+	// Refused before anything happened.
+	if _, statErr := os.Stat(from); statErr != nil {
+		t.Errorf("the file moved despite the refusal: %v", statErr)
+	}
+}

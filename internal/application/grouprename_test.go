@@ -106,8 +106,42 @@ func TestGroupRenameCarriesTheMetadataIdentityAndPresentation(t *testing.T) {
 	}
 }
 
-func TestGroupRenameReportsTheEmptyDirectoryItLeavesBehind(t *testing.T) {
+// The directories a rename empties go with it, in the same transaction.
+//
+// They used to stay behind and be reported, because removing a directory was a
+// filesystem effect with no recovery record. The journal has directory removal
+// now, so the operation can finish what it started: a rename that leaves the
+// old group's empty shell behind looks like it half worked.
+func TestGroupRenameTakesTheDirectoriesItEmpties(t *testing.T) {
 	service, workspace := groupRenameFixture(t)
+
+	result, err := service.RenameGroup(keyInventory(t, workspace), "work", "client-a")
+	if err != nil {
+		t.Fatalf("RenameGroup error = %v", err)
+	}
+	if hasNotice(result.Preview.Notices, NoticeGroupDirectoryLeftover, "work") {
+		t.Errorf("it still reports a leftover it now removes: %#v", result.Preview.Notices)
+	}
+	for _, name := range []string{"connections/work/eu", "connections/work", "keys/work"} {
+		if _, err := os.Stat(filepath.Join(workspace.Root(), filepath.FromSlash(name))); !os.IsNotExist(err) {
+			t.Errorf("%s is still there: %v", name, err)
+		}
+	}
+}
+
+// A directory holding something this operation did not touch is left alone.
+//
+// The files in a group move with it, including ones this application did not
+// put there. A directory that is not a declared group does not: nothing
+// declares it, so nothing knows where it should end up. The group directory
+// above it therefore does not become empty, and removing it anyway would
+// destroy what the user left inside.
+func TestGroupRenameLeavesADirectoryThatStillHoldsSomething(t *testing.T) {
+	service, workspace := groupRenameFixture(t)
+	stray := filepath.Join(workspace.Root(), "connections", "work", "scratch")
+	if err := os.MkdirAll(stray, 0o700); err != nil {
+		t.Fatal(err)
+	}
 
 	result, err := service.RenameGroup(keyInventory(t, workspace), "work", "client-a")
 	if err != nil {
@@ -116,10 +150,12 @@ func TestGroupRenameReportsTheEmptyDirectoryItLeavesBehind(t *testing.T) {
 	if !hasNotice(result.Preview.Notices, NoticeGroupDirectoryLeftover, "work") {
 		t.Errorf("notices = %#v, want group_directory_leftover", result.Preview.Notices)
 	}
-	// The application did not try to remove it: an unjournalled rmdir is a
-	// filesystem effect with no recovery record, so it says so instead.
-	if _, err := os.Stat(filepath.Join(workspace.Root(), "connections", "work")); err != nil {
-		t.Errorf("the source directory was removed: %v", err)
+	if _, err := os.Stat(stray); err != nil {
+		t.Errorf("the file the user left there is gone: %v", err)
+	}
+	// The nested group held nothing else, so it went.
+	if _, err := os.Stat(filepath.Join(workspace.Root(), "connections", "work", "eu")); !os.IsNotExist(err) {
+		t.Errorf("connections/work/eu is still there: %v", err)
 	}
 }
 
