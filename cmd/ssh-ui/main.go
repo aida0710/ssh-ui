@@ -107,7 +107,7 @@ func main() {
 		}
 		os.Exit(runConnect(
 			context.Background(), alias, app.HandoffDir(home),
-			&http.Client{Timeout: connectTimeout}, os.Stderr,
+			&http.Client{Timeout: connectTimeout}, macos.NewToolchain(), os.Stderr,
 		))
 	}
 

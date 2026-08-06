@@ -8,7 +8,8 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -91,6 +92,54 @@ func runOpen(ctx context.Context, stateDir string, client *http.Client, browser 
 	return 0
 }
 
+// sshFinder resolves the ssh program. It is the same seam every other part of
+// this application uses, so there is one answer to "which ssh".
+type sshFinder interface{ SSH() (string, error) }
+
+// connectEnvironment is the environment ssh will run with.
+//
+// The user's own environment is passed through, because this is the connection
+// they would have made themselves. The five variables that arm the askpass
+// helper are not passed through: they are removed and then set, so what OpenSSH
+// reads is what this decided.
+//
+// It matters more than it looks. syscall.Exec hands the array over as given and
+// getenv answers with the first match in it, so appending would lose to an
+// SSH_ASKPASS the user exported years ago — while still handing that program
+// the one-time token, which it can redeem for a stored password. An unarmed
+// connection removes them too, so a stale variable cannot arm one.
+func connectEnvironment(inherited []string, helper, url, token, alias string) []string {
+	decided := map[string]string{}
+	if helper != "" && token != "" {
+		decided = map[string]string{
+			"SSH_ASKPASS":         helper,
+			"SSH_ASKPASS_REQUIRE": "force",
+			URLVariable:           url,
+			TokenVariable:         token,
+			AliasVariable:         alias,
+		}
+	}
+	ours := map[string]bool{
+		"SSH_ASKPASS": true, "SSH_ASKPASS_REQUIRE": true,
+		URLVariable: true, TokenVariable: true, AliasVariable: true,
+	}
+
+	environment := make([]string, 0, len(inherited)+len(decided))
+	for _, entry := range inherited {
+		name, _, found := strings.Cut(entry, "=")
+		if found && ours[name] {
+			continue
+		}
+		environment = append(environment, entry)
+	}
+	for _, name := range []string{"SSH_ASKPASS", "SSH_ASKPASS_REQUIRE", URLVariable, TokenVariable, AliasVariable} {
+		if value, set := decided[name]; set {
+			environment = append(environment, name+"="+value)
+		}
+	}
+	return environment
+}
+
 // runConnect asks the running application for what this connection needs and
 // hands the terminal to ssh.
 //
@@ -98,14 +147,14 @@ func runOpen(ctx context.Context, stateDir string, client *http.Client, browser 
 // and `ssh <alias>` is what they would have typed: OpenSSH asks for the
 // password itself, which is a working connection. Saying so on stderr means the
 // difference is visible without being in the way.
-func runConnect(ctx context.Context, alias string, stateDir string, client *http.Client, stderr io.Writer) int {
+func runConnect(ctx context.Context, alias string, stateDir string, client *http.Client, toolchain sshFinder, stderr io.Writer) int {
 	if err := platform.ValidateAlias(alias); err != nil {
 		fmt.Fprintf(stderr, "ssh-ui: %q is not an alias this will put on a command line\n", alias)
 		return 2
 	}
 
-	environment := os.Environ()
 	armed := false
+	helper, url, token := "", "", ""
 	answer, err := askApplication(ctx, alias, stateDir, client)
 	switch {
 	case err != nil:
@@ -115,25 +164,23 @@ func runConnect(ctx context.Context, alias string, stateDir string, client *http
 			fmt.Fprintf(stderr, "ssh-ui: %s\n", warning)
 		}
 		if answer.AskpassToken != "" {
-			helper, pathErr := os.Executable()
+			resolved, pathErr := os.Executable()
 			if pathErr != nil {
 				fmt.Fprintf(stderr, "ssh-ui: connecting without a stored password (%v)\n", pathErr)
-				break
+			} else {
+				armed, helper, url, token = true, resolved, answer.AskpassURL, answer.AskpassToken
 			}
-			armed = true
-			environment = append(environment,
-				"SSH_ASKPASS="+helper,
-				"SSH_ASKPASS_REQUIRE=force",
-				URLVariable+"="+answer.AskpassURL,
-				TokenVariable+"="+answer.AskpassToken,
-				AliasVariable+"="+alias,
-			)
 		}
 	}
+	environment := connectEnvironment(os.Environ(), helper, url, token, alias)
 
-	ssh, err := exec.LookPath("ssh")
-	if err != nil {
-		fmt.Fprintf(stderr, "ssh-ui: ssh is not on the path: %v\n", err)
+	// Resolved the way every other OpenSSH program this application starts is
+	// resolved: from a fixed list of directories, to an absolute path. PATH is
+	// not consulted, because the token above would otherwise be handed to
+	// whatever is first on it.
+	ssh, err := toolchain.SSH()
+	if err != nil || !filepath.IsAbs(ssh) {
+		fmt.Fprintf(stderr, "ssh-ui: ssh was not found where it is expected: %v\n", err)
 		return 1
 	}
 	// The terminal belongs to ssh from here. Exec rather than a child process

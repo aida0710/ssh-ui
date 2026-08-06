@@ -172,12 +172,15 @@ func newInstallation(t *testing.T, bucket *fakeBucket, files map[string]string) 
 	}
 	manager := storage.NewManager(workspace, time.Now, rand.Reader)
 
-	// The file source is what the Include graph would answer. Here it is the
-	// fixture's own configuration files, which is the same shape.
+	// The file source is what the Include graph would answer, and the real one
+	// answers with every file inside the workspace that the graph reaches —
+	// whatever kind of file it is. It used to drop ssh-ui/ here, which meant
+	// the exclusion test could not see the one route that reaches those files:
+	// an Include line naming one.
 	source := func() ([]string, error) {
 		var paths []string
 		for name := range files {
-			if strings.HasPrefix(name, "keys/") || strings.HasPrefix(name, "ssh-ui/") {
+			if strings.HasPrefix(name, "keys/") {
 				continue
 			}
 			paths = append(paths, name)
@@ -474,9 +477,13 @@ func TestBothIsTheDefaultAndTheEmptyStringMeansIt(t *testing.T) {
 // and this is the test that notices if that list ever grows a wildcard.
 func TestASnapshotCarriesTheVaultAndNotTheKeyToItsOwnBucket(t *testing.T) {
 	installation := newInstallation(t, &fakeBucket{}, map[string]string{
-		"config":               "Host bastion\n",
+		// The entry file names the sealed settings itself, which is the shape
+		// the exclusion has to survive: the file source is the Include graph,
+		// and the graph takes what the configuration points at.
+		"config":               "Include ssh-ui/sync-settings\nHost bastion\n",
 		"ssh-ui/secrets":       "sealed vault bytes",
 		"ssh-ui/sync-settings": "sealed access key",
+		"ssh-ui/cli":           `{"url":"http://127.0.0.1:1","secret":"s"}`,
 	})
 
 	manifest, contents, err := installation.service.Collect()
@@ -490,11 +497,13 @@ func TestASnapshotCarriesTheVaultAndNotTheKeyToItsOwnBucket(t *testing.T) {
 	if !packed["ssh-ui/secrets"] {
 		t.Errorf("the vault does not travel: %v", packed)
 	}
-	if packed[secret.SettingsPath] {
-		t.Errorf("the snapshot carries the key to its own bucket: %v", packed)
-	}
-	if _, ok := contents[secret.SettingsPath]; ok {
-		t.Error("the settings are in the archive even though the manifest omits them")
+	for _, excluded := range []string{secret.SettingsPath, "ssh-ui/cli"} {
+		if packed[excluded] {
+			t.Errorf("the snapshot carries %s: %v", excluded, packed)
+		}
+		if _, ok := contents[excluded]; ok {
+			t.Errorf("%s is in the archive even though the manifest omits it", excluded)
+		}
 	}
 }
 

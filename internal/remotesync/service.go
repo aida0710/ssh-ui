@@ -240,6 +240,46 @@ func (s *Service) store() (*objectstore.Client, error) {
 	return s.client, nil
 }
 
+// neverTravels are the files a snapshot must not carry, whatever names it is
+// given.
+//
+// The exclusion used to be implicit: Collect names what it takes, so anything
+// not named was left out. That is true of what Collect adds and not of what it
+// is given — the file source is the Include graph, and an Include line naming
+// one of these puts it in. The key to the bucket would then be in the bucket,
+// which is the one arrangement this design exists to avoid, so it is refused
+// here rather than assumed away.
+var neverTravels = []string{
+	// The object store credentials. Sealed, but a snapshot carrying the key to
+	// its own bucket means whoever obtained one snapshot can fetch every later
+	// one.
+	SettingsPathRelative,
+	// The handoff: a URL and a secret for one run of one machine, which mean
+	// nothing anywhere else.
+	"ssh-ui/cli",
+	// This machine's own bookkeeping. A journal or a backup from another
+	// machine describes writes that never happened here.
+	"ssh-ui/journal",
+	"ssh-ui/backups",
+	"ssh-ui/history",
+	"ssh-ui/trash",
+	StatePath,
+}
+
+// SettingsPathRelative is the sealed object store settings. It is named here
+// rather than imported from the secret package, which imports nothing of this
+// one and must go on importing nothing of it.
+const SettingsPathRelative = "ssh-ui/sync-settings"
+
+func excluded(relative string) bool {
+	for _, name := range neverTravels {
+		if relative == name || strings.HasPrefix(relative, name+"/") {
+			return true
+		}
+	}
+	return false
+}
+
 // Collect reads every file that belongs in a snapshot.
 //
 // That is: whatever the FileSource names — the entry file and everything the
@@ -264,7 +304,7 @@ func (s *Service) Collect() (Manifest, map[string][]byte, error) {
 	var entries []Entry
 	for _, relative := range relatives {
 		relative = filepath.ToSlash(relative)
-		if seen[relative] || checkPath(relative) != nil {
+		if seen[relative] || checkPath(relative) != nil || excluded(relative) {
 			continue
 		}
 		seen[relative] = true
