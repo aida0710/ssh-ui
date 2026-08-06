@@ -150,66 +150,13 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
         </p>
       ) : null}
 
-      <label className="flex flex-col gap-1 text-sm">
-        <span>{t("kh.search")}</span>
-        <input
-          value={query}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            void search(event.target.value);
-          }}
-          className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1"
-        />
-      </label>
-
-      {listing ? (
-        <table className="text-sm">
-          <caption className="text-left text-zinc-400">{listing.path}</caption>
-          <tbody>
-            {listing.entries.map((item) => (
-              <tr key={`${item.line}-${item.digest}`}>
-                <td className="pr-3">{item.hashed ? t("kh.hashed") : item.hosts.join(", ")}</td>
-                <td className="pr-3 text-zinc-400">{item.keyType}</td>
-                <td className="pr-3 text-zinc-400">{item.fingerprint}</td>
-                <td>
-                  <button
-                    type="button"
-                    onClick={() => setPending(item)}
-                    className="rounded border border-zinc-700 px-2 py-1"
-                  >
-                    {t("kh.delete")}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : null}
-
-      {pending ? (
-        <div className="rounded border border-red-700 p-3 text-sm">
-          <p>
-            {t("kh.confirmRemove", { line: pending.line, fingerprint: pending.fingerprint })}
-          </p>
-          <div className="mt-2 flex gap-2">
-            <button
-              type="button"
-              onClick={() => void confirmDelete()}
-              className="rounded border border-red-600 px-3 py-1"
-            >
-              {t("kh.confirmDelete")}
-            </button>
-            <button
-              type="button"
-              onClick={() => setPending(null)}
-              className="rounded border border-zinc-700 px-3 py-1"
-            >
-              {t("kh.cancel")}
-            </button>
-          </div>
-        </div>
-      ) : null}
-
+      {/*
+        Scanning is what a user comes here to do; reading the file is how they
+        check the result. The control sat below the whole listing, so reaching
+        it meant scrolling past every host already known. Its results travel
+        with it: leaving them behind would have put the candidate list below the
+        file the user was scanning in order to add to.
+      */}
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-1 text-sm">
           <span>{t("kh.hostToScan")}</span>
@@ -291,6 +238,66 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
           </div>
         </div>
       ) : null}
+      <label className="flex flex-col gap-1 text-sm">
+        <span>{t("kh.search")}</span>
+        <input
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            void search(event.target.value);
+          }}
+          className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1"
+        />
+      </label>
+
+      {listing ? (
+        <table className="text-sm">
+          <caption className="text-left text-zinc-400">{listing.path}</caption>
+          <tbody>
+            {listing.entries.map((item) => (
+              <tr key={`${item.line}-${item.digest}`}>
+                <td className="pr-3">{item.hashed ? t("kh.hashed") : item.hosts.join(", ")}</td>
+                <td className="pr-3 text-zinc-400">{item.keyType}</td>
+                <td className="pr-3 text-zinc-400">{item.fingerprint}</td>
+                <td>
+                  <button
+                    type="button"
+                    onClick={() => setPending(item)}
+                    className="rounded border border-zinc-700 px-2 py-1"
+                  >
+                    {t("kh.delete")}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
+
+      {pending ? (
+        <div className="rounded border border-red-700 p-3 text-sm">
+          <p>
+            {t("kh.confirmRemove", { line: pending.line, fingerprint: pending.fingerprint })}
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={() => void confirmDelete()}
+              className="rounded border border-red-600 px-3 py-1"
+            >
+              {t("kh.confirmDelete")}
+            </button>
+            <button
+              type="button"
+              onClick={() => setPending(null)}
+              className="rounded border border-zinc-700 px-3 py-1"
+            >
+              {t("kh.cancel")}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
     </section>
   );
 }
