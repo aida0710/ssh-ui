@@ -195,11 +195,7 @@ func New(options Options) (*Server, error) {
 	// `ssh-ui <alias>` asks here for what one connection needs. The secret is
 	// what the caller must have read out of the state directory; without one
 	// this route refuses everything.
-	registerUpdateRoutes(e, &UpdateHandlers{
-		Current: options.Version,
-		Checker: options.Updates,
-		Path:    options.AskpassHelper,
-	})
+	registerUpdateRoutes(e, &UpdateHandlers{Current: options.Version, Checker: options.Updates})
 	registerLoginItemRoutes(e, LoginItemHandlers{
 		Controller: options.LoginItem,
 		Program:    options.AskpassHelper,

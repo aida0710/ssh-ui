@@ -67,7 +67,6 @@ export type IntegrationsApi = {
   lockVault(): Promise<PasswordVaultStatus>;
   changeMasterPassword(current: string, next: string): Promise<ChangeMasterPasswordResult>;
   updateStatus(): Promise<UpdateStatus>;
-  applyUpdate(): Promise<UpdateStatus>;
   loginItem(): Promise<LoginItem>;
   setLoginItem(enabled: boolean): Promise<LoginItem>;
   passwordEligibility(alias: string): Promise<PasswordEligibility>;
@@ -95,18 +94,14 @@ export type IntegrationsApi = {
 // UI actually received, because a type assertion proves nothing at runtime.
 function validateUpdate(value: unknown): UpdateStatus {
   const record = asRecord(value);
-  if (typeof record.current !== "string" || typeof record.available !== "boolean" ||
-      typeof record.updatable !== "boolean" || typeof record.restartRequired !== "boolean") {
+  if (typeof record.current !== "string" || typeof record.available !== "boolean") {
     throw new Error("invalid_response");
   }
   return {
     current: record.current,
     available: record.available,
-    updatable: record.updatable,
-    restartRequired: record.restartRequired,
     ...(typeof record.latest === "string" ? { latest: record.latest } : {}),
     ...(typeof record.pageUrl === "string" ? { pageUrl: record.pageUrl } : {}),
-    ...(typeof record.path === "string" ? { path: record.path } : {}),
   };
 }
 
@@ -419,11 +414,6 @@ export const integrationsApi: IntegrationsApi = {
   },
   async updateStatus() {
     return validateUpdate(await apiClient.read("/api/v1/update"));
-  },
-  async applyUpdate() {
-    return validateUpdate(
-      await apiClient.mutate("/api/v1/update", { method: "POST", headers: jsonHeaders, body: "{}" }),
-    );
   },
   async loginItem() {
     return validateLoginItem(await apiClient.read("/api/v1/login-item"));

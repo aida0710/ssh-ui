@@ -26,8 +26,7 @@ function buildApi(overrides: Partial<IntegrationsApi> = {}): IntegrationsApi {
       snapshotResealed: true,
     }),
     loginItem: vi.fn().mockResolvedValue({ enabled: false, supported: true }),
-    updateStatus: vi.fn().mockResolvedValue({ current: "dev", available: false, updatable: true, restartRequired: false }),
-    applyUpdate: vi.fn().mockResolvedValue({ current: "dev", available: false, updatable: true, restartRequired: true }),
+    updateStatus: vi.fn().mockResolvedValue({ current: "dev", available: false, restartRequired: false }),
     setLoginItem: vi.fn().mockResolvedValue({ enabled: true, supported: true }),
     ...overrides,
   } as unknown as IntegrationsApi;

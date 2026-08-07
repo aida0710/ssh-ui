@@ -389,17 +389,6 @@ paths:
               schema: { $ref: "#/components/schemas/UpdateStatus" }
         "401": { $ref: "#/components/responses/Problem" }
         "502": { $ref: "#/components/responses/Problem" }
-    post:
-      operationId: applyUpdate
-      responses:
-        "200":
-          description: The binary was replaced
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/UpdateStatus" }
-        "401": { $ref: "#/components/responses/Problem" }
-        "409": { $ref: "#/components/responses/Problem" }
-        "502": { $ref: "#/components/responses/Problem" }
   /api/v1/login-item:
     get:
       operationId: getLoginItem
@@ -1198,24 +1187,15 @@ components:
     UpdateStatus:
       type: object
       additionalProperties: false
-      required: [current, available, updatable, restartRequired]
+      required: [current, available]
       properties:
         current: { type: string }
-        # False for a build that was not made from a tag. Such a build trusts no
-        # release signing key, so it can verify nothing and offers nothing; its
-        # update path is the source it was built from.
-        updatable: { type: boolean }
         # Empty until something is published, or until the check has run.
         latest: { type: string }
         available: { type: boolean }
-        # Where a person can read what changed and download it by hand, which
-        # is the alternative to letting this replace anything.
+        # Where a person reads what changed and decides what to do. This
+        # application fetches nothing and replaces nothing.
         pageUrl: { type: string }
-        # True once the binary on disk is newer than the one running. Replacing
-        # a file does not replace what is already in memory.
-        restartRequired: { type: boolean }
-        # The path that was or would be replaced, so it is never a surprise.
-        path: { type: string }
     LoginItem:
       type: object
       additionalProperties: false

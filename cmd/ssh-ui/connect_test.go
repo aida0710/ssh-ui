@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/ed25519"
 	"strings"
 	"testing"
 )
@@ -95,38 +94,6 @@ func TestConnectEnvironmentDropsStaleArmingWhenNothingIsStored(t *testing.T) {
 			if strings.HasPrefix(entry, name) {
 				t.Errorf("an unarmed connection still carries %q", entry)
 			}
-		}
-	}
-}
-
-// A build made from a working tree does not replace itself.
-//
-// It trusts no signing key, so it could verify nothing anyway, and what it
-// would be replacing is the output of a build the person in front of it just
-// ran. Only a build made from a tag carries the keys and the button.
-func TestOnlyAReleaseBuildCanUpdateItself(t *testing.T) {
-	if updater(developmentVersion) != nil {
-		t.Error("a development build carries an updater")
-	}
-	release := updater("v0.1.0")
-	if release == nil {
-		t.Fatal("a release build carries no updater")
-	}
-	if len(release.PublicKeys) == 0 {
-		t.Error("a release build trusts no signing key, so it can accept nothing")
-	}
-}
-
-// The keys compiled in have to decode, or the release that ships with them can
-// verify nothing and every installation of it is stuck.
-func TestTheCompiledInKeysDecode(t *testing.T) {
-	keys := releaseKeys()
-	if len(keys) != len(releaseSigningKeys) {
-		t.Fatalf("%d of %d keys decoded", len(keys), len(releaseSigningKeys))
-	}
-	for index, key := range keys {
-		if len(key) != ed25519.PublicKeySize {
-			t.Errorf("key %d is %d bytes", index, len(key))
 		}
 	}
 }

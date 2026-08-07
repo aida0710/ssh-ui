@@ -381,7 +381,7 @@ export interface paths {
         };
         get: operations["checkForUpdate"];
         put?: never;
-        post: operations["applyUpdate"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -987,12 +987,9 @@ export interface components {
         };
         UpdateStatus: {
             current: string;
-            updatable: boolean;
             latest?: string;
             available: boolean;
             pageUrl?: string;
-            restartRequired: boolean;
-            path?: string;
         };
         LoginItem: {
             enabled: boolean;
@@ -2315,29 +2312,6 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
-            502: components["responses"]["Problem"];
-        };
-    };
-    applyUpdate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The binary was replaced */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UpdateStatus"];
-                };
-            };
-            401: components["responses"]["Problem"];
-            409: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
         };
     };

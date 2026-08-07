@@ -1010,13 +1010,10 @@ type UnresolvedReference struct {
 
 // UpdateStatus defines model for UpdateStatus.
 type UpdateStatus struct {
-	Available       bool    `json:"available"`
-	Current         string  `json:"current"`
-	Latest          *string `json:"latest,omitempty"`
-	PageUrl         *string `json:"pageUrl,omitempty"`
-	Path            *string `json:"path,omitempty"`
-	RestartRequired bool    `json:"restartRequired"`
-	Updatable       bool    `json:"updatable"`
+	Available bool    `json:"available"`
+	Current   string  `json:"current"`
+	Latest    *string `json:"latest,omitempty"`
+	PageUrl   *string `json:"pageUrl,omitempty"`
 }
 
 // ValueSource defines model for ValueSource.

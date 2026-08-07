@@ -4,21 +4,22 @@ import { useTranslate } from "../i18n/context";
 
 type UpdateBadgeProps = { api?: IntegrationsApi };
 
-// The version, and the one control that changes it.
+// The version, and whether a newer one has been published.
 //
 // The check is a request this application makes to GitHub — the only host it
 // contacts other than itself — and it is made from the server rather than the
 // page, so the page's connect-src stays 'self'. It runs when this mounts and
-// otherwise only when pressed.
+// not otherwise.
 //
-// What updating actually does is said before it is done: it replaces a named
-// file on disk with bytes from a release, and what is already running goes on
-// running until the application is started again.
+// It offers a link and not a button. Replacing the running binary with bytes
+// from a release was here and is gone: the signature that guarded it needed a
+// key the release workflow could read, which is a key anybody who controls the
+// repository can read, so the defence and the attack had the same key. What is
+// left is the useful half — knowing there is a newer version — with the
+// decision left to a person.
 export function UpdateBadge({ api = integrationsApi }: UpdateBadgeProps) {
   const t = useTranslate();
   const [status, setStatus] = useState<UpdateStatus | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -41,46 +42,18 @@ export function UpdateBadge({ api = integrationsApi }: UpdateBadgeProps) {
   return (
     <div className="border-t border-line px-2 py-2 text-xs text-ink-muted">
       <p>{t("update.version", { version: status.current })}</p>
-      {failed === "" ? null : (
-        <p role="alert" className="mt-1 text-danger">
-          {failed}
+      {!status.available || status.pageUrl === undefined ? null : (
+        <p className="mt-1">
+          <a
+            href={status.pageUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="text-ink underline underline-offset-2"
+          >
+            {t("update.available", { version: status.latest ?? "" })}
+          </a>
         </p>
       )}
-      {!status.updatable ? (
-        // A build made from a working tree has no key to verify a release
-        // with, and what it would replace is the output of a build somebody
-        // just ran. Its update path is the source it came from.
-        <p className="mt-1 text-ink-faint">{t("update.fromSource")}</p>
-      ) : status.restartRequired ? (
-        <p className="mt-1 text-notice-ink">{t("update.restart")}</p>
-      ) : status.available ? (
-        <>
-          <p className="mt-1 text-ink">{t("update.available", { version: status.latest ?? "" })}</p>
-          {/*
-            Named before it is pressed: this replaces a file, and which file it
-            is should never be a surprise.
-          */}
-          {status.path === undefined ? null : (
-            <p className="mt-1 break-all font-mono text-ink-faint">{status.path}</p>
-          )}
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => {
-              setBusy(true);
-              setFailed("");
-              void api
-                .applyUpdate()
-                .then(setStatus)
-                .catch(() => setFailed(t("update.failed")))
-                .finally(() => setBusy(false));
-            }}
-            className="mt-1 rounded border border-control-line px-2 py-1 text-xs text-ink hover:bg-select-fill"
-          >
-            {busy ? t("update.applying") : t("update.apply")}
-          </button>
-        </>
-      ) : null}
     </div>
   );
 }

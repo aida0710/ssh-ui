@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"crypto/ed25519"
 	"crypto/rand"
-	"encoding/base64"
 	"errors"
 	"flag"
 	"fmt"
@@ -14,7 +12,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"runtime"
 	"syscall"
 	"time"
 
@@ -161,9 +158,12 @@ func main() {
 		// registers anything; this only makes the switch reachable.
 		LoginItem: macos.LoginItem{Runner: runner, Home: home},
 		// The one place this application contacts a host other than itself,
-		// and only when somebody presses the button. A build that is not a
-		// release has none: see updater.
-		Updates:   updater(version),
+		// and only when somebody asks. It fetches nothing and replaces
+		// nothing: it reports whether a newer version is published.
+		Updates: &selfupdate.Checker{
+			API:  "https://api.github.com/repos/aida0710/ssh-ui/releases/latest",
+			HTTP: &http.Client{Timeout: 30 * time.Second},
+		},
 		Listen:    net.Listen,
 		UI:        assets,
 		Logger:    logger,
@@ -183,62 +183,4 @@ func main() {
 		logger.Error("ssh-ui stopped", "error", err)
 		os.Exit(1)
 	}
-}
-
-// releaseSigningKeys are the public halves of the keys this project signs
-// releases with. They are compiled in, which is the whole point: an attacker
-// who takes the publishing account can publish anything and no installation
-// will accept it, because they cannot produce a signature these verify.
-//
-// There is a list because a key has to be replaceable and an installed binary
-// pins what it was built with. Replacing one takes two releases: the first is
-// signed with the outgoing key and carries a binary listing both, the second is
-// signed with the incoming key alone. Both entries are dropped to one once no
-// installation that matters is still on the older binary.
-//
-// Losing every private half means no installed binary can accept any future
-// release. Replacing it is then not an update — it is a new binary, delivered
-// the way the first one was.
-var releaseSigningKeys = []string{
-	"FyhF3tZRj1ib0u1S3vB966UtNbbMYJdKL6scl8L5cjg=",
-}
-
-// updater is the update checker for this build, or nothing.
-//
-// A build made from a working tree does not replace itself. It trusts no
-// signing key, so it could verify nothing anyway, and the thing it would be
-// replacing is the output of a build the person in front of it just ran: its
-// update path is the source, through `make update`. Only a build made from a
-// tag — which is what a release is — carries the keys and the button.
-func updater(version string) *selfupdate.Checker {
-	if version == developmentVersion {
-		return nil
-	}
-	return &selfupdate.Checker{
-		API:           "https://api.github.com/repos/aida0710/ssh-ui/releases/latest",
-		AssetName:     "ssh-ui-" + runtime.GOOS + "-" + runtime.GOARCH,
-		ChecksumName:  "checksums.txt",
-		SignatureName: "checksums.txt.sig",
-		PublicKeys:    releaseKeys(),
-		HTTP:          &http.Client{Timeout: 5 * time.Minute},
-	}
-}
-
-// developmentVersion is what a build with no tag reports, which is what the
-// Makefile writes when `git describe --tags --exact-match` finds nothing.
-const developmentVersion = "dev"
-
-// releaseKeys decodes them. One that does not decode is dropped rather than
-// guessed at, and a list with nothing left in it refuses every update — the
-// safe direction for a build that was put together wrongly.
-func releaseKeys() []ed25519.PublicKey {
-	keys := make([]ed25519.PublicKey, 0, len(releaseSigningKeys))
-	for _, encoded := range releaseSigningKeys {
-		decoded, err := base64.StdEncoding.DecodeString(encoded)
-		if err != nil || len(decoded) != ed25519.PublicKeySize {
-			continue
-		}
-		keys = append(keys, decoded)
-	}
-	return keys
 }
