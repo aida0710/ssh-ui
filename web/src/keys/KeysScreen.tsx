@@ -4,7 +4,6 @@ import { CopyButton } from "../ui/CopyButton";
 import { useTranslate, type Translate } from "../i18n/context";
 import {
   CheckboxField,
-  Field,
   control,
   hintText,
   primaryAction,

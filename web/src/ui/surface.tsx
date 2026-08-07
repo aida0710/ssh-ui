@@ -4,8 +4,20 @@ import { dangerAction, hintText, primaryAction, secondaryAction } from "./form";
 // An inset card of rows, the way macOS System Settings groups related
 // settings: a hairline between rows, a border around the group, and the
 // group's own explanation underneath rather than inside.
-export function Card({ children }: { children: ReactNode }) {
-  return <div className="overflow-hidden rounded-xl border border-line bg-card">{children}</div>;
+export function Card({ children, padded = false }: { children: ReactNode; padded?: boolean }) {
+  // Rows bring their own padding, so the card has none by default. `padded` is
+  // for the other kind of contents — a narrow pane's stacked fields, which
+  // would otherwise sit against the border. Both inspectors had copied this
+  // class string by hand rather than have somewhere to say that.
+  return (
+    <div
+      className={`overflow-hidden rounded-xl border border-line bg-card ${
+        padded ? "flex flex-col gap-3 p-3" : ""
+      }`}
+    >
+      {children}
+    </div>
+  );
 }
 
 // One setting: its name on the left, its control on the right.

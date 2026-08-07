@@ -1,6 +1,6 @@
 import type { HostDetail, HostMetadata } from "../api/config";
 import { CheckboxField, Field, control, fieldLabel, hintText } from "../ui/form";
-import { Button } from "../ui/surface";
+import { Button, Card } from "../ui/surface";
 import { useTranslate } from "../i18n/context";
 import { NoticeList } from "./SavePreview";
 
@@ -45,7 +45,7 @@ export function HostInspector({
       <section className="flex flex-col gap-3">
         <h3 className={fieldLabel}>{t("inspector.appOnly")}</h3>
 
-        <div className="flex flex-col gap-3 rounded-xl border border-line bg-card p-3">
+        <Card padded>
         <CheckboxField
           label={t("host.favourite")}
           checked={detail.metadata.favourite === true}
@@ -63,7 +63,7 @@ export function HostInspector({
               // be grey".
               value={
                 detail.metadata.colour === undefined || detail.metadata.colour === ""
-                  ? "#8e8e93"
+                  ? "#8e8e93" /* palette-exempt: the native control's own neutral */
                   : detail.metadata.colour
               }
               onChange={(event) => onMetadata({ ...detail.metadata, colour: event.target.value })}
@@ -101,7 +101,7 @@ export function HostInspector({
             className={control}
           />
         </Field>
-        </div>
+        </Card>
       </section>
 
       <section className="flex flex-col gap-2">

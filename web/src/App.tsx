@@ -15,7 +15,7 @@ import { SecretsPanel } from "./secrets/SecretsPanel";
 import { SyncPanel } from "./sync/SyncPanel";
 import { KnownHostsPanel } from "./knownhosts/KnownHostsPanel";
 import { RemoteKeyPanel } from "./remotekeys/RemoteKeyPanel";
-import { LanguageProvider, useLanguage } from "./i18n/context";
+import { useLanguage } from "./i18n/context";
 import { locales, type Locale } from "./i18n/locale";
 import { autoControl } from "./ui/form";
 import { Icon, IconSprite, type IconName } from "./ui/icons";
@@ -414,7 +414,7 @@ function SectionView(props: SectionViewProps) {
   return <div className="h-full overflow-y-auto p-6">{<PaddedSection {...props} />}</div>;
 }
 
-function PaddedSection({ section, fileTarget, groups, onOpenFile, onLock, onInspector }: SectionViewProps) {
+function PaddedSection({ section, fileTarget, groups, onLock, onInspector }: SectionViewProps) {
   if (section === "Config") {
     return <ConfigExplorer target={fileTarget} />;
   }

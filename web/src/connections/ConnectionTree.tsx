@@ -50,11 +50,6 @@ type ConnectionTreeProps = {
 
 export type Grouping = "groups" | "files";
 
-// The ungrouped bucket is keyed by a constant that never reaches the screen:
-// its label is translated, but matching a host to it must not depend on the
-// display language.
-const ungrouped = "\u0000ungrouped";
-
 function hostLabel(host: HostEntry): string {
   return host.identity.alias === "" ? `Host ${host.patterns.join(" ")}` : host.identity.alias;
 }
@@ -107,9 +102,6 @@ export function ConnectionTree({
     return grouping === "groups" && dragging !== null && canDrop(dragging, target, groupNames);
   }
 
-  function targetOf(title: string): string {
-    return title === ungrouped ? "" : title;
-  }
 
   const metadataByAlias = useMemo(() => {
     const index = new Map<

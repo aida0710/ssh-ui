@@ -32,8 +32,8 @@ function buildIntegrations(overrides: Partial<IntegrationsApi> = {}): Integratio
     lockVault: vi.fn().mockResolvedValue({ exists: true, unlocked: false, aliases: [] }),
     changeMasterPassword: vi.fn(),
     loginItem: vi.fn().mockResolvedValue({ enabled: false, supported: true }),
-    updateStatus: vi.fn().mockResolvedValue({ current: "dev", available: false, restartRequired: false }),
-    applyUpdate: vi.fn().mockResolvedValue({ current: "dev", available: false, restartRequired: true }),
+    updateStatus: vi.fn().mockResolvedValue({ current: "dev", available: false, updatable: true, restartRequired: false }),
+    applyUpdate: vi.fn().mockResolvedValue({ current: "dev", available: false, updatable: true, restartRequired: true }),
     setLoginItem: vi.fn().mockResolvedValue({ enabled: true, supported: true }),
     credentials: vi.fn().mockResolvedValue({ credentials: [] }),
     storeCredential: vi.fn().mockResolvedValue({ credentials: [] }),
@@ -99,7 +99,6 @@ function renderPanel(overrides: Partial<Parameters<typeof HostDetailPanel>[0]> =
     onRename: vi.fn(),
     onComment: vi.fn(),
     onMoveToGroup: vi.fn(),
-    onMetadata: vi.fn(),
     ...overrides,
   };
   render(<HostDetailPanel {...handlers} />);
@@ -243,8 +242,11 @@ describe("HostDetailPanel", () => {
     await user.click(screen.getByRole("button", { name: "Save comment" }));
 
     expect(handlers.onComment).toHaveBeenCalledWith("the production bastion");
-    // The comment is a configuration edit, so it must not travel as metadata.
-    expect(handlers.onMetadata).not.toHaveBeenCalled();
+    // That the comment is a configuration edit and not metadata used to be
+    // asserted here, by watching an onMetadata that was never called. The
+    // panel has no such prop any more — the metadata controls are the
+    // inspector's — so the type says it and the assertion would be watching
+    // a callback nothing could reach.
   });
 
   it("seeds the editor from a legacy note and says the save retires it", () => {

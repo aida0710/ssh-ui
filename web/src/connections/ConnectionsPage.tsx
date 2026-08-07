@@ -503,7 +503,6 @@ export function ConnectionsPage({ onOpenFile, onInspector, onToolbar }: Connecti
               onRename={onRename}
               onComment={onComment}
               onMoveToGroup={(group) => void onMoveToGroup(group)}
-              onMetadata={onMetadata}
             />
           </>
         )}

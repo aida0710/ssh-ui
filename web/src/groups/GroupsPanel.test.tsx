@@ -273,13 +273,6 @@ describe("GroupsPanel", () => {
 describe("hiding a group from the connections tree", () => {
   // "company" holds build01 directly; "company/eu" holds nothing, which is what
   // a group made to contain other groups looks like.
-  const withContainer = {
-    ...overview,
-    metadata: {
-      ...overview.metadata,
-      groups: [{ name: "company" }, { name: "company/eu" }],
-    },
-  };
 
   // Hiding is one of the three settings that live only in metadata.json, so
   // it moved to the inspector with the colour and the display order.

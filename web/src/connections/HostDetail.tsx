@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { FieldEdit, FormField, GroupMetadata, HostDetail, HostMetadata, SavePreview } from "../api/config";
+import type { FieldEdit, FormField, GroupMetadata, HostDetail, SavePreview } from "../api/config";
 import type { Problem } from "../api/client";
 import { integrationsApi, type IntegrationsApi } from "../api/integrations";
 import { DiagnosticsPanel } from "../diagnostics/DiagnosticsPanel";
@@ -8,7 +8,6 @@ import { formatValues, parseValues } from "./values";
 import { NoticeList, SavePreviewPanel } from "./SavePreview";
 import { useTranslate } from "../i18n/context";
 import {
-  CheckboxField,
   control,
   fieldLabel,
   hintText,
@@ -50,7 +49,6 @@ type HostDetailPanelProps = {
   // directory, so changing it is a move, and the caller sends the group name to
   // the server which derives the destination path from it.
   onMoveToGroup: (group: string) => void;
-  onMetadata: (metadata: HostMetadata) => void;
   // The Diagnostics tab runs the same checks as the Diagnostics section, so it
   // consumes the same client. It is a prop only so a test can inject one; the
   // panel falls back to the real client when it is absent.
@@ -71,7 +69,6 @@ export function HostDetailPanel({
   onRename,
   onComment,
   onMoveToGroup,
-  onMetadata,
   integrations = integrationsApi,
 }: HostDetailPanelProps) {
   const t = useTranslate();
@@ -180,7 +177,7 @@ export function HostDetailPanel({
             role="tab"
             aria-selected={tab === name}
             onClick={() => setTab(name)}
-            className={`px-3 py-2 text-sm ${tab === name ? "border-b-2 border-accent text-ink" : "text-ink-muted"}`}
+            className={`px-3 py-2 text-sm ${tab === name ? "border-b-2 border-ink text-ink" : "text-ink-muted"}`}
           >
             {t(tabLabels[name])}
           </button>

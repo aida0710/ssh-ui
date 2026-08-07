@@ -361,7 +361,7 @@ export function GroupsPanel({ onInspector }: GroupsPanelProps = {}) {
                 <span
                   aria-hidden="true"
                   className="h-2 w-2 shrink-0 self-center rounded-full"
-                  style={{ backgroundColor: group.colour === undefined || group.colour === "" ? "#3f3f46" : group.colour }}
+                  style={{ backgroundColor: group.colour === undefined || group.colour === "" ? "var(--ui-ink-faint)" : group.colour }}
                 />
                 {depthOf(group.name) === 1 ? null : (
                   <span className="text-ink-faint">{group.name.slice(0, group.name.lastIndexOf("/") + 1)}</span>

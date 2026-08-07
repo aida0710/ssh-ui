@@ -35,7 +35,7 @@ export function HistoryPanel() {
   async function restore(transactionId: string, path: string) {
     try {
       const result = await configApi.restore(transactionId, path);
-      setMessage(`Restored ${path} as transaction ${result.transactionId}.`);
+      setMessage(t("history.restored", { path, id: result.transactionId }));
       setProblem(null);
       await reload();
     } catch (error) {
@@ -46,7 +46,7 @@ export function HistoryPanel() {
   async function recover(transactionId: string, action: "complete" | "rollback") {
     try {
       await configApi.recover(transactionId, action);
-      setMessage(action === "complete" ? "The interrupted transaction was completed." : "The interrupted transaction was rolled back.");
+      setMessage(t(action === "complete" ? "history.completedTransaction" : "history.rolledBack"));
       setProblem(null);
       await reload();
     } catch (error) {
@@ -55,7 +55,7 @@ export function HistoryPanel() {
   }
 
   if (entries === null) {
-    return <p role="status" className="text-sm text-ink-muted">Loading history…</p>;
+    return <p role="status" className="text-sm text-ink-muted">{t("history.loading")}</p>;
   }
 
   return (

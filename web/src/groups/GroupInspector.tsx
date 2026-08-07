@@ -1,6 +1,6 @@
 import type { GroupMetadata } from "../api/config";
 import { CheckboxField, Field, control, fieldLabel, hintText } from "../ui/form";
-import { Button } from "../ui/surface";
+import { Button, Card } from "../ui/surface";
 import { useTranslate } from "../i18n/context";
 
 // The three things about a group that exist only in metadata.json.
@@ -25,14 +25,14 @@ export function GroupInspector({
     <div className="flex flex-col gap-4">
       <h3 className={fieldLabel}>{t("inspector.appOnly")}</h3>
 
-      <div className="flex flex-col gap-3 rounded-xl border border-line bg-card p-3">
+      <Card padded>
         <Field label={t("groups.colour")}>
           <input
             id={`group-colour-${group.name}`}
             type="color"
             // A colour input has no empty state, so an unset colour shows a
             // neutral swatch and clearing is its own act.
-            value={colour === "" ? "#8e8e93" : colour}
+            value={colour === "" ? "#8e8e93" /* palette-exempt: the native control's own neutral */ : colour}
             onChange={(event) => onUpdate({ colour: event.target.value })}
             className="h-8 w-14 rounded border border-control-line bg-control"
           />
@@ -66,7 +66,7 @@ export function GroupInspector({
           onChange={(checked) => onUpdate({ hidden: checked })}
         />
         {members.length === 0 ? null : <p className={hintText}>{t("groups.hideOnlyContainers")}</p>}
-      </div>
+      </Card>
     </div>
   );
 }
