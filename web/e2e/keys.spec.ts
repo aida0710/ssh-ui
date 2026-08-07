@@ -105,7 +105,7 @@ test("renames a key and carries every directive that named it", async ({ page, i
   const row = page.getByRole("row", { name: /id_rename\b/ }).first();
   await row.getByRole("button", { name: "Rename or move" }).click();
   await page.getByLabel("Name", { exact: true }).fill("id_renamed");
-  expect(await clickAndAwait(page, "Apply", "/api/v1/keys/")).toBe(200);
+  expect(await clickAndAwait(page, "Rename or move the key", "/api/v1/keys/")).toBe(200);
 
   // Both halves moved…
   expect(await installation.read("id_renamed.pub")).toContain("ssh-ed25519 ");
@@ -135,7 +135,7 @@ test("refuses a rename whose destination is taken, and writes nothing", async ({
   const row = page.getByRole("row", { name: /id_first\b/ }).first();
   await row.getByRole("button", { name: "Rename or move" }).click();
   await page.getByLabel("Name", { exact: true }).fill("id_second");
-  expect(await clickAndAwait(page, "Apply", "/api/v1/keys/")).toBe(409);
+  expect(await clickAndAwait(page, "Rename or move the key", "/api/v1/keys/")).toBe(409);
 
   await expect(page.getByRole("alert")).toContainText("already exists");
   // The decisive assertion: a refused rename is not a partial one. Both keys are

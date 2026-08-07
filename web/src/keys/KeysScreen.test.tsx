@@ -595,7 +595,7 @@ describe("KeysScreen", () => {
     expect(field).toHaveValue("id_work");
     await user.clear(field);
     await user.type(field, "id_build");
-    await user.click(screen.getByRole("button", { name: "Apply" }));
+    await user.click(screen.getByRole("button", { name: "Rename or move the key" }));
 
     await waitFor(() => expect(api.relocate).toHaveBeenCalledWith("key-one", { newName: "id_build" }));
     // The rewritten IdentityFile is the part the user cannot check for
@@ -626,7 +626,7 @@ describe("KeysScreen", () => {
     await user.click(within(row).getByRole("button", { name: "Rename or move" }));
     await user.clear(screen.getByLabelText("Name"));
     await user.type(screen.getByLabelText("Name"), "id_build");
-    await user.click(screen.getByRole("button", { name: "Apply" }));
+    await user.click(screen.getByRole("button", { name: "Rename or move the key" }));
 
     const reasons = await screen.findByRole("alert");
     expect(reasons).toHaveTextContent("cannot resolve");

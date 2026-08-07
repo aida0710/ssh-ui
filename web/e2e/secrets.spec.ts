@@ -29,7 +29,7 @@ test("gives one named secret to two hosts and writes neither name into the file"
 
     const panel = page.getByRole("region", { name: "Stored password" });
     await panel.getByLabel("Use a stored password").selectOption("office-vm");
-    await panel.getByRole("button", { name: "Use this password" }).click();
+    await panel.getByRole("button", { name: `Point ${alias} at this stored password` }).click();
     await expect(panel.getByText(`A password is stored for ${alias}.`)).toBeVisible();
   }
 

@@ -16,7 +16,7 @@ test("stores a password for a host and never shows it again", async ({ page, ins
   await expect(panel.getByText(/A key is stronger/)).toBeVisible();
 
   await panel.getByLabel("Password for bastion").fill("hunter2");
-  await panel.getByRole("button", { name: "Store the password" }).click();
+  await panel.getByRole("button", { name: "Store a new password for bastion" }).click();
 
   await expect(panel.getByText("A password is stored for bastion.")).toBeVisible();
   await expect(page.locator("body")).not.toContainText("hunter2");

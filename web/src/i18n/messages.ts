@@ -251,7 +251,7 @@ export const en = {
     "This host's key is not in known_hosts. With a stored password armed, ssh asks the helper every question — including the host key one, which it refuses — so the first connection stops there. Add the key through Known Hosts first.",
   "password.warn.hostNameUnresolved":
     "No HostName could be attributed for this alias. The password is filed under the alias either way.",
-  "password.store": "Store the password",
+  "password.store": "Store a new password for {alias}",
   "password.storeFailed": "The password could not be stored.",
   "password.stored": "A password is stored for {alias}.",
   "password.armedNote":
@@ -264,7 +264,7 @@ export const en = {
   "password.hide": "Hide",
   "password.useStored": "Use a stored password",
   "password.chooseName": "— choose a name —",
-  "password.useThis": "Use this password",
+  "password.useThis": "Point {alias} at this stored password",
   "password.shareNote": "One name can serve several hosts, so rotating it is one edit rather than several.",
   "password.assignFailed": "This host could not be pointed at that password.",
   "password.usesName": "It uses the stored password named {name}.",
@@ -725,7 +725,7 @@ export const en = {
     "The name and the group are separate destinations; changing either moves the file. Every IdentityFile and CertificateFile that names it is rewritten in the same transaction, so nothing is left pointing at the old path.",
   "keys.relocateNewName": "Name",
   "keys.relocateGroup": "Group",
-  "keys.relocateSubmit": "Apply",
+  "keys.relocateSubmit": "Rename or move the key",
   "keys.relocateFailed": "The key could not be moved.",
   "keys.relocateDone": "Now at {path}.",
   "keys.relocateMoved": "Files moved",
@@ -982,7 +982,7 @@ export const ja: Record<MessageKey, string> = {
   "password.warn.hostKeyUnknown":
     "このホストの鍵が known_hosts にありません。保存済みパスワードを使う状態では ssh は全ての質問をヘルパに回し、ホスト鍵の確認も含まれます。ヘルパはそれを拒否するので、初回接続はそこで止まります。先に Known Hosts で鍵を登録してください。",
   "password.warn.hostNameUnresolved": "この alias の HostName を特定できませんでした。パスワードは alias に紐づけて保存されます。",
-  "password.store": "パスワードを保存",
+  "password.store": "{alias} 用に新しいパスワードを保存",
   "password.storeFailed": "パスワードを保存できませんでした。",
   "password.stored": "{alias} のパスワードが保存されています。",
   "password.armedNote":
@@ -995,7 +995,7 @@ export const ja: Record<MessageKey, string> = {
   "password.hide": "隠す",
   "password.useStored": "保存済みのパスワードを使う",
   "password.chooseName": "— 名前を選ぶ —",
-  "password.useThis": "このパスワードを使う",
+  "password.useThis": "{alias} に保存済みパスワードを使う",
   "password.shareNote": "1 つの名前を複数のホストで使えるので、更新は 1 回で済みます。",
   "password.assignFailed": "このホストをそのパスワードに向けられませんでした。",
   "password.usesName": "保存済みパスワード「{name}」を使用しています。",
@@ -1452,7 +1452,7 @@ export const ja: Record<MessageKey, string> = {
     "名前とグループはそれぞれ別の移動先です。どちらを変えてもファイルが移動します。この鍵を指している IdentityFile と CertificateFile は同じトランザクションで書き換えられるので、古いパスを指したままの行は残りません。",
   "keys.relocateNewName": "名前",
   "keys.relocateGroup": "グループ",
-  "keys.relocateSubmit": "適用",
+  "keys.relocateSubmit": "鍵を改名・移動",
   "keys.relocateFailed": "鍵を移動できませんでした。",
   "keys.relocateDone": "{path} になりました。",
   "keys.relocateMoved": "移動したファイル",

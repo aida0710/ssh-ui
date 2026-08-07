@@ -290,7 +290,7 @@ export function PasswordPanel({ api = integrationsApi, alias }: PasswordPanelPro
                 }
                 className={primaryAction}
               >
-                {t("password.useThis")}
+                {t("password.useThis", { alias })}
               </button>
             </div>
           )}
@@ -310,7 +310,7 @@ export function PasswordPanel({ api = integrationsApi, alias }: PasswordPanelPro
               onClick={() => void run(() => api.storePassword(alias, password), t("password.storeFailed"))}
               className={primaryAction}
             >
-              {t("password.store")}
+              {t("password.store", { alias })}
             </button>
             <button
               type="button"

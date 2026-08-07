@@ -94,7 +94,7 @@ describe("PasswordPanel", () => {
     render(<PasswordPanel api={api} alias="bastion" />);
 
     await userEvent.type(await screen.findByLabelText("Password for bastion"), "hunter2");
-    await userEvent.click(screen.getByRole("button", { name: "Store the password" }));
+    await userEvent.click(screen.getByRole("button", { name: "Store a new password for bastion" }));
 
     await waitFor(() => expect(api.storePassword).toHaveBeenCalledWith("bastion", "hunter2"));
     // The field is cleared, and nothing renders the value back.
@@ -159,7 +159,7 @@ describe("PasswordPanel", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/could never be used/);
     expect(screen.getByText(/PasswordAuthentication is off/)).toBeInTheDocument();
     expect(screen.getByLabelText("Password for bastion")).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Store the password" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Store a new password for bastion" })).toBeDisabled();
     expect(api.storePassword).not.toHaveBeenCalled();
   });
 
@@ -175,7 +175,7 @@ describe("PasswordPanel", () => {
     render(<PasswordPanel api={api} alias="bastion" />);
 
     await userEvent.selectOptions(await screen.findByLabelText("Use a stored password"), "office-vm");
-    await userEvent.click(screen.getByRole("button", { name: "Use this password" }));
+    await userEvent.click(screen.getByRole("button", { name: "Point bastion at this stored password" }));
 
     await waitFor(() =>
       expect(api.assignCredential).toHaveBeenCalledWith("password", "bastion", "office-vm"),
