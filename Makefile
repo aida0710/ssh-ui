@@ -47,11 +47,12 @@ verify-generated: generate
 # ある。タグのないビルドは "dev" と名乗る。それにはリリースがあることは伝えるが、
 # どれだけ遅れているかは決して伝えない。
 VERSION ?= $(shell git describe --tags --exact-match 2>/dev/null || echo dev)
+export VERSION
 
 build:
 	npm run build --prefix web
 	mkdir -p bin
-	go build -trimpath -ldflags "-X main.version=$(VERSION)" -o bin/sshc ./cmd/sshc
+	go build -trimpath -ldflags "-X main.version=$${VERSION}" -o bin/sshc ./cmd/sshc
 
 # 統合テストのスイートは、コンテナ内の本物の S3 実装と本物の sshd に対して走る。
 # 密閉されたスイートには答えられない二つの問いに答える。本物のオブジェクトストアが

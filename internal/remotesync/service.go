@@ -165,6 +165,17 @@ type state struct {
 // しない。
 type FileSource func() ([]string, error)
 
+// remoteBinding は、ひとつの設定保存で切り替わるリモート接続一式。
+//
+// client は Endpoint、Bucket、Region、資格情報を自分の中にも保持する。したがって、
+// client と config を別々に読むと、再設定と同期が重なったときに、古いバケットへ
+// 新しいパスで書くような、どの保存設定にも存在しなかった組合せを作れてしまう。
+type remoteBinding struct {
+	config Config
+	creds  objectstore.Credentials
+	client *objectstore.Client
+}
+
 // Service は、一度にひとつの push か pull を行う。
 type Service struct {
 	workspace    *storage.Workspace
@@ -173,10 +184,8 @@ type Service struct {
 	now          func() string
 	newOrigin    func() (string, error)
 
-	mu     sync.Mutex
-	config Config
-	creds  objectstore.Credentials
-	client *objectstore.Client
+	mu      sync.Mutex
+	binding remoteBinding
 }
 
 // NewService は、未設定のサービスを返す。
@@ -202,42 +211,37 @@ func (s *Service) Configure(config Config, credentials objectstore.Credentials, 
 	// 切り詰めることで、これができる前に保存されたものもきれいになる。
 	config.Endpoint = strings.TrimRight(config.Endpoint, "/")
 	config.Path = strings.Trim(config.Path, "/")
-	s.config = config
-	s.creds = credentials
-	s.client = client
+	s.binding = remoteBinding{config: config, creds: credentials, client: client}
 }
 
-// configuration は、この実行が指している設定のコピー。
-func (s *Service) configuration() Config {
+// configuredBinding は、同期処理の開始時点の接続一式をひとつの値として返す。
+// Configure はこのロックの前か後のどちらかにしか現れず、一回の操作の途中で
+// config と client の世代が混ざることはない。
+func (s *Service) configuredBinding() (remoteBinding, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.config
+	binding := s.binding
+	if binding.client == nil || binding.config.Bucket == "" || binding.creds.AccessKeyID == "" {
+		return remoteBinding{}, ErrNotConfigured
+	}
+	return binding, nil
 }
 
 // Configured は、バケットと資格情報が設定されているかを報告する。
 func (s *Service) Configured() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.client != nil && s.config.Bucket != "" && s.creds.AccessKeyID != ""
+	return s.binding.client != nil && s.binding.config.Bucket != "" && s.binding.creds.AccessKeyID != ""
 }
 
 // Direction は、このマシンがどちら向きにデータを動かしてよいかを報告する。
 func (s *Service) Direction() Direction {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.config.Direction == "" {
+	if s.binding.config.Direction == "" {
 		return DirectionBoth
 	}
-	return s.config.Direction
-}
-
-func (s *Service) store() (*objectstore.Client, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.client == nil || s.config.Bucket == "" || s.creds.AccessKeyID == "" {
-		return nil, ErrNotConfigured
-	}
-	return s.client, nil
+	return s.binding.config.Direction
 }
 
 // neverTravels は、どんな名前を与えられようとスナップショットが運んではならない
@@ -380,18 +384,11 @@ func (s *Service) walkKeys() ([]string, error) {
 // 答えを返すストアに届くかどうかであって、そこへ何かが push されたかどうかでは
 // ない。
 func (s *Service) Check(ctx context.Context) error {
-	client, err := s.store()
+	binding, err := s.configuredBinding()
 	if err != nil {
 		return err
 	}
-	return Check(ctx, client, s.objectKey())
-}
-
-// objectKey は、このマシンのライブのスナップショットが置かれる場所。
-func (s *Service) objectKey() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return ObjectKeyFor(s.config)
+	return Check(ctx, binding.client, ObjectKeyFor(binding.config))
 }
 
 // Check は、このサービスが保持していないクライアントに対して同じ問いを投げる。
@@ -411,13 +408,14 @@ func Check(ctx context.Context, client *objectstore.Client, key string) error {
 // マシンの作業を黙って踏み潰せない — それが、これについて「自動」という語を安全に
 // 使えるようにしている。
 func (s *Service) Push(ctx context.Context, passphrase string) error {
-	if s.Direction() == DirectionPull {
-		return ErrPushRefused
-	}
-	client, err := s.store()
+	binding, err := s.configuredBinding()
 	if err != nil {
 		return err
 	}
+	if binding.config.Direction == DirectionPull {
+		return ErrPushRefused
+	}
+	client := binding.client
 	current, err := s.readState()
 	if err != nil {
 		return err
@@ -446,7 +444,7 @@ func (s *Service) Push(ctx context.Context, passphrase string) error {
 		return err
 	}
 
-	objectKey := s.objectKey()
+	objectKey := ObjectKeyFor(binding.config)
 	if current.Key != objectKey {
 		// 別のオブジェクトの世代は、このオブジェクトについて何も語らない。
 		// If-None-Match へフォールバックすることは、push がオブジェクトを作り、
@@ -461,7 +459,7 @@ func (s *Service) Push(ctx context.Context, passphrase string) error {
 	// ライブの書き込みがそのあと競争に負けても、残るのはこのマシンがその時刻に確かに
 	// 作ったスナップショットであり、それはそのフォルダが保持していると述べている
 	// ものそのものである。
-	dated, err := SnapshotKeyFor(s.configuration(), manifest.CreatedAt)
+	dated, err := SnapshotKeyFor(binding.config, manifest.CreatedAt)
 	if err != nil {
 		return err
 	}
@@ -486,6 +484,7 @@ type PullResult struct {
 	Manifest  Manifest
 	ETag      string
 	Origin    string
+	objectKey string
 }
 
 // Pull はスナップショットを取得し、それを適用すると何が変わるかを算出する。
@@ -493,11 +492,12 @@ type PullResult struct {
 // 何も書かない。Apply を別の呼び出しにしてあるのは、書き込みの前に必ず見せる
 // プレビューを、このアプリケーションの他の部分と同じくユーザーに見せるためである。
 func (s *Service) Pull(ctx context.Context, passphrase string) (PullResult, error) {
-	client, err := s.store()
+	binding, err := s.configuredBinding()
 	if err != nil {
 		return PullResult{}, err
 	}
-	object, err := client.Get(ctx, s.objectKey())
+	objectKey := ObjectKeyFor(binding.config)
+	object, err := binding.client.Get(ctx, objectKey)
 	if err != nil {
 		if errors.Is(err, objectstore.ErrNotFound) {
 			return PullResult{}, ErrNoSnapshot
@@ -532,7 +532,7 @@ func (s *Service) Pull(ctx context.Context, passphrase string) (PullResult, erro
 	}
 	return PullResult{
 		Request: request, Conflicts: conflicts, Manifest: manifest,
-		ETag: object.ETag, Origin: manifest.Origin,
+		ETag: object.ETag, Origin: manifest.Origin, objectKey: objectKey,
 	}, err
 }
 
@@ -576,7 +576,7 @@ func (s *Service) Apply(result PullResult) error {
 		}
 	}
 	manifest := result.Manifest
-	return s.writeState(state{ETag: result.ETag, Key: s.objectKey(), Base: &manifest, Origin: origin})
+	return s.writeState(state{ETag: result.ETag, Key: result.objectKey, Base: &manifest, Origin: origin})
 }
 
 // localDigests は、どちらかの側が知っているすべてのパスをハッシュする。これにより、
@@ -663,7 +663,7 @@ func (s *Service) writeState(next state) error {
 func (s *Service) Target() (endpoint, bucket, path string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.config.Endpoint, s.config.Bucket, s.config.Path
+	return s.binding.config.Endpoint, s.binding.config.Bucket, s.binding.config.Path
 }
 
 // LastSync は、state ファイルから、このマシンが最後に同期した内容を報告する。

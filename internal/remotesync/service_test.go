@@ -588,6 +588,107 @@ func TestTheKeysFollowTheConfiguredPath(t *testing.T) {
 	}
 }
 
+// 同期の途中で設定画面が別のバケットを保存しても、ひとつの push は開始時点の
+// client と config の組を最後まで使う。別々に読むと、古い client が新しい Path を
+// 受け取り、どちらの設定にも存在しない場所へスナップショットを書いてしまう。
+func TestPushKeepsOneRemoteBindingWhenReconfigured(t *testing.T) {
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, ".ssh"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := storage.NewWorkspace(storage.OSFileSystem{}, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := storage.NewManager(workspace, time.Now, rand.Reader)
+
+	collecting := make(chan struct{})
+	resume := make(chan struct{})
+	var once sync.Once
+	files := func() ([]string, error) {
+		once.Do(func() { close(collecting) })
+		<-resume
+		return nil, nil
+	}
+	service := remotesync.NewService(workspace, manager, files,
+		func() string { return "2026-08-05T00:00:00Z" },
+		func() (string, error) { return "origin-A", nil })
+
+	oldBucket, newBucket := &fakeBucket{}, &fakeBucket{}
+	oldServer := httptest.NewTLSServer(oldBucket.handler())
+	newServer := httptest.NewTLSServer(newBucket.handler())
+	t.Cleanup(oldServer.Close)
+	t.Cleanup(newServer.Close)
+	credentials := objectstore.Credentials{AccessKeyID: "AKID", SecretAccessKey: "secret"}
+	client := func(server *httptest.Server) *objectstore.Client {
+		return &objectstore.Client{
+			HTTP: server.Client(), Endpoint: server.URL, Bucket: "sshc", Region: "auto",
+			Creds: credentials,
+			Now:   func() time.Time { return time.Unix(0, 0).UTC() },
+		}
+	}
+	service.Configure(remotesync.Config{
+		Endpoint: oldServer.URL, Bucket: "sshc", Region: "auto", Path: "old",
+	}, credentials, client(oldServer))
+
+	result := make(chan error, 1)
+	go func() { result <- service.Push(context.Background(), syncPassphrase) }()
+	select {
+	case <-collecting:
+	case <-time.After(5 * time.Second):
+		close(resume)
+		t.Fatal("Push did not reach collection")
+	}
+	service.Configure(remotesync.Config{
+		Endpoint: newServer.URL, Bucket: "sshc", Region: "auto", Path: "new",
+	}, credentials, client(newServer))
+	close(resume)
+
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatalf("Push = %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Push did not finish")
+	}
+	if got := oldBucket.keys(); len(got) != 2 || oldBucket.object("old/"+remotesync.ObjectName) == nil {
+		t.Errorf("old binding holds %v, want its live object and dated copy", got)
+	}
+	if got := newBucket.keys(); len(got) != 0 {
+		t.Errorf("new binding was used by an in-flight push: %v", got)
+	}
+}
+
+// Pull のプレビュー後に接続先が変わっても、Apply が記録する ETag は取得元のキーに
+// 属する。新しいキーの世代として記録すると、その次の push は存在しないオブジェクトへ
+// 古い If-Match を送り、自分自身を「別のマシンが更新した」と誤認してしまう。
+func TestApplyKeepsTheObjectKeyUsedByPull(t *testing.T) {
+	bucket := &fakeBucket{}
+	producer := newInstallation(t, bucket, map[string]string{"config": "Host bastion\n"})
+	if err := producer.service.Push(context.Background(), syncPassphrase); err != nil {
+		t.Fatalf("producer Push = %v", err)
+	}
+
+	consumer := newInstallation(t, bucket, map[string]string{})
+	result, err := consumer.service.Pull(context.Background(), syncPassphrase)
+	if err != nil {
+		t.Fatalf("consumer Pull = %v", err)
+	}
+	config := consumer.config
+	config.Path = "new"
+	consumer.service.Configure(config, consumer.creds, consumer.client)
+	if err := consumer.service.Apply(result); err != nil {
+		t.Fatalf("consumer Apply = %v", err)
+	}
+	if err := consumer.service.Push(context.Background(), syncPassphrase); err != nil {
+		t.Fatalf("Push after reconfiguration = %v", err)
+	}
+	if got := bucket.object("new/" + remotesync.ObjectName); got == nil {
+		t.Errorf("nothing was written to the new key: %v", bucket.keys())
+	}
+}
+
 // push のたびに、ライブのオブジェクトの隣へ日付付きのコピーが残る。ライブの方は
 // 固定のキーを保つ。条件付き書き込みには条件をかける対象のオブジェクトがひとつ
 // 必要であり、固定名の代わりに日付名にすれば、あるマシンが別のマシンの作業を黙って

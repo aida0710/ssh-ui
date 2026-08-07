@@ -43,6 +43,11 @@ func writeFixture(t *testing.T, workspace *storage.Workspace, relativePath strin
 	if err := os.WriteFile(absolute, contents, permission); err != nil {
 		t.Fatalf("write fixture %s: %v", relativePath, err)
 	}
+	// WriteFile の mode はプロセスの umask で狭められる。公開権限を検査するテストは
+	// その fixture 自身が実行環境の umask によって安全化されてはならない。
+	if err := os.Chmod(absolute, permission); err != nil {
+		t.Fatalf("set fixture permissions for %s: %v", relativePath, err)
+	}
 }
 
 func newKeyPairFixture(t *testing.T, passphrase string) (privateKey []byte, publicKey []byte, fingerprint string) {

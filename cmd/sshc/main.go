@@ -94,6 +94,14 @@ func main() {
 			os.Stderr,
 		))
 	}
+	if len(os.Args) == 2 && os.Args[1] == ListSubcommand {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "sshc: %v\n", err)
+			os.Exit(1)
+		}
+		os.Exit(runList(home, os.Stdout, os.Stderr))
+	}
 
 	// `sshc <alias>` は接続する。askpass の分岐のあと、フラグ解析の前で判定する。alias は
 	// 裸の語であり、flag.Parse はそこで止まってしまうため、接続する代わりにアプリケーション

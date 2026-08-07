@@ -156,7 +156,7 @@ test("shows a nested group inside its parent, and hides a container from the tre
   expect(await clickAndAwait(page, "Save groups", "/api/v1/config/save")).toBe(200);
 
   await openSection(page, "Connections");
-  await expect(tree.getByRole("region", { name: "work" })).toHaveCount(0);
+  await expect(tree.getByRole("region", { name: "work", exact: true })).toHaveCount(0);
   // 子は親の見出しが消えても生き残る。
   await expect(tree.getByRole("region", { name: "work/eu" })).toBeVisible();
 });
