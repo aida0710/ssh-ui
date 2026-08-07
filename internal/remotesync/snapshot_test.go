@@ -304,3 +304,43 @@ func gzipOf(t *testing.T, body []byte) []byte {
 	}
 	return buffer.Bytes()
 }
+
+// A snapshot may hold files and nothing else.
+//
+// A symlink in a tar is the oldest way to make an extractor write outside where
+// it thinks it is writing: the link is created inside, and the next entry
+// written through it lands wherever it points. The check that refuses one has
+// been there all along and nothing noticed when it was removed, which is the
+// same as not having it.
+func TestOpenRefusesAnEntryThatIsNotAFile(t *testing.T) {
+	for _, entry := range []struct {
+		name   string
+		header tar.Header
+	}{
+		{"symlink", tar.Header{Typeflag: tar.TypeSymlink, Name: "escape", Linkname: "../../../etc/hosts"}},
+		{"hard link", tar.Header{Typeflag: tar.TypeLink, Name: "escape", Linkname: "config"}},
+		{"directory", tar.Header{Typeflag: tar.TypeDir, Name: "connections/", Mode: 0o700}},
+		{"device", tar.Header{Typeflag: tar.TypeChar, Name: "console", Mode: 0o600}},
+	} {
+		t.Run(entry.name, func(t *testing.T) {
+			var compressed bytes.Buffer
+			zip := gzip.NewWriter(&compressed)
+			archive := tar.NewWriter(zip)
+			manifest := `{"schemaVersion":1,"createdAt":"2026-08-05T00:00:00Z","origin":"o","files":[]}`
+			writeRaw(t, archive, remotesync.ManifestName, manifest)
+			if err := archive.WriteHeader(&entry.header); err != nil {
+				t.Fatal(err)
+			}
+			if err := archive.Close(); err != nil {
+				t.Fatal(err)
+			}
+			if err := zip.Close(); err != nil {
+				t.Fatal(err)
+			}
+
+			if _, _, err := remotesync.Read(compressed.Bytes()); !errors.Is(err, remotesync.ErrUnsafePath) {
+				t.Errorf("a %s entry was accepted: %v", entry.name, err)
+			}
+		})
+	}
+}
