@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"ssh-ui/internal/platform"
+	"sshc/internal/platform"
 )
 
 const (

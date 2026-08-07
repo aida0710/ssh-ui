@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/remotesync"
-	"ssh-ui/internal/storage"
+	"sshc/internal/remotesync"
+	"sshc/internal/storage"
 )
 
 const root = "/Users/tester/.ssh"

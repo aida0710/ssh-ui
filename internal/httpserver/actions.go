@@ -7,8 +7,8 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/api"
-	"ssh-ui/internal/session"
+	"sshc/internal/api"
+	"sshc/internal/session"
 )
 
 // actionKind binds one confirmable operation to the subsystem that owns it.

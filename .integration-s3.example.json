@@ -1,1 +1,1 @@
-{"identities":[{"name":"ssh-ui","credentials":[{"accessKey":"SSHUITESTKEY","secretKey":"sshuitestsecret"}],"actions":["Admin","Read","Write","List","Tagging"]}]}
+{"identities":[{"name":"sshc","credentials":[{"accessKey":"SSHUITESTKEY","secretKey":"sshuitestsecret"}],"actions":["Admin","Read","Write","List","Tagging"]}]}

@@ -12,8 +12,8 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"ssh-ui/internal/config"
-	"ssh-ui/internal/storage"
+	"sshc/internal/config"
+	"sshc/internal/storage"
 )
 
 // Kind classifies a file under ~/.ssh by what it contains, never by its name.
@@ -50,7 +50,7 @@ const (
 	// Everything below it — backups, trash, journal and history — is engine
 	// state, so it never appears in the inventory, is never registered with an
 	// agent and is never suggested as an IdentityFile.
-	StateDirectoryName = "ssh-ui"
+	StateDirectoryName = "sshc"
 
 	maxScanDepth   = 8
 	maxScanEntries = 4096

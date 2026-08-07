@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"ssh-ui/internal/config"
-	"ssh-ui/internal/diagnostics"
-	"ssh-ui/internal/effective"
-	"ssh-ui/internal/platform"
+	"sshc/internal/config"
+	"sshc/internal/diagnostics"
+	"sshc/internal/effective"
+	"sshc/internal/platform"
 )
 
 type scriptedRunner struct {

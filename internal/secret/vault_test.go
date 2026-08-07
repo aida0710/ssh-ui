@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/envelope"
-	"ssh-ui/internal/secret"
+	"sshc/internal/envelope"
+	"sshc/internal/secret"
 )
 
 const passphrase = "correct horse battery staple"
@@ -126,8 +126,8 @@ func TestSealUsesAFreshNonceEveryTime(t *testing.T) {
 func TestOpenRefusesSomethingThatIsNotAVault(t *testing.T) {
 	cases := map[string][]byte{
 		"empty":        {},
-		"short":        []byte("ssh-ui"),
-		"wrong magic":  append([]byte("not-an-ssh-ui-en"), make([]byte, 64)...),
+		"short":        []byte("sshc"),
+		"wrong magic":  append([]byte("not-an-sshc-en"), make([]byte, 64)...),
 		"zero cost":    zeroCostVault(t),
 		"truncated":    sealedVault(t, map[string]string{"a": "b"})[:20],
 		"only header":  headerOf(t),

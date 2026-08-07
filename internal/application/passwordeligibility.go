@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"ssh-ui/internal/effective"
-	"ssh-ui/internal/knownhosts"
+	"sshc/internal/effective"
+	"sshc/internal/knownhosts"
 )
 
 // Codes for what stands between a host and a stored password.

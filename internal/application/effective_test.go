@@ -75,8 +75,8 @@ func TestDiffEffectiveReportsAddedChangedAndRemovedValues(t *testing.T) {
 	}}
 	after := Effective{Alias: "build01", Entries: []EffectiveEntry{
 		{Keyword: "User", Values: []string{"ops"}, Source: Source{Path: "config", Line: 3}},
-		{Keyword: "Port", Values: []string{"2222"}, Source: Source{Path: "groups.ssh-ui.conf", Line: 5}},
-		{Keyword: "ServerAliveInterval", Values: []string{"30"}, Source: Source{Path: "groups.ssh-ui.conf", Line: 6}},
+		{Keyword: "Port", Values: []string{"2222"}, Source: Source{Path: "groups.sshc.conf", Line: 5}},
+		{Keyword: "ServerAliveInterval", Values: []string{"30"}, Source: Source{Path: "groups.sshc.conf", Line: 6}},
 	}}
 
 	diff := DiffEffective(before, after)
@@ -86,7 +86,7 @@ func TestDiffEffectiveReportsAddedChangedAndRemovedValues(t *testing.T) {
 	if diff.Changes[0].Keyword != "Port" || diff.Changes[0].Before[0] != "22" || diff.Changes[0].After[0] != "2222" {
 		t.Fatalf("port change = %#v", diff.Changes[0])
 	}
-	if diff.Changes[0].AfterSources[0].Path != "groups.ssh-ui.conf" {
+	if diff.Changes[0].AfterSources[0].Path != "groups.sshc.conf" {
 		t.Fatalf("port source = %#v", diff.Changes[0].AfterSources)
 	}
 	if diff.Changes[1].Keyword != "ServerAliveInterval" || len(diff.Changes[1].Before) != 0 {
@@ -111,7 +111,7 @@ func TestDiffEffectiveIgnoresALineShiftButNotARealMove(t *testing.T) {
 	}
 
 	movedFile := Effective{Alias: "nas", Entries: []EffectiveEntry{
-		{Keyword: "ServerAliveInterval", Values: []string{"30"}, Source: Source{Path: "groups.ssh-ui.conf", Absolute: "/root/groups.ssh-ui.conf", Line: 7, Condition: "Host nas"}},
+		{Keyword: "ServerAliveInterval", Values: []string{"30"}, Source: Source{Path: "groups.sshc.conf", Absolute: "/root/groups.sshc.conf", Line: 7, Condition: "Host nas"}},
 	}}
 	if diff := DiffEffective(before, movedFile); len(diff.Changes) != 1 {
 		t.Fatalf("a move to another file was not reported: %#v", diff.Changes)

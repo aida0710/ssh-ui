@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"ssh-ui/internal/platform"
+	"sshc/internal/platform"
 )
 
 // DefaultEvaluationTimeout bounds one `ssh -G` run. Evaluation never touches

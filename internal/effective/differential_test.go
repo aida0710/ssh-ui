@@ -6,11 +6,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"ssh-ui/internal/config"
-	"ssh-ui/internal/effective"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/platform/macos"
-	"ssh-ui/internal/storage"
+	"sshc/internal/config"
+	"sshc/internal/effective"
+	"sshc/internal/platform"
+	"sshc/internal/platform/macos"
+	"sshc/internal/storage"
 )
 
 // TestProjectionMatchesInstalledOpenSSH is the differential test the
@@ -78,17 +78,17 @@ func TestProjectionMatchesInstalledOpenSSH(t *testing.T) {
 			// group, so its own file wins over the parent group's settings
 			// block, and connections/work/*.conf must not reach it at all.
 			name: "generated group region",
-			contents: "# >>> ssh-ui groups (generated). Child groups first: OpenSSH keeps the first value it reads.\n" +
+			contents: "# >>> sshc groups (generated). Child groups first: OpenSSH keeps the first value it reads.\n" +
 				"# Edit through the UI; lines between these markers are replaced on the next save.\n" +
 				"Include connections/work/eu/*.conf\n" +
 				"Include connections/work/*.conf\n" +
-				"Include groups.ssh-ui.conf\n" +
-				"# <<< ssh-ui groups\n" +
+				"Include groups.sshc.conf\n" +
+				"# <<< sshc groups\n" +
 				"Host *\n\tPort 22\n",
 			files: map[string]string{
 				"connections/work/eu/lon.conf": "Host lon-1\n\tHostName 203.0.113.11\n\tPort 2210\n",
 				"connections/work/web.conf":    "Host web-1\n\tHostName 203.0.113.10\n",
-				"groups.ssh-ui.conf":           "Host lon-1 web-1\n\tUser ops\n\nHost lon-1\n\tPort 2299\n",
+				"groups.sshc.conf":             "Host lon-1 web-1\n\tUser ops\n\nHost lon-1\n\tPort 2299\n",
 			},
 			alias:      "lon-1",
 			keywords:   []string{"hostname", "port", "user"},

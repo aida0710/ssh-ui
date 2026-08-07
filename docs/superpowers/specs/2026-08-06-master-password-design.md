@@ -2,7 +2,7 @@
 
 The vault already has a master password: a passphrase this application never
 stores, from which Argon2id derives the key that seals
-`~/.ssh/ssh-ui/secrets`. What it protects is one map — a remote account's
+`~/.ssh/sshc/secrets`. What it protects is one map — a remote account's
 password, keyed by alias.
 
 Three things sit outside it that belong inside, and the map has the wrong shape.
@@ -26,7 +26,7 @@ There are two credential namespaces, and they do not mix.
 ```
 
 The object store's settings are **not** in it. They live beside it, in
-`ssh-ui/sync-settings`, sealed with the same master password:
+`sshc/sync-settings`, sealed with the same master password:
 
 ```json
 { "endpoint": "…", "bucket": "…", "region": "…",
@@ -70,15 +70,15 @@ did. `SyncHandlers.Configure` carried the reason:
 > convenience and a much larger blast radius, and it would mean anybody who
 > obtained one snapshot could fetch every later one.
 
-The vault travels: `Collect` names `ssh-ui/secrets` outright. Putting the access
+The vault travels: `Collect` names `sshc/secrets` outright. Putting the access
 key inside it would put the key to the bucket inside the bucket. Someone who
 obtained one snapshot by any means — a backup, a stray copy — and its passphrase
 would gain the live bucket and every future snapshot, rather than the one
 snapshot they already had.
 
-So the settings live in `ssh-ui/sync-settings`, sealed with the same master
+So the settings live in `sshc/sync-settings`, sealed with the same master
 password and never collected. `Collect` lists what it takes, so a new file under
-`ssh-ui/` is excluded by construction rather than by a rule someone has to
+`sshc/` is excluded by construction rather than by a rule someone has to
 remember.
 
 The bootstrap follows from that and is stated rather than solved: a machine that
@@ -139,7 +139,7 @@ form is filled in on the second run.
 ## When the vault is opened
 
 There is one route by which a master password is entered: the screen. The
-binary's other invocation — `ssh-ui <prompt>`, the askpass helper OpenSSH execs
+binary's other invocation — `sshc <prompt>`, the askpass helper OpenSSH execs
 — holds no secret and can decrypt nothing; it asks the running, unlocked process
 over loopback with a one-time token. It is not a second way in.
 
@@ -156,7 +156,7 @@ generation. If unattended start is ever wanted, the shape is standard input fed
 from somewhere that protects it —
 
 ```
-security find-generic-password -w -s ssh-ui | ssh-ui -unlock-stdin
+security find-generic-password -w -s sshc | sshc -unlock-stdin
 ```
 
 — and it is not built now, because a guess at an unattended workflow nobody has

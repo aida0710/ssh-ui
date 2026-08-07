@@ -8,10 +8,10 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/handoff"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/secret"
-	"ssh-ui/internal/session"
+	"sshc/internal/handoff"
+	"sshc/internal/platform"
+	"sshc/internal/secret"
+	"sshc/internal/session"
 )
 
 // ConnectPath is where the command line asks what it needs to connect.
@@ -26,7 +26,7 @@ const ConnectPath = "/cli/connect"
 // maxConnectBody bounds the request. An alias is a word.
 const maxConnectBody = 4 << 10
 
-// ConnectHandlers answer `ssh-ui <alias>`.
+// ConnectHandlers answer `sshc <alias>`.
 type ConnectHandlers struct {
 	// Secret is what the caller must present. An empty one refuses every
 	// request: a server that could not write its handoff must not accept one.

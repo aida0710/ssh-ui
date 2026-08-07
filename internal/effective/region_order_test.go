@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"ssh-ui/internal/effective"
-	"ssh-ui/internal/storage"
+	"sshc/internal/effective"
+	"sshc/internal/storage"
 )
 
 // The differential test skips when OpenSSH is absent, which would let a broken
@@ -17,16 +17,16 @@ func TestGeneratedRegionFixtureOrdersChildBeforeParent(t *testing.T) {
 	home := t.TempDir()
 	root := filepath.Join(home, ".ssh")
 	files := map[string]string{
-		"config": "# >>> ssh-ui groups (generated). Child groups first: OpenSSH keeps the first value it reads.\n" +
+		"config": "# >>> sshc groups (generated). Child groups first: OpenSSH keeps the first value it reads.\n" +
 			"# Edit through the UI; lines between these markers are replaced on the next save.\n" +
 			"Include connections/work/eu/*.conf\n" +
 			"Include connections/work/*.conf\n" +
-			"Include groups.ssh-ui.conf\n" +
-			"# <<< ssh-ui groups\n" +
+			"Include groups.sshc.conf\n" +
+			"# <<< sshc groups\n" +
 			"Host *\n\tPort 22\n",
 		"connections/work/eu/lon.conf": "Host lon-1\n\tHostName 203.0.113.11\n\tPort 2210\n",
 		"connections/work/web.conf":    "Host web-1\n\tHostName 203.0.113.10\n",
-		"groups.ssh-ui.conf":           "Host lon-1 web-1\n\tUser ops\n\nHost lon-1\n\tPort 2299\n",
+		"groups.sshc.conf":             "Host lon-1 web-1\n\tUser ops\n\nHost lon-1\n\tPort 2299\n",
 	}
 	for relative, contents := range files {
 		absolute := filepath.Join(root, filepath.FromSlash(relative))

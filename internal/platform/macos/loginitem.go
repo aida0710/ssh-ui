@@ -9,26 +9,26 @@ import (
 	"strconv"
 	"strings"
 
-	"ssh-ui/internal/platform"
+	"sshc/internal/platform"
 )
 
 // LoginItemLabel is the launchd label this application registers under.
-const LoginItemLabel = "com.github.aida0710.ssh-ui"
+const LoginItemLabel = "com.github.aida0710.sshc"
 
 // ErrLoginItemPathNotAbsolute refuses to register a program launchd would have
 // to find through PATH, which is to say a program someone else could supply.
 var ErrLoginItemPathNotAbsolute = errors.New("login item program path must be absolute")
 
-// LoginItem turns "start ssh-ui when I log in" on and off.
+// LoginItem turns "start sshc when I log in" on and off.
 //
 // It is off unless the user asks for it. A background process that holds the
 // key to every stored secret is not something to arrange on somebody's behalf,
-// and the application is perfectly usable without it: `ssh-ui <alias>` falls
+// and the application is perfectly usable without it: `sshc <alias>` falls
 // back to a plain ssh when nothing is running.
 //
 // The agent is started with -open=false, so nothing opens a browser at login.
 // Standard output is deliberately not redirected anywhere: it carries the URL
-// with a live bootstrap token, and a log file is not a place for one. `ssh-ui
+// with a live bootstrap token, and a log file is not a place for one. `sshc
 // open` mints a fresh one when somebody wants to look.
 type LoginItem struct {
 	// Runner runs launchctl. Injected so no test loads an agent.

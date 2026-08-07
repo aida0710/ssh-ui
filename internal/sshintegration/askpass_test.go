@@ -1,6 +1,6 @@
 // Package sshintegration holds tests that need a real OpenSSH server.
 //
-// Everything here skips unless SSH_UI_TEST_SSH_ADDR names one. `make
+// Everything here skips unless SSHC_TEST_SSH_ADDR names one. `make
 // integration` starts one in a container and sets it; CI does the same.
 //
 // The point is the one thing no fake can establish: that OpenSSH accepts what
@@ -29,16 +29,16 @@ import (
 
 	"crypto/rand"
 
-	"ssh-ui/internal/httpserver"
-	"ssh-ui/internal/secret"
-	"ssh-ui/internal/session"
-	"ssh-ui/internal/storage"
+	"sshc/internal/httpserver"
+	"sshc/internal/secret"
+	"sshc/internal/session"
+	"sshc/internal/storage"
 )
 
 const (
-	addressVariable  = "SSH_UI_TEST_SSH_ADDR"
-	userVariable     = "SSH_UI_TEST_SSH_USER"
-	passwordVariable = "SSH_UI_TEST_SSH_PASSWORD"
+	addressVariable  = "SSHC_TEST_SSH_ADDR"
+	userVariable     = "SSHC_TEST_SSH_USER"
+	passwordVariable = "SSHC_TEST_SSH_PASSWORD"
 
 	alias      = "integration"
 	passphrase = "correct horse battery staple"
@@ -61,7 +61,7 @@ func requireTarget(t *testing.T) target {
 
 func helperPath(t *testing.T) string {
 	t.Helper()
-	path, err := filepath.Abs(filepath.Join("..", "..", "bin", "ssh-ui"))
+	path, err := filepath.Abs(filepath.Join("..", "..", "bin", "sshc"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +242,7 @@ func startServer(t *testing.T, home string) (*secret.Service, string, *countingL
 	return vault, strings.TrimSuffix(origin, "/") + httpserver.AskpassPath, listener
 }
 
-// answerable is the production rule, restated here because cmd/ssh-ui is a
+// answerable is the production rule, restated here because cmd/sshc is a
 // main package and cannot be imported. A test that used a laxer rule would
 // prove nothing about the shipped one, so this is the same predicate: the
 // prompt ends in OpenSSH's password suffix and mentions nothing else.
@@ -273,9 +273,9 @@ func runSSH(t *testing.T, home, endpoint, token string, arguments ...string) (st
 		"PATH=" + os.Getenv("PATH"),
 		"SSH_ASKPASS=" + helperPath(t),
 		"SSH_ASKPASS_REQUIRE=force",
-		"SSH_UI_ASKPASS_URL=" + endpoint,
-		"SSH_UI_ASKPASS_TOKEN=" + token,
-		"SSH_UI_ASKPASS_ALIAS=" + alias,
+		"SSHC_ASKPASS_URL=" + endpoint,
+		"SSHC_ASKPASS_TOKEN=" + token,
+		"SSHC_ASKPASS_ALIAS=" + alias,
 	}
 	output, err := command.CombinedOutput()
 	return string(output), err

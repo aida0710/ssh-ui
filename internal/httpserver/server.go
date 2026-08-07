@@ -16,18 +16,18 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/application"
-	"ssh-ui/internal/diagnostics"
-	"ssh-ui/internal/knownhosts"
-	"ssh-ui/internal/remotekey"
-	"ssh-ui/internal/remotesync"
-	"ssh-ui/internal/secret"
-	"ssh-ui/internal/selfupdate"
-	"ssh-ui/internal/session"
+	"sshc/internal/application"
+	"sshc/internal/diagnostics"
+	"sshc/internal/knownhosts"
+	"sshc/internal/remotekey"
+	"sshc/internal/remotesync"
+	"sshc/internal/secret"
+	"sshc/internal/selfupdate"
+	"sshc/internal/session"
 )
 
 type Options struct {
-	// CLISecret is what `ssh-ui <alias>` must present. It is minted per run and
+	// CLISecret is what `sshc <alias>` must present. It is minted per run and
 	// written to the state directory, so a handoff left behind by a process
 	// that was killed carries a secret nothing accepts.
 	CLISecret string
@@ -56,7 +56,7 @@ type Options struct {
 	// tests that do not wire it rely on.
 	Passwords *secret.Service
 	// AskpassHelper is the absolute path of this binary, which is the program
-	// OpenSSH runs to obtain a password. Only cmd/ssh-ui can know it.
+	// OpenSSH runs to obtain a password. Only cmd/sshc can know it.
 	AskpassHelper string
 	// Answerable is the prompt rule, injected so the server and the helper
 	// cannot drift into two different rules.
@@ -73,7 +73,7 @@ type Server struct {
 	http     *http.Server
 	url      string
 	engine   *echo.Echo
-	// cliSecret is what `ssh-ui <alias>` must present. It is held so the caller
+	// cliSecret is what `sshc <alias>` must present. It is held so the caller
 	// that knows where the handoff belongs can read it back rather than
 	// carrying it alongside.
 	cliSecret string
@@ -192,7 +192,7 @@ func New(options Options) (*Server, error) {
 			ResealSnapshot: reseal,
 		})
 	}
-	// `ssh-ui <alias>` asks here for what one connection needs. The secret is
+	// `sshc <alias>` asks here for what one connection needs. The secret is
 	// what the caller must have read out of the state directory; without one
 	// this route refuses everything.
 	registerUpdateRoutes(e, &UpdateHandlers{Current: options.Version, Checker: options.Updates})
@@ -292,7 +292,7 @@ func acceptsHTML(header string) bool {
 	return false
 }
 
-// CLISecret is what `ssh-ui <alias>` must present, so the caller that knows
+// CLISecret is what `sshc <alias>` must present, so the caller that knows
 // where to write the handoff can read it back without holding it separately.
 func (s *Server) CLISecret() string { return s.cliSecret }
 

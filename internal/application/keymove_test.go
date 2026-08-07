@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/keys"
-	"ssh-ui/internal/storage"
+	"sshc/internal/keys"
+	"sshc/internal/storage"
 )
 
 // A real Ed25519 key pair, generated once and kept as a constant. Building one

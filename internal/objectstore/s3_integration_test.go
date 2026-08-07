@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"ssh-ui/internal/objectstore"
+	"sshc/internal/objectstore"
 )
 
 // The integration suite runs against a real S3 implementation.
@@ -24,11 +24,11 @@ import (
 // same. Any S3-compatible server will do — SeaweedFS, MinIO, or R2 itself with
 // real credentials.
 const (
-	endpointVariable = "SSH_UI_TEST_S3_ENDPOINT"
-	keyVariable      = "SSH_UI_TEST_S3_KEY"
-	secretVariable   = "SSH_UI_TEST_S3_SECRET"
-	bucketVariable   = "SSH_UI_TEST_S3_BUCKET"
-	regionVariable   = "SSH_UI_TEST_S3_REGION"
+	endpointVariable = "SSHC_TEST_S3_ENDPOINT"
+	keyVariable      = "SSHC_TEST_S3_KEY"
+	secretVariable   = "SSHC_TEST_S3_SECRET"
+	bucketVariable   = "SSHC_TEST_S3_BUCKET"
+	regionVariable   = "SSHC_TEST_S3_REGION"
 )
 
 func integrationClient(t *testing.T) objectstore.Client {
@@ -43,7 +43,7 @@ func integrationClient(t *testing.T) objectstore.Client {
 	}
 	bucket := os.Getenv(bucketVariable)
 	if bucket == "" {
-		bucket = "ssh-ui-test"
+		bucket = "sshc-test"
 	}
 	return objectstore.Client{
 		HTTP:     &http.Client{Timeout: 30 * time.Second},

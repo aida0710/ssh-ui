@@ -30,7 +30,7 @@ export async function bootstrapSession(
     });
     // A cookie that no longer names a session cannot be recovered from here: a
     // bootstrap fragment is printed only by a starting process. The two cases
-    // are told apart because restarting ssh-ui is the answer to one of them.
+    // are told apart because restarting sshc is the answer to one of them.
     if (!renewed.ok) throw new Error("session_expired");
     const payload: unknown = await renewed.json();
     if (!isBootstrapResponse(payload)) throw new Error("invalid_bootstrap_response");
@@ -45,7 +45,7 @@ export async function bootstrapSession(
   const response = await fetcher("/api/v1/session/bootstrap", {
     method: "POST",
     credentials: "same-origin",
-    headers: { "X-SSH-UI-Bootstrap": bootstrap },
+    headers: { "X-SSHC-Bootstrap": bootstrap },
   });
   if (!response.ok) throw new Error("bootstrap_rejected");
 

@@ -1,6 +1,6 @@
 // Package secret holds the passwords this application can hand to OpenSSH.
 //
-// They live in one encrypted file inside the workspace, ~/.ssh/ssh-ui/secrets,
+// They live in one encrypted file inside the workspace, ~/.ssh/sshc/secrets,
 // and not in the macOS Keychain. That is a deliberate choice with one reason:
 // a Keychain item belongs to a machine, and these have to travel. The
 // workspace is what syncs, so anything that must arrive on a second machine
@@ -19,25 +19,25 @@ import (
 	"slices"
 	"strings"
 
-	"ssh-ui/internal/envelope"
-	"ssh-ui/internal/platform"
+	"sshc/internal/envelope"
+	"sshc/internal/platform"
 )
 
 // WorkspacePath is where the sealed file lives, relative to the workspace
 // root. It has no extension that invites an editor to open it and no name that
 // suggests it can be read.
-const WorkspacePath = "ssh-ui/secrets"
+const WorkspacePath = "sshc/secrets"
 
 // SettingsPath is the object store's settings, sealed with the same master
 // password and kept beside the vault rather than inside it.
 //
-// The vault travels: remotesync.Collect names ssh-ui/secrets outright. Putting
+// The vault travels: remotesync.Collect names sshc/secrets outright. Putting
 // the access key inside it would put the key to the bucket inside the bucket,
 // and someone who obtained one snapshot by any means, along with its
 // passphrase, would gain the live bucket and every snapshot after it rather
 // than the one they already had. Collect lists what it takes, so this file is
 // excluded by construction and not by a rule anyone has to remember.
-const SettingsPath = "ssh-ui/sync-settings"
+const SettingsPath = "sshc/sync-settings"
 
 // SchemaVersion is the version of the plaintext document, inside the
 // encryption. The header carries its own version for the envelope.
@@ -102,7 +102,7 @@ func ValidKind(kind Kind) bool {
 // SyncSettings is what the object store needs.
 //
 // It is sealed with the same master password as the vault and kept in its own
-// file, because the vault travels: Collect names ssh-ui/secrets outright, and
+// file, because the vault travels: Collect names sshc/secrets outright, and
 // putting the access key inside the vault would put the key to the bucket
 // inside the bucket. Someone who obtained one snapshot by any means, and its
 // passphrase, would gain the live bucket and every future snapshot rather than

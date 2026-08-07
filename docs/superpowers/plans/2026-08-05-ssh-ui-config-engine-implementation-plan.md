@@ -1,4 +1,4 @@
-# SSH UI Lossless Config Engine Implementation Plan
+# sshc Lossless Config Engine Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -1624,11 +1624,11 @@ func TestOSFileSystemReadFileRefusesSymlinksAndOversizedFiles(t *testing.T) {
 
 func TestOSFileSystemWriteTempCreatesPrivateFileInTargetDirectory(t *testing.T) {
 	directory := t.TempDir()
-	path, err := OSFileSystem{}.WriteTemp(directory, ".ssh-ui-", FilePermission, []byte("staged"))
+	path, err := OSFileSystem{}.WriteTemp(directory, ".sshc-", FilePermission, []byte("staged"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if filepath.Dir(path) != directory || !strings.HasPrefix(filepath.Base(path), ".ssh-ui-") {
+	if filepath.Dir(path) != directory || !strings.HasPrefix(filepath.Base(path), ".sshc-") {
 		t.Fatalf("temp path = %q", path)
 	}
 	info, err := os.Lstat(path)
@@ -1961,7 +1961,7 @@ import (
 )
 
 var (
-	ErrOutsideWorkspace = errors.New("path is outside the ssh-ui workspace")
+	ErrOutsideWorkspace = errors.New("path is outside the sshc workspace")
 	ErrSymlinkPath      = errors.New("path contains a symbolic link")
 	ErrMissingDirectory = errors.New("parent directory does not exist")
 	ErrNotDirectory     = errors.New("path component is not a directory")
@@ -2007,7 +2007,7 @@ func (w *Workspace) Home() string { return w.home }
 func (w *Workspace) Root() string { return w.root }
 
 // StateDir is the directory holding journals, history and backups.
-func (w *Workspace) StateDir() string { return filepath.Join(w.root, "ssh-ui") }
+func (w *Workspace) StateDir() string { return filepath.Join(w.root, "sshc") }
 
 // Contains reports whether candidate is the root or lives below it.
 func (w *Workspace) Contains(candidate string) bool {
@@ -2236,7 +2236,7 @@ func TestCommitWritesEveryChangeAndRecordsHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, entry := range staged {
-		if strings.HasPrefix(entry.Name(), ".ssh-ui-") {
+		if strings.HasPrefix(entry.Name(), ".sshc-") {
 			t.Fatalf("temporary file %q was left behind", entry.Name())
 		}
 	}
@@ -2491,7 +2491,7 @@ const (
 	journalDirectoryName = "journal"
 	historyDirectoryName = "history"
 	backupDirectoryName  = "backups"
-	temporaryPrefix      = ".ssh-ui-"
+	temporaryPrefix      = ".sshc-"
 
 	statusStaging    = "staging"
 	statusStaged     = "staged"
@@ -3418,8 +3418,8 @@ import (
 	"testing"
 	"time"
 
-	"ssh-ui/internal/config"
-	"ssh-ui/internal/storage"
+	"sshc/internal/config"
+	"sshc/internal/storage"
 )
 
 const mainConfig = `# personal config
@@ -3600,7 +3600,7 @@ Expected: FAIL with `undefined: storage.NewResolver`.
 // internal/storage/loader.go
 package storage
 
-import "ssh-ui/internal/config"
+import "sshc/internal/config"
 
 // ConfigLoader gives the Include graph read-only access to the disk.
 //
@@ -3662,8 +3662,8 @@ Add a section after the security boundary section, in the README's existing Japa
 - 書き込みは解決済みの `~/.ssh` 配下だけに限定します。`..`、シンボリックリンク、外部パスで書き込み範囲は広がりません。読み取りは `O_NOFOLLOW` を使います。
 - `Include` が `~/.ssh` の外を指す場合は、グラフ表示と読み取りのみ許可します。
 - `%h` など接続先が決まるまで確定しないトークンは展開せず、`include_unsupported_expansion` として報告します。
-- 変更は `~/.ssh/ssh-ui/journal/` に予定を記録し、全ファイルを一時ファイルへ書き出して fsync した後に atomic rename します。中断した場合は `~/.ssh/ssh-ui/backups/<id>/` の世代バックアップから復旧するか、staged 内容で完了させるかを選べます。
-- 完了した変更は `~/.ssh/ssh-ui/history/` に記録します。バックアップは自動削除しません。
+- 変更は `~/.ssh/sshc/journal/` に予定を記録し、全ファイルを一時ファイルへ書き出して fsync した後に atomic rename します。中断した場合は `~/.ssh/sshc/backups/<id>/` の世代バックアップから復旧するか、staged 内容で完了させるかを選べます。
+- 完了した変更は `~/.ssh/sshc/history/` に記録します。バックアップは自動削除しません。
 - 複数ファイルの OS レベル完全 atomic commit は存在しないため、部分適用は隠さず pending として提示します。
 - ディレクトリ構成要素の入れ替えに対する time-of-check/time-of-use 競合は best-effort でしか防げません。`O_NOFOLLOW` と構成要素ごとの検査を行いますが、同一ユーザー権限で動作する悪意あるプロセスからは完全には保護できません。
 ```
@@ -3678,7 +3678,7 @@ go test -race ./...
 make fuzz
 npm test --prefix web
 npm run typecheck --prefix web
-go build -trimpath -o bin/ssh-ui ./cmd/ssh-ui
+go build -trimpath -o bin/sshc ./cmd/sshc
 git diff --stat go.mod go.sum
 git status --short
 ```
@@ -3696,10 +3696,10 @@ Run:
 
 ```bash
 grep -rn "UserHomeDir\|os.Getenv(\"HOME\")\|\$HOME" internal/ cmd/ || echo "no home directory access"
-ls -la ~/.ssh/ssh-ui 2>/dev/null || echo "no state directory in the real home"
+ls -la ~/.ssh/sshc 2>/dev/null || echo "no state directory in the real home"
 ```
 
-Expected: the first command prints `no home directory access`; the second confirms the real `~/.ssh` gained no `ssh-ui` directory. If either check fails, fix the offending test before committing.
+Expected: the first command prints `no home directory access`; the second confirms the real `~/.ssh` gained no `sshc` directory. If either check fails, fix the offending test before committing.
 
 - [ ] **Step 8: Commit the wiring and documentation**
 

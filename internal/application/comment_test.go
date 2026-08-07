@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/config"
+	"sshc/internal/config"
 )
 
 func TestSetHostCommentReplacesOnlyTheAttachedRun(t *testing.T) {

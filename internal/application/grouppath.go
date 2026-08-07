@@ -38,7 +38,7 @@ var ErrInvalidGroupName = errors.New("group name is not a safe relative director
 // meaning inside ~/.ssh. The comparison is case-insensitive because a default
 // macOS volume treats "Config" and "config" as one directory entry.
 var reservedGroupNames = map[string]bool{
-	"ssh-ui":           true,
+	"sshc":             true,
 	"config":           true,
 	"known_hosts":      true,
 	"known_hosts2":     true,

@@ -6,13 +6,13 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/api"
-	"ssh-ui/internal/config"
-	"ssh-ui/internal/diagnostics"
-	"ssh-ui/internal/effective"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/secret"
-	"ssh-ui/internal/session"
+	"sshc/internal/api"
+	"sshc/internal/config"
+	"sshc/internal/diagnostics"
+	"sshc/internal/effective"
+	"sshc/internal/platform"
+	"sshc/internal/secret"
+	"sshc/internal/session"
 )
 
 // DiagnosticsHandlers exposes the separately triggered checks.

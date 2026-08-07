@@ -1,8 +1,8 @@
-# SSH UI Remote Sync Implementation Plan
+# sshc Remote Sync Implementation Plan
 
 **Status:** design, not yet implemented.
 
-**Goal:** Keep one `~/.ssh` in step across several machines through a Cloudflare R2 bucket. The whole workspace travels — the entry file, every file the Include graph reaches, `ssh-ui/metadata.json`, and **the private keys** — as one encrypted snapshot. A push never overwrites a snapshot it has not seen. A pull is an ordinary journalled transaction, so it is previewed, backed up and rollable-back exactly like every other write this application makes.
+**Goal:** Keep one `~/.ssh` in step across several machines through a Cloudflare R2 bucket. The whole workspace travels — the entry file, every file the Include graph reaches, `sshc/metadata.json`, and **the private keys** — as one encrypted snapshot. A push never overwrites a snapshot it has not seen. A pull is an ordinary journalled transaction, so it is previewed, backed up and rollable-back exactly like every other write this application makes.
 
 **Architecture:** Two new packages. `internal/objectstore` is an S3-compatible client: SigV4 signing, `GET`/`PUT`/`HEAD`, conditional writes, nothing else. `internal/sync` owns the snapshot format, the encryption, the conflict rule and the translation of a pull into a `storage.Request`. Neither knows what an `ssh_config` is. `internal/application` gains the use case that ties a successful commit to a queued push. Credentials and the encryption passphrase live in `internal/secret` — the Keychain package the password-authentication plan introduces, which is why **that plan lands first**.
 
@@ -42,7 +42,7 @@ snapshot := nonce || AES-256-GCM(key, nonce, gzip(tar(manifest.json, files…)))
 - **Paths are workspace-relative and forward-slashed**, the same vocabulary `storage.Workspace` already uses. A path that does not resolve inside the workspace is refused on read — a snapshot is untrusted input, and `../` in a tar is the oldest trick there is.
 - **`mode` travels** because a private key with the wrong bits is a private key OpenSSH refuses. Only `0600` and `0700` are accepted; anything else is refused rather than normalised, so a snapshot cannot widen permissions.
 - **`origin` is not a hostname.** It exists so the UI can say "this snapshot came from a different installation", and a hostname in an object anyone with the bucket can read is an unnecessary disclosure.
-- **`secret: true`** marks a private key so the pull can apply it with `storage.Change{SkipBackup: true}`. That field exists in the storage layer for exactly this reason, and its comment already says why: *the previous contents may be a private key, and the design refuses to leave a second copy of key material in `~/.ssh/ssh-ui/backups/`.* A pull that ignored it would defeat that decision from a new direction.
+- **`secret: true`** marks a private key so the pull can apply it with `storage.Change{SkipBackup: true}`. That field exists in the storage layer for exactly this reason, and its comment already says why: *the previous contents may be a private key, and the design refuses to leave a second copy of key material in `~/.ssh/sshc/backups/`.* A pull that ignored it would defeat that decision from a new direction.
 
 ## 2. Encryption is not optional
 
@@ -59,7 +59,7 @@ Private keys are in the snapshot. That decision was taken deliberately; it makes
 
 This application's one real guarantee is that it never writes over a file it has not read. Sync must inherit that or it dissolves it.
 
-**The remote's ETag is the generation.** Local state, in `~/.ssh/ssh-ui/sync-state.json`, records the ETag of the snapshot this machine last pushed or pulled, and the manifest it contained.
+**The remote's ETag is the generation.** Local state, in `~/.ssh/sshc/sync-state.json`, records the ETag of the snapshot this machine last pushed or pulled, and the manifest it contained.
 
 - **First push:** `PUT` with `If-None-Match: *`. Succeeds only if no object exists. A `412` means another machine got there first.
 - **Later push:** `PUT` with `If-Match: <last known ETag>`. A `412` means the remote moved since we last saw it.
@@ -326,7 +326,7 @@ Plus six statements, each with a named test above:
 
 1. A push cannot overwrite a snapshot this machine has not seen.
 2. A pull is one `storage.Request` and is refused by the existing validator if it would break the Include graph.
-3. A private key is never written into `~/.ssh/ssh-ui/backups/` by a pull.
+3. A private key is never written into `~/.ssh/sshc/backups/` by a pull.
 4. A malicious snapshot cannot write outside the workspace or widen a permission bit.
 5. No credential and no passphrase appears in any response body, any log line, or any file under `~/.ssh`.
 6. `go.mod` and `go.sum` are unchanged: this plan adds no module.

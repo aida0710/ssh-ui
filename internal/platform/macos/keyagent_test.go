@@ -8,8 +8,8 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/platform/macos"
+	"sshc/internal/platform"
+	"sshc/internal/platform/macos"
 )
 
 // recordingRunner captures the command that would have run. No test in this

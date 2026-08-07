@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"os/exec"
 
-	"ssh-ui/internal/platform"
+	"sshc/internal/platform"
 )
 
 var ErrUnsafeBrowserURL = errors.New("browser URL must use loopback HTTP")

@@ -29,10 +29,10 @@ import (
 	"testing/fstest"
 	"time"
 
-	"ssh-ui/internal/app"
-	"ssh-ui/internal/httpserver"
-	"ssh-ui/internal/keys"
-	"ssh-ui/internal/platform"
+	"sshc/internal/app"
+	"sshc/internal/httpserver"
+	"sshc/internal/keys"
+	"sshc/internal/platform"
 )
 
 // canaryPassphrase protects the fixture private key. It must never appear in
@@ -341,11 +341,11 @@ func writeFixtureTree(t testing.TB, home, root string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	encoded, err := keys.EncodePrivateKey(privateKey, "fixture@ssh-ui", []byte(canaryPassphrase))
+	encoded, err := keys.EncodePrivateKey(privateKey, "fixture@sshc", []byte(canaryPassphrase))
 	if err != nil {
 		t.Fatal(err)
 	}
-	public, err := keys.EncodePublicKey(privateKey, "fixture@ssh-ui")
+	public, err := keys.EncodePublicKey(privateKey, "fixture@sshc")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -386,7 +386,7 @@ func fixturePrivateKeySecondLine(t testing.TB, root string) string {
 func (f *fixture) bootstrapSession(bootstrap string) {
 	f.t.Helper()
 	response := f.do(http.MethodPost, "/api/v1/session/bootstrap", nil, func(request *http.Request) {
-		request.Header.Set("X-SSH-UI-Bootstrap", bootstrap)
+		request.Header.Set("X-SSHC-Bootstrap", bootstrap)
 	})
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
@@ -630,7 +630,7 @@ func (f *fixture) read(relative string) []byte {
 //
 // The merged tree settled on a single POST /api/v1/actions endpoint that takes
 // {kind, target} and answers 201, and on one delivery spelling for every
-// guarded route: the X-SSH-UI-Action header. The plan was drafted while two
+// guarded route: the X-SSHC-Action header. The plan was drafted while two
 // endpoint spellings and a body-carried token were still in play; neither
 // survived into the tree.
 func (f *fixture) actionToken(t testing.TB, kind, target string) string {
@@ -666,7 +666,7 @@ func (f *fixture) tryActionToken(kind, target string) string {
 func withAction(token string) func(*http.Request) {
 	return func(request *http.Request) {
 		if token != "" {
-			request.Header.Set("X-SSH-UI-Action", token)
+			request.Header.Set("X-SSHC-Action", token)
 		}
 	}
 }

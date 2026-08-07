@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"ssh-ui/internal/diagnostics"
+	"sshc/internal/diagnostics"
 )
 
 // dialerFunc turns a function into a Dialer so a test can decide the outcome

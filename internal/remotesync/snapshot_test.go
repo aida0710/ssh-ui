@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/remotesync"
+	"sshc/internal/remotesync"
 )
 
 func entry(path, contents string, secret bool) remotesync.Entry {
@@ -26,7 +26,7 @@ func buildFixture(t *testing.T) ([]byte, map[string][]byte) {
 	contents := map[string][]byte{
 		"config":                    []byte("# Managed by hand\r\nHost bastion\n\tPort 2222   \n"),
 		"connections/work/lon.conf": []byte("Host lon-1\n\tHostName 203.0.113.11\n"),
-		"ssh-ui/metadata.json":      []byte(`{"schemaVersion":2}`),
+		"sshc/metadata.json":        []byte(`{"schemaVersion":2}`),
 		"keys/work/id_ed25519":      []byte("-----BEGIN OPENSSH PRIVATE KEY-----\nnot really\n"),
 	}
 	manifest := remotesync.Manifest{
@@ -35,7 +35,7 @@ func buildFixture(t *testing.T) ([]byte, map[string][]byte) {
 		Files: []remotesync.Entry{
 			entry("config", string(contents["config"]), false),
 			entry("connections/work/lon.conf", string(contents["connections/work/lon.conf"]), false),
-			entry("ssh-ui/metadata.json", string(contents["ssh-ui/metadata.json"]), false),
+			entry("sshc/metadata.json", string(contents["sshc/metadata.json"]), false),
 			entry("keys/work/id_ed25519", string(contents["keys/work/id_ed25519"]), true),
 		},
 	}
@@ -71,7 +71,7 @@ func TestRoundTripIsByteIdentical(t *testing.T) {
 
 func TestAPrivateKeyIsMarkedSecret(t *testing.T) {
 	// A pull applies a secret entry with SkipBackup set. Losing the mark would
-	// leave a copy of key material in ~/.ssh/ssh-ui/backups/ on every sync.
+	// leave a copy of key material in ~/.ssh/sshc/backups/ on every sync.
 	archive, _ := buildFixture(t)
 
 	manifest, _, err := remotesync.Read(archive)

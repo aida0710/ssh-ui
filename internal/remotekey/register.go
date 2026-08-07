@@ -13,17 +13,17 @@ import (
 	"strings"
 	"time"
 
-	"ssh-ui/internal/effective"
-	"ssh-ui/internal/knownhosts"
-	"ssh-ui/internal/platform"
+	"sshc/internal/effective"
+	"sshc/internal/knownhosts"
+	"sshc/internal/platform"
 )
 
 const (
 	// ProbeMarker is what a POSIX shell must echo back.
-	ProbeMarker = "ssh-ui-posix-shell"
+	ProbeMarker = "sshc-posix-shell"
 	// ProbeCommand is the fixed command used to decide whether the remote
 	// account has a POSIX shell. It prints one known word and nothing else.
-	ProbeCommand = `printf '%s\n' ssh-ui-posix-shell`
+	ProbeCommand = `printf '%s\n' sshc-posix-shell`
 	// RemotePath is the file this package appends to.
 	RemotePath = "~/.ssh/authorized_keys"
 
@@ -45,18 +45,18 @@ umask 077
 key=$(cat)
 case "$key" in
   ssh-*|ecdsa-*|sk-*) ;;
-  *) echo "ssh-ui: unsupported key" >&2; exit 3 ;;
+  *) echo "sshc: unsupported key" >&2; exit 3 ;;
 esac
 mkdir -p "$HOME/.ssh"
 chmod 700 "$HOME/.ssh"
 touch "$HOME/.ssh/authorized_keys"
 chmod 600 "$HOME/.ssh/authorized_keys"
 if grep -qxF "$key" "$HOME/.ssh/authorized_keys"; then
-  echo "ssh-ui: already-present"
+  echo "sshc: already-present"
   exit 0
 fi
 printf '%s\n' "$key" >> "$HOME/.ssh/authorized_keys"
-echo "ssh-ui: added"
+echo "sshc: added"
 `
 
 var (
@@ -196,9 +196,9 @@ func (s Service) Register(ctx context.Context, report effective.Report, alias st
 		Truncated: output.Truncated,
 	}
 	switch {
-	case strings.Contains(string(output.Stdout), "ssh-ui: already-present"):
+	case strings.Contains(string(output.Stdout), "sshc: already-present"):
 		result.Outcome = RegistrationExisting
-	case strings.Contains(string(output.Stdout), "ssh-ui: added"):
+	case strings.Contains(string(output.Stdout), "sshc: added"):
 		result.Outcome = RegistrationAdded
 	default:
 		return result, ErrUnsupportedRemote

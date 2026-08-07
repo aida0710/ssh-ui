@@ -12,15 +12,15 @@ import (
 	"sync"
 	"time"
 
-	"ssh-ui/internal/envelope"
-	"ssh-ui/internal/objectstore"
-	"ssh-ui/internal/storage"
+	"sshc/internal/envelope"
+	"sshc/internal/objectstore"
+	"sshc/internal/storage"
 )
 
 // StatePath is where this machine records what it last synced, relative to the
 // workspace root. It is written through the transaction manager like every
 // other file, so the record of what was synced cannot be left half-written.
-const StatePath = "ssh-ui/sync-state.json"
+const StatePath = "sshc/sync-state.json"
 
 // archiveSuffix names what the bytes are: a tar.gz inside an encrypted
 // envelope. Both the live object and every dated copy carry it.
@@ -256,20 +256,20 @@ var neverTravels = []string{
 	SettingsPathRelative,
 	// The handoff: a URL and a secret for one run of one machine, which mean
 	// nothing anywhere else.
-	"ssh-ui/cli",
+	"sshc/cli",
 	// This machine's own bookkeeping. A journal or a backup from another
 	// machine describes writes that never happened here.
-	"ssh-ui/journal",
-	"ssh-ui/backups",
-	"ssh-ui/history",
-	"ssh-ui/trash",
+	"sshc/journal",
+	"sshc/backups",
+	"sshc/history",
+	"sshc/trash",
 	StatePath,
 }
 
 // SettingsPathRelative is the sealed object store settings. It is named here
 // rather than imported from the secret package, which imports nothing of this
 // one and must go on importing nothing of it.
-const SettingsPathRelative = "ssh-ui/sync-settings"
+const SettingsPathRelative = "sshc/sync-settings"
 
 func excluded(relative string) bool {
 	for _, name := range neverTravels {
@@ -297,7 +297,7 @@ func (s *Service) Collect() (Manifest, map[string][]byte, error) {
 		return Manifest{}, nil, err
 	}
 	relatives = append(relatives, keys...)
-	relatives = append(relatives, "ssh-ui/metadata.json", "ssh-ui/secrets")
+	relatives = append(relatives, "sshc/metadata.json", "sshc/secrets")
 
 	seen := map[string]bool{}
 	contents := map[string][]byte{}

@@ -1,11 +1,11 @@
-# SSH UI 設計
+# sshc 設計
 
 作成日: 2026-08-04  
 状態: ユーザー承認済み設計の文書化
 
 ## 1. 目的
 
-`ssh-ui` は、macOS 上の OpenSSH クライアント設定と鍵を localhost の Web UI から整理・編集・検証するツールである。既存の `~/.ssh/config` と `Include` 先を正本として扱い、通常の Terminal からの `ssh <alias>`、`scp`、`rsync` と完全に共存する。
+`sshc` は、macOS 上の OpenSSH クライアント設定と鍵を localhost の Web UI から整理・編集・検証するツールである。既存の `~/.ssh/config` と `Include` 先を正本として扱い、通常の Terminal からの `ssh <alias>`、`scp`、`rsync` と完全に共存する。
 
 主な利用目的は以下である。
 
@@ -24,7 +24,7 @@
 - クライアント OS は macOS のみ
 - OpenSSH は OS にインストール済みのものを利用
 - サーバーは `127.0.0.1` のみで待ち受ける
-- `ssh-ui` コマンドの実行中だけ動作し、常駐 LaunchAgent は作らない
+- `sshc` コマンドの実行中だけ動作し、常駐 LaunchAgent は作らない
 - UI は React、Vite、TypeScript、Tailwind CSS
 - API は Go と Echo
 - 配布物はフロントエンドを埋め込んだ単一 Go バイナリを目標とする
@@ -52,7 +52,7 @@ OpenAPI を API 契約の正本とし、Go の入出力型と TypeScript クラ�
 ## 4. アーキテクチャ
 
 ```text
-ssh-ui CLI
+sshc CLI
 ├── Echo HTTP API
 ├── embedded React application
 ├── application use cases
@@ -79,7 +79,7 @@ ssh-ui CLI
 
 - 接続設定: `~/.ssh/config` とその `Include` 先
 - 鍵: `~/.ssh` 配下の実ファイル
-- UI 専用情報: `~/.ssh/ssh-ui/metadata.json`
+- UI 専用情報: `~/.ssh/sshc/metadata.json`
 
 metadata にはスキーマバージョン、グループの表示情報、タグ、色、メモ、お気に入り、表示順を保存する。グループ所属は保存しない。秘密鍵本文、公開鍵本文、パスフレーズ、Keychain の秘密値は保存しない。
 
@@ -204,7 +204,7 @@ Terminal 起動へ渡せる Host alias は安全な文字集合に限定する�
 
 - config、Include 先、metadata、`known_hosts` は UI による変更前に世代スナップショットを作成
 - 履歴には時刻、対象、操作種別、内容を含まない秘密鍵 reveal の監査事実を記録
-- 鍵削除は `~/.ssh/ssh-ui/trash/` への同一ファイルシステム内移動
+- 鍵削除は `~/.ssh/sshc/trash/` への同一ファイルシステム内移動
 - trash は `0700`、鍵は元の厳格な権限を維持
 - 30 日経過を表示するが自動削除しない
 - 完全削除は再確認を必要とする
@@ -251,7 +251,7 @@ localhost HTTP は暗号化されないため、loopback 以外には絶対に b
 - 外部 CDN、フォント、分析、telemetry を使用しない
 - 秘密値を URL、ログ、例外、React 永続状態へ含めない
 - 秘密鍵 API と一般 API を分離
-- bootstrap 交換時にセッション専用 CSRF token を発行し、状態変更 API では `X-SSH-UI-CSRF` header として要求
+- bootstrap 交換時にセッション専用 CSRF token を発行し、状態変更 API では `X-SSHC-CSRF` header として要求
 - 秘密鍵 reveal、完全削除、接続テスト、公開鍵登録には、対象と操作種別へ紐付いた一回限り・短時間有効の action token を追加で要求
 
 ### 8.3 実行可能な SSH 設定

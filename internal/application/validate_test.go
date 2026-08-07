@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"ssh-ui/internal/storage"
+	"sshc/internal/storage"
 )
 
 // mapLoader is a config.Loader backed by a map, so an overlay can be exercised
@@ -141,7 +141,7 @@ func TestValidateLeavesApplicationStateAlone(t *testing.T) {
 			SkipBackup: true,
 		}},
 	}); err != nil {
-		t.Fatalf("a file under ssh-ui/ was validated as configuration: %v", err)
+		t.Fatalf("a file under sshc/ was validated as configuration: %v", err)
 	}
 
 	// The same bytes as a real configuration file are still refused, so this
@@ -160,11 +160,11 @@ func TestValidateLeavesApplicationStateAlone(t *testing.T) {
 	if _, err := service.manager.Commit(storage.Request{
 		Operation: "config.file_raw",
 		Changes: []storage.Change{{
-			Path:     filepath.Join(workspace.Root(), "ssh-ui-notes.conf"),
+			Path:     filepath.Join(workspace.Root(), "sshc-notes.conf"),
 			Contents: ciphertext,
 		}},
 	}); err == nil {
-		t.Fatal("a sibling of ssh-ui/ escaped validation")
+		t.Fatal("a sibling of sshc/ escaped validation")
 	}
 }
 
@@ -172,7 +172,7 @@ func TestValidateLeavesApplicationStateAlone(t *testing.T) {
 // configuration change, and must not be refused because the configuration it
 // never touched cannot be resolved.
 //
-// It matters more than it looks: the vault lives under ssh-ui/, the whole
+// It matters more than it looks: the vault lives under sshc/, the whole
 // application is behind the master password, and a workspace with no config
 // file yet — or a broken one — would otherwise be a workspace where the master
 // password cannot be set. The tool for fixing a broken configuration would

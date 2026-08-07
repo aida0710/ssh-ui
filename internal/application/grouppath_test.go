@@ -53,8 +53,8 @@ func TestValidateGroupNameRefusesEverythingThatIsNotASafeRelativeDirectory(t *te
 		"work\x00eu",   // a NUL never reaches a path
 		".hidden",      // a leading dot is how ~/.ssh hides its own files
 		"work/.hidden", // at any depth
-		"ssh-ui",       // the engine's own state directory
-		"SSH-UI",       // and the same file on a case-insensitive volume
+		"sshc",         // the engine's own state directory
+		"SSHC",         // and the same file on a case-insensitive volume
 		"Config",       // a name the application depends on
 		"known_hosts",  //
 		"authorized_keys",
@@ -95,7 +95,7 @@ func TestGroupOfPathReadsMembershipFromTheDirectory(t *testing.T) {
 		{"connections/loose.conf", "", false},
 		{"conf.d/10.conf", "", false},
 		{"config", "", false},
-		{"ssh-ui/metadata.json", "", false},
+		{"sshc/metadata.json", "", false},
 		{"connections", "", false},
 	}
 	for _, testCase := range cases {

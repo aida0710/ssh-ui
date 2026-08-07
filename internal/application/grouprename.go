@@ -8,9 +8,9 @@ import (
 	"sort"
 	"strings"
 
-	"ssh-ui/internal/config"
-	"ssh-ui/internal/keys"
-	"ssh-ui/internal/storage"
+	"sshc/internal/config"
+	"sshc/internal/keys"
+	"sshc/internal/storage"
 )
 
 var (

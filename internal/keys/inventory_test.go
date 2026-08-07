@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/storage"
+	"sshc/internal/storage"
 )
 
 // newTestWorkspace builds an isolated ~/.ssh under t.TempDir(). No test in this
@@ -78,9 +78,9 @@ func TestScanClassifiesByContentNotByFileName(t *testing.T) {
 	writeFixture(t, workspace, "config", []byte("Host example\n  HostName example.test\n"), 0o600)
 	writeFixture(t, workspace, "known_hosts", []byte("example.test "+string(publicKey)), 0o600)
 	writeFixture(t, workspace, "exposed", privateKey, 0o644)
-	writeFixture(t, workspace, "ssh-ui/trash/20260805T090000.000-aabbccdd/secret", privateKey, 0o600)
-	writeFixture(t, workspace, "ssh-ui/backups/20260805T090000.000-aabbccdd/config", []byte("Host old\n"), 0o600)
-	writeFixture(t, workspace, "ssh-ui/journal/20260805T090000.000-aabbccdd.json", []byte("{}\n"), 0o600)
+	writeFixture(t, workspace, "sshc/trash/20260805T090000.000-aabbccdd/secret", privateKey, 0o600)
+	writeFixture(t, workspace, "sshc/backups/20260805T090000.000-aabbccdd/config", []byte("Host old\n"), 0o600)
+	writeFixture(t, workspace, "sshc/journal/20260805T090000.000-aabbccdd.json", []byte("{}\n"), 0o600)
 
 	inventory, err := NewScanner(workspace).Scan()
 	if err != nil {

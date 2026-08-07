@@ -7,7 +7,7 @@ test("exchanges the fragment for a session and removes it from the address bar",
 }) => {
   await openApplication(page, installation);
 
-  await expect(page.getByRole("heading", { name: "SSH UI", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "sshc", level: 1 })).toBeVisible();
   await expect(sessionStatus(page)).toContainText("Local session active");
 
   expect(await page.evaluate(() => window.location.hash)).toBe("");
@@ -16,7 +16,7 @@ test("exchanges the fragment for a session and removes it from the address bar",
   expect(await page.evaluate(() => document.cookie)).toBe("");
 
   const cookies = await context.cookies();
-  const session = cookies.find((cookie) => cookie.name === "ssh_ui_session");
+  const session = cookies.find((cookie) => cookie.name === "sshc_session");
   expect(session).toBeDefined();
   expect(session?.httpOnly).toBe(true);
   expect(session?.sameSite).toBe("Strict");
@@ -72,7 +72,7 @@ test("enforces the content security policy in the browser, not only in the heade
   // refuses the assignment itself, and script-src 'self' would refuse to run
   // the result. Either is a pass; what must not happen is the script running.
   const inlineRan = await page.evaluate(async () => {
-    const marker = "__ssh_ui_inline_marker";
+    const marker = "__sshc_inline_marker";
     try {
       const element = document.createElement("script");
       element.textContent = `window.${marker} = true;`;
@@ -120,10 +120,10 @@ test("keeps no secret in persistent browser storage", async ({ page, installatio
   // nothing but the two preference keys may exist.
   const stored = await page.evaluate(() => ({
     keys: Object.keys(window.localStorage).sort(),
-    language: window.localStorage.getItem("ssh-ui.language"),
+    language: window.localStorage.getItem("sshc.language"),
     session: window.sessionStorage.length,
   }));
-  expect(stored.keys).toEqual(["ssh-ui.language"]);
+  expect(stored.keys).toEqual(["sshc.language"]);
   expect(["en", "ja"]).toContain(stored.language);
   expect(stored.session).toBe(0);
 });
@@ -149,9 +149,9 @@ test("keeps the chosen appearance, and writes nothing else", async ({ page, inst
 
   const stored = await page.evaluate(() => ({
     keys: Object.keys(window.localStorage).sort(),
-    theme: window.localStorage.getItem("ssh-ui.theme"),
+    theme: window.localStorage.getItem("sshc.theme"),
   }));
-  expect(stored.keys).toEqual(["ssh-ui.language", "ssh-ui.theme"]);
+  expect(stored.keys).toEqual(["sshc.language", "sshc.theme"]);
   expect(stored.theme).toBe("system");
 });
 
@@ -183,7 +183,7 @@ test("keeps the chosen language across a reload, and translates the panels", asy
   await expect(page.getByRole("button", { name: "鍵", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "鍵", exact: true }).click();
   await expect(page.getByRole("button", { name: "鍵を作成" })).toBeVisible();
-  expect(await page.evaluate(() => Object.keys(window.localStorage).sort())).toEqual(["ssh-ui.language"]);
+  expect(await page.evaluate(() => Object.keys(window.localStorage).sort())).toEqual(["sshc.language"]);
 });
 
 // The fragment is spent on first use and taken out of the address bar, so a

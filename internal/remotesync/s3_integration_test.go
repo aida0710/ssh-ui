@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"ssh-ui/internal/objectstore"
-	"ssh-ui/internal/remotesync"
-	"ssh-ui/internal/storage"
+	"sshc/internal/objectstore"
+	"sshc/internal/remotesync"
+	"sshc/internal/storage"
 )
 
 // Two machines and a real bucket.
@@ -23,19 +23,19 @@ import (
 // specification. This proves the compare-and-swap against a server that did
 // not read this repository.
 //
-// It skips unless SSH_UI_TEST_S3_ENDPOINT names one; `make integration` starts
+// It skips unless SSHC_TEST_S3_ENDPOINT names one; `make integration` starts
 // SeaweedFS in a container and sets it.
 func integrationBucket(t *testing.T) (objectstore.Client, string) {
 	t.Helper()
-	endpoint := os.Getenv("SSH_UI_TEST_S3_ENDPOINT")
+	endpoint := os.Getenv("SSHC_TEST_S3_ENDPOINT")
 	if endpoint == "" {
-		t.Skip("SSH_UI_TEST_S3_ENDPOINT is not set; run `make integration`")
+		t.Skip("SSHC_TEST_S3_ENDPOINT is not set; run `make integration`")
 	}
-	bucket := os.Getenv("SSH_UI_TEST_S3_BUCKET")
+	bucket := os.Getenv("SSHC_TEST_S3_BUCKET")
 	if bucket == "" {
-		bucket = "ssh-ui-test"
+		bucket = "sshc-test"
 	}
-	region := os.Getenv("SSH_UI_TEST_S3_REGION")
+	region := os.Getenv("SSHC_TEST_S3_REGION")
 	if region == "" {
 		region = "us-east-1"
 	}
@@ -45,8 +45,8 @@ func integrationBucket(t *testing.T) (objectstore.Client, string) {
 		Bucket:   bucket,
 		Region:   region,
 		Creds: objectstore.Credentials{
-			AccessKeyID:     os.Getenv("SSH_UI_TEST_S3_KEY"),
-			SecretAccessKey: os.Getenv("SSH_UI_TEST_S3_SECRET"),
+			AccessKeyID:     os.Getenv("SSHC_TEST_S3_KEY"),
+			SecretAccessKey: os.Getenv("SSHC_TEST_S3_SECRET"),
 		},
 	}, endpoint
 }
@@ -79,7 +79,7 @@ func realInstallation(t *testing.T, files map[string]string) installation {
 	source := func() ([]string, error) {
 		var paths []string
 		for name := range files {
-			if strings.HasPrefix(name, "keys/") || strings.HasPrefix(name, "ssh-ui/") {
+			if strings.HasPrefix(name, "keys/") || strings.HasPrefix(name, "sshc/") {
 				continue
 			}
 			paths = append(paths, name)
@@ -102,7 +102,7 @@ func TestAgainstARealBucketASnapshotTravelsBetweenTwoMachines(t *testing.T) {
 	first := realInstallation(t, map[string]string{
 		"config":               "Host bastion\r\n\tPort 2222   \n",
 		"keys/work/id_ed25519": "-----BEGIN OPENSSH PRIVATE KEY-----\nnot really\n",
-		"ssh-ui/metadata.json": `{"schemaVersion":2}`,
+		"sshc/metadata.json":   `{"schemaVersion":2}`,
 	})
 	// The object key is fixed, so a bucket that has been used before already
 	// holds a snapshot and the conditional write refuses. That is the client

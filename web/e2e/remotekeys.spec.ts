@@ -4,7 +4,7 @@ import { clickAndAwait, expect, openSection, test, openApplication } from "./sup
 // sends it anywhere: only the plan endpoint is exercised, and design §6.6 makes
 // that endpoint describe the change without contacting the remote host.
 const publicKey =
-  "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGZpeHR1cmVrZXlmaXh0dXJla2V5Zml4dHVyZWtl fixture@ssh-ui";
+  "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGZpeHR1cmVrZXlmaXh0dXJla2V5Zml4dHVyZWtl fixture@sshc";
 
 // "Register the key" is never clicked here. It opens an SSH connection, which
 // no automated test in this repository may do; that half is manual test M2.

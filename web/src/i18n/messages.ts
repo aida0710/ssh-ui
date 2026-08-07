@@ -13,11 +13,11 @@
 // from English, so a message that would need concatenation in one language is
 // written as one string with placeholders in both.
 export const en = {
-  "shell.title": "SSH UI",
+  "shell.title": "sshc",
   "shell.starting": "Starting secure local session…",
   "shell.active": "Local session active · {version}",
   "shell.bootstrapFailed":
-    "Secure local session could not be started. Restart ssh-ui and use the newly opened tab.",
+    "Secure local session could not be started. Restart sshc and use the newly opened tab.",
   "shell.primaryNavigation": "Primary",
   "shell.navConnections": "Connections",
   "shell.navKeysHosts": "Keys and hosts",
@@ -58,7 +58,7 @@ export const en = {
   "secrets.master": "Master password",
   "secrets.create": "Create the vault",
   "secrets.unlock": "Unlock",
-  "secrets.lock": "Lock ssh-ui",
+  "secrets.lock": "Lock sshc",
   "secrets.createFailed": "The vault could not be created. A master password must be at least 12 characters.",
   "secrets.unlockFailed": "That is not the master password.",
   "secrets.failed": "The vault could not be read.",
@@ -80,8 +80,8 @@ export const en = {
   "update.available": "{version} is available — read what changed",
   "login.heading": "Start at login",
   "login.note":
-    "Off by default. With it on, ssh-ui runs in the background from the moment you log in, so `ssh-ui <alias>` always finds it. It starts locked: the first time you want the interface, run `ssh-ui open`, which mints a fresh way in rather than leaving one in a log file.",
-  "login.enable": "Start ssh-ui when I log in",
+    "Off by default. With it on, sshc runs in the background from the moment you log in, so `sshc <alias>` always finds it. It starts locked: the first time you want the interface, run `sshc open`, which mints a fresh way in rather than leaving one in a log file.",
+  "login.enable": "Start sshc when I log in",
   "login.failed": "That could not be changed.",
   "secrets.changeHeading": "Master password",
   "secrets.changeNote":
@@ -98,7 +98,7 @@ export const en = {
   "section.secrets": "Secrets",
   "lock.explainNew":
     "Choose a master password. It seals your stored passwords, your key passphrases, the sync settings and every backup this application keeps.",
-  "lock.explainOpen": "Give your master password to open ssh-ui.",
+  "lock.explainOpen": "Give your master password to open sshc.",
   "lock.noRecovery":
     "It cannot be recovered. Lose it and what the vault holds is gone — including the backups that would otherwise let a change be undone.",
   "lock.password": "Master password",
@@ -134,7 +134,7 @@ export const en = {
   "history.empty": "No change has been made through this application yet.",
   "history.restorePath": "Restore {path}",
   "history.backupsKept":
-    "Generation backups are kept in ~/.ssh/ssh-ui/backups and are never deleted automatically. A restore is itself a new transaction, so it can be undone the same way.",
+    "Generation backups are kept in ~/.ssh/sshc/backups and are never deleted automatically. A restore is itself a new transaction, so it can be undone the same way.",
 
   "notice.complex_external_rule": "A wildcard, negation, Match block or duplicate alias makes this value come from a rule this editor will not simplify. The source is shown instead.",
   "notice.duplicate_alias": "Another block declares the same alias. OpenSSH uses the first one it reads.",
@@ -162,7 +162,7 @@ export const en = {
     "This group is declared but its directory is not there. Nothing is read for it until something is put in one.",
   "notice.group_empty": "This group is declared and holds nothing.",
   "notice.generated_region_damaged":
-    "~/.ssh/config has the opening marker of this application's generated block but not its closing one, so it cannot tell where its own lines stop. The Include lines in it still work; groups cannot be saved until the closing marker is put back. Add a line reading “# <<< ssh-ui groups” after the last generated Include, or delete the whole block and save the groups again.",
+    "~/.ssh/config has the opening marker of this application's generated block but not its closing one, so it cannot tell where its own lines stop. The Include lines in it still work; groups cannot be saved until the closing marker is put back. Add a line reading “# <<< sshc groups” after the last generated Include, or delete the whole block and save the groups again.",
   "notice.explained_values_only": "These values explain what this engine reads. Run ssh -G from the Diagnostics tab for the authoritative answer.",
   "notice.destination_not_included": "No Include reaches this file yet, so OpenSSH will not read the moved connection until you add one.",
   "notice.group_file_unreached":
@@ -202,7 +202,7 @@ export const en = {
 
   "orphan.heading": "Settings whose connection is gone",
   "orphan.explain":
-    "These notes were written for a Host block that is no longer in your configuration. ssh-ui does not guess which connection inherited them.",
+    "These notes were written for a Host block that is no longer in your configuration. sshc does not guess which connection inherited them.",
   "orphan.chooseTarget": "Choose the connection this note belongs to.",
   "orphan.occupied": "{alias} already has its own settings. Clear those first, or discard this note.",
   "orphan.entry": "{alias} in {path}",
@@ -222,7 +222,7 @@ export const en = {
     "A stored password is the remote account's own credential, and the same password is often reused elsewhere. A key is stronger. Store one only for a server that will not take a key.",
   "password.statusFailed": "The password vault could not be read.",
   "password.noVault":
-    "No vault yet. Choose a passphrase of at least {count} characters. It is never stored: it exists only while ssh-ui is running, and it is what encrypts the file that travels with the rest of your ~/.ssh.",
+    "No vault yet. Choose a passphrase of at least {count} characters. It is never stored: it exists only while sshc is running, and it is what encrypts the file that travels with the rest of your ~/.ssh.",
   "password.newPassphrase": "New vault passphrase",
   "password.passphraseLost":
     "Lose this and every stored password is gone. Nobody can recover it, including this application.",
@@ -250,7 +250,7 @@ export const en = {
   "password.storeFailed": "The password could not be stored.",
   "password.stored": "A password is stored for {alias}.",
   "password.armedNote":
-    "Opening a terminal for this host arms the helper for that one connection. The vault must be unlocked at the time, so a saved password does nothing until the passphrase has been entered once since ssh-ui started.",
+    "Opening a terminal for this host arms the helper for that one connection. The vault must be unlocked at the time, so a saved password does nothing until the passphrase has been entered once since sshc started.",
   "password.forget": "Forget the password for {alias}",
   "password.forgetFailed": "The password could not be removed.",
   "password.show": "Show",
@@ -357,7 +357,7 @@ export const en = {
   "diag.reachedThrough": "reached through {parent}",
   "diag.notSimple": "These rules are not simple enough to project",
   "diag.notSimpleDetail":
-    "ssh-ui shows where each of these comes from and does not guess what it resolves to. `ssh -G` is the authority for them.",
+    "sshc shows where each of these comes from and does not guess what it resolves to. `ssh -G` is the authority for them.",
   "diag.inside": "inside {condition}",
   "diag.reachability": "Reachability",
   "diag.authentication": "Authentication",
@@ -387,7 +387,7 @@ export const en = {
   "kh.add": "Add",
   "kh.addHeading": "Add an unverified host key",
   "kh.addExplain":
-    "ssh-keyscan returned this key from {host}. Anything answering at that address could have sent it, so ssh-ui will not treat it as this host’s key on its own. Type the fingerprint you obtained through another channel, or acknowledge that you are trusting a key nobody verified.",
+    "ssh-keyscan returned this key from {host}. Anything answering at that address could have sent it, so sshc will not treat it as this host’s key on its own. Type the fingerprint you obtained through another channel, or acknowledge that you are trusting a key nobody verified.",
   "kh.expectedFingerprint": "Fingerprint you obtained through another channel",
   "kh.acknowledge": "I could not verify this key and I accept the risk of trusting it",
   "kh.addToKnownHosts": "Add to known_hosts",
@@ -398,7 +398,7 @@ export const en = {
   "rk.idle": "Nothing is sent to the remote host until you confirm it.",
   "rk.added": "The key was added to the remote authorized_keys file.",
   "rk.alreadyPresent": "The key was already present; the remote file was left as it was.",
-  "rk.valuesFromEngine": "ssh-ui reading your configuration; ssh was not run",
+  "rk.valuesFromEngine": "sshc reading your configuration; ssh was not run",
   "rk.valuesFromSshG": "ssh -G, which OpenSSH itself resolved",
   "rk.pickFromSsh": "Public key from ~/.ssh",
   "rk.typeInstead": "Type one below instead",
@@ -427,7 +427,7 @@ export const en = {
   "rk.remoteCommandLabel": "Remote command",
   "rk.connectingRuns": "Connecting to this host runs a command",
   "rk.acknowledgeRuns": "I have read this command and accept that connecting runs it",
-  "rk.manualHeading": "ssh-ui will not register a key on this host. Do it yourself:",
+  "rk.manualHeading": "sshc will not register a key on this host. Do it yourself:",
   "rk.result": "Result",
 
   "explorer.loading": "Loading configuration files…",
@@ -590,8 +590,8 @@ export const en = {
   "host.moveToGroup": "Move to this group",
   "host.favourite": "Favourite",
   "host.comment": "Comment",
-  "host.commentNote": "Written into the configuration file above the Host line, so it is there for anyone reading the file without ssh-ui.",
-  "host.commentFromNote": "This started as a note stored only by ssh-ui. Saving it writes it into the configuration file and retires the note.",
+  "host.commentNote": "Written into the configuration file above the Host line, so it is there for anyone reading the file without sshc.",
+  "host.commentFromNote": "This started as a note stored only by sshc. Saving it writes it into the configuration file and retires the note.",
   "host.saveComment": "Save comment",
   "host.colour": "Colour",
   "host.clearColour": "Clear colour",
@@ -602,7 +602,7 @@ export const en = {
 
   "keys.heading": "Keys",
   "keys.reading": "Reading the ssh directory…",
-  "keys.unreadable": "The ssh directory could not be read. Restart ssh-ui and try again.",
+  "keys.unreadable": "The ssh directory could not be read. Restart sshc and try again.",
   "keys.createFailed": "The key could not be created. Check the name, the algorithm and the passphrase.",
   "keys.passphraseFailed": "The passphrase could not be changed. Check the current passphrase and try again.",
   "keys.agentFailed": "The key could not be added to the agent. Check the passphrase, and that an agent this process can reach is running.",
@@ -651,7 +651,7 @@ export const en = {
   "keys.agentDelegationsNote": "These configuration entries expect the agent to supply a key rather than naming a file:",
   "keys.registerHeading": "Add to agent: {path}",
   "keys.registerNote":
-    "The passphrase is handed to ssh-add on standard input, so it reaches neither the command line nor the child environment. ssh-ui does not store it. The login Keychain is the only place it can outlive this request, and only if you ask for that below.",
+    "The passphrase is handed to ssh-add on standard input, so it reaches neither the command line nor the child environment. sshc does not store it. The login Keychain is the only place it can outlive this request, and only if you ask for that below.",
   "keys.keyPassphrase": "Key passphrase",
   "keys.lifetime": "Lifetime",
   "keys.lifetimeForever": "Until the agent exits",
@@ -669,7 +669,7 @@ export const en = {
   "keys.cancel": "Cancel",
   "keys.passphraseHeading": "Change passphrase: {path}",
   "keys.passphraseNote":
-    "The passphrase is used only for this change. ssh-ui never stores it. Use “Add to agent” with the login Keychain option if you want macOS to remember it.",
+    "The passphrase is used only for this change. sshc never stores it. Use “Add to agent” with the login Keychain option if you want macOS to remember it.",
   "keys.currentPassphrase": "Current passphrase",
   "keys.newPassphrase": "New passphrase",
   "keys.removePassphrase": "Remove the passphrase and leave the key unprotected on disk",
@@ -683,7 +683,7 @@ export const en = {
   "keys.createSubmit": "Create key",
   "keys.showTerminalCommand": "Show Terminal command",
   "keys.hardwareNote":
-    "Hardware-backed keys need your security key, so ssh-ui does not create them. Run this command in Terminal yourself:",
+    "Hardware-backed keys need your security key, so sshc does not create them. Run this command in Terminal yourself:",
   "keys.trashHeading": "Trash",
   "keys.trashNote": "Deleted keys stay here until you remove them. Nothing is ever deleted automatically.",
   "keys.trashCaption": "Soft-deleted keys",
@@ -739,17 +739,17 @@ export const en = {
   "keys.blockerStateDirectory": "{detail} is inside the engine's own state directory",
   "keys.blockerOther": "{detail}",
   "keys.noteKeychainEntryStale":
-    "If you stored this key's passphrase in the login Keychain, that entry still names the old file. macOS owns it, so ssh-ui cannot move it; update or remove it in Keychain Access if you no longer want it.",
+    "If you stored this key's passphrase in the login Keychain, that entry still names the old file. macOS owns it, so sshc cannot move it; update or remove it in Keychain Access if you no longer want it.",
 } as const;
 
 export type MessageKey = keyof typeof en;
 
 export const ja: Record<MessageKey, string> = {
-  "shell.title": "SSH UI",
+  "shell.title": "sshc",
   "shell.starting": "ローカルセッションを開始しています…",
   "shell.active": "ローカルセッション有効 · {version}",
   "shell.bootstrapFailed":
-    "ローカルセッションを開始できませんでした。ssh-ui を再起動し、新しく開いたタブを使ってください。",
+    "ローカルセッションを開始できませんでした。sshc を再起動し、新しく開いたタブを使ってください。",
   "shell.primaryNavigation": "メインナビゲーション",
   "shell.navConnections": "接続",
   "shell.navKeysHosts": "鍵とホスト",
@@ -788,7 +788,7 @@ export const ja: Record<MessageKey, string> = {
   "secrets.master": "マスターパスワード",
   "secrets.create": "vault を作成",
   "secrets.unlock": "開く",
-  "secrets.lock": "ssh-ui を閉じる",
+  "secrets.lock": "sshc を閉じる",
   "secrets.createFailed": "vault を作成できませんでした。マスターパスワードは 12 文字以上必要です。",
   "secrets.unlockFailed": "マスターパスワードが違います。",
   "secrets.failed": "vault を読めませんでした。",
@@ -810,8 +810,8 @@ export const ja: Record<MessageKey, string> = {
   "update.available": "{version} が公開されています — 変更点を読む",
   "login.heading": "ログイン時に起動",
   "login.note":
-    "既定はオフです。オンにすると、ログイン時から ssh-ui がバックグラウンドで動くので、`ssh-ui <接続先>` が常に本体を見つけられます。起動直後は施錠された状態です。画面を見たくなったら `ssh-ui open` を実行してください（その場で新しい入り口を発行します。ログファイルに残さないためです）。",
-  "login.enable": "ログイン時に ssh-ui を起動する",
+    "既定はオフです。オンにすると、ログイン時から sshc がバックグラウンドで動くので、`sshc <接続先>` が常に本体を見つけられます。起動直後は施錠された状態です。画面を見たくなったら `sshc open` を実行してください（その場で新しい入り口を発行します。ログファイルに残さないためです）。",
+  "login.enable": "ログイン時に sshc を起動する",
   "login.failed": "変更できませんでした。",
   "secrets.changeHeading": "マスターパスワード",
   "secrets.changeNote":
@@ -828,7 +828,7 @@ export const ja: Record<MessageKey, string> = {
   "section.secrets": "秘密",
   "lock.explainNew":
     "マスターパスワードを決めてください。保存したパスワード、鍵のパスフレーズ、同期設定、そしてこのアプリが取る全てのバックアップを、これで封をします。",
-  "lock.explainOpen": "ssh-ui を開くにはマスターパスワードを入力してください。",
+  "lock.explainOpen": "sshc を開くにはマスターパスワードを入力してください。",
   "lock.noRecovery":
     "復旧はできません。失うと vault の中身は取り出せなくなります。変更を取り消すためのバックアップも含めてです。",
   "lock.password": "マスターパスワード",
@@ -864,7 +864,7 @@ export const ja: Record<MessageKey, string> = {
   "history.empty": "このアプリケーションを通した変更はまだありません。",
   "history.restorePath": "{path} を復元",
   "history.backupsKept":
-    "世代バックアップは ~/.ssh/ssh-ui/backups に保存され、自動では削除されません。復元自体も新しいトランザクションなので、同じ方法で取り消せます。",
+    "世代バックアップは ~/.ssh/sshc/backups に保存され、自動では削除されません。復元自体も新しいトランザクションなので、同じ方法で取り消せます。",
 
   "notice.complex_external_rule": "ワイルドカード、否定、Match ブロック、alias の重複のいずれかにより、この値はこのエディタが単純化しない規則から来ています。代わりに出所を表示します。",
   "notice.duplicate_alias": "別のブロックが同じ alias を宣言しています。OpenSSH は最初に読んだものを使います。",
@@ -892,7 +892,7 @@ export const ja: Record<MessageKey, string> = {
     "このグループは宣言されていますが、ディレクトリがありません。何か置かれるまで、このグループについては何も読まれません。",
   "notice.group_empty": "このグループは宣言されていますが、中身がありません。",
   "notice.generated_region_damaged":
-    "~/.ssh/config に、このアプリが生成するブロックの開始マーカーはありますが終了マーカーがありません。自分が書いた行がどこまでかを判断できない状態です。中の Include 行は今も有効ですが、終了マーカーを戻すまでグループの保存はできません。生成された最後の Include 行の次に「# <<< ssh-ui groups」という行を足すか、ブロックごと削除してからグループを保存し直してください。",
+    "~/.ssh/config に、このアプリが生成するブロックの開始マーカーはありますが終了マーカーがありません。自分が書いた行がどこまでかを判断できない状態です。中の Include 行は今も有効ですが、終了マーカーを戻すまでグループの保存はできません。生成された最後の Include 行の次に「# <<< sshc groups」という行を足すか、ブロックごと削除してからグループを保存し直してください。",
   "notice.explained_values_only": "これらの値はこのエンジンが読んだ内容の説明です。権威ある答えは Diagnostics タブの ssh -G で確認してください。",
   "notice.destination_not_included": "このファイルへ届く Include がまだないため、移動した接続を OpenSSH は読みません。Include を追加してください。",
   "notice.group_file_unreached":
@@ -930,7 +930,7 @@ export const ja: Record<MessageKey, string> = {
 
   "orphan.heading": "接続がなくなった設定",
   "orphan.explain":
-    "これらのメモは、設定にもう存在しない Host ブロックに対して書かれたものです。ssh-ui はどの接続が引き継いだかを推測しません。",
+    "これらのメモは、設定にもう存在しない Host ブロックに対して書かれたものです。sshc はどの接続が引き継いだかを推測しません。",
   "orphan.chooseTarget": "このメモが属する接続を選んでください。",
   "orphan.occupied": "{alias} には既に独自の設定があります。先にそちらを消すか、このメモを破棄してください。",
   "orphan.entry": "{path} の {alias}",
@@ -950,7 +950,7 @@ export const ja: Record<MessageKey, string> = {
     "保存するのはリモートアカウント自身の資格情報で、同じパスワードは他所でも使い回されがちです。鍵のほうが確実に強力です。鍵を受け付けないサーバーにだけ使ってください。",
   "password.statusFailed": "パスワード保管庫を読み取れませんでした。",
   "password.noVault":
-    "保管庫はまだありません。{count} 文字以上のパスフレーズを決めてください。保存はされません。ssh-ui の起動中だけ存在し、~/.ssh と一緒に運ばれるファイルを暗号化するのに使われます。",
+    "保管庫はまだありません。{count} 文字以上のパスフレーズを決めてください。保存はされません。sshc の起動中だけ存在し、~/.ssh と一緒に運ばれるファイルを暗号化するのに使われます。",
   "password.newPassphrase": "保管庫の新しいパスフレーズ",
   "password.passphraseLost":
     "これを失うと保存済みパスワードは全て失われます。このアプリを含め、誰も復元できません。",
@@ -976,7 +976,7 @@ export const ja: Record<MessageKey, string> = {
   "password.storeFailed": "パスワードを保存できませんでした。",
   "password.stored": "{alias} のパスワードが保存されています。",
   "password.armedNote":
-    "このホストのターミナルを開くと、その 1 接続分だけヘルパが有効になります。その時点で保管庫がアンロックされている必要があるため、ssh-ui 起動後に一度パスフレーズを入れるまで保存済みパスワードは機能しません。",
+    "このホストのターミナルを開くと、その 1 接続分だけヘルパが有効になります。その時点で保管庫がアンロックされている必要があるため、sshc 起動後に一度パスフレーズを入れるまで保存済みパスワードは機能しません。",
   "password.forget": "{alias} のパスワードを削除",
   "password.forgetFailed": "パスワードを削除できませんでした。",
   "password.show": "表示",
@@ -1081,7 +1081,7 @@ export const ja: Record<MessageKey, string> = {
   "diag.reachedThrough": "{parent} を経由",
   "diag.notSimple": "これらの規則は投影できるほど単純ではありません",
   "diag.notSimpleDetail":
-    "ssh-ui は出所だけを表示し、何に解決されるかは推測しません。これらについては `ssh -G` が権威です。",
+    "sshc は出所だけを表示し、何に解決されるかは推測しません。これらについては `ssh -G` が権威です。",
   "diag.inside": "{condition} の内側",
   "diag.reachability": "到達性",
   "diag.authentication": "認証",
@@ -1111,7 +1111,7 @@ export const ja: Record<MessageKey, string> = {
   "kh.add": "追加",
   "kh.addHeading": "未検証のホスト鍵を追加",
   "kh.addExplain":
-    "ssh-keyscan は {host} からこの鍵を受け取りました。そのアドレスで応答したものなら何でも送れるため、ssh-ui はこれだけでこのホストの鍵とは扱いません。別経路で入手した fingerprint を入力するか、誰も検証していない鍵を信頼することを承認してください。",
+    "ssh-keyscan は {host} からこの鍵を受け取りました。そのアドレスで応答したものなら何でも送れるため、sshc はこれだけでこのホストの鍵とは扱いません。別経路で入手した fingerprint を入力するか、誰も検証していない鍵を信頼することを承認してください。",
   "kh.expectedFingerprint": "別経路で入手した fingerprint",
   "kh.acknowledge": "この鍵を検証できませんでしたが、信頼するリスクを受け入れます",
   "kh.addToKnownHosts": "known_hosts に追加",
@@ -1122,7 +1122,7 @@ export const ja: Record<MessageKey, string> = {
   "rk.idle": "確認するまで、リモートホストへは何も送られません。",
   "rk.added": "リモートの authorized_keys に鍵を追加しました。",
   "rk.alreadyPresent": "鍵は既に存在したため、リモートのファイルはそのままです。",
-  "rk.valuesFromEngine": "ssh-ui が設定を読んだ結果です（ssh は実行していません）",
+  "rk.valuesFromEngine": "sshc が設定を読んだ結果です（ssh は実行していません）",
   "rk.valuesFromSshG": "ssh -G が解決した結果です（OpenSSH 自身によるもの）",
   "rk.pickFromSsh": "~/.ssh から公開鍵を選ぶ",
   "rk.typeInstead": "下に手で入力する",
@@ -1151,7 +1151,7 @@ export const ja: Record<MessageKey, string> = {
   "rk.remoteCommandLabel": "リモートコマンド",
   "rk.connectingRuns": "このホストへの接続はコマンドを実行します",
   "rk.acknowledgeRuns": "このコマンドを読み、接続によって実行されることを承知しました",
-  "rk.manualHeading": "ssh-ui はこのホストへ鍵を登録しません。手動で行ってください:",
+  "rk.manualHeading": "sshc はこのホストへ鍵を登録しません。手動で行ってください:",
   "rk.result": "結果",
 
   "explorer.loading": "設定ファイルを読み込んでいます…",
@@ -1312,8 +1312,8 @@ export const ja: Record<MessageKey, string> = {
   "host.moveToGroup": "このグループへ移動",
   "host.favourite": "お気に入り",
   "host.comment": "コメント",
-  "host.commentNote": "Host 行の上に設定ファイルへ書き込まれます。ssh-ui を使わずにファイルを読む人にも残ります。",
-  "host.commentFromNote": "これは ssh-ui だけが保存していたメモです。保存すると設定ファイルへ書き込まれ、メモは廃止されます。",
+  "host.commentNote": "Host 行の上に設定ファイルへ書き込まれます。sshc を使わずにファイルを読む人にも残ります。",
+  "host.commentFromNote": "これは sshc だけが保存していたメモです。保存すると設定ファイルへ書き込まれ、メモは廃止されます。",
   "host.saveComment": "コメントを保存",
   "host.colour": "色",
   "host.clearColour": "色を消す",
@@ -1324,7 +1324,7 @@ export const ja: Record<MessageKey, string> = {
 
   "keys.heading": "鍵",
   "keys.reading": "ssh ディレクトリを読み込んでいます…",
-  "keys.unreadable": "ssh ディレクトリを読み取れませんでした。ssh-ui を再起動して、もう一度試してください。",
+  "keys.unreadable": "ssh ディレクトリを読み取れませんでした。sshc を再起動して、もう一度試してください。",
   "keys.createFailed": "鍵を作成できませんでした。名前、アルゴリズム、パスフレーズを確認してください。",
   "keys.passphraseFailed": "パスフレーズを変更できませんでした。現在のパスフレーズを確認して、もう一度試してください。",
   "keys.agentFailed": "鍵を agent に追加できませんでした。パスフレーズと、このプロセスから到達できる agent が動いているかを確認してください。",
@@ -1373,7 +1373,7 @@ export const ja: Record<MessageKey, string> = {
   "keys.agentDelegationsNote": "これらの設定エントリは、ファイルを指定する代わりに agent が鍵を供給することを期待しています:",
   "keys.registerHeading": "agent に追加: {path}",
   "keys.registerNote":
-    "パスフレーズは ssh-add へ標準入力で渡されるため、コマンドラインにも子プロセスの環境変数にも載りません。ssh-ui は保存しません。この要求より長く残りうるのは login Keychain だけで、それも下で指定した場合に限ります。",
+    "パスフレーズは ssh-add へ標準入力で渡されるため、コマンドラインにも子プロセスの環境変数にも載りません。sshc は保存しません。この要求より長く残りうるのは login Keychain だけで、それも下で指定した場合に限ります。",
   "keys.keyPassphrase": "鍵のパスフレーズ",
   "keys.lifetime": "保持期間",
   "keys.lifetimeForever": "agent が終了するまで",
@@ -1391,7 +1391,7 @@ export const ja: Record<MessageKey, string> = {
   "keys.cancel": "キャンセル",
   "keys.passphraseHeading": "パスフレーズを変更: {path}",
   "keys.passphraseNote":
-    "パスフレーズはこの変更にのみ使われ、ssh-ui が保存することはありません。macOS に記憶させたい場合は「agent に追加」の login Keychain オプションを使ってください。",
+    "パスフレーズはこの変更にのみ使われ、sshc が保存することはありません。macOS に記憶させたい場合は「agent に追加」の login Keychain オプションを使ってください。",
   "keys.currentPassphrase": "現在のパスフレーズ",
   "keys.newPassphrase": "新しいパスフレーズ",
   "keys.removePassphrase": "パスフレーズを外し、鍵を保護されていない状態でディスクに置く",
@@ -1405,7 +1405,7 @@ export const ja: Record<MessageKey, string> = {
   "keys.createSubmit": "鍵を作成",
   "keys.showTerminalCommand": "Terminal コマンドを表示",
   "keys.hardwareNote":
-    "ハードウェアに紐づく鍵はセキュリティキーの操作が必要なため、ssh-ui では作成しません。次のコマンドを Terminal で実行してください:",
+    "ハードウェアに紐づく鍵はセキュリティキーの操作が必要なため、sshc では作成しません。次のコマンドを Terminal で実行してください:",
   "keys.trashHeading": "ゴミ箱",
   "keys.trashNote": "削除した鍵は、あなたが取り除くまでここに残ります。自動で削除されることはありません。",
   "keys.trashCaption": "ソフト削除した鍵",
@@ -1461,7 +1461,7 @@ export const ja: Record<MessageKey, string> = {
   "keys.blockerStateDirectory": "{detail} はエンジン自身の状態ディレクトリの中です",
   "keys.blockerOther": "{detail}",
   "keys.noteKeychainEntryStale":
-    "この鍵のパスフレーズをログインキーチェーンに保存している場合、その項目は古いファイル名のままです。キーチェーンは macOS が管理しているため ssh-ui からは移動できません。不要であればキーチェーンアクセスで更新または削除してください。",
+    "この鍵のパスフレーズをログインキーチェーンに保存している場合、その項目は古いファイル名のままです。キーチェーンは macOS が管理しているため sshc からは移動できません。不要であればキーチェーンアクセスで更新または削除してください。",
 };
 
 export const messages = { en, ja } satisfies Record<string, Record<MessageKey, string>>;

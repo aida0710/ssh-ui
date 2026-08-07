@@ -46,11 +46,11 @@ func TestOSFileSystemReadFileRefusesSymlinksAndOversizedFiles(t *testing.T) {
 
 func TestOSFileSystemWriteTempCreatesPrivateFileInTargetDirectory(t *testing.T) {
 	directory := t.TempDir()
-	path, err := OSFileSystem{}.WriteTemp(directory, ".ssh-ui-", FilePermission, []byte("staged"))
+	path, err := OSFileSystem{}.WriteTemp(directory, ".sshc-", FilePermission, []byte("staged"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if filepath.Dir(path) != directory || !strings.HasPrefix(filepath.Base(path), ".ssh-ui-") {
+	if filepath.Dir(path) != directory || !strings.HasPrefix(filepath.Base(path), ".sshc-") {
 		t.Fatalf("temp path = %q", path)
 	}
 	info, err := os.Lstat(path)

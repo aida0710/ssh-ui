@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"testing"
 
-	"ssh-ui/internal/effective"
+	"sshc/internal/effective"
 )
 
 func TestParseChainReadsEveryDestinationForm(t *testing.T) {

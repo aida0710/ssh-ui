@@ -1,4 +1,4 @@
-# SSH UI Connections UI and Groups Implementation Plan
+# sshc Connections UI and Groups Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -11,11 +11,11 @@
 ## Global Constraints
 
 - macOS only. The server binds `127.0.0.1` on an OS-assigned port, never `0.0.0.0`, `::`, a fixed port, or a LaunchAgent.
-- No CORS. API and UI are same-origin; every mutation carries the `X-SSH-UI-CSRF` header; every `/api/` response keeps `Cache-Control: no-store`.
+- No CORS. API and UI are same-origin; every mutation carries the `X-SSHC-CSRF` header; every `/api/` response keeps `Cache-Control: no-store`.
 - Same pinned versions as the foundation: Go 1.26.5, Echo v5.3.1, React 19.2.8, Vite 8.1.5, TypeScript 5.9.3, Tailwind CSS 4.3.3, Vitest 4.1.1. **Add no new npm or Go dependency in this plan.** `go.mod` direct requirements and `web/package.json` must be byte-identical when the plan completes. If a future change genuinely needs a dependency, it must be justified in writing and pinned to an exact version — this plan needs none.
 - Echo v5 handler signature is `func(c *echo.Context) error` with a pointer receiver argument. Do not write Echo v4 code.
 - Automated tests must never touch the real `~/.ssh`, Keychain, ssh-agent, Terminal or a remote host. Use `t.TempDir()`, map-backed fakes and injected clocks.
-- `os.UserHomeDir` may be called only from `cmd/ssh-ui`. `internal/config`, `internal/storage`, `internal/application` and `internal/httpserver` must receive the home directory as a parameter. (This supersedes the subsystem 2 verification grep, which assumed no package needed a home directory yet.)
+- `os.UserHomeDir` may be called only from `cmd/sshc`. `internal/config`, `internal/storage`, `internal/application` and `internal/httpserver` must receive the home directory as a parameter. (This supersedes the subsystem 2 verification grep, which assumed no package needed a home directory yet.)
 - Never log request bodies, cookies, tokens, file contents, configuration text or full paths. Error payloads returned to the UI may carry a workspace-relative path, a line number and a stable code — never file contents.
 - The lossless guarantee survives every UI edit path: parsing and rendering an unchanged file returns the original bytes; unknown directives, comments, blank lines, quoting, `key=value` and CRLF are never dropped or reformatted; an edit changes only the lines the user changed.
 - `api/openapi.yaml` is the contract. Add the endpoint and its schemas there first, then run `make generate` to regenerate `internal/api/models.gen.go` and `web/src/api/schema.d.ts`. Keep to the validated OpenAPI subset described in `api/README.md`: objects, strings, integers, booleans, arrays, `const`, `required`, `$ref`, responses and headers. No `oneOf`, `anyOf` or discriminators.
@@ -30,9 +30,9 @@ These belong to later subsystems and must not be implemented here. The UI may re
 - Key inventory, generation, reveal, agent and Keychain integration, trash and restore of keys — subsystem 4.
 - `ssh -G` effective configuration, ProxyJump reachability diagnostics, connection tests, macOS Terminal launch, Known Hosts, remote public-key registration — subsystem 5.
 - Fuzzing beyond what subsystem 2 already runs, Playwright E2E, CSP/injection suite, single-binary packaging and acceptance checks — subsystem 6.
-- `~/.ssh` **file and folder move, rename and delete** (design §6.2 second bullet). Creating a new configuration file is delivered here because a whole-file Raw save already expresses it exactly. Relocating and deleting *files* is blocked on missing storage primitives, not on UI work: `storage.Manager.Commit` only writes and creates, so the following must be built first, each with the backup, journal and rollback semantics the existing write path already has — (1) a journalled delete that records the previous contents and mode in the generation backup and can be rolled back into place, (2) a journalled rename that treats the source and destination as one entry so an interrupted rename is detectable and reversible, (3) a journalled directory create/remove, since `Workspace.EnsureDirectory` creates but never removes, and (4) an extension of `Pending`/`Complete`/`Rollback` to replay all three. Those belong in a named follow-up plan, **`ssh-ui-file-operations`**, not in subsystem 6, which is hardening and release (fuzz, race, E2E, CSP and injection suite, packaging, acceptance checks) and is not a feature bucket.
+- `~/.ssh` **file and folder move, rename and delete** (design §6.2 second bullet). Creating a new configuration file is delivered here because a whole-file Raw save already expresses it exactly. Relocating and deleting *files* is blocked on missing storage primitives, not on UI work: `storage.Manager.Commit` only writes and creates, so the following must be built first, each with the backup, journal and rollback semantics the existing write path already has — (1) a journalled delete that records the previous contents and mode in the generation backup and can be rolled back into place, (2) a journalled rename that treats the source and destination as one entry so an interrupted rename is detectable and reversible, (3) a journalled directory create/remove, since `Workspace.EnsureDirectory` creates but never removes, and (4) an extension of `Pending`/`Complete`/`Rollback` to replay all three. Those belong in a named follow-up plan, **`sshc-file-operations`**, not in subsystem 6, which is hardening and release (fuzz, race, E2E, CSP and injection suite, packaging, acceptance checks) and is not a feature bucket.
 
-  Cross-plan note added during review: the subsystem 4 key vault plan (`2026-08-05-ssh-ui-key-vault-implementation-plan.md`, Task 4) already delivers items (1), (2) and (4) as general-purpose primitives, because the key trash needs them — `storage.Move{From, To, Precondition}`, `storage.Removal{Path, Precondition}`, the `Request.Moves`/`Request.Removals` fields, `PendingEntry.Action`/`Target`, `Pending.CanRollback` and `ErrIrreversibleRemoval`. Subsystem 4 runs after this plan, so nothing here depends on them. When `ssh-ui-file-operations` is written it must build on those primitives rather than reinventing them, and its remaining gap is item (3), directory removal, plus the Config Explorer interface itself. Note that a committed `Removal` is deliberately not reversible, so a file delete in the explorer must either route through `Move` into a trash area or state plainly that it cannot be undone.
+  Cross-plan note added during review: the subsystem 4 key vault plan (`2026-08-05-sshc-key-vault-implementation-plan.md`, Task 4) already delivers items (1), (2) and (4) as general-purpose primitives, because the key trash needs them — `storage.Move{From, To, Precondition}`, `storage.Removal{Path, Precondition}`, the `Request.Moves`/`Request.Removals` fields, `PendingEntry.Action`/`Target`, `Pending.CanRollback` and `ErrIrreversibleRemoval`. Subsystem 4 runs after this plan, so nothing here depends on them. When `sshc-file-operations` is written it must build on those primitives rather than reinventing them, and its remaining gap is item (3), directory removal, plus the Config Explorer interface itself. Note that a committed `Removal` is deliberately not reversible, so a file delete in the explorer must either route through `Move` into a trash area or state plainly that it cannot be undone.
 - The Host detail `Effective` and `Diagnostics` tabs render a placeholder that names the owning subsystem. The group preview shows this plan's *explained* values, which are an explanation of the engine's own first-value-wins walk and are labelled as such — design §5.5 keeps `ssh -G` as the authority.
 
 ---
@@ -255,7 +255,7 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/storage"
+	"sshc/internal/storage"
 )
 
 func newTestWorkspace(t *testing.T) *storage.Workspace {
@@ -486,7 +486,7 @@ import (
 	"sort"
 	"strings"
 
-	"ssh-ui/internal/storage"
+	"sshc/internal/storage"
 )
 
 const (
@@ -499,7 +499,7 @@ const (
 	// DefaultGroupsFile is the configuration file group inheritance compiles
 	// into. It stays inside the configuration tree so it is ordinary, hand
 	// editable OpenSSH configuration.
-	DefaultGroupsFile = "groups.ssh-ui.conf"
+	DefaultGroupsFile = "groups.sshc.conf"
 )
 
 var (
@@ -566,7 +566,7 @@ type GroupMetadata struct {
 	Settings []Setting `json:"settings,omitempty"`
 }
 
-// Metadata is the whole of ~/.ssh/ssh-ui/metadata.json.
+// Metadata is the whole of ~/.ssh/sshc/metadata.json.
 type Metadata struct {
 	SchemaVersion int             `json:"schemaVersion"`
 	GroupsFile    string          `json:"groupsFile,omitempty"`
@@ -802,7 +802,7 @@ Expected: PASS for every test in the package.
 ```bash
 git add internal/application/paths.go internal/application/paths_test.go \
   internal/application/notice.go internal/application/metadata.go internal/application/metadata_test.go
-git commit -m "feat: add ssh-ui metadata store with stable host identity"
+git commit -m "feat: add sshc metadata store with stable host identity"
 ```
 
 ---
@@ -841,7 +841,7 @@ import (
 	"sort"
 	"testing"
 
-	"ssh-ui/internal/config"
+	"sshc/internal/config"
 )
 
 const testRoot = "/home/tester/.ssh"
@@ -905,7 +905,7 @@ package application
 import (
 	"testing"
 
-	"ssh-ui/internal/config"
+	"sshc/internal/config"
 )
 
 func TestWalkDirectivesFollowsIncludesAtTheirLinePosition(t *testing.T) {
@@ -1011,7 +1011,7 @@ Expected: FAIL with `undefined: WalkDirectives`.
 // internal/application/walk.go
 package application
 
-import "ssh-ui/internal/config"
+import "sshc/internal/config"
 
 // Visit is one directive line reached while reading the configuration the way
 // OpenSSH reads it.
@@ -1096,7 +1096,7 @@ import (
 	"errors"
 	"testing"
 
-	"ssh-ui/internal/config"
+	"sshc/internal/config"
 )
 
 const projectionConfig = `# personal configuration
@@ -1299,7 +1299,7 @@ import (
 	"errors"
 	"strings"
 
-	"ssh-ui/internal/config"
+	"sshc/internal/config"
 )
 
 // ErrHostNotFound reports that no Host block in the graph declares the
@@ -1700,7 +1700,7 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/config"
+	"sshc/internal/config"
 )
 
 const editConfig = `Host bastion
@@ -1900,7 +1900,7 @@ import (
 	"sort"
 	"strings"
 
-	"ssh-ui/internal/config"
+	"sshc/internal/config"
 )
 
 // EditAction names one change to a host block's directives.
@@ -2317,7 +2317,7 @@ package application
 import (
 	"testing"
 
-	"ssh-ui/internal/storage"
+	"sshc/internal/storage"
 )
 
 func TestBuildFileDiffMarksOnlyTheChangedLines(t *testing.T) {
@@ -2348,7 +2348,7 @@ func TestBuildFileDiffMarksOnlyTheChangedLines(t *testing.T) {
 }
 
 func TestBuildFileDiffReportsCreationAndTruncation(t *testing.T) {
-	created := BuildFileDiff("groups.ssh-ui.conf", nil, []byte("Host build01\n\tUser ops\n"))
+	created := BuildFileDiff("groups.sshc.conf", nil, []byte("Host build01\n\tUser ops\n"))
 	if !created.Created || created.OldDigest != "" || len(created.Lines) != 2 {
 		t.Fatalf("created diff = %#v", created)
 	}
@@ -2424,7 +2424,7 @@ package application
 import (
 	"strings"
 
-	"ssh-ui/internal/storage"
+	"sshc/internal/storage"
 )
 
 // MaxDiffLines bounds the quadratic longest-common-subsequence table. A file
@@ -2693,8 +2693,8 @@ func TestDiffEffectiveReportsAddedChangedAndRemovedValues(t *testing.T) {
 	}}
 	after := Effective{Alias: "build01", Entries: []EffectiveEntry{
 		{Keyword: "User", Values: []string{"ops"}, Source: Source{Path: "config", Line: 3}},
-		{Keyword: "Port", Values: []string{"2222"}, Source: Source{Path: "groups.ssh-ui.conf", Line: 5}},
-		{Keyword: "ServerAliveInterval", Values: []string{"30"}, Source: Source{Path: "groups.ssh-ui.conf", Line: 6}},
+		{Keyword: "Port", Values: []string{"2222"}, Source: Source{Path: "groups.sshc.conf", Line: 5}},
+		{Keyword: "ServerAliveInterval", Values: []string{"30"}, Source: Source{Path: "groups.sshc.conf", Line: 6}},
 	}}
 
 	diff := DiffEffective(before, after)
@@ -2704,7 +2704,7 @@ func TestDiffEffectiveReportsAddedChangedAndRemovedValues(t *testing.T) {
 	if diff.Changes[0].Keyword != "Port" || diff.Changes[0].Before[0] != "22" || diff.Changes[0].After[0] != "2222" {
 		t.Fatalf("port change = %#v", diff.Changes[0])
 	}
-	if diff.Changes[0].AfterSources[0].Path != "groups.ssh-ui.conf" {
+	if diff.Changes[0].AfterSources[0].Path != "groups.sshc.conf" {
 		t.Fatalf("port source = %#v", diff.Changes[0].AfterSources)
 	}
 	if diff.Changes[1].Keyword != "ServerAliveInterval" || len(diff.Changes[1].Before) != 0 {
@@ -2729,7 +2729,7 @@ import (
 	"sort"
 	"strings"
 
-	"ssh-ui/internal/config"
+	"sshc/internal/config"
 )
 
 // cumulativeKeywords are the directives OpenSSH accumulates instead of keeping
@@ -2950,7 +2950,7 @@ package application
 import (
 	"testing"
 
-	"ssh-ui/internal/config"
+	"sshc/internal/config"
 )
 
 func groupFixture() (Metadata, []HostEntry) {
@@ -2978,7 +2978,7 @@ func TestCompileGroupsPutsChildrenBeforeParentsAndInheritsMembers(t *testing.T) 
 	metadata, hosts := groupFixture()
 
 	contents, notices := CompileGroups(metadata, hosts, "\n")
-	const want = `# Generated by ssh-ui from ~/.ssh/ssh-ui/metadata.json.
+	const want = `# Generated by sshc from ~/.ssh/sshc/metadata.json.
 # Child groups come first because OpenSSH keeps the first value it reads.
 # Edit groups in the UI; hand edits to this file are replaced on the next save.
 
@@ -3037,7 +3037,7 @@ func TestPlanGroupIncludePlacesTheIncludeBeforeCatchAllDefaults(t *testing.T) {
 	if err := InsertIncludeLine(file, DefaultGroupsFile, index); err != nil {
 		t.Fatal(err)
 	}
-	const want = "Host bastion\n\tUser ops\nInclude groups.ssh-ui.conf\nHost *\n\tServerAliveInterval 30\n"
+	const want = "Host bastion\n\tUser ops\nInclude groups.sshc.conf\nHost *\n\tServerAliveInterval 30\n"
 	if got := string(file.Render()); got != want {
 		t.Fatalf("render = %q", got)
 	}
@@ -3057,7 +3057,7 @@ func TestPlanGroupIncludeAppendsWhenThereIsNoCatchAllBlock(t *testing.T) {
 	if err := InsertIncludeLine(file, DefaultGroupsFile, index); err != nil {
 		t.Fatal(err)
 	}
-	if got := string(file.Render()); got != "Host bastion\n\tUser ops\nInclude groups.ssh-ui.conf\n" {
+	if got := string(file.Render()); got != "Host bastion\n\tUser ops\nInclude groups.sshc.conf\n" {
 		t.Fatalf("render = %q", got)
 	}
 }
@@ -3079,7 +3079,7 @@ import (
 	"sort"
 	"strings"
 
-	"ssh-ui/internal/config"
+	"sshc/internal/config"
 )
 
 // maxGroupDepth bounds the parent walk so a malformed hierarchy cannot loop.
@@ -3188,7 +3188,7 @@ func CompileGroups(metadata Metadata, hosts []HostEntry, ending string) ([]byte,
 
 	var builder strings.Builder
 	for _, comment := range []string{
-		"# Generated by ssh-ui from ~/.ssh/ssh-ui/metadata.json.",
+		"# Generated by sshc from ~/.ssh/sshc/metadata.json.",
 		"# Child groups come first because OpenSSH keeps the first value it reads.",
 		"# Edit groups in the UI; hand edits to this file are replaced on the next save.",
 	} {
@@ -3321,7 +3321,7 @@ Expected: PASS.
 ```bash
 git add internal/application/effective.go internal/application/effective_test.go \
   internal/application/groups.go internal/application/groups_test.go
-git commit -m "feat: compile ssh-ui groups into ordinary host blocks"
+git commit -m "feat: compile sshc groups into ordinary host blocks"
 ```
 
 ---
@@ -3355,7 +3355,7 @@ import (
 	"testing"
 	"time"
 
-	"ssh-ui/internal/storage"
+	"sshc/internal/storage"
 )
 
 const serviceMainConfig = `# personal configuration
@@ -3683,8 +3683,8 @@ import (
 	"strconv"
 	"strings"
 
-	"ssh-ui/internal/config"
-	"ssh-ui/internal/storage"
+	"sshc/internal/config"
+	"sshc/internal/storage"
 )
 
 // SyntaxError refuses a save whose new contents cannot be represented. It
@@ -3866,8 +3866,8 @@ import (
 	"sync"
 	"time"
 
-	"ssh-ui/internal/config"
-	"ssh-ui/internal/storage"
+	"sshc/internal/config"
+	"sshc/internal/storage"
 )
 
 const (
@@ -4640,7 +4640,7 @@ func (s *Service) Restore(identifier, relative string) (SaveResult, error) {
 
 Run: `go test ./internal/application -v`
 
-Expected: PASS. If `TestSaveGroupsWrites...` reports a different diff count, check that the group save produced exactly three changes: `metadata.json`, `groups.ssh-ui.conf` and the entry `config` that gained the `Include` line.
+Expected: PASS. If `TestSaveGroupsWrites...` reports a different diff count, check that the group save produced exactly three changes: `metadata.json`, `groups.sshc.conf` and the entry `config` that gained the `Include` line.
 
 - [ ] **Step 6: Run the race detector over the package**
 
@@ -4670,7 +4670,7 @@ git commit -m "feat: commit ssh config edits through a validated transaction"
 - Modify: `internal/httpserver/server.go`
 - Modify: `internal/app/run.go`
 - Modify: `internal/app/run_test.go`
-- Modify: `cmd/ssh-ui/main.go`
+- Modify: `cmd/sshc/main.go`
 
 **Interfaces:**
 - Consumes: Task 5 `application.Service` and every exported type it returns; `storage.NewWorkspace`, `storage.NewManager`, `storage.OSFileSystem`.
@@ -5197,7 +5197,7 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/application"
+	"sshc/internal/application"
 )
 
 func TestValidatePathParameterRejectsTraversalAndControlCharacters(t *testing.T) {
@@ -5294,8 +5294,8 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/application"
-	"ssh-ui/internal/storage"
+	"sshc/internal/application"
+	"sshc/internal/storage"
 )
 
 // Runtime limits at the HTTP boundary. Generated types describe shapes; these
@@ -5569,10 +5569,10 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/api"
-	"ssh-ui/internal/application"
-	"ssh-ui/internal/session"
-	"ssh-ui/internal/storage"
+	"sshc/internal/api"
+	"sshc/internal/application"
+	"sshc/internal/session"
+	"sshc/internal/storage"
 )
 
 const handlerConfig = "Host bastion\n\tHostName 203.0.113.10\n\tPort 22\n"
@@ -5855,7 +5855,7 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/application"
+	"sshc/internal/application"
 )
 
 // ConfigHandlers serves the configuration, metadata and history endpoints.
@@ -6046,7 +6046,7 @@ type Options struct {
 	}
 ```
 
-Add `"ssh-ui/internal/application"` to the file's imports.
+Add `"sshc/internal/application"` to the file's imports.
 
 In `internal/app/run.go`, add the home directory and build the workspace, transaction manager and service:
 
@@ -6057,7 +6057,7 @@ type Dependencies struct {
 	Listen  ListenFunc
 	UI      fs.FS
 	Logger  *slog.Logger
-	// Home is the user's home directory. Only cmd/ssh-ui may read it from the
+	// Home is the user's home directory. Only cmd/sshc may read it from the
 	// operating system; every test injects a temporary directory.
 	Home string
 }
@@ -6082,11 +6082,11 @@ type Dependencies struct {
 	})
 ```
 
-Add `"time"`, `"ssh-ui/internal/application"` and `"ssh-ui/internal/storage"` to the imports. `Random` must be safe for concurrent use because both the session manager and the transaction manager read from it; production passes `crypto/rand.Reader`, which is.
+Add `"time"`, `"sshc/internal/application"` and `"sshc/internal/storage"` to the imports. `Random` must be safe for concurrent use because both the session manager and the transaction manager read from it; production passes `crypto/rand.Reader`, which is.
 
 In `internal/app/run_test.go`, add `Home: t.TempDir(),` to each of the three `Dependencies` literals so no test touches a real home directory.
 
-In `cmd/ssh-ui/main.go`, resolve the home directory before building the dependencies:
+In `cmd/sshc/main.go`, resolve the home directory before building the dependencies:
 
 ```go
 	home, err := os.UserHomeDir()
@@ -6133,7 +6133,7 @@ Expected: no change to `go.mod`, `go.sum` or `web/package.json`; the grep prints
 git add api/openapi.yaml internal/api/models.gen.go web/src/api/schema.d.ts \
   internal/httpserver/config_requests.go internal/httpserver/config_requests_test.go \
   internal/httpserver/config_handlers.go internal/httpserver/config_handlers_test.go \
-  internal/httpserver/server.go internal/app/run.go internal/app/run_test.go cmd/ssh-ui/main.go
+  internal/httpserver/server.go internal/app/run.go internal/app/run_test.go cmd/sshc/main.go
 git commit -m "feat: expose config, metadata and history over the local API"
 ```
 
@@ -6311,7 +6311,7 @@ Add a `read` method and make `mutate` throw `ApiError`:
     if (!csrfToken) throw new Error("csrf_unavailable");
 
     const headers = new Headers(init.headers);
-    headers.set("X-SSH-UI-CSRF", csrfToken);
+    headers.set("X-SSHC-CSRF", csrfToken);
     const response = await fetch(path, { ...init, credentials: "same-origin", headers });
     if (!response.ok) throw await failure(response);
     return response.json() as Promise<T>;
@@ -6747,7 +6747,7 @@ line exists whatever section is open. Section panels never add another one:
 
 ```tsx
       <header className="flex items-baseline gap-3 border-b border-zinc-800 px-6 py-4">
-        <h1 className="text-xl font-semibold">SSH UI</h1>
+        <h1 className="text-xl font-semibold">sshc</h1>
         <p role="status" className="text-sm text-zinc-300">
           {state === "ready" ? `Local session active · ${version}` : "Starting secure local session…"}
         </p>
@@ -8290,7 +8290,7 @@ describe("ConfigExplorer", () => {
       kind: "file_raw",
       path: "conf.d/30-lab.conf",
       base: "",
-      raw: "# created by ssh-ui\n",
+      raw: "# created by sshc\n",
     }));
   });
 });
@@ -8340,7 +8340,7 @@ export function ConfigExplorer() {
   async function createFile() {
     if (newPath === "") return;
     try {
-      await configApi.save({ kind: "file_raw", path: newPath, base: "", raw: "# created by ssh-ui\n" });
+      await configApi.save({ kind: "file_raw", path: newPath, base: "", raw: "# created by sshc\n" });
       setNewPath("");
       setProblem(null);
       await reload();
@@ -8547,7 +8547,7 @@ beforeEach(() => {
   vi.mocked(configApi.overview).mockResolvedValue(overview as never);
   vi.mocked(configApi.preview).mockResolvedValue({
     operation: "config.groups",
-    diffs: [{ path: "groups.ssh-ui.conf", created: true, lines: [{ op: "insert", text: "Host build01", newLine: 1 }] }],
+    diffs: [{ path: "groups.sshc.conf", created: true, lines: [{ op: "insert", text: "Host build01", newLine: 1 }] }],
     effective: [{ alias: "build01", changes: [{ keyword: "Port", before: [], after: ["2222"] }] }],
   } as never);
 });
@@ -8575,7 +8575,7 @@ describe("GroupsPanel", () => {
 
     vi.mocked(configApi.save).mockResolvedValue({
       transactionId: "t1",
-      written: ["groups.ssh-ui.conf"],
+      written: ["groups.sshc.conf"],
       preview: { operation: "config.groups", diffs: [] },
     } as never);
     await user.click(screen.getByRole("button", { name: "Save groups" }));
@@ -8715,7 +8715,7 @@ export function GroupsPanel() {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-xs text-zinc-400">
-        Groups compile into ordinary Host blocks in {metadata.groupsFile ?? "groups.ssh-ui.conf"}, with child groups
+        Groups compile into ordinary Host blocks in {metadata.groupsFile ?? "groups.sshc.conf"}, with child groups
         written before their parents so OpenSSH keeps the most specific value it reads first.
       </p>
       {localError === "" ? null : <p role="alert" className="text-sm text-rose-300">{localError}</p>}
@@ -9018,7 +9018,7 @@ export function HistoryPanel() {
           </ul>
         )}
         <p className="text-xs text-zinc-500">
-          Generation backups are kept in ~/.ssh/ssh-ui/backups and are never deleted automatically. A restore is itself
+          Generation backups are kept in ~/.ssh/sshc/backups and are never deleted automatically. A restore is itself
           a new transaction, so it can be undone the same way.
         </p>
       </section>
@@ -9090,14 +9090,14 @@ Add this section after the SSH config engine section, in the README's existing J
 - `~/.ssh/config` と `Include` 先を正本として編集します。フォーム編集、任意キー・値編集、ブロック Raw 編集、ファイル全体 Raw 編集はすべて同じ lossless 構文木を更新し、変更していない行は 1 バイトも書き換えません。
 - 保存は必ず「読み込んだ内容」を base として送り、その SHA-256 を precondition にします。外部変更があった場合は書き込まず、三者差分を表示します。
 - 保存前に再パースと Include グラフ再解決を行い、新たに壊れた行や新たな Include エラーが生じる変更は拒否します。既に存在していた問題は保存の障害にしません。
-- UI 専用情報は `~/.ssh/ssh-ui/metadata.json` に保存します。スキーマバージョン、グループ、タグ、色、メモ、お気に入り、表示順のみで、鍵本文やパスフレーズは保存しません。
+- UI 専用情報は `~/.ssh/sshc/metadata.json` に保存します。スキーマバージョン、グループ、タグ、色、メモ、お気に入り、表示順のみで、鍵本文やパスフレーズは保存しません。
 - Host の識別は「正規化した相対パス + 具体的な主 alias」です。改名と別ファイルへの移動は config と metadata を同一トランザクションで更新し、対応先が消えた metadata は推測で付け替えず orphan として再関連付けを求めます。
 - Host ブロックの移動は、移動元・移動先・metadata を 1 つの journal 付きトランザクションで書き込みます。ブロックは所有する行（末尾のコメントと空行を含む）ごと byte 単位で移し、読み込み順が変わるため移動前後の実効値差分を表示します。移動先に同じ alias が既にある場合は拒否します。
-- ファイルとフォルダの移動・改名・削除はまだ提供していません。`storage` に journal 付きの削除・改名プリミティブが必要で、後続の `ssh-ui-file-operations` 計画で対応します。
-- グループは `groups.ssh-ui.conf` に通常の `Host` ブロックとして生成し、子グループを親より先に配置します。`Include` は具体的な Host ブロックの後、最初の catch-all ブロックの前に挿入します。
+- ファイルとフォルダの移動・改名・削除はまだ提供していません。`storage` に journal 付きの削除・改名プリミティブが必要で、後続の `sshc-file-operations` 計画で対応します。
+- グループは `groups.sshc.conf` に通常の `Host` ブロックとして生成し、子グループを親より先に配置します。`Include` は具体的な Host ブロックの後、最初の catch-all ブロックの前に挿入します。
 - ワイルドカード、否定パターン、`Match`、alias 重複によって単純な継承へ投影できない場合は、結果を捏造せず「complex external rule」として出所を表示します。
 - Effective タブと Diagnostics タブは値の出所説明のみです。`ssh -G` による実効設定判定、到達性診断、Terminal 起動、鍵管理、Known Hosts は後続サブシステムで実装します。
-- API は同一オリジンのみです。CORS は有効化せず、状態変更 API は `X-SSH-UI-CSRF` header を要求し、`/api/` 応答は `Cache-Control: no-store` を返します。
+- API は同一オリジンのみです。CORS は有効化せず、状態変更 API は `X-SSHC-CSRF` header を要求し、`/api/` 応答は `Cache-Control: no-store` を返します。
 ```
 
 - [ ] **Step 12: Run the whole verification suite**
@@ -9111,7 +9111,7 @@ make fuzz
 npm test --prefix web
 npm run typecheck --prefix web
 npm run build --prefix web
-go build -trimpath -o bin/ssh-ui ./cmd/ssh-ui
+go build -trimpath -o bin/sshc ./cmd/sshc
 ```
 
 Expected: every command succeeds. `make fuzz` still finds no failing input, proving the parser guarantees this plan depends on are intact.
@@ -9124,10 +9124,10 @@ Run:
 git diff --stat go.mod go.sum web/package.json web/package-lock.json
 grep -rn "UserHomeDir" internal/ || echo "no internal package reads the home directory"
 grep -rEn "https?://(?!127\.0\.0\.1)" web/src/ || echo "no external origin in the frontend"
-ls -la ~/.ssh/ssh-ui 2>/dev/null || echo "no state directory in the real home"
+ls -la ~/.ssh/sshc 2>/dev/null || echo "no state directory in the real home"
 ```
 
-Expected: no dependency file changed; the grep for `UserHomeDir` prints the "no internal package" line; the frontend contains no external origin; the real `~/.ssh` gained no `ssh-ui` directory. If the last check fails, find the test that used a real home directory and fix it before committing.
+Expected: no dependency file changed; the grep for `UserHomeDir` prints the "no internal package" line; the frontend contains no external origin; the real `~/.ssh` gained no `sshc` directory. If the last check fails, find the test that used a real home directory and fix it before committing.
 
 - [ ] **Step 14: Commit the explorer, groups and history panels**
 
@@ -9184,7 +9184,7 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/config"
+	"sshc/internal/config"
 )
 
 // moveSource exercises every construct the move must carry across untouched:
@@ -9317,7 +9317,7 @@ package application
 import (
 	"errors"
 
-	"ssh-ui/internal/config"
+	"sshc/internal/config"
 )
 
 var (
@@ -10004,14 +10004,14 @@ make fuzz
 npm test --prefix web
 npm run typecheck --prefix web
 npm run build --prefix web
-go build -trimpath -o bin/ssh-ui ./cmd/ssh-ui
+go build -trimpath -o bin/sshc ./cmd/sshc
 git diff --stat go.mod go.sum web/package.json web/package-lock.json
 grep -rn "UserHomeDir" internal/ || echo "no internal package reads the home directory"
-ls -la ~/.ssh/ssh-ui 2>/dev/null || echo "no state directory in the real home"
+ls -la ~/.ssh/sshc 2>/dev/null || echo "no state directory in the real home"
 ```
 
 Expected: every command succeeds, no dependency file changed, only
-`cmd/ssh-ui` reads the home directory, and the real `~/.ssh` gained no `ssh-ui`
+`cmd/sshc` reads the home directory, and the real `~/.ssh` gained no `sshc`
 directory. Then work through the acceptance gate below.
 
 ---
@@ -10021,7 +10021,7 @@ directory. Then work through the acceptance gate below.
 Before starting the key-vault plan, verify all of the following:
 
 - `go test ./...`, `go test -race ./...`, `make fuzz`, `npm test --prefix web`, `npm run typecheck --prefix web` and `npm run build --prefix web` all pass.
-- `go build -trimpath -o bin/ssh-ui ./cmd/ssh-ui` succeeds and the binary still serves the embedded UI.
+- `go build -trimpath -o bin/sshc ./cmd/sshc` succeeds and the binary still serves the embedded UI.
 - Loading a configuration, opening every tab and saving nothing leaves every file byte-for-byte unchanged.
 - A form edit rewrites only the edited line: the trailing comment on that line, the surrounding comments, blank lines, indentation, `key=value` spelling and CRLF endings survive.
 - An unknown directive is editable in the Advanced tab and in Raw, and is never reformatted or dropped.
@@ -10037,17 +10037,17 @@ Before starting the key-vault plan, verify all of the following:
 - A whole-file Raw edit with unbalanced quoting is refused with a line and column, the editor keeps the text, and nothing is written.
 - An edit that would introduce an Include cycle is refused; an Include problem that already existed does not block an unrelated save.
 - Saving with a stale base returns a three-way conflict carrying both the external change and the pending change, and writes nothing.
-- Group compilation writes `groups.ssh-ui.conf` with child groups before parents, inserts the `Include` before the first catch-all block, and commits the generated file, the entry file and `metadata.json` in one transaction.
+- Group compilation writes `groups.sshc.conf` with child groups before parents, inserts the `Include` before the first catch-all block, and commits the generated file, the entry file and `metadata.json` in one transaction.
 - The group preview shows the before/after explained values per member and labels them as not being `ssh -G`.
 - A wildcard, negation, `Match` block or duplicate alias produces a `complex_external_rule` notice naming the real source instead of a fabricated inherited value.
 - Renaming a host updates the `Host` line and the metadata entry in the same transaction; an entry whose target disappeared becomes an orphan and is never re-pointed.
 - `metadata.json` contains only schema version, groups file, groups, tags, colour, note, favourite and order; a value carrying key material is refused.
-- Every mutation requires the session cookie and the `X-SSH-UI-CSRF` header, every `/api/` response carries `Cache-Control: no-store`, and no CORS header is emitted.
+- Every mutation requires the session cookie and the `X-SSHC-CSRF` header, every `/api/` response carries `Cache-Control: no-store`, and no CORS header is emitted.
 - Problem responses carry a code, a workspace-relative path and a location — never file contents — and unknown JSON fields and oversized bodies are rejected at the boundary.
 - Every response shape decodes into the generated `internal/api` models with `DisallowUnknownFields`, proving `api/openapi.yaml` is still the contract.
 - The Include explorer shows external Includes as read-only, and no edit API accepts a path outside the resolved `~/.ssh`.
 - An interrupted transaction is shown as unfinished with both recovery choices, and history restore commits the backup as a new, reversible transaction.
 - `go.mod`, `go.sum`, `web/package.json` and `web/package-lock.json` are unchanged: this plan added no dependency.
-- No automated test read or wrote the real `~/.ssh`, Keychain, ssh-agent, Terminal or a remote host, and only `cmd/ssh-ui` calls `os.UserHomeDir`.
+- No automated test read or wrote the real `~/.ssh`, Keychain, ssh-agent, Terminal or a remote host, and only `cmd/sshc` calls `os.UserHomeDir`.
 - Key management, `ssh -G`, ProxyJump diagnostics, Terminal launch, Known Hosts, remote key registration, packaging and E2E remain unimplemented and are recorded in this plan's Out of Scope section for their owning subsystems.
-- `~/.ssh` file and folder move, rename and delete remain unimplemented, and the Out of Scope section names the four missing `storage` primitives and the `ssh-ui-file-operations` follow-up plan that owns them. They are not parked in subsystem 6.
+- `~/.ssh` file and folder move, rename and delete remain unimplemented, and the Out of Scope section names the four missing `storage` primitives and the `sshc-file-operations` follow-up plan that owns them. They are not parked in subsystem 6.

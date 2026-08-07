@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"ssh-ui/internal/storage"
+	"sshc/internal/storage"
 )
 
 const (
@@ -114,7 +114,7 @@ func (service *Service) newEntryID() (string, error) {
 }
 
 // Trash soft-deletes a key by moving it, and the files that belong to the same
-// key pair, into ~/.ssh/ssh-ui/trash/<entry>/ in one journalled transaction.
+// key pair, into ~/.ssh/sshc/trash/<entry>/ in one journalled transaction.
 //
 // The move is a rename inside the same filesystem, so the bytes are never
 // copied and the file keeps the permission bits it already had. The trash entry

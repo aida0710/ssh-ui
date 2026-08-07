@@ -1,8 +1,8 @@
-# SSH UI Hardening and Release Implementation Plan
+# sshc Hardening and Release Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Prove the assembled `ssh-ui` system keeps the promises of design §8, §10.4 and §10.5 — with fuzz targets beyond the parser, a security suite that drives the real loopback server, an injection suite that inspects the exact argument vectors the application would execute, a Playwright run over an isolated `~/.ssh`, and a single reproducible binary — then state, condition by condition, which of design §12's completion conditions hold.
+**Goal:** Prove the assembled `sshc` system keeps the promises of design §8, §10.4 and §10.5 — with fuzz targets beyond the parser, a security suite that drives the real loopback server, an injection suite that inspects the exact argument vectors the application would execute, a Playwright run over an isolated `~/.ssh`, and a single reproducible binary — then state, condition by condition, which of design §12's completion conditions hold.
 
 **Architecture:** One new test-only Go package, `internal/acceptance`, starts the *production* server through a new `app.Build` seam on a real `127.0.0.1:0` listener against a throwaway `$HOME`, and enumerates its route table from the Echo router instead of keeping a hand-written list, so a route added later is covered without anyone remembering to cover it. Recording process, terminal and agent doubles capture every `platform.Command` the application would run, which turns "no option injection" and "no AppleScript injection" into assertions about argv rather than about the absence of a crash. A `@playwright/test` project drives the built binary in real Chromium, where CSP enforcement, cookie flags, fragment removal and "no external origin was contacted" can be observed rather than assumed.
 
@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- macOS only. The server binds loopback `127.0.0.1` on an OS-assigned port and nothing else. No CORS. No LaunchAgent. The server exists only while the `ssh-ui` process runs.
+- macOS only. The server binds loopback `127.0.0.1` on an OS-assigned port and nothing else. No CORS. No LaunchAgent. The server exists only while the `sshc` process runs.
 - Pinned versions, unchanged from the earlier subsystems: Go 1.26.5, Echo v5.3.1, React 19.2.8, Vite 8.1.5, TypeScript 5.9.3, Tailwind CSS 4.3.3, Vitest 4.1.1, and `golang.org/x/crypto v0.54.0` which subsystem 4 introduced.
 - This plan adds exactly two dependencies, both justified in the task that adds them and pinned exactly: `@playwright/test` **1.62.1** as a `devDependencies` entry in `web/package.json` (Task 6), and `gopkg.in/yaml.v3` **v3.0.1** promoted from an existing indirect requirement to a direct one in `go.mod` (Task 1). `go.sum` gains nothing, because v3.0.1 is already there. Any further dependency must be justified and pinned exactly.
 - Automated tests must never contact a real remote host, change a real `authorized_keys`, or touch the real `~/.ssh`, the real Keychain, a real `ssh-agent` or Terminal. Every test in this plan runs against a `t.TempDir()` home and fake seams.
@@ -19,7 +19,7 @@
 - Every suite carries a **positive control** — one input that must reach the defended code path — so a suite can never pass merely because the route is broken or the fixture is empty.
 - No test may be skipped to make a suite green. A skip must be a deliberate, documented capability check, like the differential test's "is `ssh` installed". The acceptance gate enumerates the only skips allowed to exist.
 - Never log request bodies, cookies, bootstrap, session, CSRF or action tokens, key material, passphrases, file contents or clipboard contents. This plan adds the first test that actually scrapes the log stream for them.
-- `os.UserHomeDir` and `$HOME` may be read only from `cmd/ssh-ui`. Nothing under `internal/` may read either, including this plan's test package, which receives its home as a value.
+- `os.UserHomeDir` and `$HOME` may be read only from `cmd/sshc`. Nothing under `internal/` may read either, including this plan's test package, which receives its home as a value.
 - `api/openapi.yaml` stays the contract. Endpoint changes go there first, then `make generate`. Never hand-edit `internal/api/models.gen.go` or `web/src/api/schema.d.ts`.
 - Never write a raw control character into source or into this document. Use `"\x00"` in Go and `"\u0000"` in TypeScript.
 - Playwright artefacts must never contain secrets: traces, videos and screenshots are disabled, because one end-to-end flow renders a private key on screen by design.
@@ -45,7 +45,7 @@ This plan owns the cross-cutting suite and the release. It does not re-run gates
 ├── .gitignore                                   # modified: Playwright artefacts
 ├── go.mod                                       # modified: gopkg.in/yaml.v3 becomes a direct requirement
 ├── api/openapi.yaml                             # unchanged by this plan; read by the contract test
-├── cmd/ssh-ui/main.go                           # modified: -open flag and the URL-printing launcher
+├── cmd/sshc/main.go                           # modified: -open flag and the URL-printing launcher
 ├── docs/
 │   └── manual-acceptance.md                     # created: the checklist automation must not run
 ├── internal/
@@ -79,7 +79,7 @@ This plan owns the cross-cutting suite and the release. It does not re-run gates
     ├── tsconfig.e2e.json                        # created
     ├── vite.config.ts                           # modified: Vitest only collects src/**/*.test.*
     └── e2e/
-        ├── support/environment.ts               # isolated $HOME, spawns bin/ssh-ui -open=false
+        ├── support/environment.ts               # isolated $HOME, spawns bin/sshc -open=false
         ├── bootstrap.spec.ts                    # session, replay, CSP, no external origin
         ├── connections.spec.ts                  # form edit, Raw edit, save preview, three-way conflict
         ├── explorer.spec.ts                     # Include explorer
@@ -89,7 +89,7 @@ This plan owns the cross-cutting suite and the release. It does not re-run gates
 
 ### A note on drift
 
-Subsystems 3, 4 and 5 were written concurrently and all three modify `api/openapi.yaml`, `internal/httpserver`, `internal/session`, `internal/app` and `cmd/ssh-ui`. The roadmap already records that whoever executes them must reconcile the shared wiring rather than pasting a plan's wiring step verbatim. The same applies here, in exactly one place: **the field set of `app.Dependencies`**. This plan's harness sets `Home`, `Random`, `Browser`, `Listen`, `UI`, `Logger`, `Runner`, `Toolchain`, `Terminal`, `KeyAgent` and `SessionNow`. If the merged tree spells a seam differently — for example `Executor` instead of `Runner` — use the spelling that is in the tree and keep everything else identical. The route-table contract test in Task 1 exists precisely so a seam the harness forgot to supply shows up as a missing route rather than as silently reduced coverage.
+Subsystems 3, 4 and 5 were written concurrently and all three modify `api/openapi.yaml`, `internal/httpserver`, `internal/session`, `internal/app` and `cmd/sshc`. The roadmap already records that whoever executes them must reconcile the shared wiring rather than pasting a plan's wiring step verbatim. The same applies here, in exactly one place: **the field set of `app.Dependencies`**. This plan's harness sets `Home`, `Random`, `Browser`, `Listen`, `UI`, `Logger`, `Runner`, `Toolchain`, `Terminal`, `KeyAgent` and `SessionNow`. If the merged tree spells a seam differently — for example `Executor` instead of `Runner` — use the spelling that is in the tree and keep everything else identical. The route-table contract test in Task 1 exists precisely so a seam the harness forgot to supply shows up as a missing route rather than as silently reduced coverage.
 
 One decision the earlier plans left colliding is already settled in the committed tree and this plan follows it: action tokens use subsystem 5's shape — `session.ActionRequest{Kind, Target, Evidence}` with `session.ActionRevealPrivateKey = "private_key.reveal"` and `session.ActionPurgeTrashEntry = "trash.purge"` — not subsystem 4's `Action{Purpose, Subject}`.
 
@@ -496,10 +496,10 @@ import (
 	"testing/fstest"
 	"time"
 
-	"ssh-ui/internal/app"
-	"ssh-ui/internal/httpserver"
-	"ssh-ui/internal/keys"
-	"ssh-ui/internal/platform"
+	"sshc/internal/app"
+	"sshc/internal/httpserver"
+	"sshc/internal/keys"
+	"sshc/internal/platform"
 )
 
 // canaryPassphrase protects the fixture private key. It must never appear in
@@ -764,11 +764,11 @@ func writeFixtureTree(t testing.TB, home, root string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	encoded, err := keys.EncodePrivateKey(privateKey, "fixture@ssh-ui", []byte(canaryPassphrase))
+	encoded, err := keys.EncodePrivateKey(privateKey, "fixture@sshc", []byte(canaryPassphrase))
 	if err != nil {
 		t.Fatal(err)
 	}
-	public, err := keys.EncodePublicKey(privateKey, "fixture@ssh-ui")
+	public, err := keys.EncodePublicKey(privateKey, "fixture@sshc")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -809,7 +809,7 @@ func fixturePrivateKeySecondLine(t testing.TB, root string) string {
 func (f *fixture) bootstrapSession(bootstrap string) {
 	f.t.Helper()
 	response := f.do(http.MethodPost, "/api/v1/session/bootstrap", nil, func(request *http.Request) {
-		request.Header.Set("X-SSH-UI-Bootstrap", bootstrap)
+		request.Header.Set("X-SSHC-Bootstrap", bootstrap)
 	})
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
@@ -994,8 +994,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"ssh-ui/internal/httpserver"
-	"ssh-ui/internal/session"
+	"sshc/internal/httpserver"
+	"sshc/internal/session"
 )
 
 // expectedContentSecurityPolicy is asserted by exact match on purpose. Widening
@@ -1128,7 +1128,7 @@ func TestEveryAPIResponseIsNoStoreAndCarriesTheExactPolicy(t *testing.T) {
 func TestBootstrapTokenIsSingleUse(t *testing.T) {
 	f := newFixture(t)
 	response := f.do(http.MethodPost, "/api/v1/session/bootstrap", nil, func(request *http.Request) {
-		request.Header.Set("X-SSH-UI-Bootstrap", f.canaries.Bootstrap)
+		request.Header.Set("X-SSHC-Bootstrap", f.canaries.Bootstrap)
 	})
 	status := response.StatusCode
 	cookies := response.Cookies()
@@ -1160,7 +1160,7 @@ func TestServerRefusesEveryListenerThatIsNotUnmappedLoopbackIPv4(t *testing.T) {
 		{"ipv6 loopback", &net.TCPAddr{IP: net.IPv6loopback, Port: 51234}, true},
 		{"private address", &net.TCPAddr{IP: net.ParseIP("192.168.1.10").To4(), Port: 51234}, true},
 		{"public address", &net.TCPAddr{IP: net.ParseIP("203.0.113.10").To4(), Port: 51234}, true},
-		{"unix socket", &net.UnixAddr{Name: "/tmp/ssh-ui.sock", Net: "unix"}, true},
+		{"unix socket", &net.UnixAddr{Name: "/tmp/sshc.sock", Net: "unix"}, true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -1316,8 +1316,8 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/httpserver"
-	"ssh-ui/internal/platform"
+	"sshc/internal/httpserver"
+	"sshc/internal/platform"
 )
 
 // maxAcceptableResponseBytes bounds what any single response may be. Nothing in
@@ -1475,7 +1475,7 @@ Append to `internal/acceptance/harness_test.go`:
 // actionToken asks the running server for one confirmation token, exactly as
 // the frontend does. The route and header spellings differ between the
 // diagnostics surface, which takes the token in the request body, and the key
-// vault surface, which takes it in X-SSH-UI-Action; both are issued here.
+// vault surface, which takes it in X-SSHC-Action; both are issued here.
 func (f *fixture) actionToken(t testing.TB, kind, target string) string {
 	t.Helper()
 	for _, path := range []string{"/api/v1/actions/token", "/api/v1/actions"} {
@@ -1565,7 +1565,7 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/session"
+	"sshc/internal/session"
 )
 
 // tokenDelivery says where a route expects its one-time confirmation.
@@ -1628,7 +1628,7 @@ func (f *fixture) sendGuarded(t testing.TB, route guardedRoute, presented string
 	}
 	return f.do(route.Method, route.Path, body, func(request *http.Request) {
 		if route.Delivery == tokenInHeader && presented != "" {
-			request.Header.Set("X-SSH-UI-Action", presented)
+			request.Header.Set("X-SSHC-Action", presented)
 		}
 	})
 }
@@ -1816,7 +1816,7 @@ func TestNoResponseCarriesASecretItIsNotEntitledTo(t *testing.T) {
 	keyID := f.keyID()
 	revealToken := f.actionToken(t, session.ActionRevealPrivateKey, keyID)
 	record(http.MethodPost, "/api/v1/keys/"+keyID+"/reveal", nil, func(request *http.Request) {
-		request.Header.Set("X-SSH-UI-Action", revealToken)
+		request.Header.Set("X-SSHC-Action", revealToken)
 	})
 
 	sawFileContents := map[string]bool{}
@@ -1884,7 +1884,7 @@ func TestNoLogLineCarriesASecret(t *testing.T) {
 	keyID := f.keyID()
 	revealToken := f.actionToken(t, session.ActionRevealPrivateKey, keyID)
 	readBody(t, f.do(http.MethodPost, "/api/v1/keys/"+keyID+"/reveal", nil, func(request *http.Request) {
-		request.Header.Set("X-SSH-UI-Action", revealToken)
+		request.Header.Set("X-SSHC-Action", revealToken)
 	}))
 
 	logged := f.logText()
@@ -1969,10 +1969,10 @@ import (
 	"testing"
 	"time"
 
-	"ssh-ui/internal/config"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/platform/macos"
-	"ssh-ui/internal/remotekey"
+	"sshc/internal/config"
+	"sshc/internal/platform"
+	"sshc/internal/platform/macos"
+	"sshc/internal/remotekey"
 )
 
 // hostileArguments are values OpenSSH itself would accept inside a Host line,
@@ -1988,7 +1988,7 @@ var hostileArguments = []string{
 	"-",
 	"--",
 	"bastion -oProxyCommand=id",
-	"bastion;touch /tmp/ssh-ui-pwned",
+	"bastion;touch /tmp/sshc-pwned",
 	"bastion|id",
 	"bastion&&id",
 	"bastion$(id)",
@@ -2230,7 +2230,7 @@ func TestRemoteRegistrationNeverInterpolatesInputIntoTheRemoteShell(t *testing.T
 		if strings.Contains(strings.Join(command.Arguments, " "), remotekey.ProbeCommand) {
 			return platform.Output{Stdout: []byte(remotekey.ProbeMarker + "\n")}, nil
 		}
-		return platform.Output{Stdout: []byte("ssh-ui: added\n")}, nil
+		return platform.Output{Stdout: []byte("sshc: added\n")}, nil
 	})
 	token := f.actionToken(t, "remote_key.register", "bastion")
 	readBody(t, f.do(http.MethodPost, "/api/v1/remote-keys/register", mustJSON(t, map[string]any{
@@ -3110,7 +3110,7 @@ git commit -m "test: fuzz the include expander, known_hosts, ssh -G output and t
 ## Task 6: Playwright end-to-end over an isolated `~/.ssh`
 
 **Files:**
-- Modify: `cmd/ssh-ui/main.go`
+- Modify: `cmd/sshc/main.go`
 - Modify: `web/package.json`
 - Modify: `web/vite.config.ts`
 - Modify: `.gitignore`
@@ -3147,7 +3147,7 @@ A lighter approach was considered and rejected. Driving the built binary with `c
 
 Automation needs the URL without handing a live bootstrap token to whatever browser happens to be running on the desk. `open <url>` already puts that token in the process table of the same user, so printing it on the process's own standard output is no weaker, and it is opt-in.
 
-In `cmd/ssh-ui/main.go`, add the flag and a launcher that prints instead of opening:
+In `cmd/sshc/main.go`, add the flag and a launcher that prints instead of opening:
 
 ```go
 // urlPrinter satisfies platform.BrowserLauncher by writing the URL instead of
@@ -3175,14 +3175,14 @@ and inside `main`, before `dependencies` is built:
 	}
 ```
 
-then set `Browser: browser` in `dependencies`. Add `"flag"`, `"fmt"`, `"io"` and `"ssh-ui/internal/platform"` to the imports.
+then set `Browser: browser` in `dependencies`. Add `"flag"`, `"fmt"`, `"io"` and `"sshc/internal/platform"` to the imports.
 
 - [ ] **Step 2: Verify the flag by hand, in a throwaway home**
 
 ```bash
-go build -trimpath -o bin/ssh-ui ./cmd/ssh-ui
+go build -trimpath -o bin/sshc ./cmd/sshc
 work="$(mktemp -d)"
-HOME="$work" ./bin/ssh-ui -open=false &
+HOME="$work" ./bin/sshc -open=false &
 sleep 1
 kill %1
 rm -rf "$work"
@@ -3291,7 +3291,7 @@ import { dirname, join, resolve } from "node:path";
 // binaryPath is the artefact under test. `make e2e` builds it first; a missing
 // binary fails loudly rather than falling back to a dev server, because the
 // point of this suite is the shipped artefact.
-const binaryPath = resolve(process.cwd(), "..", "bin", "ssh-ui");
+const binaryPath = resolve(process.cwd(), "..", "bin", "sshc");
 
 // The fixture home is written by this file and by nothing else. Every spec that
 // needs a different starting state writes it through `installation.write`.
@@ -3325,7 +3325,7 @@ export type Installation = {
 };
 
 async function buildHome(): Promise<string> {
-  const home = await mkdtemp(join(tmpdir(), "ssh-ui-e2e-"));
+  const home = await mkdtemp(join(tmpdir(), "sshc-e2e-"));
   if (!home.startsWith(tmpdir())) {
     throw new Error("the end-to-end home is not inside the temporary directory");
   }
@@ -3348,7 +3348,7 @@ function startBinary(home: string): Promise<{ child: ChildProcess; url: string }
       stdio: ["ignore", "pipe", "pipe"],
     });
     let buffered = "";
-    const timer = setTimeout(() => rejectPromise(new Error("ssh-ui printed no URL within 10s")), 10_000);
+    const timer = setTimeout(() => rejectPromise(new Error("sshc printed no URL within 10s")), 10_000);
     child.stdout?.on("data", (chunk: Buffer) => {
       buffered += chunk.toString("utf8");
       const newline = buffered.indexOf("\n");
@@ -3358,7 +3358,7 @@ function startBinary(home: string): Promise<{ child: ChildProcess; url: string }
     });
     child.on("exit", (code) => {
       clearTimeout(timer);
-      rejectPromise(new Error(`ssh-ui exited with ${String(code)} before printing a URL`));
+      rejectPromise(new Error(`sshc exited with ${String(code)} before printing a URL`));
     });
   });
 }
@@ -3399,14 +3399,14 @@ import { expect, test } from "./support/environment";
 test("exchanges the fragment for a session and removes it from the address bar", async ({ page, context, installation }) => {
   await page.goto(installation.url);
 
-  await expect(page.getByRole("heading", { name: "SSH UI", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "sshc", level: 1 })).toBeVisible();
   await expect(page.getByRole("status")).toContainText("Local session active");
 
   expect(await page.evaluate(() => window.location.hash)).toBe("");
   expect(await page.evaluate(() => document.cookie)).toBe("");
 
   const cookies = await context.cookies();
-  const session = cookies.find((cookie) => cookie.name === "ssh_ui_session");
+  const session = cookies.find((cookie) => cookie.name === "sshc_session");
   expect(session).toBeDefined();
   expect(session?.httpOnly).toBe(true);
   expect(session?.sameSite).toBe("Strict");
@@ -3688,7 +3688,7 @@ Expected: `no playwright in the bundle`, the node check is silent, Vitest collec
 - [ ] **Step 13: Commit**
 
 ```bash
-git add cmd/ssh-ui/main.go web/package.json web/package-lock.json web/playwright.config.ts web/tsconfig.e2e.json web/vite.config.ts web/e2e .gitignore Makefile
+git add cmd/sshc/main.go web/package.json web/package-lock.json web/playwright.config.ts web/tsconfig.e2e.json web/vite.config.ts web/e2e .gitignore Makefile
 git commit -m "test: drive the built binary through the main flows in a real browser"
 ```
 
@@ -3702,10 +3702,10 @@ git commit -m "test: drive the built binary through the main flows in a real bro
 - Modify: `README.md`
 
 **Interfaces:**
-- Consumes: `cmd/ssh-ui`'s `-open` flag from Task 6; `internal/ui/dist/index.html`.
+- Consumes: `cmd/sshc`'s `-open` flag from Task 6; `internal/ui/dist/index.html`.
 - Produces: `make verify-generated`; `TestBuiltBinaryServesTheEmbeddedUIAndStopsOnSIGTERM`; `TestNoTestOnlyPackageReachesTheShippedBinary`.
 
-Every earlier plan stops at `go build -trimpath -o bin/ssh-ui ./cmd/ssh-ui` and asserts the command succeeded. Nothing asserts that the artefact starts, serves the UI it embedded, and stops when the operating system asks it to — which is the only claim a user actually depends on.
+Every earlier plan stops at `go build -trimpath -o bin/sshc ./cmd/sshc` and asserts the command succeeded. Nothing asserts that the artefact starts, serves the UI it embedded, and stops when the operating system asks it to — which is the only claim a user actually depends on.
 
 **Teeth:** the smoke test compares the served bytes with the committed `internal/ui/dist/index.html`, so a binary built with a stale or empty `dist` fails rather than serving a placeholder. The shutdown assertion has a deadline, so a process that ignores SIGTERM fails instead of hanging the suite.
 
@@ -3738,9 +3738,9 @@ import (
 // is never read. Nothing here contacts a network.
 func TestBuiltBinaryServesTheEmbeddedUIAndStopsOnSIGTERM(t *testing.T) {
 	repository := filepath.Join("..", "..")
-	binary := filepath.Join(t.TempDir(), "ssh-ui")
+	binary := filepath.Join(t.TempDir(), "sshc")
 
-	build := exec.Command("go", "build", "-trimpath", "-o", binary, "./cmd/ssh-ui")
+	build := exec.Command("go", "build", "-trimpath", "-o", binary, "./cmd/sshc")
 	build.Dir = repository
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("go build = %v\n%s", err, output)
@@ -3820,7 +3820,7 @@ func TestBuiltBinaryServesTheEmbeddedUIAndStopsOnSIGTERM(t *testing.T) {
 	bootstrap.Host = host
 	bootstrap.Header.Set("Origin", base)
 	bootstrap.Header.Set("Sec-Fetch-Site", "same-origin")
-	bootstrap.Header.Set("X-SSH-UI-Bootstrap", fragment)
+	bootstrap.Header.Set("X-SSHC-Bootstrap", fragment)
 	exchanged, err := client.Do(bootstrap)
 	if err != nil {
 		t.Fatalf("bootstrap = %v", err)
@@ -3860,7 +3860,7 @@ func TestBuiltBinaryServesTheEmbeddedUIAndStopsOnSIGTERM(t *testing.T) {
 // the artefact. internal/acceptance is test-only by construction, but a future
 // helper moved into a non-test file would change that silently.
 func TestNoTestOnlyPackageReachesTheShippedBinary(t *testing.T) {
-	list := exec.Command("go", "list", "-deps", "./cmd/ssh-ui")
+	list := exec.Command("go", "list", "-deps", "./cmd/sshc")
 	list.Dir = filepath.Join("..", "..")
 	output, err := list.CombinedOutput()
 	if err != nil {
@@ -3868,7 +3868,7 @@ func TestNoTestOnlyPackageReachesTheShippedBinary(t *testing.T) {
 	}
 	for _, line := range strings.Split(string(output), "\n") {
 		switch strings.TrimSpace(line) {
-		case "ssh-ui/internal/acceptance":
+		case "sshc/internal/acceptance":
 			t.Error("the hardening suite is linked into the shipped binary")
 		case "testing", "net/http/httptest":
 			t.Errorf("%s is linked into the shipped binary", strings.TrimSpace(line))
@@ -3887,7 +3887,7 @@ Expected: PASS. The build step takes a few seconds; that is the price of testing
 | Mutation | File | Assertion that must fail |
 |---|---|---|
 | Change `//go:embed all:dist` to embed an empty directory | `internal/ui/embed.go` | the served-bytes comparison |
-| Remove `syscall.SIGTERM` from `signal.NotifyContext` | `cmd/ssh-ui/main.go` | the 10-second shutdown deadline |
+| Remove `syscall.SIGTERM` from `signal.NotifyContext` | `cmd/sshc/main.go` | the 10-second shutdown deadline |
 | Add `logger.Info("target", "url", target)` to `Run` | `internal/app/run.go` | the stderr token check |
 
 Run each, confirm FAIL, then `git checkout -- <file>`.
@@ -3911,12 +3911,12 @@ Expected: `generate` runs both generators and `git diff --exit-code` prints noth
 
 ```bash
 make build
-ls -l bin/ssh-ui
-otool -L bin/ssh-ui
-strings bin/ssh-ui | grep -c '<div id="root">'
+ls -l bin/sshc
+otool -L bin/sshc
+strings bin/sshc | grep -c '<div id="root">'
 ```
 
-Expected: `bin/ssh-ui` exists; `otool -L` lists only system libraries (`libSystem`, `CoreFoundation`, `Security`), no bundled runtime; the `strings` count is at least 1, showing the UI is inside the binary. Record the byte size in the commit message so a later change that doubles it is visible.
+Expected: `bin/sshc` exists; `otool -L` lists only system libraries (`libSystem`, `CoreFoundation`, `Security`), no bundled runtime; the `strings` count is at least 1, showing the UI is inside the binary. Record the byte size in the commit message so a later change that doubles it is visible.
 
 - [ ] **Step 6: Document the release commands**
 
@@ -3928,13 +3928,13 @@ make verify-generated # 生成物が契約と一致することを確認
 make test             # Go、race detector、Vitest、TypeScript を検証
 make fuzz             # 全 fuzz target を既定 30 秒ずつ実行（FUZZTIME で変更）
 make e2e              # バイナリをビルドし Playwright で主要フローを検証
-make build            # UI を生成し bin/ssh-ui へ単一バイナリを作成
+make build            # UI を生成し bin/sshc へ単一バイナリを作成
 ```
 
 and append to the 強化とリリースの境界 section:
 
 ```markdown
-- `./bin/ssh-ui -open=false` は既定ブラウザを開かず、bootstrap fragment 付き URL を標準出力へ 1 行だけ出します。自動化用の明示的なオプションであり、通常の利用では使いません。token は `open <url>` の argv と同程度の露出であり、それ以上ではありません。
+- `./bin/sshc -open=false` は既定ブラウザを開かず、bootstrap fragment 付き URL を標準出力へ 1 行だけ出します。自動化用の明示的なオプションであり、通常の利用では使いません。token は `open <url>` の argv と同程度の露出であり、それ以上ではありません。
 - 配布物は UI を埋め込んだ単一バイナリです。`otool -L` はシステムライブラリのみを表示し、同梱ランタイムはありません。
 ```
 
@@ -3953,7 +3953,7 @@ git commit -m "test: build, serve and terminate the shipped binary, and verify c
 **Files:**
 - Create: `internal/acceptance/conditions_test.go`
 - Create: `docs/manual-acceptance.md`
-- Modify: `docs/superpowers/plans/2026-08-04-ssh-ui-roadmap.md`
+- Modify: `docs/superpowers/plans/2026-08-04-sshc-roadmap.md`
 - Modify: `README.md`
 
 **Interfaces:**
@@ -3978,8 +3978,8 @@ Create `docs/manual-acceptance.md`:
 実施前に必ず読むこと。
 
 - 実施は使い捨ての `HOME` で行い、本番の `~/.ssh` では行いません。
-  `work="$(mktemp -d)"; cp -R ~/.ssh "$work/.ssh"; HOME="$work" ./bin/ssh-ui`
-- 本番の `~/.ssh` を使う項目（Keychain と Terminal）は、事前に `~/.ssh` と `~/.ssh/ssh-ui` を別ディレクトリへ退避してから行います。
+  `work="$(mktemp -d)"; cp -R ~/.ssh "$work/.ssh"; HOME="$work" ./bin/sshc`
+- 本番の `~/.ssh` を使う項目（Keychain と Terminal）は、事前に `~/.ssh` と `~/.ssh/sshc` を別ディレクトリへ退避してから行います。
 - 各項目に日付、macOS と OpenSSH のバージョン、結果を記録します。
 
 ## M1. 実リモートホストへの接続テスト
@@ -4016,7 +4016,7 @@ Create `docs/manual-acceptance.md`:
 
 1. 本番の `~/.ssh` をコピーした使い捨て `HOME` で起動する。
 2. Connections、Config、Groups、Keys、Known Hosts、History の各画面を開くだけで、何も保存しない。
-3. 終了後、`diff -r ~/.ssh "$work/.ssh"` が `ssh-ui/` 配下以外で差分を出さないことを確認する。
+3. 終了後、`diff -r ~/.ssh "$work/.ssh"` が `sshc/` 配下以外で差分を出さないことを確認する。
 4. 期待: 読み取りだけで既存ファイルが 1 バイトも変わらない。
 
 ## 記録
@@ -4333,10 +4333,10 @@ Restore the name with `git checkout -- internal/acceptance/transport_test.go` an
 
 - [ ] **Step 5: Record the subsystem in the roadmap**
 
-In `docs/superpowers/plans/2026-08-04-ssh-ui-roadmap.md`, replace the subsystem 6 status line and extend the dependency note:
+In `docs/superpowers/plans/2026-08-04-sshc-roadmap.md`, replace the subsystem 6 status line and extend the dependency note:
 
 ```markdown
-- Subsystem 6 (Hardening and release): delivered; plan `2026-08-05-ssh-ui-hardening-release-implementation-plan.md`, 8 tasks. Adds `internal/acceptance` as a test-only package, four new fuzz targets, a Playwright end-to-end suite, `make fuzz`/`make e2e`/`make verify-generated`, and the design §12 audit in `TestDesignCompletionConditions`. Dependencies added: `@playwright/test` 1.62.1 (devDependency) and `gopkg.in/yaml.v3` v3.0.1 promoted from indirect to direct; `go.sum` unchanged.
+- Subsystem 6 (Hardening and release): delivered; plan `2026-08-05-sshc-hardening-release-implementation-plan.md`, 8 tasks. Adds `internal/acceptance` as a test-only package, four new fuzz targets, a Playwright end-to-end suite, `make fuzz`/`make e2e`/`make verify-generated`, and the design §12 audit in `TestDesignCompletionConditions`. Dependencies added: `@playwright/test` 1.62.1 (devDependency) and `gopkg.in/yaml.v3` v3.0.1 promoted from indirect to direct; `go.sum` unchanged.
 - Fetch Metadata is now verified on every `/api/` request, not only on state-changing ones. Any later plan that adds an authenticated GET must send `Sec-Fetch-Site: same-origin` in its tests.
 - The manual acceptance checklist lives in `docs/manual-acceptance.md`. Real remote connections, real `authorized_keys` changes, the real Keychain and a real Terminal launch are there and must stay out of automation.
 ```
@@ -4359,7 +4359,7 @@ make test
 make fuzz
 PLAYWRIGHT_BROWSERS_PATH=./web/.playwright-browsers make e2e
 go vet ./...
-git add internal/acceptance/conditions_test.go docs/manual-acceptance.md docs/superpowers/plans/2026-08-04-ssh-ui-roadmap.md README.md
+git add internal/acceptance/conditions_test.go docs/manual-acceptance.md docs/superpowers/plans/2026-08-04-sshc-roadmap.md README.md
 git commit -m "docs: audit the design completion conditions and record the manual acceptance tests"
 ```
 
@@ -4383,8 +4383,8 @@ go test ./internal/acceptance -run TestDesignCompletionConditions -v
 - `make test` passes, including `go test -race ./...`, Vitest and both TypeScript projects.
 - `make fuzz` runs **five** targets — `FuzzParseRendersOriginalBytes`, `FuzzExpandIncludePattern`, `FuzzParseValues`, `FuzzParseKnownHostsRoundTrip`, `FuzzAPIRequestBodies` — for `FUZZTIME` each, with no failing input, and `git status --short` shows no new file under any `testdata/fuzz` directory.
 - `TestMakefileFuzzTargetsCoverEveryFuzzFunction` passes, so no fuzz target exists that `make fuzz` does not run.
-- `make e2e` passes on a freshly built `bin/ssh-ui`, twice in a row.
-- `make build` produces `bin/ssh-ui`; `otool -L bin/ssh-ui` lists only system libraries; `strings bin/ssh-ui | grep -c '<div id="root">'` is at least 1.
+- `make e2e` passes on a freshly built `bin/sshc`, twice in a row.
+- `make build` produces `bin/sshc`; `otool -L bin/sshc` lists only system libraries; `strings bin/sshc | grep -c '<div id="root">'` is at least 1.
 - Every `/api/` route in the router appears in `api/openapi.yaml` and vice versa (`TestRouteTableMatchesTheOpenAPIContract`).
 - Every `/api/` route refuses a wrong `Host`, a wrong `Origin`, `Sec-Fetch-Site: cross-site`, `same-site`, `none` and an absent `Sec-Fetch-Site`, and every route except bootstrap refuses a request with no session.
 - Every `/api/` response, successful and failed, authenticated and not, carries `Cache-Control: no-store` and the exact CSP string, which contains no `unsafe-inline`, no `unsafe-eval`, no `*` and no scheme source.
@@ -4401,15 +4401,15 @@ go test ./internal/acceptance -run TestDesignCompletionConditions -v
 - A configuration containing a `Host` alias with a NUL, a newline or a leading hyphen still round-trips byte-for-byte, and every external effect for that alias is refused.
 - Request bodies are bounded on every route by `MaxRequestBodyCeiling` and by each handler's own limit; an oversized body is refused with a 4xx that echoes nothing back and starts no command.
 - A truncated `ssh -G` transcript never becomes an effective value; reported stderr stays inside `MaxReportedOutput`.
-- `bin/ssh-ui` starts under a temporary `HOME`, prints one loopback URL with a 43-character bootstrap fragment, serves bytes identical to the committed `internal/ui/dist/index.html`, exchanges the bootstrap token, and exits 0 within 10 seconds of `SIGTERM` without logging the token.
-- `go list -deps ./cmd/ssh-ui` contains neither `ssh-ui/internal/acceptance` nor `testing`.
+- `bin/sshc` starts under a temporary `HOME`, prints one loopback URL with a 43-character bootstrap fragment, serves bytes identical to the committed `internal/ui/dist/index.html`, exchanges the bootstrap token, and exits 0 within 10 seconds of `SIGTERM` without logging the token.
+- `go list -deps ./cmd/sshc` contains neither `sshc/internal/acceptance` nor `testing`.
 - `@playwright/test` is a `devDependencies` entry pinned to `1.62.1`, appears nowhere in `internal/ui/dist/`, and its browser lives in `web/.playwright-browsers/`, which is ignored by git.
 - `go.mod` gained exactly one direct requirement, `gopkg.in/yaml.v3 v3.0.1`, and `go.sum` is unchanged: `git diff --stat go.sum` is empty.
 - No test contacted a remote host, changed a real `authorized_keys`, or touched the real `~/.ssh`, Keychain, `ssh-agent` or Terminal. Confirm with:
 
 ```bash
 grep -rn "UserHomeDir\|os.Getenv(\"HOME\")" internal/ || echo "no internal package reads the home directory"
-ls -la ~/.ssh/ssh-ui 2>/dev/null || echo "no state directory in the real home"
+ls -la ~/.ssh/sshc 2>/dev/null || echo "no state directory in the real home"
 find ~/.ssh -newermt '-30 minutes' 2>/dev/null || echo "no recently modified file in the real ~/.ssh"
 ```
 
@@ -4444,6 +4444,6 @@ Checked after writing, against design §8, §10.4, §10.5, §11 item 6, §12 and
 
 - **Spec coverage.** §8.1 is covered by Task 1 (loopback bind, random port, bootstrap single use, session in memory, Host/Origin/Fetch Metadata, no CORS) and Task 2 (body and output ceilings). §8.2 is covered by Task 1 (CSP, no external resources), Task 3 (action tokens, no secret in a response or a log) and Task 6 (no secret in persistent browser storage, fragment removed). §8.3 is covered by Task 3's guarded-route table and Task 4's argv assertions. §10.4's nine bullets each map to a named test. §10.5's eight bullets map to Task 6's five specs plus the earlier plans' Vitest suites, which `make test` re-runs. §11 item 6 — security hardening, fuzz, E2E, single binary, acceptance — is Tasks 1-8 in order. §12 is Task 8. §13's four answers are the reasons written into the tasks: reveal stays separated and no-store (Task 3), the hybrid editor is exercised through both form and Raw (Task 6), Include is not presented as inheritance (Task 8 condition 4 defers to subsystem 3 and says so), and the atomicity limit is why Task 4 asserts refusals leave files unchanged rather than asserting rollback.
 - **Gaps found and closed while writing.** Fetch Metadata was verified only on state-changing requests; Task 1 extends it and lists the test repairs. No middleware-level body ceiling existed; Task 2 adds one without disturbing the per-handler limits. No test read the log stream, which subsystem 4's gate named as an untested constraint; Task 3 adds one. `make fuzz` ran only the first target; Task 5 fixes it and adds a coverage test so it cannot regress.
-- **Gaps found and left open, deliberately.** Group inheritance, journal recovery and the Vitest component suites stay with subsystems 2 and 3; this plan re-runs them through `make test` rather than duplicating them, and the audit rows say so. `~/.ssh` file and folder move, rename and delete remain with the `ssh-ui-file-operations` follow-up. Design §12 has twelve bullets, not the thirteen the brief expected; the discrepancy is stated in Task 8 rather than papered over.
+- **Gaps found and left open, deliberately.** Group inheritance, journal recovery and the Vitest component suites stay with subsystems 2 and 3; this plan re-runs them through `make test` rather than duplicating them, and the audit rows say so. `~/.ssh` file and folder move, rename and delete remain with the `sshc-file-operations` follow-up. Design §12 has twelve bullets, not the thirteen the brief expected; the discrepancy is stated in Task 8 rather than papered over.
 - **Placeholder scan.** No "TBD", no "add appropriate error handling", no "similar to Task N". Every code step carries the code. The one instruction that cannot name its targets in advance — Task 1 Step 8's repair of existing GET tests — names the exact line to add and the rule for judging each failure, because the number of affected files depends on how subsystems 3, 4 and 5 merged.
 - **Type consistency.** `httpserver.Route{Method, Path}` is produced in Task 1 and consumed in Tasks 1, 2, 3 and 5. `app.Build(Dependencies, string) (*httpserver.Server, string, error)` is produced in Task 1 and consumed by `newFixture` and by `Run`. `MaxRequestBodyCeiling` is deliberately not `MaxRequestBody`, which subsystem 5 already exports at 64 KiB. `newFixture` takes `testing.TB`, not `*testing.T`, because Task 5's fuzz target passes a `*testing.F`. `session.ActionRequest{Kind, Target, Evidence}` and the `private_key.reveal` / `trash.purge` spellings follow the committed tree, not subsystem 4's superseded `Action{Purpose, Subject}`. `hostileArguments` is declared once in Task 4 and reused in Task 5's seeds. `quoteForName`, `assertArgumentIsInert`, `readBody`, `mustJSON`, `emptyBodyFor` and `maxAcceptableResponseBytes` each have exactly one declaration.

@@ -38,7 +38,7 @@ test("gives one named secret to two hosts and writes neither name into the file"
 
   // And the sealed file carries none of it: not the secret, not the name, not
   // the hosts that point at it.
-  const sealed = await installation.read("ssh-ui/secrets");
+  const sealed = await installation.read("sshc/secrets");
   for (const absent of ["hunter2", "office-vm", "bastion", "nas"]) {
     expect(sealed).not.toContain(absent);
   }

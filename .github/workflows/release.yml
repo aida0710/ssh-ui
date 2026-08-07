@@ -42,8 +42,8 @@ jobs:
       - name: Package
         run: |
           mkdir -p dist
-          cp bin/ssh-ui "dist/ssh-ui-darwin-arm64"
-          cd dist && shasum -a 256 ssh-ui-darwin-arm64 > checksums.txt
+          cp bin/sshc "dist/sshc-darwin-arm64"
+          cd dist && shasum -a 256 sshc-darwin-arm64 > checksums.txt
 
       # The private half never leaves this step. An installation that cannot
       # verify the signature refuses the update rather than taking it, so a
@@ -55,4 +55,4 @@ jobs:
           gh release create "${{ github.ref_name }}" \
             --title "${{ github.ref_name }}" \
             --generate-notes \
-            dist/ssh-ui-darwin-arm64 dist/checksums.txt
+            dist/sshc-darwin-arm64 dist/checksums.txt

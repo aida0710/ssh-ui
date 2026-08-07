@@ -4,8 +4,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"ssh-ui/internal/config"
-	"ssh-ui/internal/storage"
+	"sshc/internal/config"
+	"sshc/internal/storage"
 )
 
 // Reference is one configuration directive that names a key file.

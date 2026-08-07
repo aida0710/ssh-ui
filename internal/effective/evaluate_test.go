@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/effective"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/platform/macos"
+	"sshc/internal/effective"
+	"sshc/internal/platform"
+	"sshc/internal/platform/macos"
 )
 
 // recordingRunner captures the command it was asked to run and replays a

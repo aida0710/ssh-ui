@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"ssh-ui/internal/config"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/storage"
+	"sshc/internal/config"
+	"sshc/internal/platform"
+	"sshc/internal/storage"
 )
 
 var (
@@ -91,7 +91,7 @@ var reservedFileNames = map[string]bool{
 	"authorized_keys2": true,
 	"environment":      true,
 	"rc":               true,
-	"ssh-ui":           true,
+	"sshc":             true,
 }
 
 // ValidateComment rejects a comment that would damage the key file or the line
@@ -342,7 +342,7 @@ type PassphraseResult struct {
 //
 // The transaction opts out of the generational backup, because the contents it
 // replaces are the user's private key and the design refuses to leave a second
-// copy of key material in ~/.ssh/ssh-ui/backups/. The rename that installs the
+// copy of key material in ~/.ssh/sshc/backups/. The rename that installs the
 // new key is atomic, so an interruption leaves either the old key or the new
 // one; an interrupted change can be completed but not rolled back.
 //
@@ -602,7 +602,7 @@ type RegisterResult struct {
 // its passphrase in the login Keychain.
 //
 // Only a key the inventory currently contains can be registered, so a trashed
-// key and anything under ~/.ssh/ssh-ui are unreachable by construction. The
+// key and anything under ~/.ssh/sshc are unreachable by construction. The
 // passphrase is overwritten before Register returns, and the registration is
 // recorded in history without it. The audit note is written only after the
 // agent accepted the key, so a refused registration leaves no record claiming

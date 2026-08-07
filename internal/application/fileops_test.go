@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/storage"
+	"sshc/internal/storage"
 )
 
 // newFileOpsService builds a workspace whose entry file names one included file

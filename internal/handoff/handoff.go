@@ -1,7 +1,7 @@
 // Package handoff is how the running application tells a command-line
 // invocation of the same binary where to find it.
 //
-// It exists so that connecting from a terminal is `ssh-ui <alias>` rather than
+// It exists so that connecting from a terminal is `sshc <alias>` rather than
 // five environment variables and a flag. Those variables are the hand-written
 // form of what the Terminal button already does for itself; nothing about them
 // was ever meant to be typed.
@@ -42,7 +42,7 @@ type Handoff struct {
 // A custom header is a request no web page can send cross-origin without a
 // preflight, and this server answers no preflight, so the handoff route is
 // unreachable from a browser however much it knows.
-const HeaderName = "X-SSH-UI-CLI"
+const HeaderName = "X-SSHC-CLI"
 
 // Mint returns a secret for one run.
 //

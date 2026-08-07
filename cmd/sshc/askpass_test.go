@@ -132,7 +132,7 @@ func TestAskpassWritesNothingOnStandardOutputWhenItRefuses(t *testing.T) {
 
 func TestAskpassRefusesAnEndpointThatIsNotLoopback(t *testing.T) {
 	// The endpoint arrives in an environment variable, so it is input. An
-	// exported SSH_UI_ASKPASS_URL pointing elsewhere would turn this helper
+	// exported SSHC_ASKPASS_URL pointing elsewhere would turn this helper
 	// into an exfiltration tool for the password it is about to fetch.
 	reached := false
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -218,7 +218,7 @@ func TestOpenSSHsInvocationIsRecognisedAsTheHelperAndNotAsTheApplication(t *test
 	// ssh waited for a password that was never sent.
 	environment := fullEnvironment("http://127.0.0.1:1/askpass")
 	arguments, ok := askpassInvocation(
-		[]string{"/opt/ssh-ui", "ops@203.0.113.10's password: "}, environment.lookup)
+		[]string{"/opt/sshc", "ops@203.0.113.10's password: "}, environment.lookup)
 	if !ok {
 		t.Fatal("the invocation OpenSSH actually makes was not recognised as the helper")
 	}
@@ -229,7 +229,7 @@ func TestOpenSSHsInvocationIsRecognisedAsTheHelperAndNotAsTheApplication(t *test
 
 func TestTheSubcommandStillWorksForRunningItByHand(t *testing.T) {
 	arguments, ok := askpassInvocation(
-		[]string{"/opt/ssh-ui", AskpassSubcommand, "a prompt"}, askpassEnvironment{}.lookup)
+		[]string{"/opt/sshc", AskpassSubcommand, "a prompt"}, askpassEnvironment{}.lookup)
 	if !ok {
 		t.Fatal("the explicit subcommand was not recognised")
 	}
@@ -250,7 +250,7 @@ func TestAnOrdinaryStartIsNotTurnedIntoTheHelper(t *testing.T) {
 		"an empty token": {TokenVariable: "", URLVariable: "http://127.0.0.1:1/askpass"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, ok := askpassInvocation([]string{"/opt/ssh-ui", "-open=false"}, environment.lookup); ok {
+			if _, ok := askpassInvocation([]string{"/opt/sshc", "-open=false"}, environment.lookup); ok {
 				t.Error("an ordinary start was taken for an askpass invocation")
 			}
 		})

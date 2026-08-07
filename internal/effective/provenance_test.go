@@ -3,7 +3,7 @@ package effective_test
 import (
 	"testing"
 
-	"ssh-ui/internal/effective"
+	"sshc/internal/effective"
 )
 
 func codesOf(complexities []effective.Complexity) map[string]effective.Complexity {

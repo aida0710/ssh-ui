@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"ssh-ui/internal/platform/macos"
+	"sshc/internal/platform/macos"
 )
 
 type fakeRunner struct{ argv []string }

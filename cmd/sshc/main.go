@@ -15,11 +15,11 @@ import (
 	"syscall"
 	"time"
 
-	"ssh-ui/internal/app"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/platform/macos"
-	"ssh-ui/internal/selfupdate"
-	"ssh-ui/internal/ui"
+	"sshc/internal/app"
+	"sshc/internal/platform"
+	"sshc/internal/platform/macos"
+	"sshc/internal/selfupdate"
+	"sshc/internal/ui"
 )
 
 var version = "dev"
@@ -82,7 +82,7 @@ func main() {
 	if len(os.Args) == 2 && os.Args[1] == OpenSubcommand {
 		home, err := os.UserHomeDir()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "ssh-ui: %v\n", err)
+			fmt.Fprintf(os.Stderr, "sshc: %v\n", err)
 			os.Exit(1)
 		}
 		os.Exit(runOpen(
@@ -95,13 +95,13 @@ func main() {
 		))
 	}
 
-	// `ssh-ui <alias>` connects. It is checked after the askpass branch and
+	// `sshc <alias>` connects. It is checked after the askpass branch and
 	// before flag parsing, because an alias is a bare word and flag.Parse would
 	// stop at it and then the application would start instead of connecting.
 	if alias, ok := connectInvocation(os.Args); ok {
 		home, err := os.UserHomeDir()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "ssh-ui: %v\n", err)
+			fmt.Fprintf(os.Stderr, "sshc: %v\n", err)
 			os.Exit(1)
 		}
 		os.Exit(runConnect(
@@ -161,7 +161,7 @@ func main() {
 		// and only when somebody asks. It fetches nothing and replaces
 		// nothing: it reports whether a newer version is published.
 		Updates: &selfupdate.Checker{
-			API:  "https://api.github.com/repos/aida0710/ssh-ui/releases/latest",
+			API:  "https://api.github.com/repos/aida0710/sshc/releases/latest",
 			HTTP: &http.Client{Timeout: 30 * time.Second},
 		},
 		Listen:    net.Listen,
@@ -180,7 +180,7 @@ func main() {
 		Answerable:    AnswerablePrompt,
 	}
 	if err := app.Run(ctx, dependencies, version); err != nil && !errors.Is(err, context.Canceled) {
-		logger.Error("ssh-ui stopped", "error", err)
+		logger.Error("sshc stopped", "error", err)
 		os.Exit(1)
 	}
 }

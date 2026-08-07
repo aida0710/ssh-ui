@@ -18,7 +18,7 @@ import (
 	"testing/fstest"
 	"time"
 
-	"ssh-ui/internal/platform"
+	"sshc/internal/platform"
 )
 
 type browserFunc func(context.Context, string) error
@@ -175,7 +175,7 @@ func (call keyVaultSession) do(method, path string, body []byte, headers map[str
 	// Fetch Metadata and the CSRF token accompany every API request, a read as
 	// much as a write: the cookie is not scoped to a port and the token is.
 	request.Header.Set("Sec-Fetch-Site", "same-origin")
-	request.Header.Set("X-SSH-UI-CSRF", call.csrf)
+	request.Header.Set("X-SSHC-CSRF", call.csrf)
 	if method != http.MethodGet {
 		request.Header.Set("Origin", call.base)
 	}
@@ -236,7 +236,7 @@ func TestRunExposesTheKeyVaultAndItsTrashThroughTheWiredProcess(t *testing.T) {
 	}
 	bootstrapRequest.Header.Set("Origin", base)
 	bootstrapRequest.Header.Set("Sec-Fetch-Site", "same-origin")
-	bootstrapRequest.Header.Set("X-SSH-UI-Bootstrap", bootstrapToken)
+	bootstrapRequest.Header.Set("X-SSHC-Bootstrap", bootstrapToken)
 	bootstrapResponse, err := client.Do(bootstrapRequest)
 	if err != nil {
 		t.Fatalf("bootstrap: %v", err)

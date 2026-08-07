@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/httpserver"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/session"
+	"sshc/internal/httpserver"
+	"sshc/internal/platform"
+	"sshc/internal/session"
 )
 
 // maxAcceptableResponseBytes bounds what any single response may be. Nothing in

@@ -51,7 +51,7 @@ describe("keysApi", () => {
 
     const [revealPath, revealInit] = fetcher.mock.calls[1] as [string, RequestInit];
     expect(revealPath).toBe("/api/v1/keys/key-one/reveal");
-    expect(new Headers(revealInit.headers).get("X-SSH-UI-Action")).toBe(actionToken);
+    expect(new Headers(revealInit.headers).get("X-SSHC-Action")).toBe(actionToken);
     // The token is spent immediately and never kept.
     expect(window.localStorage.getItem("action")).toBeNull();
   });

@@ -9,8 +9,8 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/application"
-	"ssh-ui/internal/storage"
+	"sshc/internal/application"
+	"sshc/internal/storage"
 )
 
 // Runtime limits at the HTTP boundary. Generated types describe shapes; these

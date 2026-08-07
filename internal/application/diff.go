@@ -3,7 +3,7 @@ package application
 import (
 	"strings"
 
-	"ssh-ui/internal/storage"
+	"sshc/internal/storage"
 )
 
 // MaxDiffLines bounds the quadratic longest-common-subsequence table. A file

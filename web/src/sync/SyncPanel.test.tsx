@@ -21,7 +21,7 @@ const configured: SyncStatus = {
   configured: true,
   locked: false,
   endpoint: "https://acc.r2.cloudflarestorage.com",
-  bucket: "ssh-ui",
+  bucket: "sshc",
   synced: true,
   direction: "both",
   lastSyncedAt: "2026-08-05T00:00:00Z",
@@ -55,7 +55,7 @@ describe("SyncPanel", () => {
     render(<SyncPanel api={api} />);
 
     await userEvent.type(await screen.findByLabelText("Endpoint"), "https://acc.r2.cloudflarestorage.com");
-    await userEvent.type(screen.getByLabelText("Bucket name"), "ssh-ui");
+    await userEvent.type(screen.getByLabelText("Bucket name"), "sshc");
     await userEvent.type(screen.getByLabelText("Access key ID"), "AKID");
     await userEvent.type(screen.getByLabelText("Secret access key"), "the-secret");
     await userEvent.click(screen.getByRole("button", { name: "Use this bucket" }));
@@ -63,7 +63,7 @@ describe("SyncPanel", () => {
     await waitFor(() =>
       expect(api.configureSync).toHaveBeenCalledWith({
         endpoint: "https://acc.r2.cloudflarestorage.com",
-        bucket: "ssh-ui",
+        bucket: "sshc",
         path: "",
         accessKeyId: "AKID",
         secretAccessKey: "the-secret",
@@ -138,7 +138,7 @@ describe("SyncPanel", () => {
     render(<SyncPanel api={api} />);
 
     await userEvent.type(await screen.findByLabelText("Endpoint"), "https://acc.r2.cloudflarestorage.com");
-    await userEvent.type(screen.getByLabelText("Bucket name"), "ssh-ui");
+    await userEvent.type(screen.getByLabelText("Bucket name"), "sshc");
     await userEvent.type(screen.getByLabelText("Access key ID"), "AKID");
     await userEvent.type(screen.getByLabelText("Secret access key"), "the-secret");
     await userEvent.selectOptions(screen.getByLabelText("Direction"), "pull");
@@ -221,7 +221,7 @@ describe("SyncPanel", () => {
     await userEvent.click(screen.getByRole("button", { name: "Unlock" }));
 
     await waitFor(() => expect(api.unlockVault).toHaveBeenCalledWith("the master password"));
-    expect(await screen.findByText("https://acc.r2.cloudflarestorage.com/ssh-ui")).toBeInTheDocument();
+    expect(await screen.findByText("https://acc.r2.cloudflarestorage.com/sshc")).toBeInTheDocument();
   });
   // The snapshot is sealed with the master password now, so a mistyped one is
   // something this machine can catch. Before, it produced an archive nobody
@@ -247,7 +247,7 @@ describe("SyncPanel", () => {
     render(<SyncPanel api={api} />);
 
     await userEvent.type(await screen.findByLabelText("Endpoint"), "https://acc.r2.cloudflarestorage.com");
-    await userEvent.type(screen.getByLabelText("Bucket name"), "ssh-ui");
+    await userEvent.type(screen.getByLabelText("Bucket name"), "sshc");
     await userEvent.type(screen.getByLabelText("Access key ID"), "AKID");
     await userEvent.type(screen.getByLabelText("Secret access key"), "the-secret");
     await userEvent.click(screen.getByRole("button", { name: "Use this bucket" }));
@@ -261,8 +261,8 @@ describe("SyncPanel", () => {
     });
     render(<SyncPanel api={api} />);
 
-    await userEvent.type(await screen.findByLabelText("Endpoint"), "https://acc.r2.cloudflarestorage.com/ssh-ui");
-    await userEvent.type(screen.getByLabelText("Bucket name"), "ssh-ui");
+    await userEvent.type(await screen.findByLabelText("Endpoint"), "https://acc.r2.cloudflarestorage.com/sshc");
+    await userEvent.type(screen.getByLabelText("Bucket name"), "sshc");
     await userEvent.type(screen.getByLabelText("Access key ID"), "AKID");
     await userEvent.type(screen.getByLabelText("Secret access key"), "the-secret");
     await userEvent.click(screen.getByRole("button", { name: "Use this bucket" }));

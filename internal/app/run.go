@@ -13,19 +13,19 @@ import (
 	"strings"
 	"time"
 
-	"ssh-ui/internal/application"
-	"ssh-ui/internal/diagnostics"
-	"ssh-ui/internal/handoff"
-	"ssh-ui/internal/httpserver"
-	"ssh-ui/internal/keys"
-	"ssh-ui/internal/knownhosts"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/remotekey"
-	"ssh-ui/internal/remotesync"
-	"ssh-ui/internal/secret"
-	"ssh-ui/internal/selfupdate"
-	"ssh-ui/internal/session"
-	"ssh-ui/internal/storage"
+	"sshc/internal/application"
+	"sshc/internal/diagnostics"
+	"sshc/internal/handoff"
+	"sshc/internal/httpserver"
+	"sshc/internal/keys"
+	"sshc/internal/knownhosts"
+	"sshc/internal/platform"
+	"sshc/internal/remotekey"
+	"sshc/internal/remotesync"
+	"sshc/internal/secret"
+	"sshc/internal/selfupdate"
+	"sshc/internal/session"
+	"sshc/internal/storage"
 )
 
 type ListenFunc func(network, address string) (net.Listener, error)
@@ -36,7 +36,7 @@ type Dependencies struct {
 	Listen  ListenFunc
 	UI      fs.FS
 	Logger  *slog.Logger
-	// Home is the user's home directory. Only cmd/ssh-ui may read it from the
+	// Home is the user's home directory. Only cmd/sshc may read it from the
 	// operating system; every test injects a temporary directory.
 	Home string
 	// Runner, Toolchain and KeyAgent are the key vault's boundary with the
@@ -52,7 +52,7 @@ type Dependencies struct {
 	// than panicking, which is what the tests here rely on.
 	Terminal platform.TerminalLauncher
 	// AskpassHelper is the absolute path of the running binary, which is the
-	// program OpenSSH executes to obtain a stored password. Only cmd/ssh-ui can
+	// program OpenSSH executes to obtain a stored password. Only cmd/sshc can
 	// know it; an empty path leaves every terminal launch on the plain path.
 	AskpassHelper string
 	// LoginItem turns "start at login" on and off. Off is the default and
@@ -67,7 +67,7 @@ type Dependencies struct {
 	// means no prompt is ever answered, which is the safe default.
 	Answerable func(prompt string) bool
 	// Lookup reads the parent environment so the OpenSSH programs this process
-	// starts receive platform.MinimalEnvironment. Only cmd/ssh-ui may supply
+	// starts receive platform.MinimalEnvironment. Only cmd/sshc may supply
 	// os.LookupEnv; a nil value lets children inherit, which suits a test.
 	Lookup func(string) (string, bool)
 	// SessionNow is the clock the session manager uses for action-token expiry.
@@ -197,7 +197,7 @@ func Build(dependencies Dependencies, version string) (*httpserver.Server, strin
 		newOrigin(dependencies.Random),
 	)
 
-	// `ssh-ui <alias>` reads this to find the running application. The secret
+	// `sshc <alias>` reads this to find the running application. The secret
 	// is minted here, per run, and written after the listener is up so the URL
 	// in it is the one that answers.
 	cliSecret, err := handoff.Mint(dependencies.Random)
@@ -246,17 +246,17 @@ func Build(dependencies Dependencies, version string) (*httpserver.Server, strin
 	// nothing accepts, so removing it is tidiness rather than a guarantee.
 	if _, err := handoff.Write(HandoffDir(dependencies.Home), server.URL(), cliSecret); err != nil {
 		dependencies.Logger.Warn(
-			"write the command-line handoff; ssh-ui <alias> will connect without a stored password",
+			"write the command-line handoff; sshc <alias> will connect without a stored password",
 			"error", err)
 	}
 	return server, bootstrap, nil
 }
 
-// HandoffDir is where the running application leaves the file `ssh-ui <alias>`
+// HandoffDir is where the running application leaves the file `sshc <alias>`
 // reads. It is the same state directory everything else of this application's
 // own lives in.
 func HandoffDir(home string) string {
-	return filepath.Join(home, ".ssh", "ssh-ui")
+	return filepath.Join(home, ".ssh", "sshc")
 }
 
 func Run(ctx context.Context, dependencies Dependencies, version string) error {

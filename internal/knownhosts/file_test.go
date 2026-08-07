@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"ssh-ui/internal/knownhosts"
+	"sshc/internal/knownhosts"
 )
 
 const (

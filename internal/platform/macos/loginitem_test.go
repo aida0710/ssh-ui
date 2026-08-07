@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/platform/macos"
+	"sshc/internal/platform"
+	"sshc/internal/platform/macos"
 )
 
 // No test loads a real agent: the runner records what launchctl would have been
@@ -28,7 +28,7 @@ func TestEnablingWritesAnAgentThatOpensNoBrowserAndLogsNothing(t *testing.T) {
 	if item.Enabled() {
 		t.Fatal("a fresh home reports the agent as registered")
 	}
-	if err := item.Enable(context.Background(), "/Users/tester/.local/bin/ssh-ui"); err != nil {
+	if err := item.Enable(context.Background(), "/Users/tester/.local/bin/sshc"); err != nil {
 		t.Fatalf("Enable = %v", err)
 	}
 	if !item.Enabled() {
@@ -55,7 +55,7 @@ func TestEnablingWritesAnAgentThatOpensNoBrowserAndLogsNothing(t *testing.T) {
 			t.Errorf("the agent redirects %s, which is where the bootstrap URL would land", absent)
 		}
 	}
-	if !strings.Contains(written, "/Users/tester/.local/bin/ssh-ui") {
+	if !strings.Contains(written, "/Users/tester/.local/bin/sshc") {
 		t.Errorf("the agent does not name the program: %s", written)
 	}
 
@@ -80,7 +80,7 @@ func TestEnablingWritesAnAgentThatOpensNoBrowserAndLogsNothing(t *testing.T) {
 
 func TestEnablingRefusesAProgramLaunchdWouldHaveToFind(t *testing.T) {
 	item := macos.LoginItem{Runner: &recordingLaunchctl{}, Home: t.TempDir()}
-	if err := item.Enable(context.Background(), "ssh-ui"); err == nil {
+	if err := item.Enable(context.Background(), "sshc"); err == nil {
 		t.Error("a relative program was accepted")
 	}
 }

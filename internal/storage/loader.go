@@ -1,6 +1,6 @@
 package storage
 
-import "ssh-ui/internal/config"
+import "sshc/internal/config"
 
 // ConfigLoader gives the Include graph read-only access to the disk.
 //

@@ -1,10 +1,10 @@
-# SSH UI Directory Groups Implementation Plan
+# sshc Directory Groups Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make a group a real place on disk instead of a field in `metadata.json`. A group becomes a directory under `~/.ssh/connections/`, its keys a directory under `~/.ssh/keys/`, and the entry file gains one generated `Include` line per group so precedence is written down rather than inferred from glob order. Moving a host between groups becomes moving its file; moving a key rewrites the `IdentityFile` lines that name it, in the same transaction, or refuses. `metadata.json` stops carrying group membership.
 
-**Architecture:** No new package. `internal/application` gains the group-path vocabulary (`grouppath.go`), the generated Include region (`region.go`, replacing `PlanGroupInclude`) and the key-move use case (`keymove.go`), which is the one place where a configuration rewrite and a key file move belong to the same `storage.Request`. `internal/keys` keeps ownership of what a key is and lends `BuildReferenceIndex`; the import direction `application → keys` is new and acyclic (`go list -deps ./internal/keys` contains no `ssh-ui/internal/application`). Every write still goes through the single `storage.Manager` that `application.NewService` installs its `Validate` hook on, so nothing reaches disk without a re-parse and a re-resolve. `storage` gains nothing: `Move`, `Removal` and `Request{Changes, Moves, Removals}` already exist and are already proven by `internal/keys/trash.go`.
+**Architecture:** No new package. `internal/application` gains the group-path vocabulary (`grouppath.go`), the generated Include region (`region.go`, replacing `PlanGroupInclude`) and the key-move use case (`keymove.go`), which is the one place where a configuration rewrite and a key file move belong to the same `storage.Request`. `internal/keys` keeps ownership of what a key is and lends `BuildReferenceIndex`; the import direction `application → keys` is new and acyclic (`go list -deps ./internal/keys` contains no `sshc/internal/application`). Every write still goes through the single `storage.Manager` that `application.NewService` installs its `Validate` hook on, so nothing reaches disk without a re-parse and a re-resolve. `storage` gains nothing: `Move`, `Removal` and `Request{Changes, Moves, Removals}` already exist and are already proven by `internal/keys/trash.go`.
 
 **Tech Stack:** Go 1.26.5 (standard library plus the already-committed `golang.org/x/crypto v0.54.0`), Echo v5.3.1, oapi-codegen v2.7.0, React 19.2.8, Vite 8.1.5, TypeScript 5.9.3, Tailwind CSS 4.3.3, Vitest 4.1.1, Playwright 1.62.1, OpenSSH 10.2p1 (the installed client; never invoked by an automated test except the existing `ssh -G -F` differential).
 
@@ -13,10 +13,10 @@
 ## Global Constraints
 
 - macOS only. The server binds `127.0.0.1` on an OS-assigned port. No CORS, no LaunchAgent.
-- Every mutation carries `X-SSH-UI-CSRF`; every `/api/` response keeps `Cache-Control: no-store`; every `/api/` request is checked for `Host`, `Origin` and Fetch Metadata by exact match, including GET (subsystem 6 Task 1).
+- Every mutation carries `X-SSHC-CSRF`; every `/api/` response keeps `Cache-Control: no-store`; every `/api/` request is checked for `Host`, `Origin` and Fetch Metadata by exact match, including GET (subsystem 6 Task 1).
 - **Add no new npm or Go dependency.** `go.mod`, `go.sum`, `web/package.json` and `web/package-lock.json` must be byte-identical when the plan completes.
 - Echo v5 handler signature is `func(c *echo.Context) error`. Do not write Echo v4 code.
-- Automated tests must never touch the real `~/.ssh`, Keychain, ssh-agent, Terminal or a remote host. `t.TempDir()`, map-backed fakes and injected clocks only. `os.UserHomeDir` may be called only from `cmd/ssh-ui`.
+- Automated tests must never touch the real `~/.ssh`, Keychain, ssh-agent, Terminal or a remote host. `t.TempDir()`, map-backed fakes and injected clocks only. `os.UserHomeDir` may be called only from `cmd/sshc`.
 - The lossless guarantee survives every path added here. An `IdentityFile` rewrite changes the value arguments of one line and nothing else: indent, separator, trailing comment and line ending are preserved by `rebuildLine`, which already does exactly this for form edits.
 - `api/openapi.yaml` is the contract. Add the schema there first, run `make generate`, keep to the subset `api/README.md` validates: objects, strings, integers, booleans, arrays, `const`, `required`, `$ref`. No `oneOf`, no `anyOf`, no `enum`.
 - Never log request bodies, cookies, tokens, file contents, configuration text or absolute paths. Problem responses carry a stable code, a workspace-relative path and a location.
@@ -32,9 +32,9 @@ This plan was written against the tree as it stands, and the tree is not clean. 
 
 ## 1. Why a directory beats a metadata field
 
-Today a group exists in exactly one place: `metadata.json`. `HostMetadata.Group` names it, `GroupMetadata.Parent` gives it a hierarchy, and `application.CompileGroups` regenerates the whole of `groups.ssh-ui.conf` from that on every save. The generated file names the group only in a comment (`groups.go` line 152, `"# group " + group.Name`); the `Host` line lists member aliases. Nothing else on disk records that `web-1` and `web-2` are both "work".
+Today a group exists in exactly one place: `metadata.json`. `HostMetadata.Group` names it, `GroupMetadata.Parent` gives it a hierarchy, and `application.CompileGroups` regenerates the whole of `groups.sshc.conf` from that on every save. The generated file names the group only in a comment (`groups.go` line 152, `"# group " + group.Name`); the `Host` line lists member aliases. Nothing else on disk records that `web-1` and `web-2` are both "work".
 
-That has one consequence worth the whole change: delete `~/.ssh/ssh-ui/` and the grouping is gone. The configuration still works — that is the point of compiling groups into ordinary `Host` blocks — but the organisation the user built is an annotation on the side, in a format only this application reads. Design §2.3 rules out making an app-specific format the source of truth for SSH configuration, and today's grouping obeys that rule by being *not* the source of truth for anything. It is the source of truth only for itself.
+That has one consequence worth the whole change: delete `~/.ssh/sshc/` and the grouping is gone. The configuration still works — that is the point of compiling groups into ordinary `Host` blocks — but the organisation the user built is an annotation on the side, in a format only this application reads. Design §2.3 rules out making an app-specific format the source of truth for SSH configuration, and today's grouping obeys that rule by being *not* the source of truth for anything. It is the source of truth only for itself.
 
 A directory is different in kind. `~/.ssh/connections/work/web-1.conf` is an ordinary configuration file in an ordinary directory. `mv`, `ls`, `find`, `git`, another editor and a shell script all understand it. `Include connections/work/*.conf` is an ordinary OpenSSH directive. Uninstall this application and the layout survives, the Include lines survive, `ssh web-1` keeps working, and a human reading `~/.ssh` can see the grouping without being told what a `groups[]` array means.
 
@@ -48,20 +48,20 @@ Design §2.3 lists, among the things the initial version will not do:
 
 Does a directory convention cross that line? Partly. The honest answer has three parts.
 
-**What does not cross it.** Every artefact this change produces is ordinary OpenSSH. The files under `connections/` are `ssh_config`. The Include lines are `Include`. The group settings still compile into ordinary `Host` blocks in `groups.ssh-ui.conf`, as §5.4 and §13 already require ("UI のグループは標準 Host ブロックと順序へコンパイルし"). Nothing needs this application to be installed in order to be read, and design §6.2 already promises file and folder creation, move and rename inside `~/.ssh`, so arranging files is squarely inside the accepted scope.
+**What does not cross it.** Every artefact this change produces is ordinary OpenSSH. The files under `connections/` are `ssh_config`. The Include lines are `Include`. The group settings still compile into ordinary `Host` blocks in `groups.sshc.conf`, as §5.4 and §13 already require ("UI のグループは標準 Host ブロックと順序へコンパイルし"). Nothing needs this application to be installed in order to be read, and design §6.2 already promises file and folder creation, move and rename inside `~/.ssh`, so arranging files is squarely inside the accepted scope.
 
 **What does cross it.** OpenSSH does not know that `connections/work/` is a group. It knows only that a line says to read those files at that point. The *meaning* of the directory is this application's convention, and a second tool reading `~/.ssh` would see a tree with no declaration of what it means. Today, deleting `metadata.json` loses an annotation and breaks nothing. After this change, flattening the directories by hand loses the grouping *and* breaks the configuration unless the Include lines are fixed too. The failure mode moves from "lose a label" to "break the config if you reorganise carelessly". Calling that a non-issue would be dishonest.
 
 **How the tension is reduced rather than denied.** The set of groups is not inferred from the filesystem. It is declared, in ordinary OpenSSH syntax, by the generated Include region in `~/.ssh/config`:
 
 ```
-# >>> ssh-ui groups (generated). Child groups first: OpenSSH keeps the first value it reads.
+# >>> sshc groups (generated). Child groups first: OpenSSH keeps the first value it reads.
 # Edit through the UI; lines between these markers are replaced on the next save.
 Include connections/work/eu/*.conf
 Include connections/work/*.conf
 Include connections/home/*.conf
-Include groups.ssh-ui.conf
-# <<< ssh-ui groups
+Include groups.sshc.conf
+# <<< sshc groups
 ```
 
 The group names are in the file, in plain text, in the order that decides precedence. A directory under `connections/` with no Include line is **not** a group; it is reported as `group_not_declared` and left alone. This matters concretely: `~/.ssh/keys/` is a layout many people already have, and inferring group membership from a directory that happens to exist would silently relabel a stranger's files. Declaration removes the guessing while keeping membership itself a fact about where the file sits — because the Include glob is literally what makes it so.
@@ -87,10 +87,10 @@ This refines the settled decision rather than contradicting it. The directory re
 │   │   ├── id_ed25519
 │   │   └── id_ed25519.pub
 │   └── home/
-├── groups.ssh-ui.conf                  # generated group-settings blocks (unchanged location)
+├── groups.sshc.conf                  # generated group-settings blocks (unchanged location)
 ├── id_ed25519                          # ungrouped key
 ├── conf.d/10-legacy.conf               # ungrouped: whatever the user already had
-└── ssh-ui/                             # engine state; never scanned, never a group
+└── sshc/                             # engine state; never scanned, never a group
 ```
 
 - A group name is its slash-separated path under `connections/`: `work`, `work/eu`. The parent is the parent directory. `GroupMetadata.Parent` disappears because the name already contains it.
@@ -104,7 +104,7 @@ OpenSSH keeps the first value it reads for a given keyword and a matching `Host`
 
 1. **The user's own material above the region.** Anything they wrote before the insertion point — their own `Host` blocks, their own `Include` lines — is read first and keeps winning. This plan never reorders a line the user wrote.
 2. **The per-group Includes, deepest group first.** `connections/work/eu/*.conf` before `connections/work/*.conf` before `connections/home/*.conf`. Groups at equal depth are ordered by `GroupMetadata.Order`, then by name, reusing the comparator `GroupDepthOrder` already implements for the settings file.
-3. **`Include groups.ssh-ui.conf`.** The generated settings blocks must be read *after* every concrete host block, otherwise a group setting would beat the host's own value. Inside that file `CompileGroups` already emits child groups before parents, and that stays.
+3. **`Include groups.sshc.conf`.** The generated settings blocks must be read *after* every concrete host block, otherwise a group setting would beat the host's own value. Inside that file `CompileGroups` already emits child groups before parents, and that stays.
 4. **The user's catch-all.** The first `Host` block containing an exact `*` pattern, or the first `Match` block, whichever comes first — the position `PlanGroupInclude` already computes. The region is inserted immediately before it. With no catch-all and no `Match`, the region is appended at the end of the file.
 
 **Why child before parent among the connections Includes.** For concrete host blocks it is not a semantic necessity: a host file sits in exactly one directory, so no alias is normally reachable from two group Includes. It matters in exactly one case — the same alias declared in two group directories — and there the deeper group wins, which is the same rule the settings file uses, so a user does not have to hold two different precedence rules in their head. `HostEntry.Duplicate` already marks that case and the UI already shows it; the ordering makes the outcome deterministic instead of alphabetical.
@@ -123,7 +123,7 @@ This is where a generated insertion can silently change behaviour, so each case 
 - **The user already includes the connections tree by hand.** If any existing Include edge in the graph resolves to a file under `connections/`, the generated region would read those files a second time. OpenSSH would apply the first read and the graph would report `include_duplicate`. **Refuse** with `group_include_already_present`, naming the file and line of the existing Include, and offer to replace that line with the region. Detectable directly from `graph.Nodes[path].Includes[].Matches`.
 - **`Host *.internal` at the top.** Not a catch-all by `PlanGroupInclude`'s test (it looks for an exact `*`), and not one by OpenSSH's either — but it does win for every matching alias, and the region will be inserted below it. That is the correct outcome and it needs no refusal; it is recorded here because it is the case where the heuristic and the truth agree by luck rather than by design, and a reader should know the heuristic is `pattern == "*"` and nothing more.
 - **The markers were edited or half-deleted.** The region is located by its two marker comments. Both present: replace the lines between them. Neither present: insert fresh at the computed position. Exactly one present: **refuse** with `generated_region_damaged`. Repairing a half-marked region means guessing where it ended.
-- **A conditional `Include groups.ssh-ui.conf`.** See section 6 — this is a defect in the current code, found while planning, and the region logic must not inherit it.
+- **A conditional `Include groups.sshc.conf`.** See section 6 — this is a defect in the current code, found while planning, and the region logic must not inherit it.
 
 ## 5. Host identity, and why nothing is orphaned
 
@@ -157,7 +157,7 @@ It must not touch an entry whose path merely has `fromPath` as a prefix unless t
 
 Recorded here so they cannot be lost between plans, in the roadmap's convention.
 
-- **`PlanGroupInclude` treats a conditional Include as a top-level one.** `groups.go` lines 189-222 scan every line of the entry file and return `(-1, true)` when any `Include` argument equals the groups file, without consulting `File.Condition(File.BlockAt(index))`. An `Include groups.ssh-ui.conf` written inside a `Host bastion` block therefore counts as present, so no top-level Include is ever inserted and the generated settings file is read only when connecting to `bastion`. The graph already reports `include_conditional` as a warning, so the symptom is visible, but the planner should not have been fooled. The region logic in Task 3 must count only an Include whose governing block is the global block. **Owned by this plan, Task 3.**
+- **`PlanGroupInclude` treats a conditional Include as a top-level one.** `groups.go` lines 189-222 scan every line of the entry file and return `(-1, true)` when any `Include` argument equals the groups file, without consulting `File.Condition(File.BlockAt(index))`. An `Include groups.sshc.conf` written inside a `Host bastion` block therefore counts as present, so no top-level Include is ever inserted and the generated settings file is read only when connecting to `bastion`. The graph already reports `include_conditional` as a warning, so the symptom is visible, but the planner should not have been fooled. The region logic in Task 3 must count only an Include whose governing block is the global block. **Owned by this plan, Task 3.**
 - **`overlayLoader` cannot model a move or a removal.** `validate.go` lines 43-78 overlays pending *contents* and its `Glob` only *adds* pending paths. `Service.validate` builds the overlay from `request.Changes` alone (line 132). A transaction containing a `storage.Move` or a `storage.Removal` is therefore validated and previewed against a world where the file is in two places at once — or still in the old one. Nothing exercises this today because `Service.Save` commits `storage.Request{Operation, Changes}` and nothing else (line 385): the application layer has never issued a move. It must before any file-level move is previewed. **Owned by this plan, Task 4, and it blocks Tasks 5, 8 and 10.**
 - **`Service.Save` cannot commit a move at all.** The `planned` struct carries `changes` only. Extending it with `moves` and `removals`, and passing them to `Commit`, is a precondition for everything in this plan that relocates a file. **Owned by this plan, Task 4.**
 - **Directory creation is not journalled.** `Workspace.ResolveForWrite` returns `ErrMissingDirectory` when a parent does not exist (`workspace.go` line 89), and `Manager.Commit` calls `EnsureDirectory` only for its own journal, history and backup directories. Creating `connections/work/` therefore happens *before* `Commit`, outside the journal — the same shape `keys.Trash` already uses for its entry directory (`trash.go` line 140) and `keys.Restore` for a restore target (line 373). A crash between the `mkdir` and the commit leaves an empty group directory. It is harmless — an Include matching nothing is one warning — but "a rejected save leaves the disk untouched" becomes "a rejected save leaves the disk untouched except possibly for an empty directory", and the acceptance gate must say so. Item (3) of the connections plan's four missing primitives, journalled directory create and remove, is still open and this plan does not close it.
@@ -172,7 +172,7 @@ Recorded here so they cannot be lost between plans, in the roadmap's convention.
 Verified by reading, as instructed. Two corrections, neither material:
 
 - The key-reference type is `keys.Reference{Directive, ConfigPath, Line, Condition, HostPatterns, Value}` in `internal/keys/references.go`, not `KeyReference`. `KeyReference` is the *wire* name — the OpenAPI schema in `api/openapi.yaml` and the generated `api.KeyReference` in `internal/api/models.gen.go`, mapped in `internal/httpserver/keys.go`. The substance of the claim holds: the six fields are exactly what an `IdentityFile` rewrite needs, and `Reference.ConfigPath` is what makes the "reference lives outside `~/.ssh`" refusal decidable.
-- `internal/application/groups.go` regenerates `groups.ssh-ui.conf` from metadata on every save, as stated — but only on an `EditGroups` save (`service.go` line 697 returns early for `EditMetadata`). A tags-or-colour-only edit does not rewrite the generated file. That is correct behaviour and the plan preserves it.
+- `internal/application/groups.go` regenerates `groups.sshc.conf` from metadata on every save, as stated — but only on an `EditGroups` save (`service.go` line 697 returns early for `EditMetadata`). A tags-or-colour-only edit does not rewrite the generated file. That is correct behaviour and the plan preserves it.
 
 Everything else in the brief checked out: `storage.Move`/`Removal`/`Request` with journalling, generational backups and `ErrIrreversibleRemoval` (`transaction.go` lines 34-94, 251-313); `internal/keys/trash.go` using them for trash, restore and purge; `service.go` line 591 relocating the metadata entry through `RenameHostIdentity` in the same transaction; `config/include.go` `expandPattern` producing an absolute glob and `graph.go` line 152 delegating to `Loader.Glob`, so `connections/<group>/*.conf` needs no engine change; `ConfigExplorer.tsx` line 189 carrying the false statement.
 
@@ -226,7 +226,7 @@ Each refuses the whole transaction and writes nothing.
 | `key_destination_is_config` | After the move, the destination path would be matched by an Include glob in the graph | A private key read as `ssh_config` is the worst outcome available. Checked by re-resolving with the destination overlaid and asserting it is absent from `graph.Nodes`. |
 | `key_destination_occupied` | The target path exists | `Commit` would answer `ErrMoveTargetExists` anyway; refusing early gives a named reason and a preview that says so. |
 | `key_group_not_declared` | The destination group has no Include line in the generated region | A key group mirrors a connection group. Creating `keys/marketing/` for a group that does not exist would be the inference this plan avoids. |
-| `key_in_state_directory` | Source or destination is under `~/.ssh/ssh-ui/` | Trash, backups and journal are engine state. The inventory already excludes them; this is defence in depth. |
+| `key_in_state_directory` | Source or destination is under `~/.ssh/sshc/` | Trash, backups and journal are engine state. The inventory already excludes them; this is defence in depth. |
 | `config_conflict` | Any configuration file's digest changed since the preview | The existing precondition machinery, unchanged. |
 | `action_token_invalid` | The evidence digest recomputed at spend time differs from the one at issue time | The confirmation authorises exactly the change the dialog displayed. |
 
@@ -242,13 +242,13 @@ A group name is a directory path, so a rename is:
 4. One `storage.Change` per configuration file containing an `IdentityFile` or `CertificateFile` that resolves under `keys/<old>`, with the value rewritten — the same rewrite the key move uses, and the same refusals.
 5. One `storage.Change` for `~/.ssh/config`, regenerating the Include region so every line naming `<old>` names `<new>`, in the same order.
 6. One `storage.Change` for `metadata.json`: `GroupMetadata.Name` for the group and every descendant (the name contains the path), and `RelocateHostIdentities` for every moved file.
-7. One `storage.Change` for `groups.ssh-ui.conf`, since `CompileGroups` keys its comment on the group name.
+7. One `storage.Change` for `groups.sshc.conf`, since `CompileGroups` keys its comment on the group name.
 
 All in one `storage.Request`. Every precondition is checked before anything is staged, so a stale file anywhere writes nothing.
 
 **Directories are not renamed; their files are.** `storage.Move` moves files. `Workspace.ResolveForWrite` refuses a final component that exists and is not a regular file (`ErrNotRegularFile`), and `Manager.sourceState` hashes the source, which a directory has no answer for. A journalled directory rename would need its own journal action, its own precondition semantics and its own rollback story — a storage-layer design decision, not a group-feature one. This plan therefore does N file moves, exactly as `keys.Restore` already does, and inherits its consequence, stated in that function's own comment: *the empty entry directory is left behind, because the transaction manager owns files, not directories.*
 
-So after a rename, `connections/<old>/` remains as an empty directory. Nothing points at it — the Include line was rewritten in the same transaction — so it is inert. The UI reports it as `group_directory_leftover` and tells the user they can remove it with `rmdir`. This plan does not delete directories, because an unjournalled `rmdir` is a filesystem effect with no recovery record, and adding one would be the fifth primitive the connections plan listed and nobody has designed. A single atomic `rename(2)` on the directory would be strictly better than N file renames and should be built eventually; it is recorded as the named follow-up `ssh-ui-file-operations`, whose remaining scope is now exactly: journalled directory create, journalled directory remove, journalled directory rename, and the Config Explorer interface.
+So after a rename, `connections/<old>/` remains as an empty directory. Nothing points at it — the Include line was rewritten in the same transaction — so it is inert. The UI reports it as `group_directory_leftover` and tells the user they can remove it with `rmdir`. This plan does not delete directories, because an unjournalled `rmdir` is a filesystem effect with no recovery record, and adding one would be the fifth primitive the connections plan listed and nobody has designed. A single atomic `rename(2)` on the directory would be strictly better than N file renames and should be built eventually; it is recorded as the named follow-up `sshc-file-operations`, whose remaining scope is now exactly: journalled directory create, journalled directory remove, journalled directory rename, and the Config Explorer interface.
 
 **Deleting a group** is the same shape with the destination being the workspace root or another group, plus removing the Include line. A group whose files would be deleted rather than relocated is not offered: the trash is for keys, and there is no config trash. The UI offers "move these connections to <group> and remove the group", never "delete the group".
 
@@ -273,9 +273,9 @@ Everything in the preview is reversible in the ordinary way: one journalled tran
 
 ## Out of Scope
 
-- Journalled directory create, remove and rename — still `ssh-ui-file-operations`. This plan creates directories outside the journal, as `keys.Trash` and `keys.Restore` already do, and states the consequence.
+- Journalled directory create, remove and rename — still `sshc-file-operations`. This plan creates directories outside the journal, as `keys.Trash` and `keys.Restore` already do, and states the consequence.
 - A file trash for configuration files. Keys have a trash; configuration files do not, and this plan does not build one. Group deletion relocates, it does not delete.
-- Reading group membership back out of a hand-edited `groups.ssh-ui.conf`. That file stays generated output, as its own header comment says.
+- Reading group membership back out of a hand-edited `groups.sshc.conf`. That file stays generated output, as its own header comment says.
 - Making `connections` and `keys` configurable the way `metadata.GroupsFile` is. Two conventional names, fixed. Whether they should be configurable is an open question at the end.
 - Any change to `ssh -G` evaluation, diagnostics, Terminal launch, Known Hosts or remote registration.
 - Multiple groups per host. Design §5.4's single primary group is unchanged and is now enforced by the filesystem: a file sits in one directory.
@@ -320,7 +320,7 @@ web/e2e/
 └── groups.spec.ts                         # NEW end-to-end over the built binary
 docs/
 ├── manual-acceptance.md                   # + M6, real Keychain after a key move
-└── superpowers/specs/2026-08-04-ssh-ui-design.md   # §4.2, §5.4, §6.2, §13 amended
+└── superpowers/specs/2026-08-04-sshc-design.md   # §4.2, §5.4, §6.2, §13 amended
 README.md                                  # boundary sections corrected
 ```
 
@@ -343,8 +343,8 @@ README.md                                  # boundary sections corrected
 **What it must not change:** `PlanGroupInclude`, `CompileGroups`, `GroupDepthOrder` or any existing signature. Task 3 retires `PlanGroupInclude`; this task only adds.
 
 - [ ] **Step 1: Write `grouppath_test.go` first.** Table tests, one per function:
-  - `TestValidateGroupNameRefusesEverythingThatIsNotASafeRelativeDirectory` — accept `work`, `work/eu`, `a-b_c.d`; refuse `""`, `/work`, `work/`, `work//eu`, `.`, `..`, `work/..`, `work/../home`, a segment with `\x00`, a segment starting with `.`, a segment longer than 64 bytes, a name deeper than `MaxGroupSegments`, and — case-insensitively — `ssh-ui`, `config`, `known_hosts`, `authorized_keys`. The case-insensitive comparison exists for the same reason `keys.reservedFileNames` uses one: a default macOS volume treats `Config` and `config` as one file.
-  - `TestGroupOfPathReadsMembershipFromTheDirectory` — `connections/work/web.conf` → `("work", true)`; `connections/work/eu/lon.conf` → `("work/eu", true)`; `connections/loose.conf` → `("", false)` (a file directly under `connections/` is in no group); `conf.d/10.conf` → `("", false)`; `config` → `("", false)`; `ssh-ui/metadata.json` → `("", false)`.
+  - `TestValidateGroupNameRefusesEverythingThatIsNotASafeRelativeDirectory` — accept `work`, `work/eu`, `a-b_c.d`; refuse `""`, `/work`, `work/`, `work//eu`, `.`, `..`, `work/..`, `work/../home`, a segment with `\x00`, a segment starting with `.`, a segment longer than 64 bytes, a name deeper than `MaxGroupSegments`, and — case-insensitively — `sshc`, `config`, `known_hosts`, `authorized_keys`. The case-insensitive comparison exists for the same reason `keys.reservedFileNames` uses one: a default macOS volume treats `Config` and `config` as one file.
+  - `TestGroupOfPathReadsMembershipFromTheDirectory` — `connections/work/web.conf` → `("work", true)`; `connections/work/eu/lon.conf` → `("work/eu", true)`; `connections/loose.conf` → `("", false)` (a file directly under `connections/` is in no group); `conf.d/10.conf` → `("", false)`; `config` → `("", false)`; `sshc/metadata.json` → `("", false)`.
   - `TestGroupNameOrderPutsChildrenBeforeParents` — `["work", "work/eu", "home"]` with equal `Order` yields `work/eu`, then `home`, then `work` sorted by depth then name; ties in depth broken by `Order` then name, matching `GroupDepthOrder`'s comparator exactly.
 - [ ] **Step 2:** Run `go test ./internal/application -run TestValidateGroupName -v`. Expected: FAIL, the file does not compile.
 - [ ] **Step 3:** Implement `grouppath.go`. `ValidateGroupName` splits on `/` and applies `keys.ValidateFileName`'s character policy per segment, without importing `internal/keys` (the two policies are deliberately separate: a group segment may not end in `.pub`, but neither may it be a key name). `MaxGroupSegments = 6` because `keys.maxScanDepth` is 8 counted from `~/.ssh` and `keys/` consumes one level, so a seventh segment would put the key file at the depth at which the scanner reports `depth_exceeded` and drops it from the inventory.
@@ -368,7 +368,7 @@ README.md                                  # boundary sections corrected
 
 **What it changes:** `Overview` starts reporting a group per host derived from its path, and the groups view is assembled from declaration plus directory plus metadata presentation. `metadata.json` is still read as it is today; nothing is written differently yet.
 
-**What it must not change:** the shape of `groups.ssh-ui.conf`. `TestCompileGroupsPutsChildrenBeforeParentsAndInheritsMembers` and `TestCompileGroupsRendersParsableLosslessConfiguration` must still pass, with their fixtures adapted to path-shaped group names (`work/eu` instead of a `parent: work` field) and the *rendered output* unchanged in structure: same three header comments, same `# group <name>` line, same member `Host` line, same tab-indented settings.
+**What it must not change:** the shape of `groups.sshc.conf`. `TestCompileGroupsPutsChildrenBeforeParentsAndInheritsMembers` and `TestCompileGroupsRendersParsableLosslessConfiguration` must still pass, with their fixtures adapted to path-shaped group names (`work/eu` instead of a `parent: work` field) and the *rendered output* unchanged in structure: same three header comments, same `# group <name>` line, same member `Host` line, same tab-indented settings.
 
 - [ ] **Step 1:** Adapt the two existing `CompileGroups` tests to path-shaped names and assert the rendered bytes are structurally identical to today's. Run them: FAIL.
 - [ ] **Step 2:** Write `TestBuildGroupsViewReportsADirectoryThatWasNeverDeclared` — a `connections/marketing/` directory present on disk with no Include line yields a `group_not_declared` notice and **no** group. This is the test that proves the application does not adopt a stranger's directory.
@@ -377,7 +377,7 @@ README.md                                  # boundary sections corrected
 - [ ] **Step 5:** Implement. `CompileGroups` keeps its signature and its output shape; only where it reads membership and parentage changes.
 - [ ] **Step 6:** Run the full application suite.
 
-**Verification:** `go test ./internal/application -v`; `go test -race ./internal/application`. Manually diff a generated `groups.ssh-ui.conf` before and after the change on the same fixture: it must be byte-identical when the group names are spelled the same way.
+**Verification:** `go test ./internal/application -v`; `go test -race ./internal/application`. Manually diff a generated `groups.sshc.conf` before and after the change on the same fixture: it must be byte-identical when the group names are spelled the same way.
 
 ---
 
@@ -392,16 +392,16 @@ README.md                                  # boundary sections corrected
 - Produces: errors `ErrRegionPositionAmbiguous`, `ErrRegionIncludeAlreadyPresent`, `ErrRegionDamaged`; notices `include_position_ambiguous`, `group_include_already_present`, `generated_region_damaged`.
 - Removes: `PlanGroupInclude`. `InsertIncludeLine` stays; the region planner uses it.
 
-The emitted region, for declared groups `work/eu`, `work`, `home` and groups file `groups.ssh-ui.conf`, using the file's dominant line ending:
+The emitted region, for declared groups `work/eu`, `work`, `home` and groups file `groups.sshc.conf`, using the file's dominant line ending:
 
 ```text
-# >>> ssh-ui groups (generated). Child groups first: OpenSSH keeps the first value it reads.
+# >>> sshc groups (generated). Child groups first: OpenSSH keeps the first value it reads.
 # Edit through the UI; lines between these markers are replaced on the next save.
 Include connections/work/eu/*.conf
 Include connections/work/*.conf
 Include connections/home/*.conf
-Include groups.ssh-ui.conf
-# <<< ssh-ui groups
+Include groups.sshc.conf
+# <<< sshc groups
 ```
 
 **What it changes:** where and how the entry file is edited when groups are saved.
@@ -414,7 +414,7 @@ Include groups.ssh-ui.conf
   - `TestPlanRegionAppendsWhenThereIsNoCatchAll` — appended at end, exactly as `TestPlanGroupIncludeAppendsWhenThereIsNoCatchAllBlock` asserts today.
   - `TestPlanRegionRefusesWhenAConcreteHostFollowsTheInsertionPoint` — `Host *\n\tUser ops\nHost bastion\n\tUser root\n` returns `ErrRegionPositionAmbiguous` and leaves the file untouched. **This is the catch-all-at-the-top case and it is the most important test in the task.**
   - `TestPlanRegionRefusesWhenAnExistingIncludeAlreadyReachesTheConnectionsTree` — `ErrRegionIncludeAlreadyPresent`, naming the line.
-  - `TestPlanRegionIgnoresAConditionalIncludeOfTheGroupsFile` — the defect from section 6: `Host bastion\n\tInclude groups.ssh-ui.conf\n` must **not** count as present, so a top-level region is planned. Assert the governing block is consulted via `File.Condition(File.BlockAt(index))`.
+  - `TestPlanRegionIgnoresAConditionalIncludeOfTheGroupsFile` — the defect from section 6: `Host bastion\n\tInclude groups.sshc.conf\n` must **not** count as present, so a top-level region is planned. Assert the governing block is consulted via `File.Condition(File.BlockAt(index))`.
   - `TestPlanRegionReplacesAnExistingRegionInPlace` — a second save with one group added rewrites only the lines between the markers; the bytes before and after are identical.
   - `TestFindRegionRefusesAHalfMarkedRegion` — one marker present returns `ErrRegionDamaged` in both directions.
   - `TestPlanRegionPreservesCRLF` — a CRLF entry file gets CRLF region lines, through `dominantEnding`.
@@ -525,7 +525,7 @@ func (loader overlayLoader) ReadFile(name string) ([]byte, error) {
 
 **Verification:** `go test ./internal/application ./internal/api -v`; `make verify-generated` prints no diff; `TestRouteTableMatchesTheOpenAPIContract` passes.
 
-**Note on `settings`.** Group settings stay in `metadata.json`, keyed by group name. A setting is not membership: it is the payload the group applies, and `groups.ssh-ui.conf` is where it lands as ordinary configuration. Putting a per-group settings file *inside* the group directory would be picked up by that group's own `Include connections/<group>/*.conf` and read in lexical order among the host files — so the group's settings would beat its own hosts' values unless the file were named to sort last, which is a naming trick, not a design. See the open questions.
+**Note on `settings`.** Group settings stay in `metadata.json`, keyed by group name. A setting is not membership: it is the payload the group applies, and `groups.sshc.conf` is where it lands as ordinary configuration. Putting a per-group settings file *inside* the group directory would be picked up by that group's own `Include connections/<group>/*.conf` and read in lexical order among the host files — so the group's settings would beat its own hosts' values unless the file were named to sort last, which is a naming trick, not a design. See the open questions.
 
 ---
 
@@ -540,7 +540,7 @@ func (loader overlayLoader) ReadFile(name string) ([]byte, error) {
 - Produces: the blocker codes from the table in section 7.
 - Consumes: `keys.Reference`, `keys.UnresolvedReference`, `keys.BuildReferenceIndex`, `keys.Inventory.Group`, `keys.ItemID`, `storage.Move`, `rebuildLine`.
 - Adds: `session.ActionKeyMove = "key.move"` to the constant block and to `knownActionKinds`.
-- Adds route: `POST /api/v1/keys/:keyId/move` (preview when `X-SSH-UI-Action` is absent, apply when present), registered in `keys.go` next to the existing key routes but served by the configuration service, because the transaction is a configuration write.
+- Adds route: `POST /api/v1/keys/:keyId/move` (preview when `X-SSHC-Action` is absent, apply when present), registered in `keys.go` next to the existing key routes but served by the configuration service, because the transaction is a configuration write.
 
 **What it changes:** the first operation in the codebase that writes configuration and moves a key in one transaction.
 
@@ -573,7 +573,7 @@ func (loader overlayLoader) ReadFile(name string) ([]byte, error) {
 
 **What it must not change:** nothing is deleted. A group delete relocates its connections to another group or to a file the user names; it never removes a configuration file.
 
-- [ ] **Step 1:** `TestGroupRenameMovesEveryFileAndRewritesEveryIncludeLine` — three connection files and two keys under `work`, renamed to `client-a`: five moves, one entry-file change (the region), one metadata change, one `groups.ssh-ui.conf` change, and one change per configuration file whose `IdentityFile` pointed under `keys/work/`.
+- [ ] **Step 1:** `TestGroupRenameMovesEveryFileAndRewritesEveryIncludeLine` — three connection files and two keys under `work`, renamed to `client-a`: five moves, one entry-file change (the region), one metadata change, one `groups.sshc.conf` change, and one change per configuration file whose `IdentityFile` pointed under `keys/work/`.
 - [ ] **Step 2:** `TestGroupRenameCarriesNestedGroupsWithIt` — renaming `work` also renames `work/eu` to `client-a/eu`, in the same transaction, with both Include lines rewritten and child-before-parent order preserved.
 - [ ] **Step 3:** `TestGroupRenameReportsTheEmptyDirectoryItLeavesBehind` — `group_directory_leftover` names `connections/work`, and the plan asserts that the application did not attempt to remove it.
 - [ ] **Step 4:** `TestGroupRenameRefusesWhenAKeyReferenceLivesOutsideTheWorkspace` — the same refusal as a key move, because it is the same rewrite. A rename that would half-apply is refused entirely.
@@ -655,7 +655,7 @@ func (loader overlayLoader) ReadFile(name string) ([]byte, error) {
 
 ## Task 12: Documentation, the design amendment and the audit
 
-**Files:** Modify `README.md`, `docs/superpowers/specs/2026-08-04-ssh-ui-design.md`, `docs/superpowers/plans/2026-08-04-ssh-ui-roadmap.md`, `docs/manual-acceptance.md`, `internal/acceptance/conditions_test.go`, `internal/effective/differential_test.go`.
+**Files:** Modify `README.md`, `docs/superpowers/specs/2026-08-04-sshc-design.md`, `docs/superpowers/plans/2026-08-04-sshc-roadmap.md`, `docs/manual-acceptance.md`, `internal/acceptance/conditions_test.go`, `internal/effective/differential_test.go`.
 
 - [ ] **Step 1:** Apply every replacement in section 12 of this plan.
 - [ ] **Step 2:** Extend `internal/effective/differential_test.go` with a fixture that uses the generated region and three groups, so the installed OpenSSH witnesses the ordering claim rather than only this application's own reading of it. It skips when `ssh` is absent, as it already does.
@@ -668,7 +668,7 @@ func (loader overlayLoader) ReadFile(name string) ([]byte, error) {
 ```bash
 go test ./internal/acceptance -run TestDesignCompletionConditions -v
 grep -rn "journalled delete and rename primitives" web/src || echo "the false statement is gone"
-grep -n "ssh-ui-file-operations" README.md
+grep -n "sshc-file-operations" README.md
 ```
 
 The last command must print only the corrected sentence, which names journalled *directory* create, remove and rename as the remaining gap.
@@ -690,11 +690,11 @@ go test ./internal/acceptance -run TestDesignCompletionConditions -v
 - `make verify-generated` prints no diff; `go.mod`, `go.sum`, `web/package.json` and `web/package-lock.json` are unchanged: this plan added no dependency.
 - Loading a configuration with groups, opening every screen and saving nothing leaves every file byte-for-byte unchanged.
 - A workspace with no `connections/` directory and no generated region behaves exactly as it did before this plan: no Include is emitted, no directory is created, no metadata field changes on a save that does not touch groups.
-- The generated region contains one `Include` per declared group, deepest group first, then `Include groups.ssh-ui.conf`, and sits immediately before the first catch-all `Host *` or the first `Match`.
+- The generated region contains one `Include` per declared group, deepest group first, then `Include groups.sshc.conf`, and sits immediately before the first catch-all `Host *` or the first `Match`.
 - `connections/work/*.conf` does not match `connections/work/eu/lon.conf`, and the nested group has its own Include line. Asserted, not assumed.
 - A configuration whose catch-all is at the top refuses the region with `include_position_ambiguous`, names both candidate positions and shows the affected aliases' effective diffs; the entry file is unchanged.
 - An existing Include that already reaches `connections/` refuses with `group_include_already_present` naming the file and line.
-- An `Include groups.ssh-ui.conf` inside a `Host` block does not count as present; a top-level region is planned. The pre-existing `PlanGroupInclude` defect is gone with the function.
+- An `Include groups.sshc.conf` inside a `Host` block does not count as present; a top-level region is planned. The pre-existing `PlanGroupInclude` defect is gone with the function.
 - A half-marked region refuses with `generated_region_damaged`.
 - Everything outside the markers is byte-identical after a region rewrite, including CRLF, `key=value` spelling, comments and unstructured lines.
 - A directory under `connections/` with no Include line is reported as `group_not_declared` and is never adopted, moved or written to.
@@ -713,7 +713,7 @@ go test ./internal/acceptance -run TestDesignCompletionConditions -v
 - Migration runs only when explicitly requested, moves whole files only, names every file it skips with a reason, and refuses entirely if the region cannot be placed safely. `TestMigrationIsNeverRunImplicitly` passes.
 - Key migration is a separate operation from configuration migration and a blocked key does not block the configuration migration.
 - `web/src/explorer/ConfigExplorer.tsx` no longer claims the journalled delete and rename primitives are missing; `README.md` no longer claims that moving a Host block between files is a later task.
-- Every `/api/` route added here appears in `api/openapi.yaml` and vice versa; every mutation requires the session cookie and `X-SSH-UI-CSRF`; every response carries `Cache-Control: no-store`; no response contains key material or configuration bytes outside the diff payloads that exist for that purpose.
+- Every `/api/` route added here appears in `api/openapi.yaml` and vice versa; every mutation requires the session cookie and `X-SSHC-CSRF`; every response carries `Cache-Control: no-store`; no response contains key material or configuration bytes outside the diff payloads that exist for that purpose.
 - No automated test read or wrote the real `~/.ssh`, Keychain, ssh-agent, Terminal or a remote host. Confirm with the roadmap's three commands.
 - `make e2e` passes twice in a row on a freshly built binary, and `internal/ui/dist` was rebuilt in the same commit as the last `web/src` change.
 
@@ -766,14 +766,14 @@ Every statement that must change, with its replacement.
 
 | Line | Current | Replacement |
 |---|---|---|
-| 66 | 「UI 専用情報は `~/.ssh/ssh-ui/metadata.json` に保存します。スキーマバージョン、グループ、タグ、色、メモ、お気に入り、表示順のみで…」 | 「UI 専用情報は `~/.ssh/ssh-ui/metadata.json` に保存します。スキーマバージョン、グループの表示情報（色、メモ、表示順、共通設定）、タグ、色、メモ、お気に入り、表示順のみで、鍵本文やパスフレーズは保存しません。**どの Host がどのグループに属するかは metadata に保存しません。ディレクトリがその正本です。**」 |
+| 66 | 「UI 専用情報は `~/.ssh/sshc/metadata.json` に保存します。スキーマバージョン、グループ、タグ、色、メモ、お気に入り、表示順のみで…」 | 「UI 専用情報は `~/.ssh/sshc/metadata.json` に保存します。スキーマバージョン、グループの表示情報（色、メモ、表示順、共通設定）、タグ、色、メモ、お気に入り、表示順のみで、鍵本文やパスフレーズは保存しません。**どの Host がどのグループに属するかは metadata に保存しません。ディレクトリがその正本です。**」 |
 | 67 | 「Host の識別は「正規化した相対パス + 具体的な主 alias」です。」 | 同文に一文追加：「グループはディレクトリなので、グループを変えるとパスが変わり、識別も変わります。移動は config と metadata を同一トランザクションで更新するため、識別が変わっても orphan にはなりません。」 |
-| 68 | 「ファイルとフォルダの移動・改名・削除はまだ提供していません。`storage` に journal 付きの削除・改名プリミティブが必要で、後続の `ssh-ui-file-operations` 計画で対応します。Host ブロックの別ファイルへの移動も同様に後続タスクです。」 | **すでに二重に誤り。** 置換：「Host ブロックの別ファイルへの移動と、グループディレクトリ間のファイル移動・グループの改名は提供しています。journal 付きの削除・改名プリミティブ（`storage.Move`、`storage.Removal`）はサブシステム4で導入済みで、鍵の trash が実際に使っています。まだ無いのは journal 付きの**ディレクトリ**作成・削除・改名と、Config Explorer 上の任意ファイル操作で、後続の `ssh-ui-file-operations` 計画が担当します。グループ改名はディレクトリの rename ではなくファイル単位の move の集合なので、空になった元ディレクトリは残ります。」 |
-| 69 | 「グループは `groups.ssh-ui.conf` に通常の `Host` ブロックとして生成し、子グループを親より先に配置します。`Include` は具体的な Host ブロックの後、最初の catch-all ブロックの前に挿入します。」 | 「グループは `~/.ssh/connections/<group>/` ディレクトリです。`~/.ssh/config` には生成マーカーで囲まれた領域を作り、宣言されたグループごとに `Include connections/<group>/*.conf` を 1 行ずつ、深い子グループから先に並べ、最後に `Include groups.ssh-ui.conf` を置きます。この領域は具体的な Host ブロックの後、最初の catch-all ブロックの前に挿入します。catch-all が先頭にあるなど挿入位置で優先順位が変わる場合は、自動で挿入せず候補位置と実効値の差分を提示して利用者に選ばせます。グループの共通設定は従来どおり `groups.ssh-ui.conf` に通常の `Host` ブロックとして生成し、子グループを親より先に置きます。マーカー間の行は次回保存時に置き換えられます。」 |
+| 68 | 「ファイルとフォルダの移動・改名・削除はまだ提供していません。`storage` に journal 付きの削除・改名プリミティブが必要で、後続の `sshc-file-operations` 計画で対応します。Host ブロックの別ファイルへの移動も同様に後続タスクです。」 | **すでに二重に誤り。** 置換：「Host ブロックの別ファイルへの移動と、グループディレクトリ間のファイル移動・グループの改名は提供しています。journal 付きの削除・改名プリミティブ（`storage.Move`、`storage.Removal`）はサブシステム4で導入済みで、鍵の trash が実際に使っています。まだ無いのは journal 付きの**ディレクトリ**作成・削除・改名と、Config Explorer 上の任意ファイル操作で、後続の `sshc-file-operations` 計画が担当します。グループ改名はディレクトリの rename ではなくファイル単位の move の集合なので、空になった元ディレクトリは残ります。」 |
+| 69 | 「グループは `groups.sshc.conf` に通常の `Host` ブロックとして生成し、子グループを親より先に配置します。`Include` は具体的な Host ブロックの後、最初の catch-all ブロックの前に挿入します。」 | 「グループは `~/.ssh/connections/<group>/` ディレクトリです。`~/.ssh/config` には生成マーカーで囲まれた領域を作り、宣言されたグループごとに `Include connections/<group>/*.conf` を 1 行ずつ、深い子グループから先に並べ、最後に `Include groups.sshc.conf` を置きます。この領域は具体的な Host ブロックの後、最初の catch-all ブロックの前に挿入します。catch-all が先頭にあるなど挿入位置で優先順位が変わる場合は、自動で挿入せず候補位置と実効値の差分を提示して利用者に選ばせます。グループの共通設定は従来どおり `groups.sshc.conf` に通常の `Host` ブロックとして生成し、子グループを親より先に置きます。マーカー間の行は次回保存時に置き換えられます。」 |
 | 新規（69 の後） | — | 「鍵は `~/.ssh/keys/<group>/` に置けます。鍵を移動すると、Include グラフが到達する範囲の `IdentityFile` と `CertificateFile` の行を同一トランザクションで書き換えます。`~/.ssh` 外の設定ファイルから参照されている場合は、半端に適用せず移動そのものを拒否します。macOS Keychain の項目は絶対パス（`SSH: <path>`）で識別されるため移動で壊れますが、このアプリケーションは Keychain を読み書きしないので、警告するだけで確認も修復もできません。」 |
 | 76（鍵管理の境界） | 「`~/.ssh` 配下のファイルは内容と権限で分類します。」 | 同文に一文追加：「`keys/<group>/` 配下も同様に走査します。走査の深さ上限は `~/.ssh` から 8 段（`keys.maxScanDepth`）なので、グループを 7 段より深く入れ子にした鍵は `depth_exceeded` として一覧から落ちます。」 |
 
-### `docs/superpowers/specs/2026-08-04-ssh-ui-design.md`
+### `docs/superpowers/specs/2026-08-04-sshc-design.md`
 
 | Section | Current | Replacement |
 |---|---|---|
@@ -787,9 +787,9 @@ Every statement that must change, with its replacement.
 
 On `main`, line 187-191 ends with "Moving, renaming and deleting files needs journalled delete and rename primitives this version does not have yet." In the current working tree that sentence has already been removed by an uncommitted i18n refactor and the note lives as `explorer.newFileNote`. Either way the note must end with: "Moving a connection between groups is done from the Connections screen. Renaming and deleting arbitrary files and folders is not offered here yet: it needs journalled directory create, remove and rename, which do not exist." Japanese: 「グループ間の移動は Connections 画面で行います。任意のファイルとフォルダの改名・削除はまだ提供していません。journal 付きのディレクトリ作成・削除・改名が必要です。」
 
-### `docs/superpowers/plans/2026-08-04-ssh-ui-roadmap.md`
+### `docs/superpowers/plans/2026-08-04-sshc-roadmap.md`
 
-Add a status line for this plan, and add two entries to "Known open defects in merged code", both closed by this plan: `PlanGroupInclude` counting a conditional Include as present, and `overlayLoader` modelling neither a move nor a removal. Add one entry that this plan does *not* close: journalled directory create, remove and rename remain with `ssh-ui-file-operations`, whose scope is now exactly those three plus the Config Explorer interface.
+Add a status line for this plan, and add two entries to "Known open defects in merged code", both closed by this plan: `PlanGroupInclude` counting a conditional Include as present, and `overlayLoader` modelling neither a move nor a removal. Add one entry that this plan does *not* close: journalled directory create, remove and rename remain with `sshc-file-operations`, whose scope is now exactly those three plus the Config Explorer interface.
 
 ### `docs/manual-acceptance.md`
 
@@ -805,7 +805,7 @@ Two of the three risks were reviewed and answered. They are recorded here rather
 
 Open question 2 asked what to do about a directive `keys.expandKeyPath` refuses to resolve. The answer has two halves, and only together do they close it.
 
-**Half one — what this application writes.** Every `IdentityFile` and `CertificateFile` that ssh-ui creates or rewrites is written as an absolute path. A reference written this way always resolves, so it is always indexed, so a later move can always find and rewrite it. This costs nothing and removes the whole class for anything ssh-ui touched.
+**Half one — what this application writes.** Every `IdentityFile` and `CertificateFile` that sshc creates or rewrites is written as an absolute path. A reference written this way always resolves, so it is always indexed, so a later move can always find and rewrite it. This costs nothing and removes the whole class for anything sshc touched.
 
 It does not, and cannot, fix what is already there. `internal/keys/references.go` lines 143-147 explain why, and the reasoning is sound: OpenSSH resolves a relative `IdentityFile` against the working directory of the `ssh` process, which is not knowable when the configuration is edited. `IdentityFile id_work` may or may not name the key being moved, and no amount of care at write time makes an existing line resolvable. The circularity is exact — the move cannot rewrite the reference to an absolute path, because rewriting it would require already knowing it names this key.
 
@@ -821,17 +821,17 @@ Tasks affected: Task 7 Step 4's assertion becomes `TestKeyMoveRefusesWhileAnyKey
 
 Risk 2 is fixed on `main` ahead of this plan, because it is a correctness gap in committed code regardless of whether directory groups are built. `overlayLoader` now carries a `gone` set alongside `pending`, `Service.validate` builds both from the whole `storage.Request` through `overlayFor`, and a pending write beats a removal so a move onto an existing path still reads its new contents. `TestOverlayLoaderHidesAMovedSourceFromReadsAndGlobs` fails without it. Tasks that assumed they had to fix this first can consume it.
 
-### Decision 7: ssh-ui is assumed to be the only writer of the managed layout, and the check that catches it being wrong stays
+### Decision 7: sshc is assumed to be the only writer of the managed layout, and the check that catches it being wrong stays
 
-The layout this plan creates — `connections/<group>/`, `keys/<group>/`, the generated `Include` lines — is assumed to be written only by this application. That assumption is what lets the design stop accommodating arbitrary hand-written shapes inside those directories: paths there are absolute because ssh-ui wrote them, the `Include` order is the one ssh-ui emitted, and a group directory contains what ssh-ui put in it.
+The layout this plan creates — `connections/<group>/`, `keys/<group>/`, the generated `Include` lines — is assumed to be written only by this application. That assumption is what lets the design stop accommodating arbitrary hand-written shapes inside those directories: paths there are absolute because sshc wrote them, the `Include` order is the one sshc emitted, and a group directory contains what sshc put in it.
 
 It also repairs the awkward part of Decision 5. The strict refusal — no key move while any reference is unresolved — reads as harsh only if it is permanent. It is not: **migration is what makes the assumption true.** Migration normalises key references to absolute paths and generates the layout, and from that point every write keeps them absolute. The refusal therefore bites once, before adoption, which is exactly when the configuration is least understood and strictness is most warranted.
 
-What does not change is the precondition and conflict machinery. `~/.ssh` has other writers whether or not the user ever opens an editor: `ssh` appends to `known_hosts`, `ssh-keygen` writes key files, `ssh-copy-id` and dotfile managers drop things in, and a second copy of ssh-ui is a second writer. The SHA-256 precondition and the three-way conflict view are already built and cost one hash per save, so keeping them is not extra work — it is the thing that notices when the assumption is wrong. The assumption is held in the design and verified at runtime, which is the only form of it that stays true.
+What does not change is the precondition and conflict machinery. `~/.ssh` has other writers whether or not the user ever opens an editor: `ssh` appends to `known_hosts`, `ssh-keygen` writes key files, `ssh-copy-id` and dotfile managers drop things in, and a second copy of sshc is a second writer. The SHA-256 precondition and the three-way conflict view are already built and cost one hash per save, so keeping them is not extra work — it is the thing that notices when the assumption is wrong. The assumption is held in the design and verified at runtime, which is the only form of it that stays true.
 
 ### Decision 8: a per-host comment is written into the configuration, and it replaces the metadata note
 
-The same argument that motivates directory groups applies to notes: today a note lives only in `~/.ssh/ssh-ui/metadata.json`, so it disappears for anyone who reads the configuration without ssh-ui. A comment line above the `Host` block is plain OpenSSH and survives.
+The same argument that motivates directory groups applies to notes: today a note lives only in `~/.ssh/sshc/metadata.json`, so it disappears for anyone who reads the configuration without sshc. A comment line above the `Host` block is plain OpenSSH and survives.
 
 **What is attachable.** `internal/config/line.go` defines `LineComment` as "a line whose first non-whitespace character is `#`", which is the correct reading — `ssh_config` has no trailing-comment syntax, and `Host foo # bar` parses `#` and `bar` as additional patterns. The UI therefore offers whole-line comments only, and must never offer to append a comment to a directive line.
 
@@ -849,10 +849,10 @@ This is independent of the rest of this plan — it needs no directory layout an
 
 Four things the settled decisions do not cover. Each is written as a question rather than answered, because each is a judgment call rather than a technical gap.
 
-1. **Do group *settings* also leave `metadata.json`?** Decision 4 says metadata keeps "colour, tags, note, favourite and display order", which would exclude `GroupMetadata.Settings`. This plan keeps settings in metadata and states the reason: the natural on-disk home would be a per-group settings file inside the group directory, and that file would be picked up by the group's own `Include connections/<group>/*.conf` and read in lexical order among the host files — so the group's shared settings would beat its own hosts' values unless the file were named to sort last, which is a naming trick rather than a design. Keeping the settings in metadata and compiling them into `groups.ssh-ui.conf` after every connections Include preserves the precedence rule exactly. If you meant settings to leave metadata too, the alternative worth considering is a second generated file per group included *after* the region — but that multiplies generated files by the number of groups.
+1. **Do group *settings* also leave `metadata.json`?** Decision 4 says metadata keeps "colour, tags, note, favourite and display order", which would exclude `GroupMetadata.Settings`. This plan keeps settings in metadata and states the reason: the natural on-disk home would be a per-group settings file inside the group directory, and that file would be picked up by the group's own `Include connections/<group>/*.conf` and read in lexical order among the host files — so the group's shared settings would beat its own hosts' values unless the file were named to sort last, which is a naming trick rather than a design. Keeping the settings in metadata and compiling them into `groups.sshc.conf` after every connections Include preserves the precedence rule exactly. If you meant settings to leave metadata too, the alternative worth considering is a second generated file per group included *after* the region — but that multiplies generated files by the number of groups.
 
 2. ~~**What is the right rule for an unresolvable key reference?**~~ Settled — see Decision 5. Original question: Decision 1 settles the case of a reference in a file outside `~/.ssh` — refuse. It does not settle the case where `keys.expandKeyPath` refuses to resolve a directive at all (`ReasonRelativePath`, `ReasonUnsupportedToken`), because the engine then cannot prove the directive does *not* name the key being moved. Three candidate rules, in decreasing strictness: (a) refuse whenever any unresolved `IdentityFile`/`CertificateFile` exists anywhere in the graph — safe, and blocks the feature for anyone with a single `%u` in an unrelated file; (b) refuse only when an unresolved reference's final path segment equals the moved file's base name — what this plan proposes, catches the common spelling, misses `IdentityFile ../keys/work/id_work` written from an unusual working directory; (c) warn, list them, and let the user confirm. I chose (b) and the plan can be changed to (a) or (c) with one predicate.
 
 3. **Should a journalled directory rename be built now?** This plan renames a group as N file moves, following the precedent `keys.Restore` set, and leaves the empty source directory behind with a `group_directory_leftover` notice. A single `rename(2)` on the directory would be atomic, would leave nothing behind, and would not widen the conflict window with the size of the group. It needs a new journal action, a precondition semantics for a thing that has no digest, and a rollback story — a storage-layer design decision. Building it first would delay this plan; building it later means every rename until then leaves debris.
 
-4. **Are `connections` and `keys` the right names, and should they be configurable?** `metadata.GroupsFile` is configurable and defaults to `groups.ssh-ui.conf`; these two are proposed as fixed. A user who already has `~/.ssh/keys/` holding ungrouped keys is not harmed — a directory is only a group when the region declares it — but they will find the application proposing to put group keys into a directory they already use for something else. Making the two names configurable is a small change to `Metadata` (two more presentation fields) and a large change to how many code paths have to ask what the names are.
+4. **Are `connections` and `keys` the right names, and should they be configurable?** `metadata.GroupsFile` is configurable and defaults to `groups.sshc.conf`; these two are proposed as fixed. A user who already has `~/.ssh/keys/` holding ungrouped keys is not harmed — a directory is only a group when the region declares it — but they will find the application proposing to put group keys into a directory they already use for something else. Making the two names configurable is a small change to `Metadata` (two more presentation fields) and a large change to how many code paths have to ask what the names are.

@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"ssh-ui/internal/config"
+	"sshc/internal/config"
 )
 
 // cumulativeKeywords are the directives OpenSSH accumulates instead of keeping

@@ -13,10 +13,10 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/api"
-	"ssh-ui/internal/keys"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/session"
+	"sshc/internal/api"
+	"sshc/internal/keys"
+	"sshc/internal/platform"
+	"sshc/internal/session"
 )
 
 // stubKeyService answers without touching a filesystem, an agent or a process.

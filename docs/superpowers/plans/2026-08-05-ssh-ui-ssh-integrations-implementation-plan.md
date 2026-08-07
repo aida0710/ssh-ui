@@ -1,4 +1,4 @@
-# SSH UI SSH Integrations Implementation Plan
+# sshc SSH Integrations Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -10,20 +10,20 @@
 
 ## Global Constraints
 
-- macOS only. Bind only to `127.0.0.1`; no CORS; no LaunchAgent; the server exists only while `ssh-ui` runs.
+- macOS only. Bind only to `127.0.0.1`; no CORS; no LaunchAgent; the server exists only while `sshc` runs.
 - Pinned versions from the foundation: Go 1.26.5, Echo v5.3.1, React 19.2.8, Vite 8.1.5, TypeScript 5.9.3, Tailwind CSS 4.3.3, Vitest 4.1.1. Echo v5 handlers take `*echo.Context`.
 - Prefer zero new dependencies. This plan adds none; any addition must be justified in the task that adds it and pinned exactly in `go.mod` or `web/package.json`.
 - No shell interpretation anywhere. Build argv directly. Never call `sh -c`, never build a shell string, never build AppleScript by concatenation. Treat every alias, hostname, user and key value as untrusted data, including values OpenSSH itself would accept.
 - Never evaluate a configuration automatically when evaluating it can run a command. `Match exec`, `ProxyCommand`, `KnownHostsCommand`, `LocalCommand` and `RemoteCommand` are detected from the parsed syntax tree, displayed with their exact command text, and require a separate explicit confirmation before any evaluation or connection.
 - Warn, in the UI and in the README, that OpenSSH does not shell-escape the tokens it expands, so a hostname or user value can reach the shell of an executable directive unchanged.
-- Every state-changing or externally visible operation — `ssh -G` on a configuration that can execute a command, reachability check, authentication test, Terminal launch, `known_hosts` change, remote registration — requires the `X-SSH-UI-CSRF` header plus a one-time, short-lived action token bound to the session, the operation kind, the target, and the executable directives that were displayed.
+- Every state-changing or externally visible operation — `ssh -G` on a configuration that can execute a command, reachability check, authentication test, Terminal launch, `known_hosts` change, remote registration — requires the `X-SSHC-CSRF` header plus a one-time, short-lived action token bound to the session, the operation kind, the target, and the executable directives that were displayed.
 - Every `known_hosts` write goes through `storage.Manager.Commit` so it is journalled, backed up and recoverable like any other managed file. Never write `known_hosts` directly.
 - Automated tests must never contact a real remote host, run a real `ssh` or `ssh-keyscan` against the network, or touch the real `~/.ssh`, Keychain or Terminal. Use `t.TempDir()`, fake `OutputRunner`s and fake dialers.
 - Two narrow real-binary carve-outs, and no others: (1) the differential test may run the installed `ssh -G -F` against safe fixtures — fixtures containing no executable directive — inside `t.TempDir()`, and must `t.Skip` when `ssh` is unavailable; (2) the process adapter's own tests may run `/bin/echo`, `/bin/cat`, `/bin/sleep`, `/usr/bin/false` and `/usr/bin/yes` with fixed argv. Neither touches the network or the real home directory.
 - Real remote connections, real `authorized_keys` changes, real Terminal launch and real Keychain use are manual acceptance tests listed at the end of this plan, never automated.
 - Never log command output, hostnames or paths beyond the minimum, and never log tokens, cookies or request bodies. The new packages import neither `log` nor `log/slog`; a verification step checks this.
 - OpenAPI first: add endpoints to `api/openapi.yaml`, then run `make generate`. Do not hand-edit `internal/api/models.gen.go` or `web/src/api/schema.d.ts`.
-- Home directory resolution stays in `cmd/ssh-ui/main.go`. Nothing under `internal/` may call `os.UserHomeDir` or read `$HOME`, so every test can inject a temporary home.
+- Home directory resolution stays in `cmd/sshc/main.go`. Nothing under `internal/` may call `os.UserHomeDir` or read `$HOME`, so every test can inject a temporary home.
 
 ### Out of scope
 
@@ -39,7 +39,7 @@ Stated here so no task drifts into a neighbouring subsystem:
 
 ```text
 api/openapi.yaml                              # extended contract (Tasks 5, 6, 7, 8)
-cmd/ssh-ui/main.go                            # resolves the home directory, builds the macOS adapters
+cmd/sshc/main.go                            # resolves the home directory, builds the macOS adapters
 internal/
 ├── platform/
 │   ├── browser.go                            # unchanged
@@ -145,7 +145,7 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/platform"
+	"sshc/internal/platform"
 )
 
 func TestValidateAliasAcceptsOnlyTheSafeCharacterSet(t *testing.T) {
@@ -305,8 +305,8 @@ import (
 	"testing"
 	"time"
 
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/platform/macos"
+	"sshc/internal/platform"
+	"sshc/internal/platform/macos"
 )
 
 // These tests run only local, non-networked system programs with a fixed argv:
@@ -508,7 +508,7 @@ import (
 	"sync"
 	"time"
 
-	"ssh-ui/internal/platform"
+	"sshc/internal/platform"
 )
 
 // OutputRunner runs external programs with a direct argv.
@@ -667,7 +667,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"ssh-ui/internal/platform/macos"
+	"sshc/internal/platform/macos"
 )
 
 func writeProgram(t *testing.T, directory, name string, mode os.FileMode) {
@@ -837,8 +837,8 @@ import (
 	"sort"
 	"testing"
 
-	"ssh-ui/internal/config"
-	"ssh-ui/internal/effective"
+	"sshc/internal/config"
+	"sshc/internal/effective"
 )
 
 // fakeLoader serves configuration files from a map so no test reads a disk.
@@ -1018,7 +1018,7 @@ import (
 	"sort"
 	"strings"
 
-	"ssh-ui/internal/config"
+	"sshc/internal/config"
 )
 
 // TokenEscapeWarning is displayed next to every executable directive.
@@ -1190,9 +1190,9 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/effective"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/platform/macos"
+	"sshc/internal/effective"
+	"sshc/internal/platform"
+	"sshc/internal/platform/macos"
 )
 
 // recordingRunner captures the command it was asked to run and replays a
@@ -1384,7 +1384,7 @@ import (
 	"strings"
 	"time"
 
-	"ssh-ui/internal/platform"
+	"sshc/internal/platform"
 )
 
 // DefaultEvaluationTimeout bounds one `ssh -G` run. Evaluation never touches
@@ -1547,7 +1547,7 @@ package effective_test
 import (
 	"testing"
 
-	"ssh-ui/internal/effective"
+	"sshc/internal/effective"
 )
 
 func codesOf(complexities []effective.Complexity) map[string]effective.Complexity {
@@ -1697,7 +1697,7 @@ package effective
 import (
 	"strings"
 
-	"ssh-ui/internal/config"
+	"sshc/internal/config"
 )
 
 // How confidently a source can be explained.
@@ -1945,7 +1945,7 @@ import (
 	"errors"
 	"testing"
 
-	"ssh-ui/internal/effective"
+	"sshc/internal/effective"
 )
 
 func TestParseChainReadsEveryDestinationForm(t *testing.T) {
@@ -2068,7 +2068,7 @@ import (
 	"errors"
 	"strings"
 
-	"ssh-ui/internal/config"
+	"sshc/internal/config"
 )
 
 const (
@@ -2278,10 +2278,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"ssh-ui/internal/config"
-	"ssh-ui/internal/effective"
-	"ssh-ui/internal/platform/macos"
-	"ssh-ui/internal/storage"
+	"sshc/internal/config"
+	"sshc/internal/effective"
+	"sshc/internal/platform/macos"
+	"sshc/internal/storage"
 )
 
 // TestProjectionMatchesInstalledOpenSSH is the differential test the
@@ -2452,7 +2452,7 @@ import (
 	"testing"
 	"time"
 
-	"ssh-ui/internal/diagnostics"
+	"sshc/internal/diagnostics"
 )
 
 // dialerFunc turns a function into a Dialer so a test can decide the outcome
@@ -2658,10 +2658,10 @@ import (
 	"testing"
 	"time"
 
-	"ssh-ui/internal/config"
-	"ssh-ui/internal/diagnostics"
-	"ssh-ui/internal/effective"
-	"ssh-ui/internal/platform"
+	"sshc/internal/config"
+	"sshc/internal/diagnostics"
+	"sshc/internal/effective"
+	"sshc/internal/platform"
 )
 
 type scriptedRunner struct {
@@ -2878,8 +2878,8 @@ import (
 	"strings"
 	"time"
 
-	"ssh-ui/internal/effective"
-	"ssh-ui/internal/platform"
+	"sshc/internal/effective"
+	"sshc/internal/platform"
 )
 
 const (
@@ -3090,7 +3090,7 @@ git commit -m "feat: add direct reachability and a bounded ssh authentication te
 - Modify: `internal/httpserver/server.go`
 - Modify: `internal/app/run.go`
 - Modify: `internal/app/run_test.go`
-- Modify: `cmd/ssh-ui/main.go`
+- Modify: `cmd/sshc/main.go`
 
 **Interfaces:**
 - Consumes: Tasks 1–4; committed `storage.NewWorkspace`, `storage.OSFileSystem`, `storage.NewResolver`, `config.Resolver`, `config.Graph`, `config.Diagnostic`; committed `httpserver.Security`, `SessionCookie`, `CSRFHeader`, `SessionContextKey`, `problem`.
@@ -3450,10 +3450,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"ssh-ui/internal/diagnostics"
-	"ssh-ui/internal/effective"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/storage"
+	"sshc/internal/diagnostics"
+	"sshc/internal/effective"
+	"sshc/internal/platform"
+	"sshc/internal/storage"
 )
 
 const serviceConfig = `Host bastion
@@ -3610,10 +3610,10 @@ import (
 	"net"
 	"path/filepath"
 
-	"ssh-ui/internal/config"
-	"ssh-ui/internal/effective"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/storage"
+	"sshc/internal/config"
+	"sshc/internal/effective"
+	"sshc/internal/platform"
+	"sshc/internal/storage"
 )
 
 // ConfigFile is one file of the Include graph, summarised for display.
@@ -4099,11 +4099,11 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/api"
-	"ssh-ui/internal/diagnostics"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/session"
-	"ssh-ui/internal/storage"
+	"sshc/internal/api"
+	"sshc/internal/diagnostics"
+	"sshc/internal/platform"
+	"sshc/internal/session"
+	"sshc/internal/storage"
 )
 
 type stubRunner struct {
@@ -4201,7 +4201,7 @@ func newTestServer(t *testing.T) *testServer {
 	request.Host = harness.host
 	request.Header.Set("Origin", harness.origin)
 	request.Header.Set("Sec-Fetch-Site", "same-origin")
-	request.Header.Set("X-SSH-UI-Bootstrap", bootstrap)
+	request.Header.Set("X-SSHC-Bootstrap", bootstrap)
 	response, err := harness.client.Do(request)
 	if err != nil {
 		t.Fatal(err)
@@ -4442,11 +4442,11 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/api"
-	"ssh-ui/internal/diagnostics"
-	"ssh-ui/internal/effective"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/session"
+	"sshc/internal/api"
+	"sshc/internal/diagnostics"
+	"sshc/internal/effective"
+	"sshc/internal/platform"
+	"sshc/internal/session"
 )
 
 // ActionHandlers issues the one-time confirmations every externally visible
@@ -4555,12 +4555,12 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/api"
-	"ssh-ui/internal/config"
-	"ssh-ui/internal/diagnostics"
-	"ssh-ui/internal/effective"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/session"
+	"sshc/internal/api"
+	"sshc/internal/config"
+	"sshc/internal/diagnostics"
+	"sshc/internal/effective"
+	"sshc/internal/platform"
+	"sshc/internal/session"
 )
 
 // DiagnosticsHandlers exposes the separately triggered checks.
@@ -4788,7 +4788,7 @@ and before the static routes, because `e.GET("/*", static)` must stay last:
 	}
 ```
 
-Add `"ssh-ui/internal/diagnostics"` to the file's import block.
+Add `"sshc/internal/diagnostics"` to the file's import block.
 
 - [ ] **Step 15: Wire the services into the process**
 
@@ -4824,7 +4824,7 @@ At the top of `Run`, before the listener is created:
 	diagnosticsService := diagnostics.NewService(workspace, dependencies.Runner, dependencies.Toolchain, nil)
 ```
 
-and pass `Diagnostics: diagnosticsService` in the `httpserver.New(httpserver.Options{...})` literal. Add `"errors"`, `"ssh-ui/internal/diagnostics"` and `"ssh-ui/internal/storage"` to the imports.
+and pass `Diagnostics: diagnosticsService` in the `httpserver.New(httpserver.Options{...})` literal. Add `"errors"`, `"sshc/internal/diagnostics"` and `"sshc/internal/storage"` to the imports.
 
 In `internal/app/run_test.go`, add `Home: t.TempDir()`, `Runner: macos.NewOutputRunner()` and `Toolchain: macos.NewToolchain()` to each of the three `Dependencies` literals, and add one test:
 
@@ -4843,7 +4843,7 @@ func TestRunRequiresAHomeDirectory(t *testing.T) {
 }
 ```
 
-In `cmd/ssh-ui/main.go`, resolve the home directory and pass the adapters:
+In `cmd/sshc/main.go`, resolve the home directory and pass the adapters:
 
 ```go
 	home, err := os.UserHomeDir()
@@ -4898,7 +4898,7 @@ git commit -m "feat: expose confirmed ssh diagnostics over the local API"
 - Modify: `internal/diagnostics/service.go`
 - Modify: `internal/diagnostics/service_test.go`
 - Modify: `internal/app/run.go`
-- Modify: `cmd/ssh-ui/main.go`
+- Modify: `cmd/sshc/main.go`
 
 **Interfaces:**
 - Consumes: Tasks 1 and 5.
@@ -4920,8 +4920,8 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/platform/macos"
+	"sshc/internal/platform"
+	"sshc/internal/platform/macos"
 )
 
 type captureRunner struct {
@@ -5019,7 +5019,7 @@ import (
 	"fmt"
 	"time"
 
-	"ssh-ui/internal/platform"
+	"sshc/internal/platform"
 )
 
 // ErrTerminalUnavailable reports that the automation program is missing.
@@ -5350,7 +5350,7 @@ In `internal/app/run.go`, build the launcher and pass it to the service:
 ```
 
 with a new `Terminal platform.TerminalLauncher` field on `Dependencies`, and in
-`cmd/ssh-ui/main.go` add `Terminal: macos.NewTerminal(macos.NewOutputRunner())`
+`cmd/sshc/main.go` add `Terminal: macos.NewTerminal(macos.NewOutputRunner())`
 to the dependency literal. A nil launcher stays valid: `LaunchTerminal` then
 returns `ErrTerminalNotConfigured` instead of panicking, which is what the
 existing `app` tests rely on.
@@ -5412,7 +5412,7 @@ import (
 	"bytes"
 	"testing"
 
-	"ssh-ui/internal/knownhosts"
+	"sshc/internal/knownhosts"
 )
 
 const (
@@ -5772,8 +5772,8 @@ import (
 	"slices"
 	"testing"
 
-	"ssh-ui/internal/knownhosts"
-	"ssh-ui/internal/platform"
+	"sshc/internal/knownhosts"
+	"sshc/internal/platform"
 )
 
 type stubRunner struct {
@@ -5850,8 +5850,8 @@ import (
 	"testing"
 	"time"
 
-	"ssh-ui/internal/knownhosts"
-	"ssh-ui/internal/storage"
+	"sshc/internal/knownhosts"
+	"sshc/internal/storage"
 )
 
 func newTestService(t *testing.T, contents string, runner *stubRunner) *knownhosts.Service {
@@ -6010,7 +6010,7 @@ import (
 	"strings"
 	"time"
 
-	"ssh-ui/internal/platform"
+	"sshc/internal/platform"
 )
 
 // UnverifiedNotice accompanies every scan result.
@@ -6104,7 +6104,7 @@ import (
 	"strconv"
 	"strings"
 
-	"ssh-ui/internal/storage"
+	"sshc/internal/storage"
 )
 
 var (
@@ -6480,9 +6480,9 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/api"
-	"ssh-ui/internal/session"
-	"ssh-ui/internal/storage"
+	"sshc/internal/api"
+	"sshc/internal/session"
+	"sshc/internal/storage"
 )
 
 func TestKnownHostsListSearchAndDeleteAreJournalled(t *testing.T) {
@@ -6628,11 +6628,11 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/api"
-	"ssh-ui/internal/knownhosts"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/session"
-	"ssh-ui/internal/storage"
+	"sshc/internal/api"
+	"sshc/internal/knownhosts"
+	"sshc/internal/platform"
+	"sshc/internal/session"
+	"sshc/internal/storage"
 )
 
 // KnownHostsHandlers expose known_hosts search and maintenance.
@@ -6866,9 +6866,9 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/effective"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/remotekey"
+	"sshc/internal/effective"
+	"sshc/internal/platform"
+	"sshc/internal/remotekey"
 )
 
 const (
@@ -6927,7 +6927,7 @@ func TestParsePublicKeyAcceptsOnlyOneValidLine(t *testing.T) {
 func TestRegisterProbesThenSendsTheKeyOnStandardInput(t *testing.T) {
 	runner := &scriptedRunner{outputs: []platform.Output{
 		{Stdout: []byte(remotekey.ProbeMarker + "\n")},
-		{Stdout: []byte("ssh-ui: added\n")},
+		{Stdout: []byte("sshc: added\n")},
 	}}
 	key, _, err := remotekey.ParsePublicKey(keyLine)
 	if err != nil {
@@ -6977,7 +6977,7 @@ func TestRegisterReportsAnExistingKeyAndAnUnsupportedRemote(t *testing.T) {
 
 	existing := &scriptedRunner{outputs: []platform.Output{
 		{Stdout: []byte(remotekey.ProbeMarker + "\n")},
-		{Stdout: []byte("ssh-ui: already-present\n")},
+		{Stdout: []byte("sshc: already-present\n")},
 	}}
 	result, err := newService(existing).Register(context.Background(), effective.Report{}, "bastion", key, false)
 	if err != nil {
@@ -7066,17 +7066,17 @@ import (
 	"strings"
 	"time"
 
-	"ssh-ui/internal/effective"
-	"ssh-ui/internal/knownhosts"
-	"ssh-ui/internal/platform"
+	"sshc/internal/effective"
+	"sshc/internal/knownhosts"
+	"sshc/internal/platform"
 )
 
 const (
 	// ProbeMarker is what a POSIX shell must echo back.
-	ProbeMarker = "ssh-ui-posix-shell"
+	ProbeMarker = "sshc-posix-shell"
 	// ProbeCommand is the fixed command used to decide whether the remote
 	// account has a POSIX shell. It prints one known word and nothing else.
-	ProbeCommand = `printf '%s\n' ssh-ui-posix-shell`
+	ProbeCommand = `printf '%s\n' sshc-posix-shell`
 	// RemotePath is the file this package appends to.
 	RemotePath = "~/.ssh/authorized_keys"
 
@@ -7098,18 +7098,18 @@ umask 077
 key=$(cat)
 case "$key" in
   ssh-*|ecdsa-*|sk-*) ;;
-  *) echo "ssh-ui: unsupported key" >&2; exit 3 ;;
+  *) echo "sshc: unsupported key" >&2; exit 3 ;;
 esac
 mkdir -p "$HOME/.ssh"
 chmod 700 "$HOME/.ssh"
 touch "$HOME/.ssh/authorized_keys"
 chmod 600 "$HOME/.ssh/authorized_keys"
 if grep -qxF "$key" "$HOME/.ssh/authorized_keys"; then
-  echo "ssh-ui: already-present"
+  echo "sshc: already-present"
   exit 0
 fi
 printf '%s\n' "$key" >> "$HOME/.ssh/authorized_keys"
-echo "ssh-ui: added"
+echo "sshc: added"
 `
 
 var (
@@ -7246,9 +7246,9 @@ func (s Service) Register(ctx context.Context, report effective.Report, alias st
 		Truncated: output.Truncated,
 	}
 	switch {
-	case strings.Contains(string(output.Stdout), "ssh-ui: already-present"):
+	case strings.Contains(string(output.Stdout), "sshc: already-present"):
 		result.Outcome = RegistrationExisting
-	case strings.Contains(string(output.Stdout), "ssh-ui: added"):
+	case strings.Contains(string(output.Stdout), "sshc: added"):
 		result.Outcome = RegistrationAdded
 	default:
 		return result, ErrUnsupportedRemote
@@ -7405,10 +7405,10 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/api"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/remotekey"
-	"ssh-ui/internal/session"
+	"sshc/internal/api"
+	"sshc/internal/platform"
+	"sshc/internal/remotekey"
+	"sshc/internal/session"
 )
 
 const registrationKey = "ssh-ed25519 " + knownHostKey + " fixture@example"
@@ -7467,7 +7467,7 @@ func TestRemoteKeyRegisterNeedsAConfirmationAndAValidKey(t *testing.T) {
 
 	server.runner.outputs = []platform.Output{
 		{Stdout: []byte(remotekey.ProbeMarker + "\n")},
-		{Stdout: []byte("ssh-ui: added\n")},
+		{Stdout: []byte("sshc: added\n")},
 	}
 	accepted := server.post(t, "/api/v1/remote-keys/register", api.RemoteKeyRegisterRequest{
 		Alias:       "bastion",
@@ -7509,11 +7509,11 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/api"
-	"ssh-ui/internal/diagnostics"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/remotekey"
-	"ssh-ui/internal/session"
+	"sshc/internal/api"
+	"sshc/internal/diagnostics"
+	"sshc/internal/platform"
+	"sshc/internal/remotekey"
+	"sshc/internal/session"
 )
 
 // RemoteKeyHandlers register a public key on a remote host.
@@ -7652,7 +7652,7 @@ git commit -m "feat: register public keys on POSIX remotes without shell interpo
 - Modify: `web/src/App.tsx`
 - Modify: `web/src/App.test.tsx`
 - Modify: `README.md`
-- Modify: `docs/superpowers/plans/2026-08-04-ssh-ui-roadmap.md`
+- Modify: `docs/superpowers/plans/2026-08-04-sshc-roadmap.md`
 
 **Interfaces:**
 - Consumes: every endpoint added in Tasks 5–8, through the generated `components["schemas"]` types.
@@ -8398,7 +8398,7 @@ Japanese style:
 
 - [ ] **Step 10: Record the subsystem in the roadmap**
 
-In `docs/superpowers/plans/2026-08-04-ssh-ui-roadmap.md`, update the Status
+In `docs/superpowers/plans/2026-08-04-sshc-roadmap.md`, update the Status
 section: mark subsystem 5 delivered with this plan's filename and the date the
 acceptance gate was verified, and note that the deferred `ssh -G` differential
 test from subsystem 2 is now implemented in `internal/effective/differential_test.go`.
@@ -8414,7 +8414,7 @@ go test -race ./...
 make fuzz
 npm test --prefix web
 npm run typecheck --prefix web
-go build -trimpath -o bin/ssh-ui ./cmd/ssh-ui
+go build -trimpath -o bin/sshc ./cmd/sshc
 git diff --stat go.mod go.sum
 git status --short
 ```
@@ -8431,13 +8431,13 @@ grep -rn "log/slog\|\"log\"" internal/effective internal/diagnostics internal/kn
 grep -rn "sh -c\|/bin/sh\|exec.Command(" internal/effective internal/diagnostics internal/knownhosts internal/remotekey internal/platform || echo "no shell and no direct exec outside the adapter"
 grep -rn "UserHomeDir\|os.Getenv(\"HOME\")" internal/ || echo "no home directory access under internal/"
 grep -rln "t.TempDir()" internal/effective internal/knownhosts internal/httpserver
-ls -la ~/.ssh/ssh-ui 2>/dev/null || echo "no state directory in the real home"
+ls -la ~/.ssh/sshc 2>/dev/null || echo "no state directory in the real home"
 go test ./internal/effective -run TestProjectionMatchesInstalledOpenSSH -v | grep -E "PASS|SKIP"
 ```
 
 Expected: the first three commands print their "no ..." message; the fourth
 lists the test files that isolate themselves in temporary directories; the real
-`~/.ssh` gained no `ssh-ui` directory; the differential test reports PASS on a
+`~/.ssh` gained no `sshc` directory; the differential test reports PASS on a
 machine with OpenSSH or SKIP without it. `exec.Command(` must appear only in
 `internal/platform/macos/command.go` and the committed `browser.go`, both of
 which use `exec.CommandContext` with a direct argv.
@@ -8445,7 +8445,7 @@ which use `exec.CommandContext` with a direct argv.
 - [ ] **Step 13: Commit the panels and documentation**
 
 ```bash
-git add web README.md docs/superpowers/plans/2026-08-04-ssh-ui-roadmap.md
+git add web README.md docs/superpowers/plans/2026-08-04-sshc-roadmap.md
 git commit -m "feat: add diagnostics and known hosts panels"
 ```
 
@@ -8454,7 +8454,7 @@ git commit -m "feat: add diagnostics and known hosts panels"
 Before starting the hardening and release plan, verify all of the following:
 
 - `go test ./...`, `go test -race ./...`, `make fuzz`, `npm test --prefix web` and `npm run typecheck --prefix web` all pass.
-- `go build -trimpath -o bin/ssh-ui ./cmd/ssh-ui` succeeds and `go.mod`/`go.sum` are unchanged: this subsystem added no dependency.
+- `go build -trimpath -o bin/sshc ./cmd/sshc` succeeds and `go.mod`/`go.sum` are unchanged: this subsystem added no dependency.
 - `make generate` produces no diff, so the committed models match `api/openapi.yaml`.
 - The deferred `ssh -G -F` differential test exists in `internal/effective/differential_test.go`, compares the engine's projection against real OpenSSH on fixtures with no executable directive inside `t.TempDir()`, and reports SKIP rather than FAIL when `ssh` is absent.
 - `Match exec`, `ProxyCommand`, `KnownHostsCommand`, `LocalCommand` and `RemoteCommand` are detected from the parsed syntax tree with their exact command text, file, line and enclosing condition.
@@ -8472,7 +8472,7 @@ Before starting the hardening and release plan, verify all of the following:
 - Every state-changing or externally visible endpoint rejects a missing CSRF header, a replayed action token, a token issued for another kind or target, and a token whose evidence no longer matches the files on disk.
 - No automated test contacted a remote host, ran `ssh`/`ssh-keyscan` against the network, or touched the real `~/.ssh`, Keychain or Terminal; the only real binaries executed are the local `ssh -G -F` differential test and `/bin/echo`, `/bin/cat`, `/bin/sleep`, `/usr/bin/false`, `/usr/bin/yes` in the process adapter's own tests.
 - `internal/effective`, `internal/diagnostics`, `internal/knownhosts` and `internal/remotekey` import no logging package, and no captured output, hostname, token or request body is logged anywhere.
-- Nothing under `internal/` reads the home directory; `cmd/ssh-ui/main.go` is the only place that resolves it.
+- Nothing under `internal/` reads the home directory; `cmd/sshc/main.go` is the only place that resolves it.
 
 ## Manual Acceptance Checklist
 
@@ -8486,7 +8486,7 @@ against a machine you control, and record the result.
 5. **Authentication test.** Run it against a host where your key works; confirm it reports authenticated quickly and that no shell, forwarding or `LocalCommand` ran. Repeat against a host with an unknown key and confirm it reports the host key problem instead of trusting it.
 6. **Cancellation.** Start the authentication test against an unresponsive address and cancel the request; confirm the `ssh` process is gone (`pgrep -f 'ssh -v'` prints nothing).
 7. **Terminal launch.** Launch a safe alias and confirm a Terminal window opens with `ssh -- <alias>`. Then define an alias containing a space or a quote and confirm the UI offers only the copyable command.
-8. **Known Hosts deletion.** Delete a stale entry, then confirm the backup under `~/.ssh/ssh-ui/backups/<id>/known_hosts` holds the original bytes and the history record exists.
+8. **Known Hosts deletion.** Delete a stale entry, then confirm the backup under `~/.ssh/sshc/backups/<id>/known_hosts` holds the original bytes and the history record exists.
 9. **Keyscan.** Scan a host you control, compare the fingerprint with `ssh-keygen -lf` output taken on the host itself, and confirm adding it requires that fingerprint or an explicit acknowledgement.
 10. **Remote registration.** Register a public key on a POSIX host: confirm the plan showed the right user and destination, the key appears exactly once in `authorized_keys`, `~/.ssh` is `0700`, `authorized_keys` is `0600`, and a second registration reports `already_present` without duplicating the line.
 11. **Unsupported remote.** Point the registration at a host without a POSIX shell and confirm only manual instructions appear and nothing was written.

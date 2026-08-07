@@ -43,9 +43,9 @@ const MaxEntries = 4096
 
 var (
 	// ErrNotASnapshot reports bytes that are not a snapshot at all.
-	ErrNotASnapshot = errors.New("these bytes are not an ssh-ui snapshot")
+	ErrNotASnapshot = errors.New("these bytes are not an sshc snapshot")
 	// ErrUnsupportedVersion reports a snapshot from a newer build.
-	ErrUnsupportedVersion = errors.New("this snapshot was written by a newer version of ssh-ui")
+	ErrUnsupportedVersion = errors.New("this snapshot was written by a newer version of sshc")
 	// ErrUnsafePath reports an entry whose path would escape the workspace. A
 	// snapshot is untrusted input and "../" in a tar is the oldest trick there
 	// is.
@@ -74,7 +74,7 @@ type Entry struct {
 	// Secret marks a private key, so a pull applies it with SkipBackup set.
 	// That field exists in the storage layer for exactly this reason: the
 	// design refuses to leave a second copy of key material in
-	// ~/.ssh/ssh-ui/backups/, and a pull that ignored it would defeat that
+	// ~/.ssh/sshc/backups/, and a pull that ignored it would defeat that
 	// decision from a new direction.
 	Secret bool `json:"secret,omitempty"`
 }

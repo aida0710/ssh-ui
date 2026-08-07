@@ -11,13 +11,13 @@ import (
 	"testing"
 	"time"
 
-	"ssh-ui/internal/config"
-	"ssh-ui/internal/effective"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/platform/macos"
-	"ssh-ui/internal/remotekey"
-	"ssh-ui/internal/session"
-	"ssh-ui/internal/storage"
+	"sshc/internal/config"
+	"sshc/internal/effective"
+	"sshc/internal/platform"
+	"sshc/internal/platform/macos"
+	"sshc/internal/remotekey"
+	"sshc/internal/session"
+	"sshc/internal/storage"
 )
 
 // hostileArguments are values OpenSSH itself would accept inside a Host line,
@@ -33,7 +33,7 @@ var hostileArguments = []string{
 	"-",
 	"--",
 	"bastion -oProxyCommand=id",
-	"bastion;touch /tmp/ssh-ui-pwned",
+	"bastion;touch /tmp/sshc-pwned",
 	"bastion|id",
 	"bastion&&id",
 	"bastion$(id)",
@@ -298,7 +298,7 @@ func TestRemoteRegistrationNeverInterpolatesInputIntoTheRemoteShell(t *testing.T
 		if strings.Contains(strings.Join(command.Arguments, " "), remotekey.ProbeCommand) {
 			return platform.Output{Stdout: []byte(remotekey.ProbeMarker + "\n")}, nil
 		}
-		return platform.Output{Stdout: []byte("ssh-ui: added\n")}, nil
+		return platform.Output{Stdout: []byte("sshc: added\n")}, nil
 	})
 	token := f.actionToken(t, session.ActionRemoteKeyRegister, "bastion")
 	registered := f.do(http.MethodPost, "/api/v1/remote-keys/register", mustJSON(t, map[string]any{

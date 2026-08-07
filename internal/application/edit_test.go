@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/config"
+	"sshc/internal/config"
 )
 
 const editConfig = `Host bastion

@@ -23,9 +23,9 @@ import (
 // is never read. Nothing here contacts a network.
 func TestBuiltBinaryServesTheEmbeddedUIAndStopsOnSIGTERM(t *testing.T) {
 	repository := filepath.Join("..", "..")
-	binary := filepath.Join(t.TempDir(), "ssh-ui")
+	binary := filepath.Join(t.TempDir(), "sshc")
 
-	build := exec.Command("go", "build", "-trimpath", "-o", binary, "./cmd/ssh-ui")
+	build := exec.Command("go", "build", "-trimpath", "-o", binary, "./cmd/sshc")
 	build.Dir = repository
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("go build = %v\n%s", err, output)
@@ -123,7 +123,7 @@ func TestBuiltBinaryServesTheEmbeddedUIAndStopsOnSIGTERM(t *testing.T) {
 	bootstrap.Host = host
 	bootstrap.Header.Set("Origin", base)
 	bootstrap.Header.Set("Sec-Fetch-Site", "same-origin")
-	bootstrap.Header.Set("X-SSH-UI-Bootstrap", fragment)
+	bootstrap.Header.Set("X-SSHC-Bootstrap", fragment)
 	exchanged, err := client.Do(bootstrap)
 	if err != nil {
 		t.Fatalf("bootstrap = %v", err)
@@ -205,7 +205,7 @@ func assertPortIsFree(t testing.TB, hostPort string) {
 // the artefact. internal/acceptance is test-only by construction, but a future
 // helper moved into a non-test file would change that silently.
 func TestNoTestOnlyPackageReachesTheShippedBinary(t *testing.T) {
-	list := exec.Command("go", "list", "-deps", "./cmd/ssh-ui")
+	list := exec.Command("go", "list", "-deps", "./cmd/sshc")
 	list.Dir = filepath.Join("..", "..")
 	output, err := list.CombinedOutput()
 	if err != nil {
@@ -218,7 +218,7 @@ func TestNoTestOnlyPackageReachesTheShippedBinary(t *testing.T) {
 			seen++
 		}
 		switch trimmed {
-		case "ssh-ui/internal/acceptance":
+		case "sshc/internal/acceptance":
 			t.Error("the hardening suite is linked into the shipped binary")
 		case "testing", "net/http/httptest":
 			t.Errorf("%s is linked into the shipped binary", trimmed)

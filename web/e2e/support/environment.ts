@@ -7,7 +7,7 @@ import { dirname, join, resolve } from "node:path";
 // binaryPath is the artefact under test. `make e2e` builds it first; a missing
 // binary fails loudly rather than falling back to a dev server, because the
 // point of this suite is the shipped artefact.
-const binaryPath = resolve(process.cwd(), "..", "bin", "ssh-ui");
+const binaryPath = resolve(process.cwd(), "..", "bin", "sshc");
 
 // The fixture home is written by this file and by nothing else. Every spec that
 // needs a different starting state writes it through `installation.write`.
@@ -46,7 +46,7 @@ export type Installation = {
 };
 
 async function buildHome(): Promise<string> {
-  const home = await mkdtemp(join(tmpdir(), "ssh-ui-e2e-"));
+  const home = await mkdtemp(join(tmpdir(), "sshc-e2e-"));
   if (!home.startsWith(tmpdir())) {
     throw new Error("the end-to-end home is not inside the temporary directory");
   }
@@ -69,7 +69,7 @@ function startBinary(home: string): Promise<{ child: ChildProcess; url: string }
     });
     let buffered = "";
     const timer = setTimeout(
-      () => rejectPromise(new Error("ssh-ui printed no URL within 10s")),
+      () => rejectPromise(new Error("sshc printed no URL within 10s")),
       10_000,
     );
     child.stdout?.on("data", (chunk: Buffer) => {
@@ -81,7 +81,7 @@ function startBinary(home: string): Promise<{ child: ChildProcess; url: string }
     });
     child.on("exit", (code) => {
       clearTimeout(timer);
-      rejectPromise(new Error(`ssh-ui exited with ${String(code)} before printing a URL`));
+      rejectPromise(new Error(`sshc exited with ${String(code)} before printing a URL`));
     });
   });
 }

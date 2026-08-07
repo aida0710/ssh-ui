@@ -13,8 +13,8 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"ssh-ui/internal/api"
-	"ssh-ui/internal/session"
+	"sshc/internal/api"
+	"sshc/internal/session"
 )
 
 func TestIntegratedBootstrapFlow(t *testing.T) {
@@ -117,9 +117,9 @@ func TestIntegratedBootstrapFlow(t *testing.T) {
 
 	const crossOriginSecret = "cross-origin-request-secret"
 	crossOriginBootstrap := do(http.MethodPost, server.URL()+"/api/v1/session/bootstrap", host, map[string]string{
-		"Origin":             "https://evil.example/" + crossOriginSecret,
-		"Sec-Fetch-Site":     "same-origin",
-		"X-SSH-UI-Bootstrap": bootstrap,
+		"Origin":           "https://evil.example/" + crossOriginSecret,
+		"Sec-Fetch-Site":   "same-origin",
+		"X-SSHC-Bootstrap": bootstrap,
 	}, nil)
 	if crossOriginBootstrap.StatusCode != http.StatusForbidden {
 		t.Fatalf("cross-origin bootstrap = %d, want %d", crossOriginBootstrap.StatusCode, http.StatusForbidden)
@@ -130,9 +130,9 @@ func TestIntegratedBootstrapFlow(t *testing.T) {
 	readBody(crossOriginBootstrap)
 
 	bootstrapHeaders := map[string]string{
-		"Origin":             server.URL(),
-		"Sec-Fetch-Site":     "same-origin",
-		"X-SSH-UI-Bootstrap": bootstrap,
+		"Origin":           server.URL(),
+		"Sec-Fetch-Site":   "same-origin",
+		"X-SSHC-Bootstrap": bootstrap,
 	}
 	bootstrapResponse := do(http.MethodPost, server.URL()+"/api/v1/session/bootstrap", host, bootstrapHeaders, nil)
 	if bootstrapResponse.StatusCode != http.StatusOK {

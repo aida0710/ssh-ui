@@ -186,7 +186,7 @@ function buildApi(overrides: Partial<KeysApi> = {}): KeysApi {
           files: [
             {
               originalRelativePath: "id_old",
-              trashRelativePath: "ssh-ui/trash/20260805T090000.000-aabbccdd/id_old",
+              trashRelativePath: "sshc/trash/20260805T090000.000-aabbccdd/id_old",
               kind: "private_key",
               fingerprint: "SHA256:012345",
               permission: "0600",

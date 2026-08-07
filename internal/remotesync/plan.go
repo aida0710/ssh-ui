@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"ssh-ui/internal/storage"
+	"sshc/internal/storage"
 )
 
 // ErrNothingToApply reports that the remote snapshot already matches this

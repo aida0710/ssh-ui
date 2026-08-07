@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/storage"
+	"sshc/internal/storage"
 )
 
 func newTestWorkspace(t *testing.T) *storage.Workspace {
@@ -65,7 +65,7 @@ func TestValidateMetadataRefusesKeyMaterialAndUnknownPaths(t *testing.T) {
 
 	// A group name is a directory path, so a document that names one this
 	// application would refuse to create must not be believed either.
-	for _, name := range []string{"../escape", "", "ssh-ui", "work/"} {
+	for _, name := range []string{"../escape", "", "sshc", "work/"} {
 		withBadGroup := NewMetadata()
 		withBadGroup.Groups = []GroupMetadata{{Name: name}}
 		if err := ValidateMetadata(withBadGroup); !errors.Is(err, ErrMetadataGroup) {

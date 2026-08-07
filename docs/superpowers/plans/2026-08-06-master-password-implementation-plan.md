@@ -250,7 +250,7 @@ in Task 1 and used in every later task, including as the `{kind}` path segment.
   held. Reading the status deliberately does not count as use, or one forgotten
   browser tab would hold the vault open for as long as the machine is on.
 - **A test that the sealed sync settings never travel in a snapshot.** The plan
-  moved them out of `ssh-ui/secrets` and stated why; nothing asserted it, so the
+  moved them out of `sshc/secrets` and stated why; nothing asserted it, so the
   invariant rested on a literal list in `remotesync.Collect`.
 - **Two README corrections.** The passphrase boundary said passphrases are never
   stored, and the security section still said this foundation does not read

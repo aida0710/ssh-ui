@@ -10,7 +10,7 @@ export const defaultLocale: Locale = "en";
 // storage. It is named rather than derived so the end-to-end suite can allow
 // exactly this key and still fail on anything else — the assertion there is an
 // allowlist, not a count, because a count cannot tell a preference from a token.
-export const storageKey = "ssh-ui.language";
+export const storageKey = "sshc.language";
 
 export function isLocale(value: unknown): value is Locale {
   return typeof value === "string" && (locales as readonly string[]).includes(value);

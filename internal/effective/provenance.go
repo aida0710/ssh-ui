@@ -3,7 +3,7 @@ package effective
 import (
 	"strings"
 
-	"ssh-ui/internal/config"
+	"sshc/internal/config"
 )
 
 // How confidently a source can be explained.

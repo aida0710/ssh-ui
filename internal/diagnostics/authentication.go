@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"ssh-ui/internal/effective"
-	"ssh-ui/internal/platform"
+	"sshc/internal/effective"
+	"sshc/internal/platform"
 )
 
 const (

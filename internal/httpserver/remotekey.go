@@ -6,11 +6,11 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/api"
-	"ssh-ui/internal/diagnostics"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/remotekey"
-	"ssh-ui/internal/session"
+	"sshc/internal/api"
+	"sshc/internal/diagnostics"
+	"sshc/internal/platform"
+	"sshc/internal/remotekey"
+	"sshc/internal/session"
 )
 
 // RemoteKeyHandlers registers a public key on a remote host.

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/platform/macos"
+	"sshc/internal/platform"
+	"sshc/internal/platform/macos"
 )
 
 type terminalRunner struct {
@@ -102,7 +102,7 @@ func TestLaunchWithPasswordPassesEveryValueAsAnArgument(t *testing.T) {
 	terminal := macos.Terminal{Runner: runner, Program: "/usr/bin/osascript"}
 
 	err := terminal.LaunchWithPassword(context.Background(),
-		"bastion", "/Applications/ssh-ui", "http://127.0.0.1:5555/askpass", "one-time-token")
+		"bastion", "/Applications/sshc", "http://127.0.0.1:5555/askpass", "one-time-token")
 	if err != nil {
 		t.Fatalf("LaunchWithPassword = %v", err)
 	}
@@ -114,7 +114,7 @@ func TestLaunchWithPasswordPassesEveryValueAsAnArgument(t *testing.T) {
 	// The endpoint and the token are not here any more. The window runs this
 	// application's own command line, which asks for a token when it needs one,
 	// so no live token is ever written into the Terminal's scrollback.
-	want := []string{"-", "bastion", "/Applications/ssh-ui"}
+	want := []string{"-", "bastion", "/Applications/sshc"}
 	if !slices.Equal(command.Arguments, want) {
 		t.Errorf("arguments = %#v, want %#v", command.Arguments, want)
 	}
@@ -137,9 +137,9 @@ func TestLaunchWithPasswordPassesEveryValueAsAnArgument(t *testing.T) {
 func TestTerminalPasswordScriptCarriesNoCredential(t *testing.T) {
 	for _, absent := range []string{
 		"SSH_ASKPASS=",
-		"SSH_UI_ASKPASS_URL=",
-		"SSH_UI_ASKPASS_TOKEN=",
-		"SSH_UI_ASKPASS_ALIAS=",
+		"SSHC_ASKPASS_URL=",
+		"SSHC_ASKPASS_TOKEN=",
+		"SSHC_ASKPASS_ALIAS=",
 	} {
 		if strings.Contains(macos.TerminalPasswordScript, absent) {
 			t.Errorf("the script still carries %q into the window", absent)
@@ -156,11 +156,11 @@ func TestLaunchWithPasswordRefusesARelativeHelperAndAnUnsafeAlias(t *testing.T) 
 	terminal := macos.Terminal{Runner: runner, Program: "/usr/bin/osascript"}
 
 	if err := terminal.LaunchWithPassword(context.Background(),
-		"bastion", "ssh-ui", "http://127.0.0.1:1/askpass", "t"); !errors.Is(err, macos.ErrHelperPathNotAbsolute) {
+		"bastion", "sshc", "http://127.0.0.1:1/askpass", "t"); !errors.Is(err, macos.ErrHelperPathNotAbsolute) {
 		t.Errorf("a relative helper = %v, want ErrHelperPathNotAbsolute", err)
 	}
 	if err := terminal.LaunchWithPassword(context.Background(),
-		"bad alias", "/Applications/ssh-ui", "http://127.0.0.1:1/askpass", "t"); err == nil {
+		"bad alias", "/Applications/sshc", "http://127.0.0.1:1/askpass", "t"); err == nil {
 		t.Error("an unsafe alias was launched")
 	}
 	if len(runner.commands) != 0 {

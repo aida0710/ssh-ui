@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/config"
+	"sshc/internal/config"
 )
 
 // planAndApply is the whole of what a caller does, so the tests assert on the
@@ -23,13 +23,13 @@ func planAndApply(t *testing.T, source string, groups []string) (string, error) 
 	return string(file.Render()), nil
 }
 
-const expectedRegion = `# >>> ssh-ui groups (generated). Child groups first: OpenSSH keeps the first value it reads.
+const expectedRegion = `# >>> sshc groups (generated). Child groups first: OpenSSH keeps the first value it reads.
 # Edit through the UI; lines between these markers are replaced on the next save.
 Include connections/work/eu/*.conf
 Include connections/work/*.conf
 Include connections/home/*.conf
-Include groups.ssh-ui.conf
-# <<< ssh-ui groups
+Include groups.sshc.conf
+# <<< sshc groups
 `
 
 func TestPlanRegionEmitsOneIncludePerGroupChildFirst(t *testing.T) {
@@ -108,7 +108,7 @@ func TestPlanRegionAppendsWhenTheFileDeclaresNoBlockAtAll(t *testing.T) {
 // which put it inside the last Host block.
 func TestPlanRegionMovesARegionThatSitsInsideAHostBlock(t *testing.T) {
 	source := "Host bastion\n\tUser ops\n\n" + RegionStartMarker + "\n" +
-		"Include connections/work/*.conf\nInclude groups.ssh-ui.conf\n" + RegionEndMarker + "\n"
+		"Include connections/work/*.conf\nInclude groups.sshc.conf\n" + RegionEndMarker + "\n"
 
 	rendered, err := planAndApply(t, source, []string{"work"})
 	if err != nil {
@@ -140,12 +140,12 @@ func TestPlanRegionIgnoresAConditionalIncludeOfTheGroupsFile(t *testing.T) {
 	// An Include inside a Host block is read when connecting to that host and
 	// at no other time. Counting it as present left the generated settings file
 	// unreachable from everywhere else, which is what the previous planner did.
-	source := "Host bastion\n\tInclude groups.ssh-ui.conf\n"
+	source := "Host bastion\n\tInclude groups.sshc.conf\n"
 	rendered, err := planAndApply(t, source, []string{"work"})
 	if err != nil {
 		t.Fatalf("PlanRegion error = %v", err)
 	}
-	if !strings.Contains(rendered, "\nInclude groups.ssh-ui.conf\n") {
+	if !strings.Contains(rendered, "\nInclude groups.sshc.conf\n") {
 		t.Errorf("no top-level Include was planned:\n%s", rendered)
 	}
 }
@@ -175,8 +175,8 @@ func TestPlanRegionReplacesAnExistingRegionInPlace(t *testing.T) {
 
 func TestFindRegionRefusesAHalfMarkedRegion(t *testing.T) {
 	for _, source := range []string{
-		RegionStartMarker + "\nInclude groups.ssh-ui.conf\n",
-		"Include groups.ssh-ui.conf\n" + RegionEndMarker + "\n",
+		RegionStartMarker + "\nInclude groups.sshc.conf\n",
+		"Include groups.sshc.conf\n" + RegionEndMarker + "\n",
 	} {
 		if _, _, _, err := FindRegion(config.Parse([]byte(source))); !errors.Is(err, ErrRegionDamaged) {
 			t.Errorf("FindRegion(%q) error = %v, want ErrRegionDamaged", source, err)

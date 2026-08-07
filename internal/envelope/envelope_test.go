@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"ssh-ui/internal/envelope"
+	"sshc/internal/envelope"
 )
 
 // Seal works from a key alone, and opening is its mirror. A caller that already

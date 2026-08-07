@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"ssh-ui/internal/secret"
-	"ssh-ui/internal/storage"
+	"sshc/internal/secret"
+	"sshc/internal/storage"
 )
 
 func newService(t *testing.T) (*secret.Service, string) {
@@ -322,7 +322,7 @@ func TestTheVaultKeepsGenerationsAndNoneOfThemIsReadable(t *testing.T) {
 		}
 	}
 
-	backups := filepath.Join(home, ".ssh", "ssh-ui", "backups")
+	backups := filepath.Join(home, ".ssh", "sshc", "backups")
 	found := 0
 	_ = filepath.Walk(backups, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info == nil || info.IsDir() {
@@ -428,7 +428,7 @@ func TestTheServiceWillNotCrossTheNamespaces(t *testing.T) {
 
 // The object store's settings are sealed with the same master password and kept
 // beside the vault, not inside it. The vault travels — remotesync.Collect names
-// ssh-ui/secrets outright — and the key to the bucket must not be in the bucket.
+// sshc/secrets outright — and the key to the bucket must not be in the bucket.
 func TestSyncSettingsAreSealedBesideTheVaultAndNotInIt(t *testing.T) {
 	service, home := newService(t)
 	if err := service.Initialise(passphrase); err != nil {
@@ -614,7 +614,7 @@ func TestVerifyAnswersWhetherThatIsTheMasterPassword(t *testing.T) {
 // Every generational backup is ciphertext, and the vault is what opens it.
 //
 // A backup of a private key used to be a copy of that key sitting in
-// ~/.ssh/ssh-ui/backups/, which is why the writes that could produce one asked
+// ~/.ssh/sshc/backups/, which is why the writes that could produce one asked
 // for no backup at all and could therefore never be undone. Sealing them is
 // what buys back the undo.
 func TestBackupsAreSealedWithTheMasterPasswordAndOpenedWithIt(t *testing.T) {
@@ -700,7 +700,7 @@ func TestChangingTheMasterPasswordReSealsTheVaultTheSettingsAndTheBackups(t *tes
 	}
 
 	// And every backup opens with the new one.
-	backups := filepath.Join(home, ".ssh", "ssh-ui", "backups")
+	backups := filepath.Join(home, ".ssh", "sshc", "backups")
 	found := 0
 	if err := filepath.Walk(backups, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil || info == nil || info.IsDir() {

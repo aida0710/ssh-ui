@@ -10,11 +10,11 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/api"
-	"ssh-ui/internal/envelope"
-	"ssh-ui/internal/objectstore"
-	"ssh-ui/internal/remotesync"
-	"ssh-ui/internal/secret"
+	"sshc/internal/api"
+	"sshc/internal/envelope"
+	"sshc/internal/objectstore"
+	"sshc/internal/remotesync"
+	"sshc/internal/secret"
 )
 
 // SyncHandlers serves the remote snapshot.
@@ -105,7 +105,7 @@ func (h SyncHandlers) Status(c *echo.Context) error { return h.status(c) }
 // Configure points this machine at a bucket.
 //
 // The credentials are sealed with the master password and kept beside the vault
-// rather than inside it. The vault travels — Collect names ssh-ui/secrets
+// rather than inside it. The vault travels — Collect names sshc/secrets
 // outright — and a snapshot that carried the key to its own bucket would be a
 // bootstrapping convenience and a much larger blast radius: anybody who
 // obtained one snapshot could fetch every later one.

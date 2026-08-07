@@ -13,12 +13,12 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/api"
-	"ssh-ui/internal/diagnostics"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/remotekey"
-	"ssh-ui/internal/session"
-	"ssh-ui/internal/storage"
+	"sshc/internal/api"
+	"sshc/internal/diagnostics"
+	"sshc/internal/platform"
+	"sshc/internal/remotekey"
+	"sshc/internal/session"
+	"sshc/internal/storage"
 )
 
 const remoteKeyLine = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPr0nHGmQb99GXmUofxJM4BXGwGzO0jGsQFBspODbkvS fixture@example"
@@ -132,7 +132,7 @@ func TestRemoteKeyPlanDescribesTheChangeWithoutContactingAnything(t *testing.T) 
 func TestRemoteKeyRegisterNeedsAConfirmationAndSendsTheKeyOnStdin(t *testing.T) {
 	engine, credentials, runner := newRemoteKeyServer(t, []platform.Output{
 		{Stdout: []byte(remotekey.ProbeMarker + "\n")},
-		{Stdout: []byte("ssh-ui: added\n")},
+		{Stdout: []byte("sshc: added\n")},
 	})
 	body := mustMarshal(t, api.RemoteKeyRegisterRequest{
 		Alias: "bastion", KeyPath: "~/.ssh/id_ed25519.pub", PublicKey: remoteKeyLine, AcknowledgeExecutable: true,
@@ -181,7 +181,7 @@ func TestRemoteKeyRegisterNeedsAConfirmationAndSendsTheKeyOnStdin(t *testing.T) 
 func TestRemoteKeyRegisterRefusesAnUnacknowledgedExecutableDirective(t *testing.T) {
 	engine, credentials, runner := newRemoteKeyServer(t, []platform.Output{
 		{Stdout: []byte(remotekey.ProbeMarker + "\n")},
-		{Stdout: []byte("ssh-ui: added\n")},
+		{Stdout: []byte("sshc: added\n")},
 	})
 
 	token := diagnosticsToken(t, engine, credentials, session.ActionRemoteKeyRegister, "bastion")

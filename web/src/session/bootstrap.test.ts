@@ -21,7 +21,7 @@ describe("bootstrapSession", () => {
     expect(fetcher).toHaveBeenCalledWith("/api/v1/session/bootstrap", expect.objectContaining({
       method: "POST",
       credentials: "same-origin",
-      headers: expect.objectContaining({ "X-SSH-UI-Bootstrap": bootstrap }),
+      headers: expect.objectContaining({ "X-SSHC-Bootstrap": bootstrap }),
     }));
     expect(replaceState).toHaveBeenCalledWith(null, "", "/");
     expect(state.csrfToken).toBe(csrfToken);
@@ -99,7 +99,7 @@ describe("a reload", () => {
 
   // A cookie that no longer names a session cannot be recovered from here: a
   // bootstrap fragment is printed only by a starting process. The error says
-  // which of the two situations it is, because "restart ssh-ui" is the answer
+  // which of the two situations it is, because "restart sshc" is the answer
   // to one of them and not the other.
   it("says the session is gone when the cookie no longer names one", async () => {
     const fetcher = vi.fn().mockResolvedValue(new Response("", { status: 401 }));

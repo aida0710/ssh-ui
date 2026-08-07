@@ -305,7 +305,7 @@ async function issueAction(kind: string, target: string): Promise<string> {
 
 async function postJSON<T>(path: string, body: unknown, actionToken?: string): Promise<T> {
   const headers: Record<string, string> = { ...jsonHeaders };
-  if (actionToken) headers["X-SSH-UI-Action"] = actionToken;
+  if (actionToken) headers["X-SSHC-Action"] = actionToken;
   return apiClient.mutate<T>(path, { method: "POST", headers, body: JSON.stringify(body) });
 }
 

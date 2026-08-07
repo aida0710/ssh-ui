@@ -12,7 +12,7 @@ export const defaultTheme: Theme = "system";
 // The second — and last — key this application writes to persistent browser
 // storage. `i18n/locale.ts` holds the first, and `e2e/bootstrap.spec.ts`
 // allowlists both by name so that anything else appearing there fails.
-export const themeStorageKey = "ssh-ui.theme";
+export const themeStorageKey = "sshc.theme";
 
 export function isTheme(value: unknown): value is Theme {
   return typeof value === "string" && (themes as readonly string[]).includes(value);

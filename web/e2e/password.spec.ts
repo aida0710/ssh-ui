@@ -3,7 +3,7 @@ import { expect, openApplication, openSection, test } from "./support/environmen
 // The end-to-end suite drives the built binary against a throwaway HOME, so
 // this exercises the real vault file on a real disk. It never launches a
 // terminal and never starts ssh: the askpass helper's own behaviour is covered
-// by cmd/ssh-ui's tests, and the redemption rules by internal/secret's.
+// by cmd/sshc's tests, and the redemption rules by internal/secret's.
 test("stores a password for a host and never shows it again", async ({ page, installation }) => {
   await openApplication(page, installation);
   await openSection(page, "Connections");
@@ -22,7 +22,7 @@ test("stores a password for a host and never shows it again", async ({ page, ins
   await expect(page.locator("body")).not.toContainText("hunter2");
 
   // And the file on disk is ciphertext: neither the password nor the alias.
-  const sealed = await installation.read("ssh-ui/secrets");
+  const sealed = await installation.read("sshc/secrets");
   expect(sealed).not.toContain("hunter2");
   expect(sealed).not.toContain("bastion");
 });
@@ -33,7 +33,7 @@ test("locking the vault returns the application to its front door", async ({ pag
   await openApplication(page, installation);
   await openSection(page, "Secrets");
 
-  await page.getByRole("button", { name: "Lock ssh-ui" }).click();
+  await page.getByRole("button", { name: "Lock sshc" }).click();
 
   await expect(page.getByLabel("Master password", { exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Primary" })).toHaveCount(0);

@@ -1040,7 +1040,7 @@ type GetConfigHostParams struct {
 
 // RevealPrivateKeyParams defines parameters for RevealPrivateKey.
 type RevealPrivateKeyParams struct {
-	XSSHUIAction string `json:"X-SSH-UI-Action"`
+	XSSHCAction string `json:"X-SSHC-Action"`
 }
 
 // ListKnownHostsParams defines parameters for ListKnownHosts.
@@ -1050,12 +1050,12 @@ type ListKnownHostsParams struct {
 
 // BootstrapSessionParams defines parameters for BootstrapSession.
 type BootstrapSessionParams struct {
-	XSSHUIBootstrap string `json:"X-SSH-UI-Bootstrap"`
+	XSSHCBootstrap string `json:"X-SSHC-Bootstrap"`
 }
 
 // PurgeTrashEntryParams defines parameters for PurgeTrashEntry.
 type PurgeTrashEntryParams struct {
-	XSSHUIAction string `json:"X-SSH-UI-Action"`
+	XSSHCAction string `json:"X-SSHC-Action"`
 }
 
 // IssueActionTokenJSONRequestBody defines body for IssueActionToken for application/json ContentType.

@@ -146,7 +146,7 @@ describe("ConfigExplorer", () => {
       kind: "file_raw",
       path: "conf.d/30-lab.conf",
       base: "",
-      raw: "# created by ssh-ui\n",
+      raw: "# created by sshc\n",
     }));
   });
 });

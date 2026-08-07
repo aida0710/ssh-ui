@@ -14,10 +14,10 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/objectstore"
-	"ssh-ui/internal/remotesync"
-	"ssh-ui/internal/secret"
-	"ssh-ui/internal/storage"
+	"sshc/internal/objectstore"
+	"sshc/internal/remotesync"
+	"sshc/internal/secret"
+	"sshc/internal/storage"
 )
 
 func syncEngine(t *testing.T) (*echo.Echo, *remotesync.Service) {
@@ -78,7 +78,7 @@ func sendSync(t *testing.T, engine *echo.Echo, method, path, body string) *httpt
 }
 
 func settings(direction string) string {
-	body := `{"endpoint":"https://example.invalid","bucket":"ssh-ui",` +
+	body := `{"endpoint":"https://example.invalid","bucket":"sshc",` +
 		`"accessKeyId":"AKID","secretAccessKey":"secret"`
 	if direction != "" {
 		body += `,"direction":"` + direction + `"`

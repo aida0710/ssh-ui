@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"ssh-ui/internal/knownhosts"
-	"ssh-ui/internal/storage"
+	"sshc/internal/knownhosts"
+	"sshc/internal/storage"
 )
 
 func newTestService(t *testing.T, contents string, runner *stubRunner) *knownhosts.Service {

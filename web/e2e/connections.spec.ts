@@ -122,8 +122,8 @@ test("diagnoses the open connection from its own tab, and starts nothing unasked
   // This binary and the alias. It used to be five environment variables and a
   // flag, which is what the Terminal button assembles for itself and carried a
   // live one-time token into the shell's history.
-  await expect(panel.getByText(/ssh-ui bastion$/)).toBeVisible();
-  await expect(panel.getByText(/SSH_UI_ASKPASS_TOKEN/)).toHaveCount(0);
+  await expect(panel.getByText(/sshc bastion$/)).toBeVisible();
+  await expect(panel.getByText(/SSHC_ASKPASS_TOKEN/)).toHaveCount(0);
 
   // Still nothing launched: building the command and running it are separate
   // operations, and only the second one needs a confirmation.
@@ -167,7 +167,7 @@ test("edits the display order it stores, and shows a favourite in the tree", asy
     page.getByLabel(/Display order/).fill("-1"),
   ]);
   expect(ordered.status()).toBe(200);
-  expect(JSON.parse(await installation.read("ssh-ui/metadata.json")).hosts[0].order).toBe(-1);
+  expect(JSON.parse(await installation.read("sshc/metadata.json")).hosts[0].order).toBe(-1);
 
   // The favourite marker used to live only in the screen reader description,
   // so a sighted user could set one and then not find it. Clicking rather than
@@ -185,7 +185,7 @@ test("re-associates a note whose connection is gone, without guessing", async ({
   installation,
 }) => {
   await installation.write(
-    "ssh-ui/metadata.json",
+    "sshc/metadata.json",
     JSON.stringify({
       schemaVersion: 1,
       groups: [{ name: "work" }],
@@ -210,7 +210,7 @@ test("re-associates a note whose connection is gone, without guessing", async ({
 
   // The note moved to the host the user named, and the server's orphan flag is
   // not written back into the document it describes.
-  const saved = JSON.parse(await installation.read("ssh-ui/metadata.json"));
+  const saved = JSON.parse(await installation.read("sshc/metadata.json"));
   expect(saved.hosts).toHaveLength(1);
   expect(saved.hosts[0]).toMatchObject({
     identity: { path: "config", alias: "bastion" },

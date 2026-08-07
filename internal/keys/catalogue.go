@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"ssh-ui/internal/platform"
+	"sshc/internal/platform"
 )
 
 // DiagnosticAlgorithmQueryFailed is reported when the installed OpenSSH could

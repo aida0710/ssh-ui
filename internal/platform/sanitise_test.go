@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/platform"
+	"sshc/internal/platform"
 )
 
 func TestSanitiseHomePathsReplacesEveryOccurrence(t *testing.T) {

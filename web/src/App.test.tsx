@@ -58,7 +58,7 @@ describe("App", () => {
       />,
     );
 
-    await screen.findByRole("heading", { name: "SSH UI" });
+    await screen.findByRole("heading", { name: "sshc" });
 
     // The groups are named lists, not headings. A heading here would collide
     // with the panels' own <h2>s: Playwright matches accessible names by
@@ -130,7 +130,7 @@ describe("App", () => {
     await user.selectOptions(control, "dark");
 
     expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
-    expect(window.localStorage.getItem("ssh-ui.theme")).toBe("dark");
+    expect(window.localStorage.getItem("sshc.theme")).toBe("dark");
   });
 
   it("shows the starting status before session setup completes", () => {
@@ -148,7 +148,7 @@ describe("App", () => {
       />,
     );
 
-    expect(await screen.findByRole("heading", { name: "SSH UI" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "sshc" })).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("Local session active · 0.1.0");
     for (const label of [
       "Connections",
@@ -254,7 +254,7 @@ describe("App", () => {
     render(<App bootstrap={vi.fn().mockRejectedValue(new Error("rejected"))} health={vi.fn()} vault={openVault} />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Secure local session could not be started. Restart ssh-ui and use the newly opened tab.",
+      "Secure local session could not be started. Restart sshc and use the newly opened tab.",
     );
   });
 

@@ -36,11 +36,11 @@ var (
 	// and pretending otherwise would be a guess.
 	ErrWrongPassphrase = errors.New("the passphrase did not open this data")
 	// ErrNotAnEnvelope reports that the bytes are not a sealed blob at all.
-	ErrNotAnEnvelope = errors.New("these bytes are not an ssh-ui envelope")
+	ErrNotAnEnvelope = errors.New("these bytes are not an sshc envelope")
 	// ErrUnsupportedVersion reports a blob written by a newer build. It is a
 	// distinct error because "this build is too old" and "your data is gone"
 	// are different things to tell someone.
-	ErrUnsupportedVersion = errors.New("this data was written by a newer version of ssh-ui")
+	ErrUnsupportedVersion = errors.New("this data was written by a newer version of sshc")
 	// ErrCostRefused reports a header demanding more work than any envelope
 	// this application writes could need.
 	ErrCostRefused = errors.New("this data demands an unreasonable amount of work to open")

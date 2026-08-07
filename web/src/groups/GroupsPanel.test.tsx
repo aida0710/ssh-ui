@@ -51,7 +51,7 @@ beforeEach(() => {
   vi.mocked(configApi.overview).mockResolvedValue(overview as never);
   vi.mocked(configApi.preview).mockResolvedValue({
     operation: "config.groups",
-    diffs: [{ path: "groups.ssh-ui.conf", created: true, lines: [{ op: "insert", text: "Host build01", newLine: 1 }] }],
+    diffs: [{ path: "groups.sshc.conf", created: true, lines: [{ op: "insert", text: "Host build01", newLine: 1 }] }],
     effective: [{ alias: "build01", changes: [{ keyword: "Port", before: [], after: ["2222"] }] }],
   } as never);
 });
@@ -97,7 +97,7 @@ describe("GroupsPanel", () => {
 
     vi.mocked(configApi.save).mockResolvedValue({
       transactionId: "t1",
-      written: ["groups.ssh-ui.conf"],
+      written: ["groups.sshc.conf"],
       preview: { operation: "config.groups", diffs: [] },
     } as never);
     await user.click(screen.getByRole("button", { name: "Save groups" }));

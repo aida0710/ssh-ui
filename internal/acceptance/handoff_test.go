@@ -7,16 +7,16 @@ import (
 	"path/filepath"
 	"testing"
 
-	"ssh-ui/internal/handoff"
-	"ssh-ui/internal/httpserver"
+	"sshc/internal/handoff"
+	"sshc/internal/httpserver"
 )
 
-// The running application leaves a handoff, and `ssh-ui <alias>` is what reads
+// The running application leaves a handoff, and `sshc <alias>` is what reads
 // it. This drives the same request that command makes.
 func TestTheHandoffLetsTheCommandLineAskForOneConnection(t *testing.T) {
 	f := newFixture(t)
 
-	stateDir := filepath.Join(f.root, "ssh-ui")
+	stateDir := filepath.Join(f.root, "sshc")
 	found, err := handoff.Read(stateDir)
 	if err != nil {
 		t.Fatalf("the running application left no handoff: %v", err)

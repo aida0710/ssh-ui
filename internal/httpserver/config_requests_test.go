@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/application"
+	"sshc/internal/application"
 )
 
 func TestValidatePathParameterRejectsTraversalAndControlCharacters(t *testing.T) {

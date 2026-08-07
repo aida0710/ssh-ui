@@ -5,7 +5,7 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/application"
+	"sshc/internal/application"
 )
 
 // ConfigHandlers serves the configuration, metadata and history endpoints.

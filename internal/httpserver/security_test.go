@@ -10,7 +10,7 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/session"
+	"sshc/internal/session"
 )
 
 func TestSecurityRejectsCrossSiteAndWrongHost(t *testing.T) {

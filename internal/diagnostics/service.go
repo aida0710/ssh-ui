@@ -6,10 +6,10 @@ import (
 	"net"
 	"path/filepath"
 
-	"ssh-ui/internal/config"
-	"ssh-ui/internal/effective"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/storage"
+	"sshc/internal/config"
+	"sshc/internal/effective"
+	"sshc/internal/platform"
+	"sshc/internal/storage"
 )
 
 // ConfigFile is one file of the Include graph, summarised for display.

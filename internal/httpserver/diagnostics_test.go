@@ -14,11 +14,11 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/api"
-	"ssh-ui/internal/diagnostics"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/session"
-	"ssh-ui/internal/storage"
+	"sshc/internal/api"
+	"sshc/internal/diagnostics"
+	"sshc/internal/platform"
+	"sshc/internal/session"
+	"sshc/internal/storage"
 )
 
 // stubRunner answers without starting a process and records every argv it was

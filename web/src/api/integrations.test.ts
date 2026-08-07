@@ -57,8 +57,8 @@ describe("integrationsApi.addKnownHost", () => {
     const [addPath, addInit] = fetcher.mock.calls[1] as [string, RequestInit];
     expect(addPath).toBe("/api/v1/known-hosts/add");
     const headers = new Headers(addInit.headers);
-    expect(headers.get("X-SSH-UI-Action")).toBe(actionToken);
-    expect(headers.get("X-SSH-UI-CSRF")).toBe(csrfToken);
+    expect(headers.get("X-SSHC-Action")).toBe(actionToken);
+    expect(headers.get("X-SSHC-CSRF")).toBe(csrfToken);
     expect(JSON.parse(String(addInit.body))).toEqual({
       ...candidate,
       expectedFingerprint: "SHA256:proof",

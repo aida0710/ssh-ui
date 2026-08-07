@@ -31,7 +31,7 @@ func TestEncodeAndInspectPrivateKeyRoundTrip(t *testing.T) {
 			if err != nil {
 				t.Fatalf("GeneratePrivateKey(%s, %d) error = %v", test.algorithm, test.bits, err)
 			}
-			encoded, err := EncodePrivateKey(privateKey, "ssh-ui@test", []byte(test.passphrase))
+			encoded, err := EncodePrivateKey(privateKey, "sshc@test", []byte(test.passphrase))
 			if err != nil {
 				t.Fatalf("EncodePrivateKey error = %v", err)
 			}
@@ -60,7 +60,7 @@ func TestEncodeAndInspectPrivateKeyRoundTrip(t *testing.T) {
 			if err != nil {
 				t.Fatalf("DecodePrivateKey error = %v", err)
 			}
-			publicKey, err := EncodePublicKey(decoded, "ssh-ui@test")
+			publicKey, err := EncodePublicKey(decoded, "sshc@test")
 			if err != nil {
 				t.Fatalf("EncodePublicKey error = %v", err)
 			}
@@ -71,8 +71,8 @@ func TestEncodeAndInspectPrivateKeyRoundTrip(t *testing.T) {
 			if info.Fingerprint != material.Fingerprint {
 				t.Errorf("public fingerprint = %q, private fingerprint = %q", info.Fingerprint, material.Fingerprint)
 			}
-			if info.Comment != "ssh-ui@test" {
-				t.Errorf("Comment = %q, want %q", info.Comment, "ssh-ui@test")
+			if info.Comment != "sshc@test" {
+				t.Errorf("Comment = %q, want %q", info.Comment, "sshc@test")
 			}
 			if info.IsCertificate {
 				t.Errorf("public key was classified as a certificate")
@@ -86,7 +86,7 @@ func TestDecodePrivateKeyReportsPassphraseProblemsDistinctly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GeneratePrivateKey error = %v", err)
 	}
-	encrypted, err := EncodePrivateKey(privateKey, "ssh-ui@test", []byte("correct horse"))
+	encrypted, err := EncodePrivateKey(privateKey, "sshc@test", []byte("correct horse"))
 	if err != nil {
 		t.Fatalf("EncodePrivateKey error = %v", err)
 	}

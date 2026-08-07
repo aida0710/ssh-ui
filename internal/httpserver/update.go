@@ -6,8 +6,8 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/api"
-	"ssh-ui/internal/selfupdate"
+	"sshc/internal/api"
+	"sshc/internal/selfupdate"
 )
 
 // UpdateHandlers report the version and whether a newer one is published.

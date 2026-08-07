@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"ssh-ui/internal/config"
-	"ssh-ui/internal/storage"
+	"sshc/internal/config"
+	"sshc/internal/storage"
 )
 
 const mainConfig = `# personal config

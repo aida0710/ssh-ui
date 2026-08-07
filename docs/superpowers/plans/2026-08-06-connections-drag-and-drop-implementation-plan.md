@@ -359,7 +359,7 @@ export type DragPayload =
   | { kind: "connection"; path: string; alias: string; group: string }
   | { kind: "group"; name: string };
 
-export const dragMimeType = "application/x-ssh-ui-drag";
+export const dragMimeType = "application/x-sshc-drag";
 
 export function canDrop(payload: DragPayload, target: string, groups: string[]): boolean;
 ```
@@ -462,7 +462,7 @@ export type DragPayload =
 // A private type on dataTransfer, so a drag that began outside this page is not
 // mistaken for one of these. It is only ever read from `types`, because a
 // dragover handler may not read the data itself.
-export const dragMimeType = "application/x-ssh-ui-drag";
+export const dragMimeType = "application/x-sshc-drag";
 
 // MaxGroupSegments in internal/application/grouppath.go. The limit comes from
 // the key scanner, not from anything here.

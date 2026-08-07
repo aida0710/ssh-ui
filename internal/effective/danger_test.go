@@ -6,8 +6,8 @@ import (
 	"sort"
 	"testing"
 
-	"ssh-ui/internal/config"
-	"ssh-ui/internal/effective"
+	"sshc/internal/config"
+	"sshc/internal/effective"
 )
 
 // fakeLoader serves configuration files from a map so no test reads a disk.

@@ -37,7 +37,7 @@ describe("apiClient", () => {
       .resolves.toEqual({ ok: true });
 
     const request = fetcher.mock.calls[0]?.[1] as RequestInit;
-    expect(new Headers(request.headers).get("X-SSH-UI-CSRF")).toBe("c".repeat(43));
+    expect(new Headers(request.headers).get("X-SSHC-CSRF")).toBe("c".repeat(43));
     expect(request.credentials).toBe("same-origin");
   });
 

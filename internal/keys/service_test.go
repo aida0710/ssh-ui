@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/storage"
+	"sshc/internal/platform"
+	"sshc/internal/storage"
 )
 
 // steppingClock advances one second per call so two transactions in one test
@@ -700,7 +700,7 @@ func TestRegisterRecordsNothingWhenTheAgentRefuses(t *testing.T) {
 }
 
 func TestValidateFileNameRefusesNamesTheApplicationDependsOn(t *testing.T) {
-	reserved := []string{"config", "known_hosts", "authorized_keys", "ssh-ui", "environment", "rc"}
+	reserved := []string{"config", "known_hosts", "authorized_keys", "sshc", "environment", "rc"}
 	for _, name := range reserved {
 		if err := ValidateFileName(name); !errors.Is(err, ErrInvalidFileName) {
 			t.Errorf("ValidateFileName(%q) = %v, want ErrInvalidFileName", name, err)
@@ -1062,7 +1062,7 @@ func TestRegisterWithoutAStoredPassphraseSendsWhatItWasGiven(t *testing.T) {
 // A passphrase change can be undone now.
 //
 // It kept no backup because the previous contents are a private key and a copy
-// of one in ~/.ssh/ssh-ui/backups/ was worse than the lost undo. The backups
+// of one in ~/.ssh/sshc/backups/ was worse than the lost undo. The backups
 // are sealed with the master password now, so that reason is gone — and this is
 // the write where an accident is least recoverable: get the new passphrase
 // wrong and the key is a key nobody can open.

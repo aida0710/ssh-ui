@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"ssh-ui/internal/config"
-	"ssh-ui/internal/storage"
+	"sshc/internal/config"
+	"sshc/internal/storage"
 )
 
 // SyntaxError refuses a save whose new contents cannot be represented. It
@@ -190,7 +190,7 @@ func (s *Service) validate(request storage.Request) error {
 			}
 			continue
 		}
-		// Anything else under ssh-ui/ is application state, never read by
+		// Anything else under sshc/ is application state, never read by
 		// OpenSSH and never part of the Include graph.
 		if isInside(stateDir, cleaned) {
 			continue
@@ -210,7 +210,7 @@ func (s *Service) validate(request storage.Request) error {
 
 	// A request that touches nothing OpenSSH reads cannot have changed the
 	// Include graph, so it is not asked to produce a resolvable one. The vault
-	// lives under ssh-ui/ and the whole application is behind it: without this,
+	// lives under sshc/ and the whole application is behind it: without this,
 	// a workspace whose config file is missing or broken is a workspace where
 	// the master password cannot be set, and the tool for fixing a broken
 	// configuration would refuse to start because the configuration is broken.
@@ -271,7 +271,7 @@ func (s *Service) touchesConfiguration(request storage.Request) bool {
 
 // isInside reports whether path is directory itself or below it. It compares
 // cleaned paths component-wise rather than by string prefix, so a sibling
-// named ssh-ui-backup is not mistaken for a child of ssh-ui.
+// named sshc-backup is not mistaken for a child of sshc.
 func isInside(directory, path string) bool {
 	if path == directory {
 		return true

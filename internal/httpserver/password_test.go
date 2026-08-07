@@ -13,10 +13,10 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/api"
-	"ssh-ui/internal/application"
-	"ssh-ui/internal/secret"
-	"ssh-ui/internal/storage"
+	"sshc/internal/api"
+	"sshc/internal/application"
+	"sshc/internal/secret"
+	"sshc/internal/storage"
 )
 
 const testPassphrase = "correct horse battery staple"

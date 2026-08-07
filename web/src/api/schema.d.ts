@@ -1698,7 +1698,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                "X-SSH-UI-Bootstrap": string;
+                "X-SSHC-Bootstrap": string;
             };
             path?: never;
             cookie?: never;
@@ -2769,7 +2769,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                "X-SSH-UI-Action": string;
+                "X-SSHC-Action": string;
             };
             path: {
                 keyId: string;
@@ -3060,7 +3060,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                "X-SSH-UI-Action": string;
+                "X-SSHC-Action": string;
             };
             path: {
                 entryId: string;

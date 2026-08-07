@@ -4,15 +4,15 @@ import (
 	"errors"
 	"strings"
 
-	"ssh-ui/internal/config"
+	"sshc/internal/config"
 )
 
 // The generated region is delimited by two comment lines. They are ordinary
 // OpenSSH comments, so a reader who has never heard of this application still
 // sees what the block is and that editing it is pointless.
 const (
-	RegionStartMarker = "# >>> ssh-ui groups (generated). Child groups first: OpenSSH keeps the first value it reads."
-	RegionEndMarker   = "# <<< ssh-ui groups"
+	RegionStartMarker = "# >>> sshc groups (generated). Child groups first: OpenSSH keeps the first value it reads."
+	RegionEndMarker   = "# <<< sshc groups"
 	regionNote        = "# Edit through the UI; lines between these markers are replaced on the next save."
 )
 

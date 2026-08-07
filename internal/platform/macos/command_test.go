@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/platform/macos"
+	"sshc/internal/platform"
+	"sshc/internal/platform/macos"
 )
 
 // These tests run only local, non-networked system programs with a fixed argv:
@@ -138,12 +138,12 @@ func TestRunOutputReplacesTheChildEnvironmentWhenAsked(t *testing.T) {
 	replaced, err := runner.RunOutput(context.Background(), platform.Command{
 		Path:      "/usr/bin/env",
 		Arguments: []string{},
-		Env:       []string{"HOME=/tmp/ssh-ui-test"},
+		Env:       []string{"HOME=/tmp/sshc-test"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.TrimSpace(string(replaced.Stdout)); got != "HOME=/tmp/ssh-ui-test" {
+	if got := strings.TrimSpace(string(replaced.Stdout)); got != "HOME=/tmp/sshc-test" {
 		t.Fatalf("child environment = %q, want exactly the supplied entry", got)
 	}
 }

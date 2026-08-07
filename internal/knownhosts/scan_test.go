@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/knownhosts"
-	"ssh-ui/internal/platform"
+	"sshc/internal/knownhosts"
+	"sshc/internal/platform"
 )
 
 type stubRunner struct {

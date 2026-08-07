@@ -129,7 +129,7 @@ describe("HostInspector", () => {
   it("lists only the values that came from elsewhere", () => {
     const detail = build();
     detail.effective.entries = [
-      { keyword: "Port", values: ["22"], source: { path: "groups.ssh-ui.conf", line: 3 } },
+      { keyword: "Port", values: ["22"], source: { path: "groups.sshc.conf", line: 3 } },
       { keyword: "User", values: ["aida"], source: { path: "connections/work/bastion.conf", line: 2 } },
     ];
     render(<HostInspector detail={detail} onMetadata={vi.fn()} />);

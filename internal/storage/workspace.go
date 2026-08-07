@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	ErrOutsideWorkspace = errors.New("path is outside the ssh-ui workspace")
+	ErrOutsideWorkspace = errors.New("path is outside the sshc workspace")
 	ErrSymlinkPath      = errors.New("path contains a symbolic link")
 	ErrMissingDirectory = errors.New("parent directory does not exist")
 	ErrNotDirectory     = errors.New("path component is not a directory")
@@ -54,7 +54,7 @@ func (w *Workspace) Home() string { return w.home }
 func (w *Workspace) Root() string { return w.root }
 
 // StateDir is the directory holding journals, history and backups.
-func (w *Workspace) StateDir() string { return filepath.Join(w.root, "ssh-ui") }
+func (w *Workspace) StateDir() string { return filepath.Join(w.root, "sshc") }
 
 // Contains reports whether candidate is the root or lives below it.
 func (w *Workspace) Contains(candidate string) bool {

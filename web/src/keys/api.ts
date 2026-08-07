@@ -313,7 +313,7 @@ export const keysApi: KeysApi = {
     return validateReveal(
       await apiClient.mutate<unknown>(`/api/v1/keys/${encodeURIComponent(keyId)}/reveal`, {
         method: "POST",
-        headers: { "X-SSH-UI-Action": token },
+        headers: { "X-SSHC-Action": token },
       }),
     );
   },
@@ -377,7 +377,7 @@ export const keysApi: KeysApi = {
     const token = await issueAction(PURGE_ACTION_KIND, entryId);
     return apiClient.mutate<PurgeTrashResponse>(`/api/v1/trash/${encodeURIComponent(entryId)}`, {
       method: "DELETE",
-      headers: { "X-SSH-UI-Action": token },
+      headers: { "X-SSHC-Action": token },
     });
   },
 };

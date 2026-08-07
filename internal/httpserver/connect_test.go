@@ -7,7 +7,7 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/handoff"
+	"sshc/internal/handoff"
 )
 
 func connectEngine(t *testing.T, handlers ConnectHandlers) *echo.Echo {

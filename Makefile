@@ -51,7 +51,7 @@ VERSION ?= $(shell git describe --tags --exact-match 2>/dev/null || echo dev)
 build:
 	npm run build --prefix web
 	mkdir -p bin
-	go build -trimpath -ldflags "-X main.version=$(VERSION)" -o bin/ssh-ui ./cmd/ssh-ui
+	go build -trimpath -ldflags "-X main.version=$(VERSION)" -o bin/sshc ./cmd/sshc
 
 # The integration suite runs against a real S3 implementation and a real sshd,
 # in containers. It answers two questions the hermetic suite cannot: what a
@@ -70,12 +70,12 @@ SSH_USER   ?= tester
 SSH_PASS   ?= integration-only-password
 
 integration-up:
-	@printf '{"identities":[{"name":"ssh-ui","credentials":[{"accessKey":"$(S3_KEY)","secretKey":"$(S3_SECRET)"}],"actions":["Admin","Read","Write","List","Tagging"]}]}' > .integration-s3.json
-	docker rm -f ssh-ui-s3 ssh-ui-sshd >/dev/null 2>&1 || true
-	docker run -d --name ssh-ui-s3 -p 127.0.0.1:$(S3_PORT):8333 \
+	@printf '{"identities":[{"name":"sshc","credentials":[{"accessKey":"$(S3_KEY)","secretKey":"$(S3_SECRET)"}],"actions":["Admin","Read","Write","List","Tagging"]}]}' > .integration-s3.json
+	docker rm -f sshc-s3 sshc-sshd >/dev/null 2>&1 || true
+	docker run -d --name sshc-s3 -p 127.0.0.1:$(S3_PORT):8333 \
 		-v "$(PWD)/.integration-s3.json:/etc/seaweedfs/s3.json:ro" $(S3_IMAGE) \
 		server -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json -dir=/data
-	docker run -d --name ssh-ui-sshd -p 127.0.0.1:$(SSHD_PORT):2222 \
+	docker run -d --name sshc-sshd -p 127.0.0.1:$(SSHD_PORT):2222 \
 		-e PASSWORD_ACCESS=true -e USER_NAME=$(SSH_USER) -e USER_PASSWORD=$(SSH_PASS) \
 		$(SSHD_IMAGE)
 	@echo "waiting for the containers to answer"
@@ -100,7 +100,7 @@ integration-up:
 # sshd with is its business and not something worth hard-coding — the first
 # attempt guessed the documented path and the image had moved it.
 integration-sshd-relax:
-	@docker exec ssh-ui-sshd sh -c ' \
+	@docker exec sshc-sshd sh -c ' \
 		found=$$(find /config /etc /defaults -name sshd_config 2>/dev/null); \
 		if [ -z "$$found" ]; then \
 			echo "this image has no sshd_config; the penalty cannot be turned off" >&2; \
@@ -111,7 +111,7 @@ integration-sshd-relax:
 				printf "\nPerSourcePenalties no\n" >> "$$configuration"; \
 		done; \
 		echo "PerSourcePenalties no ->" $$found'
-	docker restart ssh-ui-sshd
+	docker restart sshc-sshd
 	@for i in $$(seq 1 60); do \
 		ssh-keyscan -p $(SSHD_PORT) 127.0.0.1 2>/dev/null | grep -q . && break; sleep 1; done
 	@# The check is the failure mode itself. Eight scans in a row from one
@@ -130,19 +130,19 @@ integration-sshd-relax:
 # fixtures, not secrets. The file is ignored rather than committed so its name
 # never becomes a place somebody puts a real key.
 integration-down:
-	docker rm -f ssh-ui-s3 ssh-ui-sshd >/dev/null 2>&1 || true
+	docker rm -f sshc-s3 sshc-sshd >/dev/null 2>&1 || true
 	rm -f .integration-s3.json
 
 # The bucket has to exist before the first PUT; the client deliberately has no
 # CreateBucket, because the application never makes one either.
 integration: build
-	SSH_UI_TEST_S3_ENDPOINT=http://127.0.0.1:$(S3_PORT) \
-	SSH_UI_TEST_S3_KEY=$(S3_KEY) \
-	SSH_UI_TEST_S3_SECRET=$(S3_SECRET) \
-	SSH_UI_TEST_S3_BUCKET=ssh-ui-test \
-	SSH_UI_TEST_SSH_ADDR=127.0.0.1:$(SSHD_PORT) \
-	SSH_UI_TEST_SSH_USER=$(SSH_USER) \
-	SSH_UI_TEST_SSH_PASSWORD=$(SSH_PASS) \
+	SSHC_TEST_S3_ENDPOINT=http://127.0.0.1:$(S3_PORT) \
+	SSHC_TEST_S3_KEY=$(S3_KEY) \
+	SSHC_TEST_S3_SECRET=$(S3_SECRET) \
+	SSHC_TEST_S3_BUCKET=sshc-test \
+	SSHC_TEST_SSH_ADDR=127.0.0.1:$(SSHD_PORT) \
+	SSHC_TEST_SSH_USER=$(SSH_USER) \
+	SSHC_TEST_SSH_PASSWORD=$(SSH_PASS) \
 	go test ./internal/objectstore ./internal/remotesync ./internal/sshintegration -count=1 -v
 
 # The binary goes to one stable path, and that matters more here than it
@@ -156,11 +156,11 @@ INSTALL_DIR ?= $(HOME)/.local/bin
 
 install: build
 	mkdir -p "$(INSTALL_DIR)"
-	install -m 0755 bin/ssh-ui "$(INSTALL_DIR)/ssh-ui"
-	@echo "installed $(INSTALL_DIR)/ssh-ui"
+	install -m 0755 bin/sshc "$(INSTALL_DIR)/sshc"
+	@echo "installed $(INSTALL_DIR)/sshc"
 	@case ":$$PATH:" in \
 		*":$(INSTALL_DIR):"*) ;; \
-		*) echo "note: $(INSTALL_DIR) is not on PATH; add it to run 'ssh-ui <alias>' by name" ;; \
+		*) echo "note: $(INSTALL_DIR) is not on PATH; add it to run 'sshc <alias>' by name" ;; \
 	esac
 
 # For a source checkout, updating is fetching and installing again. It is not
@@ -175,5 +175,5 @@ update:
 	$(MAKE) install
 
 uninstall:
-	rm -f "$(INSTALL_DIR)/ssh-ui"
-	@echo "removed $(INSTALL_DIR)/ssh-ui"
+	rm -f "$(INSTALL_DIR)/sshc"
+	@echo "removed $(INSTALL_DIR)/sshc"

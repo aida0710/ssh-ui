@@ -1,4 +1,4 @@
-module ssh-ui
+module sshc
 
 go 1.26.0
 

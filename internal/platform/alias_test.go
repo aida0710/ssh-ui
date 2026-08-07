@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/platform"
+	"sshc/internal/platform"
 )
 
 func TestValidateAliasAcceptsOnlyTheSafeCharacterSet(t *testing.T) {

@@ -1,6 +1,6 @@
 package application
 
-import "ssh-ui/internal/config"
+import "sshc/internal/config"
 
 // Visit is one directive line reached while reading the configuration the way
 // OpenSSH reads it.

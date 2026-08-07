@@ -147,7 +147,7 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
     if (newPath === "") return;
     const path = newPath;
     try {
-      await configApi.save({ kind: "file_raw", path, base: "", raw: "# created by ssh-ui\n" });
+      await configApi.save({ kind: "file_raw", path, base: "", raw: "# created by sshc\n" });
       setNewPath("");
       setProblem(null);
       await reload();

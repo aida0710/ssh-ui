@@ -35,7 +35,7 @@
 - Consumes: nothing.
 - Produces:
   - `type Theme = "system" | "light" | "dark"` and `const themes: readonly Theme[]`
-  - `const themeStorageKey = "ssh-ui.theme"`
+  - `const themeStorageKey = "sshc.theme"`
   - `function isTheme(value: unknown): value is Theme`
   - `function detectTheme(): Theme` — stored choice, else `"system"`
   - `function rememberTheme(theme: Theme): void`
@@ -137,7 +137,7 @@ export const defaultTheme: Theme = "system";
 // The second — and last — key this application writes to persistent browser
 // storage. `i18n/locale.ts` holds the first, and `e2e/bootstrap.spec.ts`
 // allowlists both by name so that anything else appearing there fails.
-export const themeStorageKey = "ssh-ui.theme";
+export const themeStorageKey = "sshc.theme";
 
 export function isTheme(value: unknown): value is Theme {
   return typeof value === "string" && (themes as readonly string[]).includes(value);
@@ -595,10 +595,10 @@ In `web/e2e/bootstrap.spec.ts`, replace the assertion block at lines 110–121 w
   // nothing but the two preference keys may exist.
   const stored = await page.evaluate(() => ({
     keys: Object.keys(window.localStorage).sort(),
-    language: window.localStorage.getItem("ssh-ui.language"),
+    language: window.localStorage.getItem("sshc.language"),
     session: window.sessionStorage.length,
   }));
-  expect(stored.keys).toEqual(["ssh-ui.language"]);
+  expect(stored.keys).toEqual(["sshc.language"]);
   expect(["en", "ja"]).toContain(stored.language);
   expect(stored.session).toBe(0);
 });
@@ -624,16 +624,16 @@ test("keeps the chosen appearance, and writes nothing else", async ({ page, inst
 
   const stored = await page.evaluate(() => ({
     keys: Object.keys(window.localStorage).sort(),
-    theme: window.localStorage.getItem("ssh-ui.theme"),
+    theme: window.localStorage.getItem("sshc.theme"),
   }));
-  expect(stored.keys).toEqual(["ssh-ui.language", "ssh-ui.theme"]);
+  expect(stored.keys).toEqual(["sshc.language", "sshc.theme"]);
   expect(stored.theme).toBe("system");
 ```
 
 Then in the language-reload test, replace line 152 with:
 
 ```ts
-  expect(await page.evaluate(() => Object.keys(window.localStorage).sort())).toEqual(["ssh-ui.language"]);
+  expect(await page.evaluate(() => Object.keys(window.localStorage).sort())).toEqual(["sshc.language"]);
 ```
 
 - [ ] **Step 9: Add the shell test**
@@ -659,7 +659,7 @@ In `web/src/App.test.tsx`, inside `describe("App", …)`, add:
     await user.selectOptions(control, "dark");
 
     expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
-    expect(window.localStorage.getItem("ssh-ui.theme")).toBe("dark");
+    expect(window.localStorage.getItem("sshc.theme")).toBe("dark");
   });
 ```
 
@@ -1121,7 +1121,7 @@ Add to `web/src/App.test.tsx` inside `describe("App", …)`:
       />,
     );
 
-    await screen.findByRole("heading", { name: "SSH UI" });
+    await screen.findByRole("heading", { name: "sshc" });
 
     // The groups are named lists, not headings. A heading here would collide
     // with the panels' own <h2>s: Playwright matches accessible names by
@@ -1754,7 +1754,7 @@ describe("HostInspector", () => {
   it("lists only the values that came from elsewhere", () => {
     const detail = detailWith();
     detail.effective.entries = [
-      { keyword: "Port", values: ["22"], source: { path: "groups.ssh-ui.conf", line: 3 } },
+      { keyword: "Port", values: ["22"], source: { path: "groups.sshc.conf", line: 3 } },
       { keyword: "User", values: ["aida"], source: { path: "connections/work/bastion.conf", line: 2 } },
     ] as HostDetail["effective"]["entries"];
     render(<HostInspector detail={detail} onMetadata={vi.fn()} />);
@@ -2151,7 +2151,7 @@ Expected: PASS, 2 new tests.
 `README.md` describes the UI's boundaries. Add to the section that covers the Connections UI:
 
 ```markdown
-- 外観はライトとダークの 2 つで、既定は OS に従います。選択はヘッダーの「外観」で上書きでき、`localStorage` の `ssh-ui.theme` に記録します。ブラウザの永続ストレージへ書くのはこれと `ssh-ui.language` の 2 つだけで、`e2e/bootstrap.spec.ts` がその 2 つ以外が現れたら落ちる allowlist で守っています。
+- 外観はライトとダークの 2 つで、既定は OS に従います。選択はヘッダーの「外観」で上書きでき、`localStorage` の `sshc.theme` に記録します。ブラウザの永続ストレージへ書くのはこれと `sshc.language` の 2 つだけで、`e2e/bootstrap.spec.ts` がその 2 つ以外が現れたら落ちる allowlist で守っています。
 - 色は状態のためだけに使います。accent はその画面の主要な操作 1 つに限り、琥珀は注意、赤は壊す操作、緑はローカルセッションが生きていることを指します。選択されているだけの行に色は付きません。
 - 接続の詳細のうち、`~/.ssh/config` に書かれるもの（グループ、コメント、alias）は主画面に、`metadata.json` にしかないもの（色、タグ、お気に入り、表示順）と注意・継承元は右のインスペクタにあります。インスペクタは既定で閉じており、中身に注意がある時だけ開閉ボタンに印が付きます。キーボードショートカットはありません — ⌥⌘I は Chrome・Firefox・Safari のいずれでも開発者ツールが先に取るためです。
 ```

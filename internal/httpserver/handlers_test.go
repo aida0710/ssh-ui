@@ -10,8 +10,8 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/api"
-	"ssh-ui/internal/session"
+	"sshc/internal/api"
+	"sshc/internal/session"
 )
 
 func TestBootstrapHandlerSetsStrictSessionCookieAndRejectsReplay(t *testing.T) {
@@ -32,7 +32,7 @@ func TestBootstrapHandlerSetsStrictSessionCookieAndRejectsReplay(t *testing.T) {
 		request.Host = "127.0.0.1:43123"
 		request.Header.Set(echo.HeaderOrigin, "http://127.0.0.1:43123")
 		request.Header.Set("Sec-Fetch-Site", "same-origin")
-		request.Header.Set("X-SSH-UI-Bootstrap", token)
+		request.Header.Set("X-SSHC-Bootstrap", token)
 		response := httptest.NewRecorder()
 		e.ServeHTTP(response, request)
 		return response
@@ -87,7 +87,7 @@ func TestBootstrapHandlerRejectsWrongTokenWithoutCookie(t *testing.T) {
 	request.Host = "127.0.0.1:43123"
 	request.Header.Set(echo.HeaderOrigin, "http://127.0.0.1:43123")
 	request.Header.Set("Sec-Fetch-Site", "same-origin")
-	request.Header.Set("X-SSH-UI-Bootstrap", "wrong-token")
+	request.Header.Set("X-SSHC-Bootstrap", "wrong-token")
 	response := httptest.NewRecorder()
 	e.ServeHTTP(response, request)
 

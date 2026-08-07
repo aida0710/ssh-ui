@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"ssh-ui/internal/platform"
+	"sshc/internal/platform"
 )
 
 // ErrTerminalUnavailable reports that the automation program is missing.
@@ -34,7 +34,7 @@ end run
 // TerminalPasswordScript opens the connection through this application's own
 // command line.
 //
-// It runs `ssh-ui <alias>`, which asks the running application for a one-time
+// It runs `sshc <alias>`, which asks the running application for a one-time
 // token and execs ssh with the environment set. The window used to be given
 // that environment directly — five variables and the token among them — which
 // put a live credential-bearing token into the Terminal's scrollback and into

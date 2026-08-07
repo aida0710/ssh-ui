@@ -170,7 +170,7 @@ describe("SecretsPanel", () => {
     render(<SecretsPanel api={api} />);
 
     const section = await screen.findByRole("region", { name: "Start at login" });
-    const toggle = within(section).getByRole("checkbox", { name: "Start ssh-ui when I log in" });
+    const toggle = within(section).getByRole("checkbox", { name: "Start sshc when I log in" });
     expect(toggle).not.toBeChecked();
 
     await user.click(toggle);

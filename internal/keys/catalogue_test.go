@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"ssh-ui/internal/platform"
+	"sshc/internal/platform"
 )
 
 // fakeRunner records what would have been run and returns a canned output. No

@@ -5,8 +5,8 @@
 実施前に必ず読むこと。
 
 - 実施は使い捨ての `HOME` で行い、本番の `~/.ssh` では行いません。
-  `work="$(mktemp -d)"; cp -R ~/.ssh "$work/.ssh"; HOME="$work" ./bin/ssh-ui`
-- 本番の `~/.ssh` を使う項目（Keychain と Terminal）は、事前に `~/.ssh` と `~/.ssh/ssh-ui` を別ディレクトリへ退避してから行います。
+  `work="$(mktemp -d)"; cp -R ~/.ssh "$work/.ssh"; HOME="$work" ./bin/sshc`
+- 本番の `~/.ssh` を使う項目（Keychain と Terminal）は、事前に `~/.ssh` と `~/.ssh/sshc` を別ディレクトリへ退避してから行います。
 - 各項目に日付、macOS と OpenSSH のバージョン、結果を記録します。
 
 ## M1. 実リモートホストへの接続テスト
@@ -48,7 +48,7 @@
 
 1. 本番の `~/.ssh` をコピーした使い捨て `HOME` で起動する。
 2. Connections、Config、Groups、Keys、Known Hosts、Remote Keys、Diagnostics、History の各画面を開くだけで、何も保存しない。
-3. 終了後、`diff -r ~/.ssh "$work/.ssh"` が `ssh-ui/` 配下以外で差分を出さないことを確認する。
+3. 終了後、`diff -r ~/.ssh "$work/.ssh"` が `sshc/` 配下以外で差分を出さないことを確認する。
 4. 期待: 読み取りだけで既存ファイルが 1 バイトも変わらない。
 
 ## M6. 鍵の移動と実 macOS Keychain

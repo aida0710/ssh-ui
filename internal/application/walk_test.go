@@ -3,7 +3,7 @@ package application
 import (
 	"testing"
 
-	"ssh-ui/internal/config"
+	"sshc/internal/config"
 )
 
 func TestWalkDirectivesFollowsIncludesAtTheirLinePosition(t *testing.T) {

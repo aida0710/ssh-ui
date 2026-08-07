@@ -11,13 +11,13 @@ import (
 	"testing"
 	"time"
 
-	"ssh-ui/internal/session"
+	"sshc/internal/session"
 )
 
 // guardedRoute is one operation that starts a process, changes a file outside
 // the ordinary edit path, or hands out key material.
 //
-// Every one of them takes its confirmation in the X-SSH-UI-Action header: the
+// Every one of them takes its confirmation in the X-SSHC-Action header: the
 // merged tree settled on one delivery spelling, so the plan's tokenInBody
 // variant has no route to describe.
 type guardedRoute struct {
@@ -521,7 +521,7 @@ func TestNothingInTheBackupDirectoryIsReadable(t *testing.T) {
 		t.Fatalf("save = %d (%s); there would be no backup to inspect", status, body)
 	}
 
-	backups := filepath.Join(f.root, "ssh-ui", "backups")
+	backups := filepath.Join(f.root, "sshc", "backups")
 	found := 0
 	err := filepath.WalkDir(backups, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil || entry.IsDir() {

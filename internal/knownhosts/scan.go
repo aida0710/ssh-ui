@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"ssh-ui/internal/platform"
+	"sshc/internal/platform"
 )
 
 // UnverifiedNotice accompanies every scan result.

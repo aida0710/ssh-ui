@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/diagnostics"
-	"ssh-ui/internal/effective"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/storage"
+	"sshc/internal/diagnostics"
+	"sshc/internal/effective"
+	"sshc/internal/platform"
+	"sshc/internal/storage"
 )
 
 const serviceConfig = "Host bastion\n" +
@@ -283,9 +283,9 @@ func TestInspectReplacesTheHomeDirectoryInEvaluatedValues(t *testing.T) {
 // type. This one connects the same way: it asks the running application for a
 // stored password and falls back to a plain ssh when there is none.
 func TestTerminalCommandIsThisBinaryAndTheAlias(t *testing.T) {
-	service := &diagnostics.Service{Self: "/Applications/ssh-ui"}
+	service := &diagnostics.Service{Self: "/Applications/sshc"}
 	command, launchable, warning := service.TerminalCommand("bastion")
-	if command != "/Applications/ssh-ui bastion" || !launchable || warning != "" {
+	if command != "/Applications/sshc bastion" || !launchable || warning != "" {
 		t.Errorf("TerminalCommand = %q, %v, %q", command, launchable, warning)
 	}
 

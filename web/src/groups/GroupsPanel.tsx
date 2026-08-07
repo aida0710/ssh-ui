@@ -80,7 +80,7 @@ const segmentPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 export function isValidGroupName(name: string): boolean {
   const segments = name.split("/");
   if (segments.length === 0 || segments.length > 6) return false;
-  const reserved = new Set(["ssh-ui", "config", "known_hosts", "authorized_keys", "connections", "keys"]);
+  const reserved = new Set(["sshc", "config", "known_hosts", "authorized_keys", "connections", "keys"]);
   return segments.every(
     (segment) => segmentPattern.test(segment) && !reserved.has(segment.toLowerCase()),
   );
@@ -320,7 +320,7 @@ export function GroupsPanel({ onInspector }: GroupsPanelProps = {}) {
         {t("groups.directoryNote", { connections: "connections", keys: "keys" })}
       </p>
       <p className="text-xs text-ink-muted">
-        {t("groups.compileNote", { file: loaded.groupsFile ?? "groups.ssh-ui.conf" })}
+        {t("groups.compileNote", { file: loaded.groupsFile ?? "groups.sshc.conf" })}
       </p>
       <p className="text-xs text-ink-faint">{t("groups.orderNote")}</p>
       {localError === "" ? null : <Notice tone="danger">{localError}</Notice>}

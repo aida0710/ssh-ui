@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"ssh-ui/internal/storage"
+	"sshc/internal/storage"
 )
 
 var (

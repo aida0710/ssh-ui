@@ -24,7 +24,7 @@ const (
 	// opens with the key the service holds now rather than the one they were
 	// sealed with.
 	BackupDirectoryName = backupDirectoryName
-	temporaryPrefix     = ".ssh-ui-"
+	temporaryPrefix     = ".sshc-"
 
 	statusStaging    = "staging"
 	statusStaged     = "staged"
@@ -65,7 +65,7 @@ type Precondition struct {
 // SkipBackup suppresses the generational backup of the contents this change
 // replaces. It exists for one reason: the previous contents may be a private
 // key, and the design refuses to leave a second copy of key material in
-// ~/.ssh/ssh-ui/backups/. A change that opts out is still journalled and can
+// ~/.ssh/sshc/backups/. A change that opts out is still journalled and can
 // still be completed after an interruption, but it can no longer be rolled
 // back, and Rollback says so instead of pretending otherwise. The zero value
 // keeps the ordinary behaviour, so an existing caller is unaffected.

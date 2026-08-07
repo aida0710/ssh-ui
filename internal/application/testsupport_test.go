@@ -6,7 +6,7 @@ import (
 	"sort"
 	"testing"
 
-	"ssh-ui/internal/config"
+	"sshc/internal/config"
 )
 
 const testRoot = "/home/tester/.ssh"

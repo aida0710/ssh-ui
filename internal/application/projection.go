@@ -4,7 +4,7 @@ import (
 	"errors"
 	"strings"
 
-	"ssh-ui/internal/config"
+	"sshc/internal/config"
 )
 
 // ErrHostNotFound reports that no Host block in the graph declares the

@@ -18,15 +18,15 @@ test("declares a group in the entry file and moves a connection into it", async 
   // The declaration is an ordinary Include line inside two marker comments, so
   // a reader who has never heard of this application can see what it is.
   const entry = await installation.read("config");
-  expect(entry).toContain("# >>> ssh-ui groups (generated).");
+  expect(entry).toContain("# >>> sshc groups (generated).");
   expect(entry).toContain("Include connections/work/*.conf\n");
-  expect(entry).toContain("Include groups.ssh-ui.conf\n");
-  expect(entry).toContain("# <<< ssh-ui groups");
+  expect(entry).toContain("Include groups.sshc.conf\n");
+  expect(entry).toContain("# <<< sshc groups");
   // The region sits above every Host line. An Include written below one belongs
   // to that block, and OpenSSH applies an included file's options only when the
   // block matches, so anywhere lower declares the groups to one host and to
   // nothing else.
-  expect(entry.indexOf("# >>> ssh-ui groups")).toBeLessThan(entry.indexOf("Host "));
+  expect(entry.indexOf("# >>> sshc groups")).toBeLessThan(entry.indexOf("Host "));
 
   await openSection(page, "Connections");
   await page

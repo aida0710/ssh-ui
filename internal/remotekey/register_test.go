@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/effective"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/remotekey"
+	"sshc/internal/effective"
+	"sshc/internal/platform"
+	"sshc/internal/remotekey"
 )
 
 const (
@@ -71,7 +71,7 @@ func TestParsePublicKeyAcceptsOnlyOneValidLine(t *testing.T) {
 func TestRegisterProbesThenSendsTheKeyOnStandardInput(t *testing.T) {
 	runner := &scriptedRunner{outputs: []platform.Output{
 		{Stdout: []byte(remotekey.ProbeMarker + "\n")},
-		{Stdout: []byte("ssh-ui: added\n")},
+		{Stdout: []byte("sshc: added\n")},
 	}}
 	key, _, err := remotekey.ParsePublicKey(keyLine)
 	if err != nil {
@@ -132,7 +132,7 @@ func TestRegisterReportsAnExistingKeyAndAnUnsupportedRemote(t *testing.T) {
 
 	existing := &scriptedRunner{outputs: []platform.Output{
 		{Stdout: []byte(remotekey.ProbeMarker + "\n")},
-		{Stdout: []byte("ssh-ui: already-present\n")},
+		{Stdout: []byte("sshc: already-present\n")},
 	}}
 	result, err := newService(existing).Register(context.Background(), effective.Report{}, "bastion", key, false)
 	if err != nil {

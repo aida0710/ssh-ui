@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"ssh-ui/internal/objectstore"
+	"sshc/internal/objectstore"
 )
 
 // The published AWS Signature Version 4 test suite gives, for each case, the

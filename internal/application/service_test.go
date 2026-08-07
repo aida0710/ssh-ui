@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"ssh-ui/internal/storage"
+	"sshc/internal/storage"
 )
 
 const serviceMainConfig = `# personal configuration
@@ -457,7 +457,7 @@ func TestHistoryListsCommitsAndRestoreRevertsOneFile(t *testing.T) {
 }
 
 // snapshotConfigFiles reads every configuration file in the workspace, skipping
-// the ssh-ui state directory whose journal, history and backups are expected to
+// the sshc state directory whose journal, history and backups are expected to
 // change on every commit. It exists to prove a move touches nothing else.
 func snapshotConfigFiles(t *testing.T, workspace *storage.Workspace) map[string]string {
 	t.Helper()

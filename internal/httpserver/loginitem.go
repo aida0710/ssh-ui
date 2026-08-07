@@ -6,7 +6,7 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/api"
+	"sshc/internal/api"
 )
 
 // LoginItemController turns "start at login" on and off.

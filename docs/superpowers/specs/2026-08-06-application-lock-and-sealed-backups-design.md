@@ -49,7 +49,7 @@ believed to do more than it does is worse than no lock.
 `storage.Manager` takes an injected sealer, so the storage layer never imports
 the secret package — the same reasoning that keeps `keys` from importing it to
 ask where a passphrase lives. Every backup written under
-`~/.ssh/ssh-ui/backups/` is ciphertext. Rollback and history restore open them
+`~/.ssh/sshc/backups/` is ciphertext. Rollback and history restore open them
 with the same key, which the gate guarantees is there.
 
 Because the gate makes the vault open whenever a write is possible, there is no
@@ -61,8 +61,8 @@ runtime state, and it fails loudly rather than writing plaintext.
 `SkipBackup` exists because a copy of the previous contents may be key material.
 Sealing removes that reason. It comes off:
 
-- the vault write (`ssh-ui/secrets`),
-- the sync settings write (`ssh-ui/sync-settings`),
+- the vault write (`sshc/secrets`),
+- the sync settings write (`sshc/sync-settings`),
 - the key passphrase change,
 - the private keys a pull applies from a snapshot.
 
@@ -75,11 +75,11 @@ overwrites a local key is exactly the case where the previous key is what you
 want back.
 
 The backups do not travel: `remotesync.Collect` walks `~/.ssh/keys` and names
-the files it takes, and `ssh-ui/backups` is not among them.
+the files it takes, and `sshc/backups` is not among them.
 
 ## The bucket
 
-- **A path, defaulting to the root.** The objects are pinned under `ssh-ui/`
+- **A path, defaulting to the root.** The objects are pinned under `sshc/`
   inside a bucket the user already named for this application. The path becomes
   a setting, empty by default, stored sealed with the rest.
 - **An honest name.** `workspace.snapshot` says nothing: inside the envelope it

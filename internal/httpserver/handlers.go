@@ -6,8 +6,8 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/api"
-	"ssh-ui/internal/session"
+	"sshc/internal/api"
+	"sshc/internal/session"
 )
 
 type Handlers struct {
@@ -46,7 +46,7 @@ func (h Handlers) Bootstrap(c *echo.Context) error {
 		return problem(c, http.StatusInternalServerError, "bootstrap_failed")
 	}
 
-	credentials, err := h.Sessions.Bootstrap(c.Request().Header.Get("X-SSH-UI-Bootstrap"))
+	credentials, err := h.Sessions.Bootstrap(c.Request().Header.Get("X-SSHC-Bootstrap"))
 	switch {
 	case errors.Is(err, session.ErrInvalidBootstrap):
 		return problem(c, http.StatusUnauthorized, "invalid_bootstrap")

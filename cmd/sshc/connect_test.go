@@ -13,19 +13,19 @@ func TestWhatCountsAsAConnectInvocation(t *testing.T) {
 		alias string
 		ok    bool
 	}{
-		{[]string{"ssh-ui", "tv-recoding"}, "tv-recoding", true},
-		{[]string{"ssh-ui", "mdx-aida-serv-1"}, "mdx-aida-serv-1", true},
+		{[]string{"sshc", "tv-recoding"}, "tv-recoding", true},
+		{[]string{"sshc", "mdx-aida-serv-1"}, "mdx-aida-serv-1", true},
 		// The application, not a connection.
-		{[]string{"ssh-ui"}, "", false},
-		{[]string{"ssh-ui", "-open=false"}, "", false},
-		{[]string{"ssh-ui", "--open=false"}, "", false},
+		{[]string{"sshc"}, "", false},
+		{[]string{"sshc", "-open=false"}, "", false},
+		{[]string{"sshc", "--open=false"}, "", false},
 		// The one word that is a command rather than a host.
-		{[]string{"ssh-ui", "open"}, "", false},
+		{[]string{"sshc", "open"}, "", false},
 		// The helper OpenSSH runs, which takes the prompt as its argument.
-		{[]string{"ssh-ui", "askpass"}, "", false},
-		{[]string{"ssh-ui", "askpass", "password:"}, "", false},
+		{[]string{"sshc", "askpass"}, "", false},
+		{[]string{"sshc", "askpass", "password:"}, "", false},
 		// Two words is not an alias; it is a command this does not have.
-		{[]string{"ssh-ui", "connect", "bastion"}, "", false},
+		{[]string{"sshc", "connect", "bastion"}, "", false},
 	} {
 		alias, ok := connectInvocation(test.argv)
 		if ok != test.ok || alias != test.alias {
@@ -46,10 +46,10 @@ func TestConnectEnvironmentReplacesWhatItSetsRatherThanAppending(t *testing.T) {
 		"HOME=/Users/tester",
 		"SSH_ASKPASS=/tmp/not-ours",
 		"SSH_ASKPASS_REQUIRE=never",
-		"SSH_UI_ASKPASS_TOKEN=stale",
+		"SSHC_ASKPASS_TOKEN=stale",
 		"PATH=/usr/bin",
 	}
-	built := connectEnvironment(inherited, "/Users/tester/.local/bin/ssh-ui",
+	built := connectEnvironment(inherited, "/Users/tester/.local/bin/sshc",
 		"http://127.0.0.1:1/askpass", "the-one-time-token", "bastion")
 
 	counted := map[string][]string{}
@@ -61,7 +61,7 @@ func TestConnectEnvironmentReplacesWhatItSetsRatherThanAppending(t *testing.T) {
 		counted[name] = append(counted[name], value)
 	}
 	for name, want := range map[string]string{
-		"SSH_ASKPASS":         "/Users/tester/.local/bin/ssh-ui",
+		"SSH_ASKPASS":         "/Users/tester/.local/bin/sshc",
 		"SSH_ASKPASS_REQUIRE": "force",
 		URLVariable:           "http://127.0.0.1:1/askpass",
 		TokenVariable:         "the-one-time-token",
@@ -88,7 +88,7 @@ func TestConnectEnvironmentReplacesWhatItSetsRatherThanAppending(t *testing.T) {
 // Without a token nothing is armed, and a stale variable from the user's
 // environment must not arm it either.
 func TestConnectEnvironmentDropsStaleArmingWhenNothingIsStored(t *testing.T) {
-	built := connectEnvironment([]string{"SSH_ASKPASS=/tmp/not-ours", "SSH_UI_ASKPASS_TOKEN=stale"}, "", "", "", "")
+	built := connectEnvironment([]string{"SSH_ASKPASS=/tmp/not-ours", "SSHC_ASKPASS_TOKEN=stale"}, "", "", "", "")
 	for _, entry := range built {
 		for _, name := range []string{"SSH_ASKPASS=", TokenVariable + "=", URLVariable + "=", AliasVariable + "="} {
 			if strings.HasPrefix(entry, name) {

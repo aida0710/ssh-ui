@@ -1,4 +1,4 @@
-# SSH UI Key Vault Implementation Plan
+# sshc Key Vault Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -18,7 +18,7 @@
 - The application never persists a passphrase. Retention is delegated to macOS Keychain or `ssh-agent` by an explicit user action only.
 - Never log key material, passphrases, request bodies, cookies, session tokens, action tokens, or full filesystem paths. Errors returned to the caller may name a path; log lines must not.
 - Managed files are written `0600`; a stricter existing permission is preserved and a looser one is tightened. Managed directories are `0700`.
-- `~/.ssh/ssh-ui/` is engine state. Every path under it — including `backups/`, `trash/`, `journal/` and `history/` — is excluded from the key inventory, from agent registration and from configuration suggestions.
+- `~/.ssh/sshc/` is engine state. Every path under it — including `backups/`, `trash/`, `journal/` and `history/` — is excluded from the key inventory, from agent registration and from configuration suggestions.
 - Every mutation goes through `storage.Manager` so it is journalled, backed up where a backup is appropriate, recoverable, and recorded in history. The audit fact that a private key was revealed is recorded in history without the key material.
 - OpenAPI is the contract: add the endpoint and schema to `api/openapi.yaml` first, then run `make generate`. Keep the schema inside the subset `api/README.md` validated for oapi-codegen v2.7.0 — object, array, string, integer, boolean, `const`, `required`, `$ref`, response and header. Do not use `enum`, `format: date-time`, `oneOf`, `anyOf` or `nullable`; validate value sets at runtime in Go instead.
 - Reads use the committed `storage.OSFileSystem`, whose `ReadFile` opens with `O_NOFOLLOW`. A symbolic link is displayed but never followed for reading key material or for editing.
@@ -166,7 +166,7 @@ func TestEncodeAndInspectPrivateKeyRoundTrip(t *testing.T) {
 			if err != nil {
 				t.Fatalf("GeneratePrivateKey(%s, %d) error = %v", test.algorithm, test.bits, err)
 			}
-			encoded, err := EncodePrivateKey(privateKey, "ssh-ui@test", []byte(test.passphrase))
+			encoded, err := EncodePrivateKey(privateKey, "sshc@test", []byte(test.passphrase))
 			if err != nil {
 				t.Fatalf("EncodePrivateKey error = %v", err)
 			}
@@ -195,7 +195,7 @@ func TestEncodeAndInspectPrivateKeyRoundTrip(t *testing.T) {
 			if err != nil {
 				t.Fatalf("DecodePrivateKey error = %v", err)
 			}
-			publicKey, err := EncodePublicKey(decoded, "ssh-ui@test")
+			publicKey, err := EncodePublicKey(decoded, "sshc@test")
 			if err != nil {
 				t.Fatalf("EncodePublicKey error = %v", err)
 			}
@@ -206,8 +206,8 @@ func TestEncodeAndInspectPrivateKeyRoundTrip(t *testing.T) {
 			if info.Fingerprint != material.Fingerprint {
 				t.Errorf("public fingerprint = %q, private fingerprint = %q", info.Fingerprint, material.Fingerprint)
 			}
-			if info.Comment != "ssh-ui@test" {
-				t.Errorf("Comment = %q, want %q", info.Comment, "ssh-ui@test")
+			if info.Comment != "sshc@test" {
+				t.Errorf("Comment = %q, want %q", info.Comment, "sshc@test")
 			}
 			if info.IsCertificate {
 				t.Errorf("public key was classified as a certificate")
@@ -221,7 +221,7 @@ func TestDecodePrivateKeyReportsPassphraseProblemsDistinctly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GeneratePrivateKey error = %v", err)
 	}
-	encrypted, err := EncodePrivateKey(privateKey, "ssh-ui@test", []byte("correct horse"))
+	encrypted, err := EncodePrivateKey(privateKey, "sshc@test", []byte("correct horse"))
 	if err != nil {
 		t.Fatalf("EncodePrivateKey error = %v", err)
 	}
@@ -711,7 +711,7 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/storage"
+	"sshc/internal/storage"
 )
 
 // newTestWorkspace builds an isolated ~/.ssh under t.TempDir(). No test in this
@@ -782,9 +782,9 @@ func TestScanClassifiesByContentNotByFileName(t *testing.T) {
 	writeFixture(t, workspace, "config", []byte("Host example\n  HostName example.test\n"), 0o600)
 	writeFixture(t, workspace, "known_hosts", []byte("example.test "+string(publicKey)), 0o600)
 	writeFixture(t, workspace, "exposed", privateKey, 0o644)
-	writeFixture(t, workspace, "ssh-ui/trash/20260805T090000.000-aabbccdd/secret", privateKey, 0o600)
-	writeFixture(t, workspace, "ssh-ui/backups/20260805T090000.000-aabbccdd/config", []byte("Host old\n"), 0o600)
-	writeFixture(t, workspace, "ssh-ui/journal/20260805T090000.000-aabbccdd.json", []byte("{}\n"), 0o600)
+	writeFixture(t, workspace, "sshc/trash/20260805T090000.000-aabbccdd/secret", privateKey, 0o600)
+	writeFixture(t, workspace, "sshc/backups/20260805T090000.000-aabbccdd/config", []byte("Host old\n"), 0o600)
+	writeFixture(t, workspace, "sshc/journal/20260805T090000.000-aabbccdd.json", []byte("{}\n"), 0o600)
 
 	inventory, err := NewScanner(workspace).Scan()
 	if err != nil {
@@ -947,8 +947,8 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"ssh-ui/internal/config"
-	"ssh-ui/internal/storage"
+	"sshc/internal/config"
+	"sshc/internal/storage"
 )
 
 // Kind classifies a file under ~/.ssh by what it contains, never by its name.
@@ -985,7 +985,7 @@ const (
 	// Everything below it — backups, trash, journal and history — is engine
 	// state, so it never appears in the inventory, is never registered with an
 	// agent and is never suggested as an IdentityFile.
-	StateDirectoryName = "ssh-ui"
+	StateDirectoryName = "sshc"
 
 	maxScanDepth   = 8
 	maxScanEntries = 4096
@@ -1316,7 +1316,7 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/storage"
+	"sshc/internal/storage"
 )
 
 func TestBuildReferenceIndexFindsHostsThatNameAKey(t *testing.T) {
@@ -1386,13 +1386,13 @@ func TestAttachReferencesNeverPointsAtEngineState(t *testing.T) {
 	workspace := newTestWorkspace(t)
 	privateKey, _, _ := newKeyPairFixture(t, "")
 	writeFixture(t, workspace, "work", privateKey, 0o600)
-	writeFixture(t, workspace, "ssh-ui/trash/20260805T090000.000-aabbccdd/work", privateKey, 0o600)
+	writeFixture(t, workspace, "sshc/trash/20260805T090000.000-aabbccdd/work", privateKey, 0o600)
 	writeFixture(t, workspace, "config", []byte(""+
 		"Host live\n"+
 		"  IdentityFile ~/.ssh/work\n"+
 		"\n"+
 		"Host stale\n"+
-		"  IdentityFile ~/.ssh/ssh-ui/trash/20260805T090000.000-aabbccdd/work\n"), 0o600)
+		"  IdentityFile ~/.ssh/sshc/trash/20260805T090000.000-aabbccdd/work\n"), 0o600)
 
 	graph, err := storage.NewResolver(workspace).Resolve(filepath.Join(workspace.Root(), "config"))
 	if err != nil {
@@ -1435,8 +1435,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"ssh-ui/internal/config"
-	"ssh-ui/internal/storage"
+	"sshc/internal/config"
+	"sshc/internal/storage"
 )
 
 // Reference is one configuration directive that names a key file.
@@ -1683,7 +1683,7 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/platform"
+	"sshc/internal/platform"
 )
 
 // These tests run /bin/cat and /usr/bin/false. Neither touches ~/.ssh, the
@@ -1822,7 +1822,7 @@ import (
 	"os"
 	"os/exec"
 
-	"ssh-ui/internal/platform"
+	"sshc/internal/platform"
 )
 
 // passthroughVariables are the only environment variables a child receives. A
@@ -1922,7 +1922,7 @@ import (
 	"testing"
 	"time"
 
-	"ssh-ui/internal/platform"
+	"sshc/internal/platform"
 )
 
 // fakeExecutor records what would have been run and returns a canned result.
@@ -2070,7 +2070,7 @@ import (
 	"strings"
 	"time"
 
-	"ssh-ui/internal/platform"
+	"sshc/internal/platform"
 )
 
 // DiagnosticAlgorithmQueryFailed is reported when the installed OpenSSH could
@@ -2220,8 +2220,8 @@ import (
 	"testing"
 	"time"
 
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/storage"
+	"sshc/internal/platform"
+	"sshc/internal/storage"
 )
 
 // steppingClock advances one second per call so two transactions in one test
@@ -2492,8 +2492,8 @@ import (
 	"strings"
 	"time"
 
-	"ssh-ui/internal/config"
-	"ssh-ui/internal/storage"
+	"sshc/internal/config"
+	"sshc/internal/storage"
 )
 
 var (
@@ -2818,7 +2818,7 @@ git commit -m "feat: generate keys in process and hand hardware methods to Termi
 - Produces: `storage.PendingEntry` fields `Action string` and `Target string`, and `storage.Pending` field `CanRollback bool`.
 - Produces: `keys.RevealResult{ID, RelativePath, Contents, Encrypted, Fingerprint, TransactionID}` and `(*keys.Service).Reveal(keyID string) (RevealResult, error)`.
 
-Why a move rather than a copy plus a delete: the design gives private keys the trash, not the generational backup directory, precisely so key material is never duplicated. A `rename(2)` inside the same filesystem moves the file without writing its bytes anywhere new and without changing its permission bits. A `Change` plus a `Removal` would put a second copy of the key in `~/.ssh/ssh-ui/backups/`, which is the outcome the design set out to avoid.
+Why a move rather than a copy plus a delete: the design gives private keys the trash, not the generational backup directory, precisely so key material is never duplicated. A `rename(2)` inside the same filesystem moves the file without writing its bytes anywhere new and without changing its permission bits. A `Change` plus a `Removal` would put a second copy of the key in `~/.ssh/sshc/backups/`, which is the outcome the design set out to avoid.
 
 - [ ] **Step 1: Write the failing move and removal tests**
 
@@ -2912,7 +2912,7 @@ func TestCommitRejectsAMoveOntoAnExistingFileOrAChangedSource(t *testing.T) {
 
 func TestCommitRemovesAFileWithoutWritingABackup(t *testing.T) {
 	manager, workspace := newTestManager(t)
-	target := writeWorkspaceFile(t, workspace, "ssh-ui/trash/entry-1/id_work", "PRIVATE KEY BYTES\n", 0o600)
+	target := writeWorkspaceFile(t, workspace, "sshc/trash/entry-1/id_work", "PRIVATE KEY BYTES\n", 0o600)
 
 	result, err := manager.Commit(Request{
 		Operation: "key.purge",
@@ -3037,8 +3037,8 @@ func TestRollbackReversesAnInterruptedMove(t *testing.T) {
 
 func TestRollbackRefusesToPretendACommittedRemovalCanBeUndone(t *testing.T) {
 	workspace := newTestWorkspace(t)
-	first := writeWorkspaceFile(t, workspace, "ssh-ui/trash/entry-1/id_work", "FIRST\n", 0o600)
-	second := writeWorkspaceFile(t, workspace, "ssh-ui/trash/entry-1/id_work.pub", "SECOND\n", 0o600)
+	first := writeWorkspaceFile(t, workspace, "sshc/trash/entry-1/id_work", "FIRST\n", 0o600)
+	second := writeWorkspaceFile(t, workspace, "sshc/trash/entry-1/id_work.pub", "SECOND\n", 0o600)
 	failure := errors.New("injected remove failure")
 	workspace.fileSystem = faultyFileSystem{
 		FileSystem: OSFileSystem{},
@@ -3867,7 +3867,7 @@ import (
 	"testing"
 	"time"
 
-	"ssh-ui/internal/platform"
+	"sshc/internal/platform"
 )
 
 func newTrashService(t *testing.T) (*Service, string) {
@@ -4130,7 +4130,7 @@ import (
 	"strings"
 	"time"
 
-	"ssh-ui/internal/storage"
+	"sshc/internal/storage"
 )
 
 const (
@@ -4232,7 +4232,7 @@ func (service *Service) newEntryID() (string, error) {
 }
 
 // Trash soft-deletes a key by moving it, and the files that belong to the same
-// key pair, into ~/.ssh/ssh-ui/trash/<entry>/ in one journalled transaction.
+// key pair, into ~/.ssh/sshc/trash/<entry>/ in one journalled transaction.
 //
 // The move is a rename inside the same filesystem, so the bytes are never
 // copied and the file keeps the permission bits it already had. The trash entry
@@ -4623,7 +4623,7 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/platform"
+	"sshc/internal/platform"
 )
 
 // recordingExecutor captures the command that would have run. No test in this
@@ -4825,7 +4825,7 @@ import (
 	"strings"
 	"time"
 
-	"ssh-ui/internal/platform"
+	"sshc/internal/platform"
 )
 
 const (
@@ -5112,7 +5112,7 @@ type ServiceOptions struct {
 }
 ```
 
-`NewService` gains `agent: options.Agent`, and the file imports `"ssh-ui/internal/platform"`.
+`NewService` gains `agent: options.Agent`, and the file imports `"sshc/internal/platform"`.
 
 Append the registration use case:
 
@@ -5138,7 +5138,7 @@ type RegisterResult struct {
 // its passphrase in the login Keychain.
 //
 // Only a key the inventory currently contains can be registered, so a trashed
-// key and anything under ~/.ssh/ssh-ui are unreachable by construction. The
+// key and anything under ~/.ssh/sshc are unreachable by construction. The
 // passphrase is overwritten before Register returns, and the registration is
 // recorded in history without it.
 func (service *Service) Register(ctx context.Context, request RegisterRequest) (RegisterResult, error) {
@@ -5614,7 +5614,7 @@ Add these paths to `api/openapi.yaml` under the existing `paths:` block, after `
           in: path
           required: true
           schema: { type: string, minLength: 32, maxLength: 32 }
-        - name: X-SSH-UI-Action
+        - name: X-SSHC-Action
           in: header
           required: true
           schema: { type: string, minLength: 43, maxLength: 43 }
@@ -5712,7 +5712,7 @@ Add these paths to `api/openapi.yaml` under the existing `paths:` block, after `
           in: path
           required: true
           schema: { type: string, minLength: 1, maxLength: 64 }
-        - name: X-SSH-UI-Action
+        - name: X-SSHC-Action
           in: header
           required: true
           schema: { type: string, minLength: 43, maxLength: 43 }
@@ -6067,7 +6067,7 @@ func TestGeneratedKeyVaultModels(t *testing.T) {
 			DeletedAt:  "2026-08-05T09:00:00Z",
 			AgeDays:    40,
 			Stale:      true,
-			Files:      []TrashFileSummary{{OriginalRelativePath: "id_work", TrashRelativePath: "ssh-ui/trash/e/id_work", Kind: "private_key", Fingerprint: "SHA256:abcdef", Permission: "0600"}},
+			Files:      []TrashFileSummary{{OriginalRelativePath: "id_work", TrashRelativePath: "sshc/trash/e/id_work", Kind: "private_key", Fingerprint: "SHA256:abcdef", Permission: "0600"}},
 			Restorable: false,
 			Blockers:   []string{"restore_path_occupied:id_work"},
 		}},
@@ -6137,13 +6137,13 @@ git commit -m "feat: add action tokens and the key vault API contract"
 - Modify: `internal/httpserver/server.go`
 - Modify: `internal/app/run.go`
 - Modify: `internal/app/run_test.go`
-- Modify: `cmd/ssh-ui/main.go`
+- Modify: `cmd/sshc/main.go`
 
 **Interfaces:**
 - Consumes: Task 7's generated `api` models and `session.Action`, `session.PurposeRevealPrivateKey`, `session.PurposePurgeTrashEntry`, `session.IssueAction`, `session.ConsumeAction`.
 - Consumes: Tasks 3 to 6's `keys.Service` methods and `platform.KeyAgent`.
 - Consumes: committed `httpserver.Security`, `SessionCookie`, `SessionContextKey`, `CSRFHeader`, `problem`.
-- Produces: `httpserver.ActionHeader` (`X-SSH-UI-Action`).
+- Produces: `httpserver.ActionHeader` (`X-SSHC-Action`).
 - Produces: `httpserver.KeyService` interface and `httpserver.KeyHandlers{Keys, Sessions}`.
 - Produces: `httpserver.problemDetail(c *echo.Context, status int, code, detail string) error`.
 - Produces: `httpserver.Options.Keys KeyService`.
@@ -6167,10 +6167,10 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/api"
-	"ssh-ui/internal/keys"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/session"
+	"sshc/internal/api"
+	"sshc/internal/keys"
+	"sshc/internal/platform"
+	"sshc/internal/session"
 )
 
 // stubKeyService answers without touching a filesystem, an agent or a process.
@@ -6456,16 +6456,16 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/api"
-	"ssh-ui/internal/keys"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/session"
-	"ssh-ui/internal/storage"
+	"sshc/internal/api"
+	"sshc/internal/keys"
+	"sshc/internal/platform"
+	"sshc/internal/session"
+	"sshc/internal/storage"
 )
 
 // ActionHeader carries the one-time token that reveal and permanent delete
 // require in addition to the session cookie and the CSRF header.
-const ActionHeader = "X-SSH-UI-Action"
+const ActionHeader = "X-SSHC-Action"
 
 // maxKeyRequestBody bounds a key vault request body.
 const maxKeyRequestBody = 64 << 10
@@ -6967,7 +6967,7 @@ In `internal/httpserver/server.go`, add `Keys KeyService` to `Options` and regis
 	}
 ```
 
-In `internal/app/run.go`, add `"time"`, `"ssh-ui/internal/keys"` and `"ssh-ui/internal/storage"` to the import block, then extend `Dependencies` and build the key vault when a home directory is supplied:
+In `internal/app/run.go`, add `"time"`, `"sshc/internal/keys"` and `"sshc/internal/storage"` to the import block, then extend `Dependencies` and build the key vault when a home directory is supplied:
 
 ```go
 type Dependencies struct {
@@ -7029,7 +7029,7 @@ Inside `Run`, after the session manager is created and before `httpserver.New`:
 
 and pass `Keys: keyService` in the `httpserver.Options` literal.
 
-In `cmd/ssh-ui/main.go`, build the executor and agent next to the existing browser:
+In `cmd/sshc/main.go`, build the executor and agent next to the existing browser:
 
 ```go
 	executor := macos.NewExecutor(macos.OSLookup)
@@ -7090,7 +7090,7 @@ func TestRunExposesTheKeyVaultWhenAHomeDirectoryIsSupplied(t *testing.T) {
 	}
 	bootstrapRequest.Header.Set("Origin", base)
 	bootstrapRequest.Header.Set("Sec-Fetch-Site", "same-origin")
-	bootstrapRequest.Header.Set("X-SSH-UI-Bootstrap", bootstrapToken)
+	bootstrapRequest.Header.Set("X-SSHC-Bootstrap", bootstrapToken)
 	bootstrapResponse, err := client.Do(bootstrapRequest)
 	if err != nil {
 		t.Fatalf("bootstrap: %v", err)
@@ -7142,7 +7142,7 @@ func (stubKeyAgent) Add(context.Context, platform.AgentAddRequest) error {
 func (stubKeyAgent) Remove(context.Context, string) error { return platform.ErrAgentUnavailable }
 ```
 
-Add `os`, `path/filepath`, `strings`, `net/http` and `ssh-ui/internal/platform` to the `internal/app/run_test.go` import block if they are not already present.
+Add `os`, `path/filepath`, `strings`, `net/http` and `sshc/internal/platform` to the `internal/app/run_test.go` import block if they are not already present.
 
 - [ ] **Step 7: Run every Go check**
 
@@ -7159,7 +7159,7 @@ Expected: PASS. Reveal and permanent delete are refused without a matching, unex
 - [ ] **Step 8: Commit the HTTP surface**
 
 ```bash
-git add internal/httpserver internal/app cmd/ssh-ui/main.go
+git add internal/httpserver internal/app cmd/sshc/main.go
 git commit -m "feat: expose the key vault over the localhost API"
 ```
 
@@ -7179,7 +7179,7 @@ git commit -m "feat: expose the key vault over the localhost API"
 
 **Interfaces:**
 - Consumes: Task 7's generated `components["schemas"][…]` TypeScript definitions.
-- Consumes: Task 8's routes and the `X-SSH-UI-Action` header.
+- Consumes: Task 8's routes and the `X-SSHC-Action` header.
 - Produces: `apiClient.read<T>(path)` and `apiClient.send(path, init)` alongside the committed `health`, `mutate`, `setCSRF` and `clear`.
 - Produces: `keys/api.ts` exporting `KeysApi`, `keysApi`, `GenerateKeyInput`, `REVEAL_PURPOSE`, `PURGE_PURPOSE` and the response type aliases.
 - Produces: `RevealDialog` and `KeysScreen` React components.
@@ -7218,7 +7218,7 @@ async function sendMutation(path: string, init: RequestInit): Promise<Response> 
   if (!csrfToken) throw new Error("csrf_unavailable");
 
   const headers = new Headers(init.headers);
-  headers.set("X-SSH-UI-CSRF", csrfToken);
+  headers.set("X-SSHC-CSRF", csrfToken);
   return fetch(path, { ...init, credentials: "same-origin", headers });
 }
 
@@ -7345,7 +7345,7 @@ export const keysApi: KeysApi = {
     const token = await issueAction(REVEAL_PURPOSE, keyId);
     return apiClient.mutate<RevealPrivateKeyResponse>(`/api/v1/keys/${encodeURIComponent(keyId)}/reveal`, {
       method: "POST",
-      headers: { "X-SSH-UI-Action": token },
+      headers: { "X-SSHC-Action": token },
     });
   },
   trash: (keyId) =>
@@ -7362,7 +7362,7 @@ export const keysApi: KeysApi = {
     const token = await issueAction(PURGE_PURPOSE, entryId);
     return apiClient.mutate<PurgeTrashResponse>(`/api/v1/trash/${encodeURIComponent(entryId)}`, {
       method: "DELETE",
-      headers: { "X-SSH-UI-Action": token },
+      headers: { "X-SSHC-Action": token },
     });
   },
 };
@@ -7631,7 +7631,7 @@ function buildApi(overrides: Partial<KeysApi> = {}): KeysApi {
           files: [
             {
               originalRelativePath: "id_old",
-              trashRelativePath: "ssh-ui/trash/20260805T090000.000-aabbccdd/id_old",
+              trashRelativePath: "sshc/trash/20260805T090000.000-aabbccdd/id_old",
               kind: "private_key",
               fingerprint: "SHA256:012345",
               permission: "0600",
@@ -7904,7 +7904,7 @@ export function KeysScreen({ api }: KeysScreenProps) {
     return <p role="status">Reading the ssh directory…</p>;
   }
   if (state === "error" || inventory === null || trash === null) {
-    return <p role="alert">The ssh directory could not be read. Restart ssh-ui and try again.</p>;
+    return <p role="alert">The ssh directory could not be read. Restart sshc and try again.</p>;
   }
 
   return (
@@ -7998,7 +7998,7 @@ export function KeysScreen({ api }: KeysScreenProps) {
             Change passphrase: {changingPassphrase.relativePath}
           </h3>
           <p className="text-sm text-zinc-400">
-            The passphrase is used only for this change. ssh-ui never stores it. Use agent registration if you
+            The passphrase is used only for this change. sshc never stores it. Use agent registration if you
             want macOS to remember it.
           </p>
           <label className="block">
@@ -8094,7 +8094,7 @@ export function KeysScreen({ api }: KeysScreenProps) {
       {terminalCommand !== null && (
         <div>
           <p className="text-sm text-zinc-300">
-            Hardware-backed keys need your security key, so ssh-ui does not create them. Run this command in
+            Hardware-backed keys need your security key, so sshc does not create them. Run this command in
             Terminal yourself:
           </p>
           <pre aria-label="Terminal command" className="overflow-x-auto rounded-md bg-zinc-950 p-4 text-xs">
@@ -8212,8 +8212,8 @@ export function App({ bootstrap, health, keysApi }: AppProps) {
   if (state === "error") {
     return (
       <main>
-        <h1>SSH UI</h1>
-        <p role="alert">Secure local session could not be started. Restart ssh-ui and use the newly opened tab.</p>
+        <h1>sshc</h1>
+        <p role="alert">Secure local session could not be started. Restart sshc and use the newly opened tab.</p>
       </main>
     );
   }
@@ -8221,7 +8221,7 @@ export function App({ bootstrap, health, keysApi }: AppProps) {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <header className="border-b border-zinc-800 px-6 py-4">
-        <h1 className="text-xl font-semibold">SSH UI</h1>
+        <h1 className="text-xl font-semibold">sshc</h1>
       </header>
       <div className="grid grid-cols-[15rem_1fr]">
         <nav aria-label="Primary" className="border-r border-zinc-800 p-4">
@@ -8335,13 +8335,13 @@ Append to `README.md`, in its existing Japanese style, after the config engine s
 ```markdown
 ## 鍵管理の境界
 
-- `~/.ssh` 配下のファイルは内容と権限で分類します。ファイル名だけで秘密鍵と断定しません。`~/.ssh/ssh-ui/`（backups、trash、journal、history）は走査対象、agent 登録対象、config 候補のいずれからも除外します。
+- `~/.ssh` 配下のファイルは内容と権限で分類します。ファイル名だけで秘密鍵と断定しません。`~/.ssh/sshc/`（backups、trash、journal、history）は走査対象、agent 登録対象、config 候補のいずれからも除外します。
 - 通常のソフトウェア鍵（Ed25519、RSA、ECDSA）は Go プロセス内で生成・暗号化します。パスフレーズは argv にも環境変数にも載せません。
 - FIDO の `ed25519-sk` と `ecdsa-sk` はハードウェアの操作が必要なため生成しません。実行すべき `ssh-keygen` コマンドだけを表示します。Terminal の起動はロードマップのサブシステム5が担当します。
 - パスフレーズは生成・変更・agent 登録の処理中だけ保持し、アプリでは保存しません。best-effort でゼロ埋めしますが、Go の GC 上メモリからの完全消去は保証できません。保持は macOS Keychain または ssh-agent へ明示操作で委ねます。
 - 秘密鍵表示 API は通常の一覧・詳細 API と分離し、対象と操作へ紐付いた一回限り・短時間有効の action token を追加で要求します。レスポンスは `Cache-Control: no-store` で、フロントエンドは永続ストレージ、グローバル状態、ログ、分析イベントへ渡さず、ダイアログ終了時に参照を破棄します。ブラウザ拡張やクリップボード履歴に対しては保護できません。
 - 秘密鍵を表示した事実は履歴に記録します。記録するのは操作種別、時刻、対象ファイルだけで、鍵本文は含みません。
-- 鍵の削除は `~/.ssh/ssh-ui/trash/<id>/` への同一ファイルシステム内 rename です。バイト列を複製しないため、世代バックアップに鍵本文が残りません。trash ディレクトリは `0700`、鍵は元の厳格な権限のままです。
+- 鍵の削除は `~/.ssh/sshc/trash/<id>/` への同一ファイルシステム内 rename です。バイト列を複製しないため、世代バックアップに鍵本文が残りません。trash ディレクトリは `0700`、鍵は元の厳格な権限のままです。
 - 30 日経過は表示するだけで、自動削除は行いません。完全削除は再確認と専用の action token を必要とし、バックアップを作らないため取り消せません。
 - 復元は同名ファイルと同一 fingerprint の既存鍵を検査し、いずれかに該当する場合は推測せず拒否して理由を表示します。
 - ssh-agent と Keychain への登録は `ssh-add` を経由します。パスフレーズは標準入力だけで渡します。自動テストは実 agent、実 Keychain、実 Terminal、実リモートを使いません。
@@ -8368,7 +8368,7 @@ Expected:
 - `make generate` produces no diff after the committed generation;
 - every Go, race, Vitest and TypeScript check passes;
 - `make fuzz` finds no failing input;
-- `bin/ssh-ui` builds;
+- `bin/sshc` builds;
 - `go.mod` and `go.sum` show exactly the two additions from Task 1;
 - `git status --short` lists only the files this plan intends to add.
 
@@ -8379,23 +8379,23 @@ Run:
 ```bash
 grep -rn "UserHomeDir\|os.Getenv(\"HOME\")" internal/ | grep -v "_test.go" 
 grep -rn "UserHomeDir\|os.Getenv(\"HOME\")\|os.LookupEnv" internal/ --include=*_test.go || echo "no environment access in tests"
-ls -la ~/.ssh/ssh-ui 2>/dev/null || echo "no state directory in the real home"
+ls -la ~/.ssh/sshc 2>/dev/null || echo "no state directory in the real home"
 find ~/.ssh -newermt '-30 minutes' 2>/dev/null || echo "no recently modified file in the real ~/.ssh"
 ```
 
-Expected: the only non-test match is `cmd/ssh-ui/main.go` reading the home directory once at startup; tests report no environment access; the real `~/.ssh` gained no `ssh-ui` directory and no file changed. If any check fails, fix the offending test before committing.
+Expected: the only non-test match is `cmd/sshc/main.go` reading the home directory once at startup; tests report no environment access; the real `~/.ssh` gained no `sshc` directory and no file changed. If any check fails, fix the offending test before committing.
 
 - [ ] **Step 13: Perform the manual isolated acceptance run**
 
-Run: `HOME="$(mktemp -d)" ./bin/ssh-ui`
+Run: `HOME="$(mktemp -d)" ./bin/sshc`
 
 Expected, against the throwaway home only:
 
 - the Keys screen lists an empty workspace without error;
 - creating an Ed25519 key with a passphrase writes `0600` files, and `ssh-keygen -y -P <passphrase> -f <new key>` prints a public key whose fingerprint matches the one shown;
 - selecting a security-key algorithm shows an `ssh-keygen` command and creates nothing;
-- revealing the private key requires the explicit confirmation, shows the same bytes as the file, and adds a `key.reveal` entry to `~/.ssh/ssh-ui/history/` that contains no key material;
-- moving the key to the trash leaves `~/.ssh` without it, the file keeps `0600` inside `~/.ssh/ssh-ui/trash/<id>/`, and `~/.ssh/ssh-ui/backups/` contains no key material;
+- revealing the private key requires the explicit confirmation, shows the same bytes as the file, and adds a `key.reveal` entry to `~/.ssh/sshc/history/` that contains no key material;
+- moving the key to the trash leaves `~/.ssh` without it, the file keeps `0600` inside `~/.ssh/sshc/trash/<id>/`, and `~/.ssh/sshc/backups/` contains no key material;
 - restoring puts it back; permanent delete needs the second confirmation and cannot be repeated;
 - the real `~/.ssh` is untouched throughout.
 
@@ -8414,10 +8414,10 @@ Before starting the SSH integrations plan, verify all of the following:
 
 - `go test ./...`, `go test -race ./...` and `go vet ./...` pass.
 - `npm test --prefix web` and `npm run typecheck --prefix web` pass.
-- `make generate` leaves no diff, and `make build` produces `bin/ssh-ui`.
+- `make generate` leaves no diff, and `make build` produces `bin/sshc`.
 - `go.mod` and `go.sum` gained exactly `golang.org/x/crypto v0.54.0` and `golang.org/x/sys v0.47.0 // indirect`, and no other module.
 - A file is classified by its content and permissions: a private key named `notes.txt` is a private key, and a text file named `id_ed25519` is not.
-- Nothing under `~/.ssh/ssh-ui/` — backups, trash, journal or history — appears in the inventory, in agent registration or in configuration suggestions.
+- Nothing under `~/.ssh/sshc/` — backups, trash, journal or history — appears in the inventory, in agent registration or in configuration suggestions.
 - A symbolic link is listed but never followed, and it never contributes a fingerprint.
 - Ed25519, RSA and ECDSA keys are generated and encrypted inside the Go process; the resulting file is read by the installed `ssh-keygen`; the passphrase appears in no argument list and in no environment variable in any code path.
 - `ed25519-sk` and `ecdsa-sk` are never generated in process. The API returns the exact `ssh-keygen` argument list, every element passes the safe-argument check, and launching Terminal is left to roadmap subsystem 5.
@@ -8426,7 +8426,7 @@ Before starting the SSH integrations plan, verify all of the following:
 - Reveal responses carry `Cache-Control: no-store`; the frontend writes no key material to storage, no global state, no log and no analytics event, and drops it when the dialog closes. Neither the UI nor the documentation claims protection against browser extensions or clipboard history.
 - Every reveal adds a history record naming the operation, the time and the file, and containing no key material.
 - ssh-agent and Keychain registration goes through `platform.KeyAgent`; the passphrase reaches `ssh-add` only on standard input; automated tests use fakes and never a real agent, Keychain, Terminal or remote host.
-- A soft delete is a `rename` inside the workspace: the file keeps its original permission, the trash directory is `0700`, and `~/.ssh/ssh-ui/backups/` receives no key material.
+- A soft delete is a `rename` inside the workspace: the file keeps its original permission, the trash directory is `0700`, and `~/.ssh/sshc/backups/` receives no key material.
 - Trash entries show a 30-day age and are never deleted automatically.
 - Permanent delete requires a second confirmation in the UI and its own action token at the API, writes no backup, and reports honestly that an interrupted removal can be completed but not rolled back.
 - Restore refuses when the original path is occupied or when an identical key already exists, changes nothing, and reports the blockers instead of guessing.

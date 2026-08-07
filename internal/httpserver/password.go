@@ -10,11 +10,11 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/api"
-	"ssh-ui/internal/application"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/remotesync"
-	"ssh-ui/internal/secret"
+	"sshc/internal/api"
+	"sshc/internal/application"
+	"sshc/internal/platform"
+	"sshc/internal/remotesync"
+	"sshc/internal/secret"
 )
 
 // AskpassPath is where the helper asks for a password.
@@ -32,7 +32,7 @@ const AskpassPath = "/askpass"
 // will send cross-origin without a preflight, and this server answers no
 // preflight, so no web page can reach the endpoint however much it knows about
 // it.
-const AskpassTokenHeader = "X-SSH-UI-Askpass"
+const AskpassTokenHeader = "X-SSHC-Askpass"
 
 // maxAskpassBody bounds the helper's request. A prompt is a line of text.
 const maxAskpassBody = 8 << 10

@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"ssh-ui/internal/envelope"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/storage"
+	"sshc/internal/envelope"
+	"sshc/internal/platform"
+	"sshc/internal/storage"
 )
 
 var (

@@ -3,7 +3,7 @@ package application
 import (
 	"errors"
 
-	"ssh-ui/internal/config"
+	"sshc/internal/config"
 )
 
 var (

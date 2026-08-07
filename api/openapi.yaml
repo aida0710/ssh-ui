@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
-  title: SSH UI Local API
+  title: sshc Local API
   version: 0.1.0
 paths:
   /api/v1/session/bootstrap:
     post:
       operationId: bootstrapSession
       parameters:
-        - name: X-SSH-UI-Bootstrap
+        - name: X-SSHC-Bootstrap
           in: header
           required: true
           schema: { type: string, minLength: 43, maxLength: 43 }
@@ -680,7 +680,7 @@ paths:
           in: path
           required: true
           schema: { type: string, minLength: 32, maxLength: 32 }
-        - name: X-SSH-UI-Action
+        - name: X-SSHC-Action
           in: header
           required: true
           schema: { type: string, minLength: 43, maxLength: 43 }
@@ -911,7 +911,7 @@ paths:
           in: path
           required: true
           schema: { type: string, minLength: 1, maxLength: 64 }
-        - name: X-SSH-UI-Action
+        - name: X-SSHC-Action
           in: header
           required: true
           schema: { type: string, minLength: 43, maxLength: 43 }

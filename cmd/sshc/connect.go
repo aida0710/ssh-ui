@@ -13,9 +13,9 @@ import (
 	"syscall"
 	"time"
 
-	"ssh-ui/internal/handoff"
-	"ssh-ui/internal/httpserver"
-	"ssh-ui/internal/platform"
+	"sshc/internal/handoff"
+	"sshc/internal/httpserver"
+	"sshc/internal/platform"
 )
 
 // connectResponse is what the running application answers.
@@ -29,7 +29,7 @@ type connectAnswer struct {
 // connectInvocation reports whether this process was started to connect.
 //
 // A bare word that is not a flag and not the askpass subcommand is an alias.
-// That is the whole command: `ssh-ui <alias>`. The five environment variables
+// That is the whole command: `sshc <alias>`. The five environment variables
 // it replaces were the hand-written form of what the Terminal button already
 // did for itself, and nothing about them was ever meant to be typed.
 func connectInvocation(argv []string) (string, bool) {
@@ -56,37 +56,37 @@ const OpenSubcommand = "open"
 func runOpen(ctx context.Context, stateDir string, client *http.Client, browser func(string) error, stderr io.Writer) int {
 	found, err := handoff.Read(stateDir)
 	if err != nil {
-		fmt.Fprintln(stderr, "ssh-ui: not running")
+		fmt.Fprintln(stderr, "sshc: not running")
 		return 1
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, found.URL+httpserver.OpenPath, bytes.NewReader([]byte("{}")))
 	if err != nil {
-		fmt.Fprintf(stderr, "ssh-ui: %v\n", err)
+		fmt.Fprintf(stderr, "sshc: %v\n", err)
 		return 1
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set(handoff.HeaderName, found.Secret)
 	response, err := client.Do(request)
 	if err != nil {
-		fmt.Fprintln(stderr, "ssh-ui: not answering")
+		fmt.Fprintln(stderr, "sshc: not answering")
 		return 1
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
-		fmt.Fprintln(stderr, "ssh-ui: refused")
+		fmt.Fprintln(stderr, "sshc: refused")
 		return 1
 	}
 	var answer struct {
 		URL string `json:"url"`
 	}
 	if err := json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&answer); err != nil || answer.URL == "" {
-		fmt.Fprintln(stderr, "ssh-ui: the answer carried no way in")
+		fmt.Fprintln(stderr, "sshc: the answer carried no way in")
 		return 1
 	}
 	// The URL is handed to the browser and never printed. It carries a live
 	// bootstrap token, and a terminal keeps what it is shown.
 	if err := browser(answer.URL); err != nil {
-		fmt.Fprintf(stderr, "ssh-ui: %v\n", err)
+		fmt.Fprintf(stderr, "sshc: %v\n", err)
 		return 1
 	}
 	return 0
@@ -149,7 +149,7 @@ func connectEnvironment(inherited []string, helper, url, token, alias string) []
 // difference is visible without being in the way.
 func runConnect(ctx context.Context, alias string, stateDir string, client *http.Client, toolchain sshFinder, stderr io.Writer) int {
 	if err := platform.ValidateAlias(alias); err != nil {
-		fmt.Fprintf(stderr, "ssh-ui: %q is not an alias this will put on a command line\n", alias)
+		fmt.Fprintf(stderr, "sshc: %q is not an alias this will put on a command line\n", alias)
 		return 2
 	}
 
@@ -158,15 +158,15 @@ func runConnect(ctx context.Context, alias string, stateDir string, client *http
 	answer, err := askApplication(ctx, alias, stateDir, client)
 	switch {
 	case err != nil:
-		fmt.Fprintf(stderr, "ssh-ui: connecting without a stored password (%v)\n", err)
+		fmt.Fprintf(stderr, "sshc: connecting without a stored password (%v)\n", err)
 	default:
 		for _, warning := range answer.Warnings {
-			fmt.Fprintf(stderr, "ssh-ui: %s\n", warning)
+			fmt.Fprintf(stderr, "sshc: %s\n", warning)
 		}
 		if answer.AskpassToken != "" {
 			resolved, pathErr := os.Executable()
 			if pathErr != nil {
-				fmt.Fprintf(stderr, "ssh-ui: connecting without a stored password (%v)\n", pathErr)
+				fmt.Fprintf(stderr, "sshc: connecting without a stored password (%v)\n", pathErr)
 			} else {
 				armed, helper, url, token = true, resolved, answer.AskpassURL, answer.AskpassToken
 			}
@@ -180,7 +180,7 @@ func runConnect(ctx context.Context, alias string, stateDir string, client *http
 	// whatever is first on it.
 	ssh, err := toolchain.SSH()
 	if err != nil || !filepath.IsAbs(ssh) {
-		fmt.Fprintf(stderr, "ssh-ui: ssh was not found where it is expected: %v\n", err)
+		fmt.Fprintf(stderr, "sshc: ssh was not found where it is expected: %v\n", err)
 		return 1
 	}
 	// The terminal belongs to ssh from here. Exec rather than a child process
@@ -196,7 +196,7 @@ func runConnect(ctx context.Context, alias string, stateDir string, client *http
 	}
 	arguments = append(arguments, "--", alias)
 	if err := syscall.Exec(ssh, arguments, environment); err != nil {
-		fmt.Fprintf(stderr, "ssh-ui: %v\n", err)
+		fmt.Fprintf(stderr, "sshc: %v\n", err)
 		return 1
 	}
 	return 0
@@ -206,7 +206,7 @@ func runConnect(ctx context.Context, alias string, stateDir string, client *http
 func askApplication(ctx context.Context, alias, stateDir string, client *http.Client) (connectAnswer, error) {
 	found, err := handoff.Read(stateDir)
 	if err != nil {
-		return connectAnswer{}, fmt.Errorf("ssh-ui is not running")
+		return connectAnswer{}, fmt.Errorf("sshc is not running")
 	}
 	body, err := json.Marshal(map[string]string{"alias": alias})
 	if err != nil {
@@ -222,11 +222,11 @@ func askApplication(ctx context.Context, alias, stateDir string, client *http.Cl
 
 	response, err := client.Do(request)
 	if err != nil {
-		return connectAnswer{}, fmt.Errorf("ssh-ui is not answering")
+		return connectAnswer{}, fmt.Errorf("sshc is not answering")
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
-		return connectAnswer{}, fmt.Errorf("ssh-ui refused the request")
+		return connectAnswer{}, fmt.Errorf("sshc refused the request")
 	}
 	var answer connectAnswer
 	if err := json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&answer); err != nil {

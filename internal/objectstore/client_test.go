@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"ssh-ui/internal/objectstore"
+	"sshc/internal/objectstore"
 )
 
 // Every test here runs against httptest. Nothing in this package reaches
@@ -21,7 +21,7 @@ func newClient(t *testing.T, handler http.HandlerFunc) (objectstore.Client, *htt
 	return objectstore.Client{
 		HTTP:     server.Client(),
 		Endpoint: server.URL,
-		Bucket:   "ssh-ui",
+		Bucket:   "sshc",
 		Region:   "auto",
 		Creds:    suiteCredentials(),
 		Now:      func() time.Time { return suiteStamp },
@@ -43,7 +43,7 @@ func TestPutSendsTheConditionItWasGiven(t *testing.T) {
 	if _, err := client.Put(context.Background(), "snapshot", []byte("body"), `"old"`, ""); err != nil {
 		t.Fatalf("Put = %v", err)
 	}
-	if method != http.MethodPut || path != "/ssh-ui/snapshot" {
+	if method != http.MethodPut || path != "/sshc/snapshot" {
 		t.Errorf("request = %s %s", method, path)
 	}
 	if ifMatch != `"old"` || ifNoneMatch != "" {
@@ -143,7 +143,7 @@ func TestAPlaintextEndpointIsRefused(t *testing.T) {
 	// The body is encrypted before it gets here, but the credentials are not.
 	client := objectstore.Client{
 		Endpoint: "http://example.com",
-		Bucket:   "ssh-ui",
+		Bucket:   "sshc",
 		Region:   "auto",
 		Creds:    suiteCredentials(),
 		Now:      func() time.Time { return suiteStamp },

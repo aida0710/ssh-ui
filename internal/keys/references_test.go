@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/storage"
+	"sshc/internal/storage"
 )
 
 func TestBuildReferenceIndexFindsHostsThatNameAKey(t *testing.T) {
@@ -76,13 +76,13 @@ func TestAttachReferencesNeverPointsAtEngineState(t *testing.T) {
 	workspace := newTestWorkspace(t)
 	privateKey, _, _ := newKeyPairFixture(t, "")
 	writeFixture(t, workspace, "work", privateKey, 0o600)
-	writeFixture(t, workspace, "ssh-ui/trash/20260805T090000.000-aabbccdd/work", privateKey, 0o600)
+	writeFixture(t, workspace, "sshc/trash/20260805T090000.000-aabbccdd/work", privateKey, 0o600)
 	writeFixture(t, workspace, "config", []byte(""+
 		"Host live\n"+
 		"  IdentityFile ~/.ssh/work\n"+
 		"\n"+
 		"Host stale\n"+
-		"  IdentityFile ~/.ssh/ssh-ui/trash/20260805T090000.000-aabbccdd/work\n"), 0o600)
+		"  IdentityFile ~/.ssh/sshc/trash/20260805T090000.000-aabbccdd/work\n"), 0o600)
 
 	graph, err := storage.NewResolver(workspace).Resolve(filepath.Join(workspace.Root(), "config"))
 	if err != nil {
@@ -122,7 +122,7 @@ func TestAttachReferencesNeverPointsAtEngineState(t *testing.T) {
 // rewrites none of the directives that name it, silently, because a reference
 // judged to be outside cannot be the key being moved.
 //
-// The workspace here is built from the link, exactly as cmd/ssh-ui builds one
+// The workspace here is built from the link, exactly as cmd/sshc builds one
 // from os.UserHomeDir. Every other test in this package resolves the temporary
 // directory first, which is why none of them sees this.
 func TestBuildReferenceIndexResolvesAKeyUnderASymlinkedHome(t *testing.T) {

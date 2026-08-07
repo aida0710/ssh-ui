@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"ssh-ui/internal/selfupdate"
+	"sshc/internal/selfupdate"
 )
 
 // A newer version is a later one, compared as numbers. Compared as strings,

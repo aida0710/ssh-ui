@@ -8,11 +8,11 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/handoff"
+	"sshc/internal/handoff"
 )
 
 func TestWritingTheHandoffAndTakingItAway(t *testing.T) {
-	directory := filepath.Join(t.TempDir(), "ssh-ui")
+	directory := filepath.Join(t.TempDir(), "sshc")
 	secret, err := handoff.Mint(strings.NewReader(strings.Repeat("k", 64)))
 	if err != nil {
 		t.Fatalf("Mint = %v", err)
@@ -59,7 +59,7 @@ func TestWritingTheHandoffAndTakingItAway(t *testing.T) {
 // secret is per run, so a handoff left behind by a process that was killed
 // points at a port nothing is listening on with a secret nothing accepts.
 func TestASecondRunReplacesTheHandoff(t *testing.T) {
-	directory := filepath.Join(t.TempDir(), "ssh-ui")
+	directory := filepath.Join(t.TempDir(), "sshc")
 	firstSecret, err := handoff.Mint(strings.NewReader(strings.Repeat("a", 64)))
 	if err != nil {
 		t.Fatal(err)

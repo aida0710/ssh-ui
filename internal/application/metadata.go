@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"ssh-ui/internal/storage"
+	"sshc/internal/storage"
 )
 
 const (
@@ -27,7 +27,7 @@ const (
 	// DefaultGroupsFile is the configuration file group inheritance compiles
 	// into. It stays inside the configuration tree so it is ordinary, hand
 	// editable OpenSSH configuration.
-	DefaultGroupsFile = "groups.ssh-ui.conf"
+	DefaultGroupsFile = "groups.sshc.conf"
 )
 
 var (
@@ -103,7 +103,7 @@ type GroupMetadata struct {
 	Settings []Setting `json:"settings,omitempty"`
 }
 
-// Metadata is the whole of ~/.ssh/ssh-ui/metadata.json.
+// Metadata is the whole of ~/.ssh/sshc/metadata.json.
 type Metadata struct {
 	SchemaVersion int             `json:"schemaVersion"`
 	GroupsFile    string          `json:"groupsFile,omitempty"`

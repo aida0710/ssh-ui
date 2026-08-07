@@ -1,10 +1,10 @@
-# SSH UI Password Authentication Implementation Plan
+# sshc Password Authentication Implementation Plan
 
 **Status:** design, not yet implemented.
 
 **Goal:** For a host that only accepts password authentication, let the user store the password once and have `ssh` receive it without typing. No `sshpass`, no `expect`, no pty puppetry: OpenSSH already has a supported mechanism for handing a secret to the client from a program, and this plan uses it. The passwords live in one encrypted file inside the workspace, so they travel with everything else the remote-sync plan carries.
 
-**Architecture:** One new package, `internal/secret`, owning an encrypted vault at `~/.ssh/ssh-ui/secrets`: AES-256-GCM with an Argon2id-derived key, opened by a passphrase this application never stores. `cmd/ssh-ui` gains one argv branch, `ssh-ui askpass`, which is the program `ssh` executes to obtain the password; it holds no key and decrypts nothing, and instead asks the running, unlocked ssh-ui over the loopback interface with a one-time token that process minted. `internal/platform/macos/terminal.go` learns a second AppleScript that passes environment assignments as `argv`, exactly as the existing one passes the alias. `internal/diagnostics` decides whether a host is eligible and composes the command. Nothing about the configuration files changes: this feature writes no `ssh_config` byte.
+**Architecture:** One new package, `internal/secret`, owning an encrypted vault at `~/.ssh/sshc/secrets`: AES-256-GCM with an Argon2id-derived key, opened by a passphrase this application never stores. `cmd/sshc` gains one argv branch, `sshc askpass`, which is the program `ssh` executes to obtain the password; it holds no key and decrypts nothing, and instead asks the running, unlocked sshc over the loopback interface with a one-time token that process minted. `internal/platform/macos/terminal.go` learns a second AppleScript that passes environment assignments as `argv`, exactly as the existing one passes the alias. `internal/diagnostics` decides whether a host is eligible and composes the command. Nothing about the configuration files changes: this feature writes no `ssh_config` byte.
 
 **Tech Stack:** Go 1.26.5 (standard library plus `golang.org/x/crypto/argon2`, from the module already committed — `go.mod` and `go.sum` are unchanged), Echo v5.3.1, oapi-codegen v2.7.0, React 19.2.8, TypeScript 5.9.3, Vitest 4.1.1, Playwright 1.62.1, `/usr/bin/osascript` from the base macOS install, OpenSSH ≥ 8.4 (macOS ships 9.x/10.x).
 
@@ -70,7 +70,7 @@ The rule: the prompt must end in `password: ` (OpenSSH's `askpass` prompt for `S
 
 ## 2. Where the password lives
 
-`~/.ssh/ssh-ui/secrets`, one file, encrypted. Implemented in `internal/secret/vault.go`.
+`~/.ssh/sshc/secrets`, one file, encrypted. Implemented in `internal/secret/vault.go`.
 
 ```
 magic 15 | envelope 1 | kdf 1 | time 4 | memory 4 | threads 1 | saltLen 1 | salt | nonce 12 | AES-256-GCM(…)
@@ -99,23 +99,23 @@ This diagram was wrong about the invocation, and the error shipped. `SSH_ASKPASS
 names a *program*: OpenSSH execs it with the prompt as its only argument, with no
 shell in between, so no subcommand word can reach it. The binary decides it is
 the helper from the environment — the one-time token and the endpoint, which only
-this application ever sets — and `ssh-ui askpass "<prompt>"` remains the way to
+this application ever sets — and `sshc askpass "<prompt>"` remains the way to
 run it by hand. Until that was fixed, `ssh` started a second copy of the whole
 application, browser and all, and got no password. The integration suite against
 a real sshd is what found it; nothing hermetic could have.
 
 ```
-ssh  ──execs──▶  ssh-ui "<prompt>"   (SSH_UI_ASKPASS_TOKEN et al. in the environment)
+ssh  ──execs──▶  sshc "<prompt>"   (SSHC_ASKPASS_TOKEN et al. in the environment)
                         │  POST http://127.0.0.1:<port>/askpass
-                        │  X-SSH-UI-Askpass: <one-time token>
+                        │  X-SSHC-Askpass: <one-time token>
                         │  {"alias":"bastion","prompt":"ops@…'s password: "}
                         ▼
-                  the running ssh-ui, vault unlocked in memory
+                  the running sshc, vault unlocked in memory
 ```
 
 - **The token is minted when the user clicks connect**, is bound to that alias, is single-use and expires in two minutes. Running the helper by hand obtains nothing: there is no token, and a token is spent by the connection it was made for.
 - **The prompt rule is applied server-side as well**, so it cannot be skipped by invoking the helper differently. The helper checks it too, only so that an unanswerable prompt costs no round trip and spends no token.
-- **The helper refuses any endpoint that is not `127.0.0.1`.** The URL arrives in an environment variable, so it is input; an exported `SSH_UI_ASKPASS_URL` pointing elsewhere would otherwise turn the helper into an exfiltration tool for the password it is about to fetch.
+- **The helper refuses any endpoint that is not `127.0.0.1`.** The URL arrives in an environment variable, so it is input; an exported `SSHC_ASKPASS_URL` pointing elsewhere would otherwise turn the helper into an exfiltration tool for the password it is about to fetch.
 - **The endpoint is not under `/api/`.** It authenticates by token alone — no session cookie, no CSRF — and requires `Content-Type: application/json` and a custom header, both of which force a CORS preflight this server does not answer, so no web page can reach it however much it knows.
 - **The vault must be unlocked**, which means the application must be running and the user must have entered the passphrase this session. That is a real cost in convenience and it is what replaces the Keychain's confused deputy with something bounded.
 
@@ -129,7 +129,7 @@ on run argv
 	set helperPath to item 2 of argv
 	set sshCommand to "SSH_ASKPASS=" & quoted form of helperPath & ¬
 		" SSH_ASKPASS_REQUIRE=force" & ¬
-		" SSH_UI_ASKPASS_ALIAS=" & quoted form of targetAlias & ¬
+		" SSHC_ASKPASS_ALIAS=" & quoted form of targetAlias & ¬
 		" ssh -o NumberOfPasswordPrompts=1 -- " & quoted form of targetAlias
 	tell application "Terminal"
 		activate
@@ -138,7 +138,7 @@ on run argv
 end run
 ```
 
-- **The alias is passed twice**, once as the ssh operand and once in `SSH_UI_ASKPASS_ALIAS`, alongside `SSH_UI_ASKPASS_URL` and `SSH_UI_ASKPASS_TOKEN`. The helper identifies the host from the variable, never by parsing it out of the prompt text — prompt parsing would tie the feature to OpenSSH's format string, and the prompt carries the *resolved* user and hostname rather than the alias the Keychain item is filed under.
+- **The alias is passed twice**, once as the ssh operand and once in `SSHC_ASKPASS_ALIAS`, alongside `SSHC_ASKPASS_URL` and `SSHC_ASKPASS_TOKEN`. The helper identifies the host from the variable, never by parsing it out of the prompt text — prompt parsing would tie the feature to OpenSSH's format string, and the prompt carries the *resolved* user and hostname rather than the alias the Keychain item is filed under.
 - **`NumberOfPasswordPrompts=1`** so a wrong stored password fails once instead of three times, which on some servers counts toward a lockout.
 - Both `quoted form of` and `platform.ValidateAlias` still stand between an alias and either interpreter, unchanged.
 - The environment assignments are visible in the Terminal window's scrollback and in the process table. That discloses the helper's path, the alias, the loopback port and a token that is single-use, bound to that alias and dead in two minutes. It does not disclose the password.
@@ -177,9 +177,9 @@ The last one matters more than it looks. A password sent to the wrong machine is
 ## File Structure
 
 ```
-cmd/ssh-ui/main.go                       # + one argv branch before flag.Parse
-cmd/ssh-ui/askpass.go                    # new: the helper's whole behaviour
-cmd/ssh-ui/askpass_test.go               # new
+cmd/sshc/main.go                       # + one argv branch before flag.Parse
+cmd/sshc/askpass.go                    # new: the helper's whole behaviour
+cmd/sshc/askpass_test.go               # new
 internal/secret/vault.go                 # new: the encrypted vault, its envelope and its cost ceiling
 internal/secret/vault_test.go            # new
 internal/secret/service.go               # new: the unlocked vault, its writes, its one-time tokens
@@ -235,7 +235,7 @@ func (v *Vault) Rename(from, to string) error
 
 ## Task 2: The askpass helper  ✅ implemented
 
-**Files:** `cmd/ssh-ui/askpass.go`, `cmd/ssh-ui/askpass_test.go`; `cmd/ssh-ui/main.go`.
+**Files:** `cmd/sshc/askpass.go`, `cmd/sshc/askpass_test.go`; `cmd/sshc/main.go`.
 
 **Interfaces:**
 
@@ -247,7 +247,7 @@ func runAskpass(ctx context.Context, arguments []string, lookup func(string) str
 
 `main` branches before `flag.Parse()`, because `flag` would otherwise consume the prompt.
 
-**What it must not change:** the `-open` flag, the URL printing, the signal handling. `ssh-ui` with no arguments behaves exactly as it does today.
+**What it must not change:** the `-open` flag, the URL printing, the signal handling. `sshc` with no arguments behaves exactly as it does today.
 
 **Tests, all written and passing.**
 - `TestAnswerablePromptAcceptsOnlyThePasswordPrompt` — a table of the literal prompts OpenSSH emits: four accepted, thirteen refused, including the host key question, both passphrase forms, keyboard-interactive, the FIDO PIN and presence prompts, and a prompt that contains both a passphrase request and a password suffix.
@@ -257,7 +257,7 @@ func runAskpass(ctx context.Context, arguments []string, lookup func(string) str
 - `TestAskpassDistinguishesNothingStoredFromRefused`.
 - `TestAskpassRefusesAnEmptyPasswordFromTheServer` — an empty answer would spend a password attempt for nothing.
 
-**Verification:** `go test ./cmd/ssh-ui -v`.
+**Verification:** `go test ./cmd/sshc -v`.
 
 ## Task 3: Terminal launch with the helper armed
 
@@ -320,7 +320,7 @@ DELETE /api/v1/hosts/{alias}/password   → 204
 The panel sits inside the Host editor's Diagnostics tab and has three states:
 
 1. **Not eligible** — the blocker, in a sentence, with what to do instead. For `host_key_unknown` that sentence links to the Known Hosts screen, because the fix is there.
-2. **Eligible, nothing stored** — a password field, and above the button the plain statement: *"Anything running as you can read this password by running ssh-ui's helper. A key is stronger. Store one only for a server that will not take a key."* Not a tooltip, not a disclosure triangle.
+2. **Eligible, nothing stored** — a password field, and above the button the plain statement: *"Anything running as you can read this password by running sshc's helper. A key is stronger. Store one only for a server that will not take a key."* Not a tooltip, not a disclosure triangle.
 3. **Stored** — no field, the fact that one is stored, a delete button, and the armed command shown exactly as it will run.
 
 **Tests.**

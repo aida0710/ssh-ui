@@ -3,7 +3,7 @@ package application
 import (
 	"testing"
 
-	"ssh-ui/internal/storage"
+	"sshc/internal/storage"
 )
 
 func TestBuildFileDiffMarksOnlyTheChangedLines(t *testing.T) {
@@ -34,7 +34,7 @@ func TestBuildFileDiffMarksOnlyTheChangedLines(t *testing.T) {
 }
 
 func TestBuildFileDiffReportsCreationAndTruncation(t *testing.T) {
-	created := BuildFileDiff("groups.ssh-ui.conf", nil, []byte("Host build01\n\tUser ops\n"))
+	created := BuildFileDiff("groups.sshc.conf", nil, []byte("Host build01\n\tUser ops\n"))
 	if !created.Created || created.OldDigest != "" || len(created.Lines) != 2 {
 		t.Fatalf("created diff = %#v", created)
 	}

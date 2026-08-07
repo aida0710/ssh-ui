@@ -13,7 +13,7 @@ import (
 	"sort"
 	"strings"
 
-	"ssh-ui/internal/config"
+	"sshc/internal/config"
 )
 
 // TokenEscapeWarning is displayed next to every executable directive.

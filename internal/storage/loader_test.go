@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"ssh-ui/internal/config"
+	"sshc/internal/config"
 )
 
 // An Include written as "~/.ssh/…" expands against Home, and every judgement

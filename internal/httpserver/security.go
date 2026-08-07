@@ -6,14 +6,14 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/api"
-	"ssh-ui/internal/session"
+	"sshc/internal/api"
+	"sshc/internal/session"
 )
 
 const (
-	SessionCookie     = "ssh_ui_session"
-	CSRFHeader        = "X-SSH-UI-CSRF"
-	SessionContextKey = "ssh-ui-session"
+	SessionCookie     = "sshc_session"
+	CSRFHeader        = "X-SSHC-CSRF"
+	SessionContextKey = "sshc-session"
 
 	contentSecurityPolicy = "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; require-trusted-types-for 'script'"
 

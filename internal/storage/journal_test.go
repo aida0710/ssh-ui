@@ -260,8 +260,8 @@ func TestRollbackReversesAnInterruptedMove(t *testing.T) {
 
 func TestRollbackRefusesToPretendACommittedRemovalCanBeUndone(t *testing.T) {
 	workspace := newTestWorkspace(t)
-	first := writeWorkspaceFile(t, workspace, "ssh-ui/trash/entry-1/id_work", "FIRST\n", 0o600)
-	second := writeWorkspaceFile(t, workspace, "ssh-ui/trash/entry-1/id_work.pub", "SECOND\n", 0o600)
+	first := writeWorkspaceFile(t, workspace, "sshc/trash/entry-1/id_work", "FIRST\n", 0o600)
+	second := writeWorkspaceFile(t, workspace, "sshc/trash/entry-1/id_work.pub", "SECOND\n", 0o600)
 	failure := errors.New("injected remove failure")
 	workspace.fileSystem = faultyFileSystem{
 		FileSystem: OSFileSystem{},

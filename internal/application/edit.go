@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"ssh-ui/internal/config"
+	"sshc/internal/config"
 )
 
 // EditAction names one change to a host block's directives.

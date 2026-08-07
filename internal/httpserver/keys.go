@@ -12,17 +12,17 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/api"
-	"ssh-ui/internal/application"
-	"ssh-ui/internal/keys"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/session"
-	"ssh-ui/internal/storage"
+	"sshc/internal/api"
+	"sshc/internal/application"
+	"sshc/internal/keys"
+	"sshc/internal/platform"
+	"sshc/internal/session"
+	"sshc/internal/storage"
 )
 
 // ActionHeader carries the one-time token that reveal and permanent delete
 // require in addition to the session cookie and the CSRF header.
-const ActionHeader = "X-SSH-UI-Action"
+const ActionHeader = "X-SSHC-Action"
 
 // maxKeyRequestBody bounds a key vault request body.
 const maxKeyRequestBody = 64 << 10

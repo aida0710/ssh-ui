@@ -21,10 +21,10 @@ import (
 // OpenSSH execs the named program directly with the prompt as its only
 // argument. There is no shell in between, so there is nowhere to put a
 // subcommand word, and the environment is what says this is an askpass
-// invocation. `ssh-ui askpass <prompt>` does the same thing by hand.
+// invocation. `sshc askpass <prompt>` does the same thing by hand.
 //
 // It holds no secret and can decrypt nothing. The passwords live in an
-// encrypted file whose key exists only inside a running, unlocked ssh-ui, so
+// encrypted file whose key exists only inside a running, unlocked sshc, so
 // this helper asks that process over the loopback interface, presenting a
 // one-time token the same process minted when the user asked to connect. Run
 // by hand it obtains nothing: there is no token, and a token is spent by the
@@ -43,16 +43,16 @@ const (
 	// prompt: OpenSSH's prompt carries the *resolved* user and hostname, which
 	// is not what a password is filed under, and parsing it would tie this to
 	// a format string in someone else's source.
-	AliasVariable = "SSH_UI_ASKPASS_ALIAS"
-	// URLVariable is the loopback endpoint of the ssh-ui that armed this.
-	URLVariable = "SSH_UI_ASKPASS_URL"
+	AliasVariable = "SSHC_ASKPASS_ALIAS"
+	// URLVariable is the loopback endpoint of the sshc that armed this.
+	URLVariable = "SSHC_ASKPASS_URL"
 	// TokenVariable is the one-time token for this connection.
-	TokenVariable = "SSH_UI_ASKPASS_TOKEN"
+	TokenVariable = "SSHC_ASKPASS_TOKEN"
 
 	// AskpassTokenHeader carries the token. A custom header forces a CORS
 	// preflight, which this server does not answer, so no web page can reach
 	// the endpoint however much it knows about it.
-	AskpassTokenHeader = "X-SSH-UI-Askpass"
+	AskpassTokenHeader = "X-SSHC-Askpass"
 
 	// passwordPromptSuffix is what OpenSSH appends when it wants the remote
 	// account's password. Its format is "%.30s@%.128s's password: ".
@@ -116,7 +116,7 @@ type askpassResponse struct {
 	Password string `json:"password"`
 }
 
-// runAskpass is the whole of `ssh-ui askpass <prompt>`.
+// runAskpass is the whole of `sshc askpass <prompt>`.
 //
 // On success it writes the password to out and nothing else. On any refusal it
 // writes zero bytes to out, because a diagnostic on standard output would be
@@ -130,7 +130,7 @@ func runAskpass(
 	errOut io.Writer,
 ) int {
 	if len(arguments) == 0 {
-		return refuse(errOut, "ssh-ui askpass expects the prompt as its argument")
+		return refuse(errOut, "sshc askpass expects the prompt as its argument")
 	}
 	prompt := arguments[0]
 
@@ -141,16 +141,16 @@ func runAskpass(
 		// Without all three there is nothing to ask and no way to prove the
 		// question was authorised. Answering the wrong host would disclose a
 		// credential to it.
-		return refuse(errOut, "ssh-ui askpass was started without "+
+		return refuse(errOut, "sshc askpass was started without "+
 			AliasVariable+", "+URLVariable+" and "+TokenVariable)
 	}
 	if err := validateLoopbackEndpoint(endpoint); err != nil {
-		return refuse(errOut, "ssh-ui askpass refuses to send a password to "+endpoint)
+		return refuse(errOut, "sshc askpass refuses to send a password to "+endpoint)
 	}
 
 	if !AnswerablePrompt(prompt) {
 		return refuse(errOut,
-			"ssh-ui askpass answers the remote password prompt only. This prompt was "+
+			"sshc askpass answers the remote password prompt only. This prompt was "+
 				"something else, so nothing was supplied — answer it yourself, or add "+
 				"the host key through the Known Hosts screen first.")
 	}
@@ -159,9 +159,9 @@ func runAskpass(
 	if status != askpassOK {
 		switch status {
 		case askpassNoEntry:
-			writeLine(errOut, "ssh-ui has no stored password for "+alias+", or its vault is locked")
+			writeLine(errOut, "sshc has no stored password for "+alias+", or its vault is locked")
 		default:
-			writeLine(errOut, "ssh-ui refused the request for "+alias+"'s password")
+			writeLine(errOut, "sshc refused the request for "+alias+"'s password")
 		}
 		return status
 	}
@@ -219,7 +219,7 @@ func fetchPassword(
 
 // validateLoopbackEndpoint refuses to send a password anywhere but this
 // machine. The endpoint arrives in an environment variable, so it is input,
-// and an exported SSH_UI_ASKPASS_URL pointing at someone else's server would
+// and an exported SSHC_ASKPASS_URL pointing at someone else's server would
 // otherwise turn this helper into an exfiltration tool.
 func validateLoopbackEndpoint(endpoint string) error {
 	parsed, err := url.Parse(endpoint)

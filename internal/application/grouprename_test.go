@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/storage"
+	"sshc/internal/storage"
 )
 
 // groupRenameFixture builds the situation a rename is really about: a group
@@ -256,7 +256,7 @@ func TestGroupOperationsRefuseANameThatIsNotASafeDirectory(t *testing.T) {
 	service, workspace := groupRenameFixture(t)
 	inventory := keyInventory(t, workspace)
 
-	for _, name := range []string{"../escape", "", "ssh-ui"} {
+	for _, name := range []string{"../escape", "", "sshc"} {
 		if _, err := service.RenameGroup(inventory, "work", name); !errors.Is(err, ErrInvalidGroupName) {
 			t.Errorf("RenameGroup to %q = %v, want ErrInvalidGroupName", name, err)
 		}

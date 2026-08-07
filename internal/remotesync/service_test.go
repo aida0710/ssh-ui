@@ -15,10 +15,10 @@ import (
 	"testing"
 	"time"
 
-	"ssh-ui/internal/objectstore"
-	"ssh-ui/internal/remotesync"
-	"ssh-ui/internal/secret"
-	"ssh-ui/internal/storage"
+	"sshc/internal/objectstore"
+	"sshc/internal/remotesync"
+	"sshc/internal/secret"
+	"sshc/internal/storage"
 )
 
 const syncPassphrase = "correct horse battery staple"
@@ -48,7 +48,7 @@ type storedObject struct {
 // key strips the bucket name, so what the fake stores is what this application
 // calls the object.
 func (b *fakeBucket) key(path string) string {
-	return strings.TrimPrefix(strings.TrimPrefix(path, "/"), "ssh-ui/")
+	return strings.TrimPrefix(strings.TrimPrefix(path, "/"), "sshc/")
 }
 
 func (b *fakeBucket) keys() []string {
@@ -174,7 +174,7 @@ func newInstallation(t *testing.T, bucket *fakeBucket, files map[string]string) 
 
 	// The file source is what the Include graph would answer, and the real one
 	// answers with every file inside the workspace that the graph reaches —
-	// whatever kind of file it is. It used to drop ssh-ui/ here, which meant
+	// whatever kind of file it is. It used to drop sshc/ here, which meant
 	// the exclusion test could not see the one route that reaches those files:
 	// an Include line naming one.
 	source := func() ([]string, error) {
@@ -195,10 +195,10 @@ func newInstallation(t *testing.T, bucket *fakeBucket, files map[string]string) 
 
 	server := httptest.NewTLSServer(bucket.handler())
 	t.Cleanup(server.Close)
-	config := remotesync.Config{Endpoint: server.URL, Bucket: "ssh-ui", Region: "auto"}
+	config := remotesync.Config{Endpoint: server.URL, Bucket: "sshc", Region: "auto"}
 	credentials := objectstore.Credentials{AccessKeyID: "AKID", SecretAccessKey: "secret"}
 	client := &objectstore.Client{
-		HTTP: server.Client(), Endpoint: server.URL, Bucket: "ssh-ui", Region: "auto",
+		HTTP: server.Client(), Endpoint: server.URL, Bucket: "sshc", Region: "auto",
 		Creds: credentials,
 		Now:   func() time.Time { return time.Unix(0, 0).UTC() },
 	}
@@ -223,7 +223,7 @@ func TestASnapshotTravelsBetweenTwoMachines(t *testing.T) {
 	first := newInstallation(t, bucket, map[string]string{
 		"config":               "Host bastion\r\n\tPort 2222   \n",
 		"keys/work/id_ed25519": "-----BEGIN OPENSSH PRIVATE KEY-----\n",
-		"ssh-ui/metadata.json": `{"schemaVersion":2}`,
+		"sshc/metadata.json":   `{"schemaVersion":2}`,
 	})
 	if err := first.service.Push(context.Background(), syncPassphrase); err != nil {
 		t.Fatalf("Push = %v", err)
@@ -480,10 +480,10 @@ func TestASnapshotCarriesTheVaultAndNotTheKeyToItsOwnBucket(t *testing.T) {
 		// The entry file names the sealed settings itself, which is the shape
 		// the exclusion has to survive: the file source is the Include graph,
 		// and the graph takes what the configuration points at.
-		"config":               "Include ssh-ui/sync-settings\nHost bastion\n",
-		"ssh-ui/secrets":       "sealed vault bytes",
-		"ssh-ui/sync-settings": "sealed access key",
-		"ssh-ui/cli":           `{"url":"http://127.0.0.1:1","secret":"s"}`,
+		"config":             "Include sshc/sync-settings\nHost bastion\n",
+		"sshc/secrets":       "sealed vault bytes",
+		"sshc/sync-settings": "sealed access key",
+		"sshc/cli":           `{"url":"http://127.0.0.1:1","secret":"s"}`,
 	})
 
 	manifest, contents, err := installation.service.Collect()
@@ -494,10 +494,10 @@ func TestASnapshotCarriesTheVaultAndNotTheKeyToItsOwnBucket(t *testing.T) {
 	for _, entry := range manifest.Files {
 		packed[entry.Path] = true
 	}
-	if !packed["ssh-ui/secrets"] {
+	if !packed["sshc/secrets"] {
 		t.Errorf("the vault does not travel: %v", packed)
 	}
-	for _, excluded := range []string{secret.SettingsPath, "ssh-ui/cli"} {
+	for _, excluded := range []string{secret.SettingsPath, "sshc/cli"} {
 		if packed[excluded] {
 			t.Errorf("the snapshot carries %s: %v", excluded, packed)
 		}
@@ -534,9 +534,9 @@ func TestCheckRefusesABucketThatWillNotAnswer(t *testing.T) {
 	// A client pointed at a host that is not there, which is what a typo in the
 	// endpoint looks like from here.
 	installation.service.Configure(
-		remotesync.Config{Endpoint: "https://127.0.0.1:1", Bucket: "ssh-ui", Region: "auto"},
+		remotesync.Config{Endpoint: "https://127.0.0.1:1", Bucket: "sshc", Region: "auto"},
 		installation.creds,
-		&objectstore.Client{Endpoint: "https://127.0.0.1:1", Bucket: "ssh-ui", Region: "auto", Creds: installation.creds},
+		&objectstore.Client{Endpoint: "https://127.0.0.1:1", Bucket: "sshc", Region: "auto", Creds: installation.creds},
 	)
 	if err := installation.service.Check(context.Background()); err == nil {
 		t.Error("Check against an unreachable endpoint returned nil")
@@ -570,7 +570,7 @@ func TestTheKeysFollowTheConfiguredPath(t *testing.T) {
 		// application already, and a folder inside it repeating the name is one
 		// level of nothing.
 		{"", "workspace.tar.gz.enc", "snapshots/2026-08-05-000000.tar.gz.enc"},
-		{"ssh-ui", "ssh-ui/workspace.tar.gz.enc", "ssh-ui/snapshots/2026-08-05-000000.tar.gz.enc"},
+		{"sshc", "sshc/workspace.tar.gz.enc", "sshc/snapshots/2026-08-05-000000.tar.gz.enc"},
 		// However it is spelled, it means one thing.
 		{"/laptops/", "laptops/workspace.tar.gz.enc", "laptops/snapshots/2026-08-05-000000.tar.gz.enc"},
 	} {

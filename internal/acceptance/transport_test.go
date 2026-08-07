@@ -10,8 +10,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"ssh-ui/internal/httpserver"
-	"ssh-ui/internal/session"
+	"sshc/internal/httpserver"
+	"sshc/internal/session"
 )
 
 // expectedContentSecurityPolicy is asserted by exact match on purpose. Widening
@@ -160,7 +160,7 @@ func TestEveryAPIResponseIsNoStoreAndCarriesTheExactPolicy(t *testing.T) {
 func TestBootstrapTokenIsSingleUse(t *testing.T) {
 	f := newFixture(t)
 	response := f.do(http.MethodPost, "/api/v1/session/bootstrap", nil, func(request *http.Request) {
-		request.Header.Set("X-SSH-UI-Bootstrap", f.canaries.Bootstrap)
+		request.Header.Set("X-SSHC-Bootstrap", f.canaries.Bootstrap)
 	})
 	status := response.StatusCode
 	cookies := response.Cookies()
@@ -192,7 +192,7 @@ func TestServerRefusesEveryListenerThatIsNotUnmappedLoopbackIPv4(t *testing.T) {
 		{"ipv6 loopback", &net.TCPAddr{IP: net.IPv6loopback, Port: 51234}, true},
 		{"private address", &net.TCPAddr{IP: net.ParseIP("192.168.1.10").To4(), Port: 51234}, true},
 		{"public address", &net.TCPAddr{IP: net.ParseIP("203.0.113.10").To4(), Port: 51234}, true},
-		{"unix socket", &net.UnixAddr{Name: "/tmp/ssh-ui.sock", Net: "unix"}, true},
+		{"unix socket", &net.UnixAddr{Name: "/tmp/sshc.sock", Net: "unix"}, true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

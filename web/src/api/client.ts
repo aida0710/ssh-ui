@@ -87,7 +87,7 @@ export const apiClient = {
     if (!csrfToken) throw new Error("csrf_unavailable");
     const response = await fetch(path, {
       credentials: "same-origin",
-      headers: { "X-SSH-UI-CSRF": csrfToken },
+      headers: { "X-SSHC-CSRF": csrfToken },
     });
     if (!response.ok) throw await failure(response);
     return response.json() as Promise<unknown>;
@@ -103,7 +103,7 @@ export const apiClient = {
     if (!csrfToken) throw new Error("csrf_unavailable");
 
     const headers = new Headers(init.headers);
-    headers.set("X-SSH-UI-CSRF", csrfToken);
+    headers.set("X-SSHC-CSRF", csrfToken);
     return fetch(path, { ...init, credentials: "same-origin", headers });
   },
   async mutate<T>(path: string, init: RequestInit): Promise<T> {

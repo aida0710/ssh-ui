@@ -13,10 +13,10 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/api"
-	"ssh-ui/internal/application"
-	"ssh-ui/internal/session"
-	"ssh-ui/internal/storage"
+	"sshc/internal/api"
+	"sshc/internal/application"
+	"sshc/internal/session"
+	"sshc/internal/storage"
 )
 
 const handlerConfig = "Host bastion\n\tHostName 203.0.113.10\n\tPort 22\n"

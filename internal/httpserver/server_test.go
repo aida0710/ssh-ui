@@ -15,7 +15,7 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/session"
+	"sshc/internal/session"
 )
 
 type fakeListener struct{ address net.Addr }

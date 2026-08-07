@@ -101,7 +101,7 @@ func TestCommitWritesEveryChangeAndRecordsHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, entry := range staged {
-		if strings.HasPrefix(entry.Name(), ".ssh-ui-") {
+		if strings.HasPrefix(entry.Name(), ".sshc-") {
 			t.Fatalf("temporary file %q was left behind", entry.Name())
 		}
 	}
@@ -414,7 +414,7 @@ func TestCommitRejectsAMoveOntoAnExistingFileOrAChangedSource(t *testing.T) {
 
 func TestCommitRemovesAFileWithoutWritingABackup(t *testing.T) {
 	manager, workspace := newTestManager(t)
-	target := writeWorkspaceFile(t, workspace, "ssh-ui/trash/entry-1/id_work", "PRIVATE KEY BYTES\n", 0o600)
+	target := writeWorkspaceFile(t, workspace, "sshc/trash/entry-1/id_work", "PRIVATE KEY BYTES\n", 0o600)
 
 	result, err := manager.Commit(Request{
 		Operation: "key.purge",

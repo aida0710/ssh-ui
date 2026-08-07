@@ -8,7 +8,7 @@
 
 **Tech Stack:** React 19.2.8, TypeScript 5.9.3, Tailwind CSS 4.3.3, Vitest 4.1.1, Playwright.
 
-**Workspace:** `.worktrees/visual-language`, branch `feature/visual-language-screens`, cut from `26d7235`. The main checkout is in use by other work; nothing in this plan touches it. Run the end-to-end suite from `<worktree>/web` with `PLAYWRIGHT_BROWSERS_PATH=/Users/aida/projects/ssh-ui/web/.playwright-browsers`, because the harness resolves the binary as `../bin/ssh-ui` from the working directory.
+**Workspace:** `.worktrees/visual-language`, branch `feature/visual-language-screens`, cut from `26d7235`. The main checkout is in use by other work; nothing in this plan touches it. Run the end-to-end suite from `<worktree>/web` with `PLAYWRIGHT_BROWSERS_PATH=/Users/aida/projects/sshc/web/.playwright-browsers`, because the harness resolves the binary as `../bin/sshc` from the working directory.
 
 ## Global Constraints
 

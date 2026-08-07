@@ -96,7 +96,7 @@ func TestGeneratedKeyVaultModels(t *testing.T) {
 			DeletedAt:  "2026-08-05T09:00:00Z",
 			AgeDays:    40,
 			Stale:      true,
-			Files:      []TrashFileSummary{{OriginalRelativePath: "id_work", TrashRelativePath: "ssh-ui/trash/e/id_work", Kind: "private_key", Fingerprint: "SHA256:abcdef", Permission: "0600"}},
+			Files:      []TrashFileSummary{{OriginalRelativePath: "id_work", TrashRelativePath: "sshc/trash/e/id_work", Kind: "private_key", Fingerprint: "SHA256:abcdef", Permission: "0600"}},
 			Restorable: false,
 			Blockers:   []string{"restore_path_occupied:id_work"},
 		}},

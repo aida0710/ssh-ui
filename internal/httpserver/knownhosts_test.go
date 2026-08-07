@@ -12,11 +12,11 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"ssh-ui/internal/api"
-	"ssh-ui/internal/knownhosts"
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/session"
-	"ssh-ui/internal/storage"
+	"sshc/internal/api"
+	"sshc/internal/knownhosts"
+	"sshc/internal/platform"
+	"sshc/internal/session"
+	"sshc/internal/storage"
 )
 
 const (

@@ -63,8 +63,8 @@ describe("remoteKeysApi", () => {
     const [path, init] = fetcher.mock.calls[0] as [string, RequestInit];
     expect(path).toBe("/api/v1/remote-keys/plan");
     const headers = new Headers(init.headers);
-    expect(headers.get("X-SSH-UI-Action")).toBeNull();
-    expect(headers.get("X-SSH-UI-CSRF")).toBe(csrfToken);
+    expect(headers.get("X-SSHC-Action")).toBeNull();
+    expect(headers.get("X-SSHC-CSRF")).toBe(csrfToken);
     expect(JSON.parse(String(init.body))).toEqual({
       alias: "bastion",
       keyPath: "~/.ssh/id_ed25519.pub",
@@ -96,7 +96,7 @@ describe("remoteKeysApi", () => {
 
     const [registerPath, registerInit] = fetcher.mock.calls[1] as [string, RequestInit];
     expect(registerPath).toBe("/api/v1/remote-keys/register");
-    expect(new Headers(registerInit.headers).get("X-SSH-UI-Action")).toBe(actionToken);
+    expect(new Headers(registerInit.headers).get("X-SSHC-Action")).toBe(actionToken);
     expect(JSON.parse(String(registerInit.body))).toEqual({
       alias: "bastion",
       keyPath: "~/.ssh/id_ed25519.pub",

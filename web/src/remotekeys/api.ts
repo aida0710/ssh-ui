@@ -119,7 +119,7 @@ export const remoteKeysApi: RemoteKeysApi = {
     return validateRegistration(
       await apiClient.mutate<unknown>("/api/v1/remote-keys/register", {
         method: "POST",
-        headers: { ...jsonHeaders, "X-SSH-UI-Action": token },
+        headers: { ...jsonHeaders, "X-SSHC-Action": token },
         body: JSON.stringify({
           alias: input.alias,
           keyPath: input.keyPath,

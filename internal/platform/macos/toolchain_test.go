@@ -9,8 +9,8 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"ssh-ui/internal/platform"
-	"ssh-ui/internal/platform/macos"
+	"sshc/internal/platform"
+	"sshc/internal/platform/macos"
 )
 
 var _ platform.Toolchain = macos.Toolchain{}

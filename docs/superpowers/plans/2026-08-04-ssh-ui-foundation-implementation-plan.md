@@ -1,8 +1,8 @@
-# SSH UI Foundation Implementation Plan
+# sshc Foundation Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a runnable macOS `ssh-ui` command that starts a token-protected loopback server, opens an embedded React shell, bootstraps a same-origin session, and exposes an authenticated health endpoint.
+**Goal:** Build a runnable macOS `sshc` command that starts a token-protected loopback server, opens an embedded React shell, bootstraps a same-origin session, and exposes an authenticated health endpoint.
 
 **Architecture:** A Go 1.26 CLI owns a `127.0.0.1:0` listener and Echo v5 server. It generates a one-time bootstrap secret, opens a fragment-bearing URL through a macOS adapter, exchanges the secret for an in-memory HttpOnly session and CSRF token, and serves a Vite-built React application from the same binary. OpenAPI is the API contract for generated Go models and TypeScript types.
 
@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Bind only to `127.0.0.1` on an OS-assigned random port; never bind to `0.0.0.0`, `::`, or a fixed port.
-- The server exists only while the `ssh-ui` process runs; this plan must not create a LaunchAgent or background daemon.
+- The server exists only while the `sshc` process runs; this plan must not create a LaunchAgent or background daemon.
 - Automated tests must not read or modify the user's real `~/.ssh`, Keychain, ssh-agent, Terminal, or remote hosts.
 - Do not log request bodies, cookies, authorization values, bootstrap tokens, CSRF tokens, keys, or passphrases.
 - Do not use external scripts, CDNs, fonts, analytics, telemetry, or remote frontend assets.
@@ -31,7 +31,7 @@
 ├── api/
 │   ├── openapi.yaml                   # HTTP contract
 │   └── oapi-codegen.yaml              # Go model generator settings
-├── cmd/ssh-ui/main.go                 # process entrypoint and signal handling
+├── cmd/sshc/main.go                 # process entrypoint and signal handling
 ├── internal/
 │   ├── api/
 │   │   ├── generate.go                # pinned go:generate command
@@ -94,7 +94,7 @@
 
 ```go
 // go.mod
-module ssh-ui
+module sshc
 
 go 1.26.0
 ```
@@ -129,14 +129,14 @@ Expected: FAIL to compile with `undefined: HealthResponse` and `undefined: Boots
 # api/openapi.yaml
 openapi: 3.1.0
 info:
-  title: SSH UI Local API
+  title: sshc Local API
   version: 0.1.0
 paths:
   /api/v1/session/bootstrap:
     post:
       operationId: bootstrapSession
       parameters:
-        - name: X-SSH-UI-Bootstrap
+        - name: X-SSHC-Bootstrap
           in: header
           required: true
           schema: { type: string, minLength: 43, maxLength: 43 }
@@ -224,7 +224,7 @@ Expected: `go.mod`, `go.sum`, and `internal/api/models.gen.go` are created; `go.
 
 ```json
 {
-  "name": "ssh-ui-web",
+  "name": "sshc-web",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -666,9 +666,9 @@ Expected: FAIL because `Security` is undefined.
 package httpserver
 
 const (
-	SessionCookie = "ssh_ui_session"
-	CSRFHeader = "X-SSH-UI-CSRF"
-	SessionContextKey = "ssh-ui-session"
+	SessionCookie = "sshc_session"
+	CSRFHeader = "X-SSHC-CSRF"
+	SessionContextKey = "sshc-session"
 )
 
 type Security struct {
@@ -779,13 +779,13 @@ request := httptest.NewRequest(http.MethodPost, "/api/v1/session/bootstrap", nil
 request.Host = "127.0.0.1:43123"
 request.Header.Set(echo.HeaderOrigin, "http://127.0.0.1:43123")
 request.Header.Set("Sec-Fetch-Site", "same-origin")
-request.Header.Set("X-SSH-UI-Bootstrap", bootstrap)
+request.Header.Set("X-SSHC-Bootstrap", bootstrap)
 ```
 
 Expected assertions:
 
 - status 200;
-- one `ssh_ui_session` cookie with `HttpOnly`, `SameSite=Strict`, `Path=/`;
+- one `sshc_session` cookie with `HttpOnly`, `SameSite=Strict`, `Path=/`;
 - no `Secure` flag because the approved foundation is loopback HTTP;
 - JSON contains a 43-character `csrfToken`;
 - response is `no-store`;
@@ -812,7 +812,7 @@ func TestBootstrapHandlerSetsStrictSessionCookieAndRejectsReplay(t *testing.T) {
 		request.Host = "127.0.0.1:43123"
 		request.Header.Set(echo.HeaderOrigin, "http://127.0.0.1:43123")
 		request.Header.Set("Sec-Fetch-Site", "same-origin")
-		request.Header.Set("X-SSH-UI-Bootstrap", token)
+		request.Header.Set("X-SSHC-Bootstrap", token)
 		response := httptest.NewRecorder()
 		e.ServeHTTP(response, request)
 		return response
@@ -889,7 +889,7 @@ type Handlers struct {
 }
 
 func (h Handlers) Bootstrap(c *echo.Context) error {
-	credentials, err := h.Sessions.Bootstrap(c.Request().Header.Get("X-SSH-UI-Bootstrap"))
+	credentials, err := h.Sessions.Bootstrap(c.Request().Header.Get("X-SSHC-Bootstrap"))
 	switch {
 	case errors.Is(err, session.ErrInvalidBootstrap):
 		return problem(c, http.StatusUnauthorized, "invalid_bootstrap")
@@ -1254,7 +1254,7 @@ it("exchanges the fragment once and removes it from browser history", async () =
   expect(fetcher).toHaveBeenCalledWith("/api/v1/session/bootstrap", expect.objectContaining({
     method: "POST",
     credentials: "same-origin",
-    headers: expect.objectContaining({ "X-SSH-UI-Bootstrap": "b".repeat(43) }),
+    headers: expect.objectContaining({ "X-SSHC-Bootstrap": "b".repeat(43) }),
   }));
   expect(replaceState).toHaveBeenCalledWith(null, "", "/");
   expect(state.csrfToken).toBe("c".repeat(43));
@@ -1323,7 +1323,7 @@ export async function bootstrapSession(
     method: "POST",
     credentials: "same-origin",
     headers: {
-      "X-SSH-UI-Bootstrap": bootstrap,
+      "X-SSHC-Bootstrap": bootstrap,
     },
   });
   if (!response.ok) throw new Error("bootstrap_rejected");
@@ -1379,7 +1379,7 @@ export const apiClient = {
   async mutate<T>(path: string, init: RequestInit): Promise<T> {
     if (!csrfToken) throw new Error("csrf_unavailable");
 	const headers = new Headers(init.headers);
-	headers.set("X-SSH-UI-CSRF", csrfToken);
+	headers.set("X-SSHC-CSRF", csrfToken);
     const response = await fetch(path, {
       ...init,
       credentials: "same-origin",
@@ -1398,7 +1398,7 @@ Keep `csrfToken` private to the module; do not expose a getter and do not persis
 Render `<App />` with injected bootstrap and health functions. Assert the user sees:
 
 - an initial `Starting secure local session…` status;
-- `SSH UI` heading and `Local session active` after bootstrap and health succeed;
+- `sshc` heading and `Local session active` after bootstrap and health succeed;
 - disabled navigation labels for Connections, Groups, Config, Keys, Known Hosts, and History;
 - an actionable error screen when bootstrap fails;
 - no bootstrap or CSRF token text in the DOM.
@@ -1441,11 +1441,11 @@ export function App({ bootstrap, health }: AppProps) {
   }, [bootstrap, health]);
 
   if (state === "error") {
-    return <main><h1>SSH UI</h1><p role="alert">Secure local session could not be started. Restart ssh-ui and use the newly opened tab.</p></main>;
+    return <main><h1>sshc</h1><p role="alert">Secure local session could not be started. Restart sshc and use the newly opened tab.</p></main>;
   }
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <header className="border-b border-zinc-800 px-6 py-4"><h1 className="text-xl font-semibold">SSH UI</h1></header>
+      <header className="border-b border-zinc-800 px-6 py-4"><h1 className="text-xl font-semibold">sshc</h1></header>
       <div className="grid grid-cols-[15rem_1fr]">
         <nav aria-label="Primary" className="border-r border-zinc-800 p-4">
           <ul>{sections.map((section) => <li key={section}><button disabled className="w-full px-3 py-2 text-left text-zinc-500">{section}</button></li>)}</ul>
@@ -1520,7 +1520,7 @@ git commit -m "feat: add secure React bootstrap shell"
 **Files:**
 - Create: `internal/ui/embed.go`
 - Generate: `internal/ui/dist/**`
-- Create: `cmd/ssh-ui/main.go`
+- Create: `cmd/sshc/main.go`
 - Modify: `internal/httpserver/server.go`
 - Create: `internal/httpserver/integration_test.go`
 - Create: `Makefile`
@@ -1646,9 +1646,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"ssh-ui/internal/app"
-	"ssh-ui/internal/platform/macos"
-	"ssh-ui/internal/ui"
+	"sshc/internal/app"
+	"sshc/internal/platform/macos"
+	"sshc/internal/ui"
 )
 
 var version = "dev"
@@ -1670,7 +1670,7 @@ func main() {
 		Logger: logger,
 	}
 	if err := app.Run(ctx, dependencies, version); err != nil && !errors.Is(err, context.Canceled) {
-		logger.Error("ssh-ui stopped", "error", err)
+		logger.Error("sshc stopped", "error", err)
 		os.Exit(1)
 	}
 }
@@ -1695,7 +1695,7 @@ test:
 
 build:
 	npm run build --prefix web
-	go build -trimpath -o bin/ssh-ui ./cmd/ssh-ui
+	go build -trimpath -o bin/sshc ./cmd/sshc
 ```
 
 - [ ] **Step 7: Document the exact development and threat boundary**
@@ -1718,7 +1718,7 @@ Run:
 make generate
 make test
 make build
-file bin/ssh-ui
+file bin/sshc
 git diff --check
 git status --short
 ```
@@ -1727,13 +1727,13 @@ Expected:
 
 - generate produces no uncommitted diff after the first committed generation;
 - all Go, race, Vitest, and TypeScript checks pass;
-- `bin/ssh-ui` is a Mach-O arm64 executable;
+- `bin/sshc` is a Mach-O arm64 executable;
 - `git diff --check` emits nothing;
 - `git status --short` is empty; `bin/` remains absent from status because it is intentionally ignored.
 
 - [ ] **Step 9: Perform a manual isolated smoke test**
 
-Run: `./bin/ssh-ui`
+Run: `./bin/sshc`
 
 Expected:
 
@@ -1759,7 +1759,7 @@ Before starting the lossless config-engine plan, verify all of the following:
 - `npm test --prefix web` passes.
 - `npm run typecheck --prefix web` passes.
 - `npm run build --prefix web` references no external asset origin.
-- `go build -trimpath -o bin/ssh-ui ./cmd/ssh-ui` succeeds.
+- `go build -trimpath -o bin/sshc ./cmd/sshc` succeeds.
 - listener tests prove only `tcp4/127.0.0.1:0` is accepted.
 - integration tests prove bootstrap replay, wrong Host, wrong Origin, missing cookie and missing CSRF are rejected.
 - logs contain none of the deterministic bootstrap, session, or CSRF fixtures.

@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"ssh-ui/internal/platform"
+	"sshc/internal/platform"
 )
 
 // OutputRunner runs external programs with a direct argv.

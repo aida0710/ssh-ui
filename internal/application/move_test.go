@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"ssh-ui/internal/config"
+	"sshc/internal/config"
 )
 
 // regionSource is the shape every entry file takes once groups are declared.
@@ -17,7 +17,7 @@ const regionSource = `Host bastion
 
 ` + RegionStartMarker + `
 Include connections/work/*.conf
-Include groups.ssh-ui.conf
+Include groups.sshc.conf
 ` + RegionEndMarker + `
 
 Host *
