@@ -6,18 +6,26 @@
 // deliberate and neither is automatic: nothing here runs unless somebody
 // presses something.
 //
-// The download is verified against the checksum file published beside it, which
-// is protection against a truncated or corrupted transfer and nothing else: the
-// checksum comes from the same place as the binary, so it says nothing about
-// whether that place is honest. What stands behind the bytes is TLS and the
-// GitHub account that published them. For an application that holds the key to
-// every stored password and sits beside every private key, that is a real trade
-// and it is written down rather than implied.
+// The checksum file is signed, and the public key is compiled into this binary.
+// That is what stands behind the bytes: not TLS, and not the account that
+// published them. An attacker who takes the GitHub account can publish anything
+// they like and no installation will accept it, because they cannot produce a
+// signature the key already in the binary verifies.
+//
+// The checksum itself only catches a truncated transfer — it comes from the
+// same place as the binary — so it is worth nothing on its own. It is worth
+// something once the file carrying it has been signed, which is the whole
+// arrangement: sign the manifest, and let the manifest speak for the artefact.
+//
+// A release with no signature is refused rather than accepted with a warning.
+// Accepting one would mean an attacker need only leave the signature out.
 package selfupdate
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -35,9 +43,16 @@ var (
 	ErrNoRelease = errors.New("no release has been published")
 	// ErrAssetMissing reports a release with nothing this machine can run.
 	ErrAssetMissing = errors.New("the release carries no build for this machine")
-	// ErrChecksumMismatch reports a download that is not what the release says
-	// it is. It means a broken transfer; it does not mean the release is safe.
+	// ErrChecksumMismatch reports a download that is not what the signed
+	// checksum file says it is.
 	ErrChecksumMismatch = errors.New("the download does not match the published checksum")
+	// ErrUnsigned reports a release that published no signature. It is refused
+	// rather than accepted, because otherwise an attacker need only leave the
+	// signature out.
+	ErrUnsigned = errors.New("the release is not signed")
+	// ErrBadSignature reports a signature this binary's key does not verify.
+	// Whoever published that release does not hold the key this was built with.
+	ErrBadSignature = errors.New("the release signature is not from this project")
 	// ErrNotWritable reports a binary this process may not replace.
 	ErrNotWritable = errors.New("this binary is not in a place this process can replace")
 )
@@ -51,9 +66,10 @@ type Release struct {
 	Version string
 	// PageURL is where a person can read what changed and download it by hand,
 	// which is the alternative to letting this replace anything.
-	PageURL     string
-	AssetURL    string
-	ChecksumURL string
+	PageURL      string
+	AssetURL     string
+	ChecksumURL  string
+	SignatureURL string
 }
 
 // Checker asks GitHub what the latest release is.
@@ -64,7 +80,12 @@ type Checker struct {
 	AssetName string
 	// ChecksumName is the file listing the checksums of the others.
 	ChecksumName string
-	HTTP         *http.Client
+	// SignatureName is the detached signature over that file.
+	SignatureName string
+	// PublicKey verifies it. An empty one accepts nothing: a build with no key
+	// cannot tell an honest release from any other, and must not guess.
+	PublicKey ed25519.PublicKey
+	HTTP      *http.Client
 }
 
 type githubRelease struct {
@@ -117,6 +138,8 @@ func (c Checker) Latest(ctx context.Context) (Release, error) {
 			release.AssetURL = asset.URL
 		case c.ChecksumName:
 			release.ChecksumURL = asset.URL
+		case c.SignatureName:
+			release.SignatureURL = asset.URL
 		}
 	}
 	if release.AssetURL == "" {
@@ -178,18 +201,33 @@ func (c Checker) Apply(ctx context.Context, release Release, path string) error 
 		return err
 	}
 
+	if len(c.PublicKey) != ed25519.PublicKeySize {
+		return ErrUnsigned
+	}
+	if release.ChecksumURL == "" || release.SignatureURL == "" {
+		return ErrUnsigned
+	}
+	sums, err := c.download(ctx, release.ChecksumURL, 1<<20)
+	if err != nil {
+		return err
+	}
+	signature, err := c.download(ctx, release.SignatureURL, 1<<20)
+	if err != nil {
+		return err
+	}
+	// The signature is checked before the binary is even fetched, so a release
+	// nobody signed costs one small download and stops there.
+	decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(signature)))
+	if err != nil || !ed25519.Verify(c.PublicKey, sums, decoded) {
+		return ErrBadSignature
+	}
+
 	body, err := c.download(ctx, release.AssetURL, MaxDownloadBytes)
 	if err != nil {
 		return err
 	}
-	if release.ChecksumURL != "" {
-		sums, sumErr := c.download(ctx, release.ChecksumURL, 1<<20)
-		if sumErr != nil {
-			return sumErr
-		}
-		if err := verify(body, string(sums), c.AssetName); err != nil {
-			return err
-		}
+	if err := verify(body, string(sums), c.AssetName); err != nil {
+		return err
 	}
 
 	temporary, err := os.CreateTemp(directory, ".ssh-ui-update-")

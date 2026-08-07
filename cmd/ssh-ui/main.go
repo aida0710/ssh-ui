@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"flag"
 	"fmt"
@@ -161,10 +163,12 @@ func main() {
 		// The one place this application contacts a host other than itself,
 		// and only when somebody presses the button.
 		Updates: &selfupdate.Checker{
-			API:          "https://api.github.com/repos/aida0710/ssh-ui/releases/latest",
-			AssetName:    "ssh-ui-" + runtime.GOOS + "-" + runtime.GOARCH,
-			ChecksumName: "checksums.txt",
-			HTTP:         &http.Client{Timeout: 5 * time.Minute},
+			API:           "https://api.github.com/repos/aida0710/ssh-ui/releases/latest",
+			AssetName:     "ssh-ui-" + runtime.GOOS + "-" + runtime.GOARCH,
+			ChecksumName:  "checksums.txt",
+			SignatureName: "checksums.txt.sig",
+			PublicKey:     releaseKey(),
+			HTTP:          &http.Client{Timeout: 5 * time.Minute},
 		},
 		Listen:    net.Listen,
 		UI:        assets,
@@ -185,4 +189,25 @@ func main() {
 		logger.Error("ssh-ui stopped", "error", err)
 		os.Exit(1)
 	}
+}
+
+// releaseSigningKey is the public half of the key this project signs releases
+// with. It is compiled in, which is the whole point: an attacker who takes the
+// publishing account can publish anything and no installation will accept it,
+// because they cannot produce a signature this key verifies.
+//
+// Losing the private half means no future release can be accepted by any
+// binary already installed. Replacing it is therefore not an update — it is a
+// new binary, delivered the way the first one was.
+const releaseSigningKey = "FyhF3tZRj1ib0u1S3vB966UtNbbMYJdKL6scl8L5cjg="
+
+// releaseKey decodes it. A key that does not decode is no key: the updater then
+// refuses everything, which is the safe direction for a build that was put
+// together wrongly.
+func releaseKey() ed25519.PublicKey {
+	decoded, err := base64.StdEncoding.DecodeString(releaseSigningKey)
+	if err != nil || len(decoded) != ed25519.PublicKeySize {
+		return nil
+	}
+	return decoded
 }

@@ -35,15 +35,23 @@ jobs:
       - name: Build
         run: make build VERSION=${{ github.ref_name }}
 
-      # The checksum is published beside the binary so a download can be
-      # checked for a truncated transfer. It says nothing about whether this
-      # release is honest — it comes from the same place as the binary — and the
-      # README says so rather than implying otherwise.
+      # The checksum file is what the signature covers, and the checksum is what
+      # covers the binary. On its own a checksum published beside the thing it
+      # describes only catches a truncated transfer; signed, it is what an
+      # installation checks before replacing itself.
       - name: Package
         run: |
           mkdir -p dist
           cp bin/ssh-ui "dist/ssh-ui-darwin-arm64"
           cd dist && shasum -a 256 ssh-ui-darwin-arm64 > checksums.txt
+
+      # The private half never leaves this step. An installation that cannot
+      # verify the signature refuses the update rather than taking it, so a
+      # release published without this one is a release nobody installs.
+      - name: Sign
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: go run ./internal/tools/sign dist/checksums.txt > dist/checksums.txt.sig
 
       - name: Publish
         env:
@@ -52,4 +60,4 @@ jobs:
           gh release create "${{ github.ref_name }}" \
             --title "${{ github.ref_name }}" \
             --generate-notes \
-            dist/ssh-ui-darwin-arm64 dist/checksums.txt
+            dist/ssh-ui-darwin-arm64 dist/checksums.txt dist/checksums.txt.sig
