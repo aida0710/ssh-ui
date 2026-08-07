@@ -11,16 +11,31 @@ about colour. It changes no behaviour and adds no feature.
 
 ## Colour means something happened
 
-**The accent is spent on the one action a screen is for, and on nothing else.**
-Not on the selected row, not on icons, not on values, not on headings. A row
-that is merely selected was the strongest thing on the screen; it now takes a
-grey fill and gives the colour back.
+**The accent is spent on the action that completes a section, and on nothing
+else.** Not on the selected row, not on a selected tab, not on icons, not on
+values, not on headings. A row that is merely selected was the strongest thing
+on the screen; it now takes a grey fill and gives the colour back.
+
+Per section, not per screen. Sync configures a bucket *and* pushes a snapshot;
+Keys creates a key, registers one with the agent, moves one and changes one's
+passphrase. Those are separate goals that happen to share a window, and the
+button that completes each is that section's one accent.
+
+The test is the outcome, not the count: **two accents must never lead to the
+same result.** Where they did — a host could be given a password by pointing it
+at a stored one or by storing a new one, and both buttons said only
+"password" — the fault was the words, and naming the two acts apart fixed it
+without taking the colour off either.
+
+Two exceptions, deliberate: the focus ring on a control, and the tick in a
+checked box. Both are transient, both are the accepted convention, and both
+mark where the user is rather than what the screen is for.
 
 What remains coloured is state, and only state:
 
 | Colour | Means |
 | --- | --- |
-| Blue | The primary action of this screen |
+| Blue | The action that completes a section |
 | Amber | A notice — this save rewrites three lines, this host has diagnostics |
 | Red | An operation that destroys something |
 | Green | The local session is alive |
@@ -146,11 +161,17 @@ same button is in the same place on every screen, so "open the right pane" is
 one gesture regardless of section. A section that has nothing to inspect does
 not render the button at all, rather than disabling it.
 
-**Connections is the only section that fills the inspector here.** The other
-nine render no toggle. The pane is built as something a section supplies rather
-than something Connections owns, so Keys and Known Hosts can fill it later, but
-filling them is not this work — a pane offered everywhere and empty in nine
-places out of ten teaches people not to open it.
+**Two sections fill the inspector: Connections and Groups.** The other eight
+render no toggle. The pane is something a section supplies rather than something
+Connections owns, and Groups took it up for the same reason Connections did —
+a group's colour, display order and hidden flag live only in `metadata.json`,
+so they belong on the side that is not the file. The remaining eight are not a
+backlog: a pane offered everywhere and empty in most places teaches people not
+to open it.
+
+*Written before the work as "Connections is the only section that fills the
+inspector". Groups became the second when its screen was found to be carrying
+seven controls per group, all expanded at once.*
 
 **Its open state is the shell's, not a section's.** Opened on Connections, it is
 still open on Keys. A pane that shut itself every time you changed section

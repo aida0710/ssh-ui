@@ -41,7 +41,7 @@ Prescription: the list becomes rows that say what each item *is*. What you do *t
 | Known Hosts | list | Scan controls to the toolbar; the entries become rows; delete confirmation becomes a `Notice tone="danger"`. |
 | History | list | Two lists, no editing. Rows only; no inspector. |
 | Groups | list | The heaviest: seven controls per group, permanently expanded. Editing moves to the inspector. |
-| Keys | list | The largest file, 23 buttons. Same treatment as Groups, done last because it is the biggest. |
+| Keys | form | The largest file, 23 buttons. Assigned "list" here and built as a form: its four independent sections each complete their own action, and none of them is editing one selected thing. |
 
 ## Order
 
@@ -106,7 +106,13 @@ The per-screen specifics are deliberately not written out here. Each screen's re
 
 ## Self-Review
 
-**Spec coverage.** The design document asks for one palette (done, and now enforced by a test), one set of components, and an inspector that other screens can fill. This plan spends the components and gives the inspector its second and third users.
+**Spec coverage.** The design document asks for one palette (done, and now enforced by a test), one set of components, and an inspector that other screens can fill. This plan spends the components and gives the inspector its second user.
+
+*Recorded after the fact: it says "second and third" no longer because Keys
+did not take the pane. Its settings became cards of rows and stayed on the
+page — the screen has four independent forms, and moving one of them to a
+pane the other three cannot use would have split the screen rather than
+tidied it.*
 
 **What this plan does not do.** It does not merge, rename or remove a section; it does not change an API; it adds no capability. If a screen's behaviour looks wrong while converting it, that is a separate change and a separate commit.
 
