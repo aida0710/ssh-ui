@@ -83,11 +83,11 @@ func TestExpandRouteFollowsCommaSeparatedAndNestedJumps(t *testing.T) {
 	}
 }
 
-// TestExpandRouteBoundsAWideRoute guards the one shape MaxJumpDepth does not
-// bound. Every hop of a comma-separated list may carry a list of its own, so
-// the number of stages grows as a product of the list lengths rather than a
-// sum: eight levels of three hops is 9840 stages, and eight levels of thirty
-// is far beyond what any response may hold.
+// TestExpandRouteBoundsAWideRoute は、MaxJumpDepth が制限しない唯一の形を守る。
+// カンマ区切りリストの各ホップが自身のリストを持ちうるので、段数は和ではなく
+// リスト長の積として増える。3 ホップ 8 段なら 9840 段であり、30 ホップ 8 段なら、
+// どんなレスポンスにも収まりうる大きさを
+// はるかに超える。
 func TestExpandRouteBoundsAWideRoute(t *testing.T) {
 	contents := ""
 	for level := 1; level < 9; level++ {

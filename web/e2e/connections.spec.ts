@@ -24,9 +24,9 @@ test("edits a host through the form and writes only the line that changed", asyn
   const after = await installation.read("config");
   expect(after).toContain("Port 2244");
   expect(after).not.toContain("Port 2222");
-  // The bytes around the change must survive exactly: the comment, the
-  // "HostName=" spelling and the run of spaces after User are all things a
-  // reformatting editor would quietly normalise.
+  // 変更の周囲のバイト列は正確に生き残らなければならない。
+  // コメント、"HostName=" の綴り、User の後ろの連続した
+  // 空白はすべて、整形するエディタなら黙って正規化してしまうものだ。
   expect(after).toContain("# Managed by hand since 2019. Do not reformat.");
   expect(after).toContain("HostName=203.0.113.10");
   expect(after).toContain("User    ops");
@@ -70,7 +70,7 @@ test("refuses a save whose base is stale and shows the three-way conflict", asyn
 }) => {
   await openBastion(page, installation.url);
 
-  // Someone edits the file outside the application after the page loaded it.
+  // ページがファイルを読み込んだ後で、誰かがアプリケーションの外でそのファイルを編集する。
   const external = (await installation.read("config")).replace(
     "Host *",
     "Host edited-outside\n\tHostName 192.0.2.99\n\nHost *",
@@ -83,22 +83,22 @@ test("refuses a save whose base is stale and shows the three-way conflict", asyn
   await expect(page.getByText("Changed on disk since you loaded it")).toBeVisible();
   await expect(page.getByText("Your pending change")).toBeVisible();
 
-  // The decisive assertion: the external edit survived untouched and the
-  // pending change was not written over it.
+  // 決め手となる検証はこうだ。外部での編集はそのまま生き残り、
+  // 保留中の変更がそれを上書きしなかったこと。
   const after = await installation.read("config");
   expect(after).toBe(external);
   expect(after).not.toContain("Port 2277");
 });
 
-// The Diagnostics tab used to say the checks would arrive with a later
-// subsystem, long after they had. It now runs the real ones, addressed by the
-// open connection.
+// Diagnostics タブはかつて、検査は後のサブシステムで届くと
+// 言っていたが、実際にはとうに届いていた。今では開いている
+// 接続を宛先として、本物の検査を実行する。
 //
-// Only the command builder is exercised here: it composes an argv and starts
-// nothing. Reachability and the authentication test dial a host, and no
-// automated test in this repository may do that — they are manual tests M2 and
-// M3. That the buttons exist and start nothing on their own is the property
-// this spec can honestly assert.
+// ここで検証するのはコマンドビルダーだけだ。argv を組み立てるだけ
+// で何も起動しない。到達性テストと認証テストは実際にホストへ接続
+// するため、このリポジトリのどの自動テストもそれを行ってはなら
+// ない——それらは手動テスト M2 と M3 である。ボタンが存在し、それ自体
+// では何も起動しないことこそ、この試験が正直に主張できる性質だ。
 test("diagnoses the open connection from its own tab, and starts nothing unasked", async ({
   page,
   installation,
@@ -113,20 +113,20 @@ test("diagnoses the open connection from its own tab, and starts nothing unasked
 
   const panel = page.getByRole("region", { name: "Diagnostics for bastion" });
   await expect(panel).toBeVisible();
-  // The connection is already known, so the tab asks for no alias.
+  // 接続は既知であるため、タブは alias を尋ねない。
   await expect(panel.getByLabel("Host alias")).toHaveCount(0);
   expect(started.filter((path) => path.startsWith("/api/v1/diagnostics/"))).toEqual([]);
   expect(started.filter((path) => path.startsWith("/api/v1/terminal/"))).toEqual([]);
 
   expect(await clickAndAwait(page, "Terminal command", "/api/v1/terminal/command")).toBe(200);
-  // This binary and the alias. It used to be five environment variables and a
-  // flag, which is what the Terminal button assembles for itself and carried a
-  // live one-time token into the shell's history.
+  // このバイナリと alias。かつては 5 つの環境変数と 1 つの
+  // フラグだったが、それは Terminal ボタンが自分で組み立てる
+  // ものであり、有効な使い捨てトークンをシェルの履歴に残していた。
   await expect(panel.getByText(/sshc bastion$/)).toBeVisible();
   await expect(panel.getByText(/SSHC_ASKPASS_TOKEN/)).toHaveCount(0);
 
-  // Still nothing launched: building the command and running it are separate
-  // operations, and only the second one needs a confirmation.
+  // それでも何も起動しない。コマンドの組み立てと実行は
+  // 別の操作であり、確認が必要なのは後者だけだ。
   expect(started).not.toContain("/api/v1/terminal/launch");
 });
 
@@ -143,22 +143,22 @@ test("sends the Effective tab to the authoritative check instead of describing i
   await expect(page.getByRole("region", { name: "Diagnostics for bastion" })).toBeVisible();
 });
 
-// Metadata the schema has always carried but no screen could edit: a colour, a
-// display order, and a note whose Host block is gone.
+// スキーマが常に持っていながらどの画面からも編集できな
+// かったメタデータ。色、表示順、そして Host ブロックが消えたノートだ。
 test("edits the display order it stores, and shows a favourite in the tree", async ({
   page,
   installation,
 }) => {
   await openBastion(page, installation.url);
 
-  // The colour, the tags, the favourite flag and the display order are the
-  // settings that exist only in metadata.json, so they live in the inspector
-  // rather than beside the directives that get written to a file. The pane is
-  // shut until asked for.
+  // 色、タグ、favorite フラグ、表示順は metadata.json にしか
+  // 存在しない設定なので、ファイルに書き出されるディレクティブの
+  // 隣ではなくインスペクタに置かれる。ペインは求められる
+  // まで閉じている。
   await page.getByRole("button", { name: "Show details" }).click();
 
-  // Waiting on the write rather than polling the file: the metadata document
-  // does not exist until the first save creates it.
+  // ファイルをポーリングするのではなく書き込みを待つ。
+  // メタデータのドキュメントは最初の保存が作るまで存在しない。
   const [ordered] = await Promise.all([
     page.waitForResponse(
       (response) =>
@@ -169,10 +169,10 @@ test("edits the display order it stores, and shows a favourite in the tree", asy
   expect(ordered.status()).toBe(200);
   expect(JSON.parse(await installation.read("sshc/metadata.json")).hosts[0].order).toBe(-1);
 
-  // The favourite marker used to live only in the screen reader description,
-  // so a sighted user could set one and then not find it. Clicking rather than
-  // checking: the panel reloads from the server as the save lands, and the star
-  // appearing in the tree is the assertion that matters anyway.
+  // favorite マーカーはかつてスクリーンリーダー用の説明にしか存在せず、
+  // 目の見えるユーザーは設定してもそれを見つけられなかった。check()
+  // ではなくクリックで検証する。保存が完了するとパネルはサーバーから
+  // 再読み込みされ、ツリーに星が現れることこそが本当に重要な検証だ。
   await page.getByLabel("Favourite").click();
   const row = page
     .getByRole("navigation", { name: "Connections" })
@@ -200,16 +200,16 @@ test("re-associates a note whose connection is gone, without guessing", async ({
   const panel = page.getByRole("region", { name: "Settings whose connection is gone" });
   await expect(panel).toBeVisible();
   await expect(panel.getByText("retired in config")).toBeVisible();
-  // The note is retired in favour of a configuration comment, and membership is
-  // the directory now, so the panel describes the entry by what it still
-  // carries: the presentation that has no home in the configuration.
+  // ノートは設定ファイルのコメントに置き換えられて廃止され、
+  // 所属はもうディレクトリで表されるため、パネルはエントリを
+  // それがまだ持っているもの——設定ファイルに居場所のない見た目——で説明する。
   await expect(panel.getByText(/tags ci/)).toBeVisible();
 
   await panel.getByLabel("Re-associate retired with").selectOption("config\u0000bastion");
   expect(await clickAndAwait(page, "Re-associate retired", "/api/v1/config/save")).toBe(200);
 
-  // The note moved to the host the user named, and the server's orphan flag is
-  // not written back into the document it describes.
+  // ノートはユーザーが名指ししたホストへ移り、サーバーの
+  // orphan フラグはそれが説明する文書には書き戻されない。
   const saved = JSON.parse(await installation.read("sshc/metadata.json"));
   expect(saved.hosts).toHaveLength(1);
   expect(saved.hosts[0]).toMatchObject({
@@ -232,10 +232,10 @@ test("writes a comment into the configuration file above the Host line", async (
   const after = await installation.read("config");
   expect(after).toContain("# the production bastion\n# ask infra before changing it\nHost bastion\n");
 
-  // The file's own banner sits above a blank line, so it belongs to the file
-  // and not to the first block. Editing the block must leave it alone.
+  // ファイル自身のバナーは空行の上にあるため、最初の
+  // ブロックではなくファイルに属する。ブロックの編集はそれに触れてはならない。
   expect(after).toContain("# Managed by hand since 2019. Do not reformat.\n\nInclude conf.d/*.conf");
-  // And every byte the comment did not add is unchanged.
+  // そしてコメントが加えなかったすべてのバイトは変わらない。
   expect(after.replace("# the production bastion\n# ask infra before changing it\n", "")).toBe(before);
 });
 
@@ -250,13 +250,13 @@ test("removes the comment lines when the comment is cleared", async ({ page, ins
   await page.getByLabel("Comment").fill("");
   expect(await clickAndAwait(page, "Save comment", "/api/v1/config/save")).toBe(200);
 
-  // Back to the original bytes: adding and removing a comment is a round trip.
+  // 元のバイト列に戻る。コメントの追加と削除は往復である。
   expect(await installation.read("config")).toBe(before);
 });
 
-// A comment that means something can be mis-attributed. These are the two ways
-// a block leaves a file, and both would otherwise hand its description to
-// whichever connection happened to follow it.
+// 意味を持つコメントは誤って別のものに帰属しうる。この
+// 2 つがブロックがファイルを去る方法であり、どちらも
+// 放っておけば、たまたま後に続いた接続にその説明を渡してしまう。
 test("takes a comment with the connection it describes when the block moves", async ({
   page,
   installation,
@@ -273,9 +273,9 @@ test("takes a comment with the connection it describes when the block moves", as
   await page.getByLabel("Move to file").selectOption("config");
   expect(await clickAndAwait(page, "Move connection", "/api/v1/config/save")).toBe(200);
 
-  // The comment arrived with the block…
+  // コメントはブロックと一緒に届いた……
   expect(await installation.read("config")).toContain("# the file server\nHost nas\n");
-  // …and the printer kept its own rather than inheriting nas's.
+  // ……そして printer は nas のものを継承せず、自分自身のものを保った。
   const source = await installation.read("conf.d/10-home.conf");
   expect(source).not.toContain("the file server");
   expect(source).toContain("# the printer\nHost printer\n");
@@ -297,8 +297,8 @@ test("takes a comment with the connection when the block is deleted", async ({
   expect(await clickAndAwait(page, "Confirm delete", "/api/v1/config/save")).toBe(200);
 
   const after = await installation.read("conf.d/10-home.conf");
-  // Left behind, "# the file server" would have become the printer's
-  // description — a silent lie about a connection nobody touched.
+  // 置き去りにされていたら、"# the file server" は printer の
+  // 説明になってしまっていた——誰も触れていない接続についての静かな嘘だ。
   expect(after).not.toContain("the file server");
   expect(after).toContain("# the printer\nHost printer\n");
 });
@@ -312,27 +312,27 @@ test("moves a connection into a group by dragging it", async ({ page, installati
 
   await openSection(page, "Connections");
   const tree = page.getByRole("navigation", { name: "Connections" });
-  // The heading is on screen before anything is in the group, which is what
-  // makes it a target at all: a group that hid until it held something could
-  // never be filled by dragging.
+  // 見出しはグループに何も入っていない段階から画面にある。
+  // それこそがドロップ先になりうる理由であり、何かを持つまで
+  // 隠れているグループには、ドラッグで中身を入れることが決してできない。
   await expect(tree.getByRole("heading", { name: "work" })).toBeVisible();
 
   await tree.getByRole("button", { name: "bastion" }).dragTo(tree.getByRole("heading", { name: "work" }));
 
-  // Read back through the file the group's Include names. That the block is in
-  // connections/work/config.conf is what proves the move landed somewhere
-  // OpenSSH reads, rather than merely somewhere a file was written.
+  // ファイルを読み返して、グループの Include 名を確かめる。
+  // ブロックが connections/work/config.conf にあることこそ、
+  // 移動が単にファイルが書かれた場所ではなく、OpenSSH が読む場所へ届いた証拠だ。
   await expect(async () => {
     expect(await installation.read("connections/work/config.conf")).toContain("Host bastion");
   }).toPass();
   expect(await installation.read("config")).not.toContain("Host bastion\n");
 });
 
-// Opening the inspector adds a third column. The middle one has to give up the
-// width for it, and a bare `1fr` will not: in CSS grid that means
-// minmax(auto, 1fr), so the track keeps its content's width and the detail runs
-// on underneath the pane instead. The buttons at the top of the detail were the
-// first thing to disappear under it.
+// インスペクタを開くと 3 列目が追加される。中央の列がその
+// ぶんの幅を譲らねばならないが、素の `1fr` ではそれができ
+// ない。CSS grid では minmax(auto, 1fr) を使うことで、
+// トラックが内容の幅を保ち、詳細はペインの下に潜り込む。
+// 詳細欄の上部にあるボタンが真っ先にその下へ消えていた。
 test("opening the inspector narrows the detail rather than hiding it under the pane", async ({
   page,
   installation,
@@ -346,7 +346,7 @@ test("opening the inspector narrows the detail rather than hiding it under the p
   const paneLeft = (await pane.boundingBox())?.x ?? 0;
   expect(paneLeft).toBeGreaterThan(0);
 
-  // Every control the detail offers stays to the left of the pane's edge.
+  // 詳細が提供するすべてのコントロールは、ペインの端より左側にとどまる。
   for (const name of ["Duplicate connection", "Move connection", "Delete connection", "Save changes"]) {
     const box = await page.getByRole("button", { name, exact: true }).boundingBox();
     expect(box, `${name} has no box`).not.toBeNull();

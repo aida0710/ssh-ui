@@ -16,38 +16,38 @@ import (
 )
 
 var (
-	// ErrLocked reports that no passphrase has been supplied this session.
+	// ErrLocked は、このセッションでパスフレーズがまだ与えられていないことを報告する。
 	ErrLocked = errors.New("the password vault is locked")
-	// ErrAlreadyExists reports that Initialise was called for a workspace that
-	// already has a vault. Overwriting it would destroy every stored password
-	// with no way back.
+	// ErrAlreadyExists は、すでに vault を持つワークスペースに対して Initialise が
+	// 呼ばれたことを報告する。上書きすれば、保存済みのパスワードがすべて破壊され、
+	// 元に戻す手段はない。
 	ErrAlreadyExists = errors.New("this workspace already has a password vault")
-	// ErrNoVault reports that nothing has been created yet.
+	// ErrNoVault は、まだ何も作られていないことを報告する。
 	ErrNoVault = errors.New("this workspace has no password vault yet")
-	// ErrUnknownToken reports an askpass token that was never issued, has
-	// already been spent, has expired, or was issued for a different alias.
+	// ErrUnknownToken は、発行されていない、すでに使われた、期限が切れた、あるいは
+	// 別の alias に対して発行された askpass トークンを報告する。
 	ErrUnknownToken = errors.New("that askpass token is not valid for this request")
-	// ErrNoPassword reports that nothing is stored for that alias.
+	// ErrNoPassword は、その alias に何も保存されていないことを報告する。
 	ErrNoPassword = errors.New("no password is stored for that host")
 )
 
-// TokenTTL is how long an askpass token stays usable.
+// TokenTTL は、askpass トークンが使える時間。
 //
-// It is the same two minutes as a session action token, and for the same
-// reason: it is the gap between a user clicking a button and OpenSSH reaching
-// the password prompt, not a window anyone should be able to plan around.
+// セッションのアクショントークンと同じ 2 分であり、理由も同じである。これは
+// ユーザーがボタンを押してから OpenSSH がパスワードのプロンプトに到達するまでの
+// 間隔であって、誰かが計画を立てられるような窓ではない。
 const TokenTTL = 2 * time.Minute
 
-// MaxPendingTokens bounds how many unspent tokens can be held at once, so a
-// user who opens many terminals cannot grow this map without limit.
+// MaxPendingTokens は、未使用のトークンを同時にいくつ保持できるかを制限する。
+// 端末をたくさん開くユーザーが、このマップを際限なく育てられないようにするためだ。
 const MaxPendingTokens = 32
 
-// IdleTimeout is how long an open vault survives without being used.
+// IdleTimeout は、開いた vault が使われないまま生き続ける時間。
 //
-// A vault that stayed open for the life of the process would be open while the
-// laptop is in a bag, and it holds every password and every key passphrase.
-// Eight hours is a working day: someone who uses it in the morning is not asked
-// again in the afternoon, and someone who stops for the night is.
+// プロセスの寿命のあいだずっと開いたままの vault は、ノートパソコンが鞄の中に
+// あるあいだも開いている。しかもそれは、すべてのパスワードとすべての鍵の
+// パスフレーズを保持している。8 時間は 1 日の勤務時間だ。朝に使った人は午後に
+// 再度尋ねられず、夜に手を止めた人は尋ねられる。
 const IdleTimeout = 8 * time.Hour
 
 type pendingToken struct {
@@ -55,34 +55,34 @@ type pendingToken struct {
 	expires time.Time
 }
 
-// Service owns the opened vault for the life of the process.
+// Service は、プロセスの寿命のあいだ、開いた vault を所有する。
 //
-// The derived key lives in this struct and nowhere else. It is never written,
-// never logged and never returned; the only thing that leaves is one password,
-// to one askpass request, holding one token this service issued.
+// 導出された鍵はこの構造体の中にだけあり、他のどこにもない。書き出されず、ログにも
+// 出ず、返されることもない。外へ出るのはパスワードひとつだけであり、それも、この
+// サービスが発行したトークンをひとつ持つ askpass リクエストひとつに対してである。
 type Service struct {
 	workspace    *storage.Workspace
 	transactions *storage.Manager
 	now          func() time.Time
 
-	// sleep is how a refusal waits. Injected so a test can watch the backoff
-	// without spending it.
+	// sleep は拒否がどう待つかを表す。テストがバックオフを実際に消費せずに観測できる
+	// よう注入する。
 	sleep func(time.Duration)
 
 	mu    sync.Mutex
 	vault *Vault
-	// refusals counts consecutive wrong master passwords, and is what makes
-	// each one answered more slowly than the last.
+	// refusals は、連続して誤ったマスターパスワードの回数を数える。これが、拒否のたび
+	// に前回より遅く答えさせている。
 	refusals int
 	tokens   map[string]pendingToken
-	// used is when a secret was last read or written. Reading the status is
-	// deliberately not use: an open browser tab asks for it whenever a screen
-	// mounts, and one forgotten tab must not hold the vault open for as long as
-	// the machine is on.
+	// used は、秘密が最後に読み書きされた時刻。ステータスの読み取りは意図的に「使用」
+	// に含めない。開いたブラウザタブは画面がマウントされるたびにそれを尋ねるので、
+	// 忘れられたタブがひとつあるだけで、マシンの電源が入っているあいだじゅう vault が
+	// 開いたままになってはならない。
 	used time.Time
 }
 
-// NewService returns a locked service. Nothing can be read until Unlock.
+// NewService はロックされたサービスを返す。Unlock まで何も読めない。
 func NewService(workspace *storage.Workspace, transactions *storage.Manager, now func() time.Time) *Service {
 	return &Service{
 		workspace:    workspace,
@@ -92,12 +92,12 @@ func NewService(workspace *storage.Workspace, transactions *storage.Manager, now
 	}
 }
 
-// open returns the vault, shutting it first if it has gone untouched for longer
-// than IdleTimeout.
+// open は vault を返す。IdleTimeout より長く触れられていなければ、先にそれを
+// 閉じる。
 //
-// Every method that touches a secret goes through here rather than testing
-// s.vault itself, so there is one place that decides whether the vault is open
-// and no method can be written that forgets to ask.
+// 秘密に触れるすべてのメソッドは、s.vault 自体を調べるのではなくここを通る。
+// そのため、vault が開いているかを判断する場所はひとつだけになり、それを尋ね
+// 忘れたメソッドを書くことはできない。
 func (s *Service) open() *Vault {
 	if s.vault == nil {
 		return nil
@@ -110,9 +110,9 @@ func (s *Service) open() *Vault {
 	return s.vault
 }
 
-// use returns the vault and puts the idle clock back to zero. It is what a
-// method calls when it is about to read or write a secret, as opposed to
-// reporting whether there is one.
+// use は vault を返し、アイドルの時計をゼロに戻す。これは、秘密があるかどうかを
+// 報告するのではなく、まさに秘密を読み書きしようとするときにメソッドが呼ぶもので
+// ある。
 func (s *Service) use() *Vault {
 	vault := s.open()
 	if vault != nil {
@@ -125,8 +125,8 @@ func (s *Service) path() string {
 	return filepath.Join(s.workspace.Root(), filepath.FromSlash(WorkspacePath))
 }
 
-// Exists reports whether a vault file is present, which is a different
-// question from whether it is unlocked.
+// Exists は vault ファイルが存在するかを報告する。これは、それがロック解除されて
+// いるかという問いとは別のものである。
 func (s *Service) Exists() (bool, error) {
 	_, err := s.workspace.FileSystem().ReadFile(s.path())
 	if err == nil {
@@ -138,18 +138,18 @@ func (s *Service) Exists() (bool, error) {
 	return false, err
 }
 
-// Unlocked reports whether a passphrase has been supplied this session.
+// Unlocked は、このセッションでパスフレーズが与えられたかを報告する。
 func (s *Service) Unlocked() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.open() != nil
 }
 
-// Initialise creates a vault for a workspace that has none.
+// Initialise は、vault を持たないワークスペースのために vault を作る。
 //
-// It refuses when one already exists rather than replacing it: an accidental
-// re-initialise would destroy every stored password, and there is no recovery
-// path for an encrypted file whose key is gone.
+// すでに存在する場合は置き換えずに拒否する。うっかり再初期化すれば、保存済みの
+// パスワードがすべて破壊されるし、鍵が失われた暗号化ファイルに復旧の道は
+// ない。
 func (s *Service) Initialise(passphrase string) error {
 	exists, err := s.Exists()
 	if err != nil {
@@ -170,16 +170,16 @@ func (s *Service) Initialise(passphrase string) error {
 	return s.write()
 }
 
-// Verify reports whether passphrase is this workspace's master password.
+// Verify は、passphrase がこのワークスペースのマスターパスワードかを報告する。
 //
-// It answers from the file and changes nothing, so a shut vault can still be
-// asked and a screen can find out whether what the user typed is the master
-// password before using it as one. That is what lets the snapshot be sealed
-// with the master password rather than a second one: a typo becomes a refusal
-// here instead of an archive nobody can ever open.
+// ファイルから答え、何も変えない。したがって閉じた vault にも尋ねられるし、画面は、
+// ユーザーが打ち込んだものをマスターパスワードとして使う前に、それがマスター
+// パスワードかどうかを知ることができる。スナップショットを二つ目のパスワードでは
+// なくマスターパスワードで封じられるのはこれのおかげだ。打ち間違いは、誰にも開け
+// ないアーカイブではなく、ここでの拒否になる。
 //
-// It costs one derivation, which is the same cost as unlocking, and it is only
-// ever reached by an action a person asked for.
+// コストは導出 1 回分で、ロック解除と同じである。しかもここに到達するのは、人が
+// 求めた操作からだけだ。
 func (s *Service) Verify(passphrase string) (bool, error) {
 	sealed, err := s.workspace.FileSystem().ReadFile(s.path())
 	if err != nil {
@@ -197,19 +197,19 @@ func (s *Service) Verify(passphrase string) (bool, error) {
 	return true, nil
 }
 
-// MaxUnlockDelay is how long a refusal will ever wait.
+// MaxUnlockDelay は、拒否が待つ最長時間。
 //
-// The vault file can be copied and attacked offline, so this is not what stands
-// between an attacker and its contents — Argon2id is. What it stops is the
-// cheap case: a local process trying passwords against a running application as
-// fast as it can answer them.
+// vault ファイルはコピーしてオフラインで攻撃できるので、これは攻撃者とその中身の
+// あいだに立つものではない — それは Argon2id である。これが止めるのは安価な場合だ。
+// すなわち、動作中のアプリケーションに対して、答えられる限りの速さでパスワードを
+// 試すローカルのプロセスである。
 const MaxUnlockDelay = 4 * time.Second
 
-// SetSleep installs how a refusal waits. It is for the test that watches the
-// backoff rather than spending it.
+// SetSleep は、拒否がどう待つかを取り付ける。バックオフを消費せずに観測するテスト
+// のためのものである。
 func (s *Service) SetSleep(sleep func(time.Duration)) { s.sleep = sleep }
 
-// refuse waits for as long as this run's consecutive refusals have earned.
+// refuse は、この実行での連続した拒否が招いた分だけ待つ。
 func (s *Service) refuse() {
 	s.mu.Lock()
 	s.refusals++
@@ -227,7 +227,7 @@ func (s *Service) refuse() {
 	sleep(delay)
 }
 
-// Unlock opens the vault with passphrase.
+// Unlock は passphrase で vault を開く。
 func (s *Service) Unlock(passphrase string) error {
 	sealed, err := s.workspace.FileSystem().ReadFile(s.path())
 	if err != nil {
@@ -247,16 +247,16 @@ func (s *Service) Unlock(passphrase string) error {
 	s.mu.Lock()
 	s.vault = vault
 	s.used = s.now()
-	// A password that worked clears what the wrong ones built up.
+	// 通ったパスワードは、誤ったものが積み上げたものを消し去る。
 	s.refusals = 0
 	s.mu.Unlock()
 	return nil
 }
 
-// Lock forgets the derived key and every pending token.
+// Lock は、導出された鍵と未使用のトークンをすべて忘れる。
 //
-// The tokens go with it because a token outliving the unlock would let a
-// connection started before the lock still collect a password after it.
+// トークンも一緒に消えるのは、ロックより長生きするトークンがあれば、ロック前に
+// 始まった接続がロック後もパスワードを取得できてしまうからである。
 func (s *Service) Lock() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -264,10 +264,10 @@ func (s *Service) Lock() {
 	s.tokens = map[string]pendingToken{}
 }
 
-// Has reports whether a password is stored for alias. It answers false rather
-// than an error while locked, because "we cannot see" and "there is none" look
-// the same from outside and the interface says which state it is in
-// separately.
+// Has は、alias にパスワードが保存されているかを報告する。ロック中はエラーでは
+// なく false を答える。「見えない」と「存在しない」は外からは同じに見えるし、
+// インターフェースは、どちらの状態にあるかを別途示している
+// からである。
 func (s *Service) Has(alias string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -279,11 +279,11 @@ func (s *Service) Has(alias string) bool {
 	return ok
 }
 
-// Set stores a password for one alias and writes the vault.
+// Set は、alias ひとつ分のパスワードを保存し、vault を書き込む。
 //
-// The credential takes the alias as its name, which is what "just store a
-// password for this host" means now that secrets have names. Sharing one across
-// several hosts is done by assigning an existing name instead.
+// 資格情報は alias を名前として取る。秘密に名前が付いたいま、「このホストのために
+// とにかくパスワードを保存する」とはそういう意味である。複数のホストで共有するに
+// は、代わりに既存の名前を割り当てる。
 func (s *Service) Set(alias, password string) error {
 	s.mu.Lock()
 	vault := s.use()
@@ -303,7 +303,7 @@ func (s *Service) Set(alias, password string) error {
 	return s.write()
 }
 
-// Remove forgets a password and writes the vault.
+// Remove はパスワードを忘れ、vault を書き込む。
 func (s *Service) Remove(alias string) error {
 	s.mu.Lock()
 	vault := s.use()
@@ -311,16 +311,16 @@ func (s *Service) Remove(alias string) error {
 		s.mu.Unlock()
 		return ErrLocked
 	}
-	// The reference goes; the credential stays if anything else points at it,
-	// and goes with it when nothing does.
+	// 参照は消える。他に何かが指していれば資格情報は残り、何も指さなくなれば
+	// 一緒に消える。
 	vault.Unassign(KindPassword, alias)
 	_ = vault.Delete(KindPassword, alias)
 	s.mu.Unlock()
 	return s.write()
 }
 
-// Rename carries a stored password to a new alias. A host rename that left it
-// behind would file the password under a name nothing ever asks for again.
+// Rename は、保存済みのパスワードを新しい alias へ引き継ぐ。ホストの名前変更が
+// それを置き去りにすれば、二度と誰も尋ねない名前の下にパスワードが残る。
 func (s *Service) Rename(from, to string) error {
 	s.mu.Lock()
 	vault := s.use()
@@ -340,11 +340,11 @@ func (s *Service) Rename(from, to string) error {
 	return s.write()
 }
 
-// Credentials lists every credential name of both kinds with what uses it.
+// Credentials は、両方の種別のすべての資格情報名と、その使用先を列挙する。
 //
-// Names and uses, never values. This is what the screens read, and a screen
-// that could read a secret would be a screen a compromised browser could read
-// it from.
+// 名前と使用先だけで、値は決して返さない。これは各画面が読むものであり、秘密を
+// 読める画面があれば、それは侵害されたブラウザがそこから秘密を読める画面だという
+// ことになる。
 func (s *Service) Credentials() (map[Kind]map[string][]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -366,10 +366,10 @@ func (s *Service) Credentials() (map[Kind]map[string][]string, error) {
 	return listed, nil
 }
 
-// SetCredential creates a credential or replaces its value.
+// SetCredential は、資格情報を作るか、その値を置き換える。
 //
-// Replacing is how a shared secret is rotated: every subject pointing at the
-// name reads the new value, which is the whole reason names exist.
+// 置き換えは、共有された秘密をローテーションする方法である。その名前を指している
+// すべての subject が新しい値を読む。名前が存在する理由そのものだ。
 func (s *Service) SetCredential(kind Kind, name, value string) error {
 	s.mu.Lock()
 	vault := s.use()
@@ -385,7 +385,7 @@ func (s *Service) SetCredential(kind Kind, name, value string) error {
 	return s.write()
 }
 
-// DeleteCredential forgets a credential, refusing while anything points at it.
+// DeleteCredential は資格情報を忘れる。何かがそれを指しているあいだは拒否する。
 func (s *Service) DeleteCredential(kind Kind, name string) error {
 	s.mu.Lock()
 	vault := s.use()
@@ -401,8 +401,8 @@ func (s *Service) DeleteCredential(kind Kind, name string) error {
 	return s.write()
 }
 
-// AssignCredential points a subject at a credential of the same kind. The kind
-// is the guard: there is no map in which the other kind's names appear.
+// AssignCredential は、subject を同じ種別の資格情報に向ける。種別が防護である。
+// 他方の種別の名前が現れるマップは存在しない。
 func (s *Service) AssignCredential(kind Kind, subject, name string) error {
 	s.mu.Lock()
 	vault := s.use()
@@ -418,7 +418,7 @@ func (s *Service) AssignCredential(kind Kind, subject, name string) error {
 	return s.write()
 }
 
-// UnassignCredential forgets a subject's reference, leaving the credential.
+// UnassignCredential は subject の参照を忘れ、資格情報自体は残す。
 func (s *Service) UnassignCredential(kind Kind, subject string) error {
 	s.mu.Lock()
 	vault := s.use()
@@ -431,7 +431,7 @@ func (s *Service) UnassignCredential(kind Kind, subject string) error {
 	return s.write()
 }
 
-// AssignedCredential reports the name a subject references.
+// AssignedCredential は、subject が参照している名前を報告する。
 func (s *Service) AssignedCredential(kind Kind, subject string) (string, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -442,9 +442,9 @@ func (s *Service) AssignedCredential(kind Kind, subject string) (string, bool) {
 	return vault.Assigned(kind, subject)
 }
 
-// PasswordFor resolves an alias to the value it should be given, or "" when
-// there is none and when the vault is shut. The caller that matters — the
-// askpass answer — distinguishes the two through Redeem's errors.
+// PasswordFor は、alias を、それに与えるべき値へ解決する。存在しないとき、および
+// vault が閉じているときは "" を返す。重要な呼び出し側 — askpass の応答 — は、
+// Redeem のエラーで両者を区別する。
 func (s *Service) PasswordFor(alias string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -456,9 +456,9 @@ func (s *Service) PasswordFor(alias string) string {
 	return value
 }
 
-// KeyPassphraseFor resolves a key's workspace-relative path to its stored
-// passphrase. It is what lets a key be added to the agent in one action rather
-// than two, and it is injected into the key vault rather than imported by it.
+// KeyPassphraseFor は、鍵のワークスペース相対パスを、保存済みのパスフレーズへ
+// 解決する。鍵を二段階ではなく一度の操作でエージェントへ追加できるのはこれの
+// おかげであり、鍵 vault が import するのではなく、そこへ注入される。
 func (s *Service) KeyPassphraseFor(relativePath string) (string, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -469,14 +469,14 @@ func (s *Service) KeyPassphraseFor(relativePath string) (string, bool) {
 	return vault.SecretFor(KindKeyPassphrase, relativePath)
 }
 
-// SealBackup seals one generational backup, and OpenBackup opens it.
+// SealBackup は世代バックアップをひとつ封じ、OpenBackup はそれを開く。
 //
-// They are handed to the storage layer rather than imported by it: where a
-// secret lives belongs to this package, and the transaction manager must not
-// have to know. A shut vault seals nothing and opens nothing — the application
-// is behind the master password so that cannot happen while anything is being
-// written, and failing here is the right answer if it somehow does, because the
-// alternative is a copy of a private key in the clear.
+// これらはストレージ層に import されるのではなく、そこへ渡される。秘密がどこに
+// あるかはこのパッケージの領分であり、トランザクションマネージャがそれを知らねば
+// ならない道理はない。閉じた vault は何も封じず、何も開かない — アプリケーションは
+// マスターパスワードの後ろにあるので、何かが書かれている最中にそれが起きることは
+// ないし、万一起きたなら、ここで失敗するのが正しい答えである。もう一方の選択肢は、
+// 秘密鍵の平文コピーだからだ。
 func (s *Service) SealBackup(plaintext []byte) ([]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -497,17 +497,17 @@ func (s *Service) OpenBackup(sealed []byte) ([]byte, error) {
 	return vault.OpenBytes(sealed)
 }
 
-// settingsPath is the sealed object store settings beside the vault.
+// settingsPath は、vault の隣にある、封をされたオブジェクトストアの設定。
 func (s *Service) settingsPath() string {
 	return filepath.Join(s.workspace.Root(), filepath.FromSlash(SettingsPath))
 }
 
-// SyncSettings returns the object store settings, secrets included.
+// SyncSettings は、秘密も含めてオブジェクトストアの設定を返す。
 //
-// Only the caller that builds a client asks for these; the screen is answered
-// from the fields that are not secret. A machine that has never been given them
-// answers the zero value and no error, because "not configured yet" is a state
-// and not a failure.
+// これを求めるのはクライアントを組み立てる呼び出し側だけである。画面には、秘密で
+// ないフィールドから答える。これらを一度も与えられていないマシンはゼロ値を返し、
+// エラーにはしない。「まだ設定されていない」は状態であって、失敗では
+// ないからだ。
 func (s *Service) SyncSettings() (SyncSettings, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -525,7 +525,7 @@ func (s *Service) SyncSettings() (SyncSettings, error) {
 	return vault.OpenSettings(sealed)
 }
 
-// SetSyncSettings replaces the object store settings.
+// SetSyncSettings は、オブジェクトストアの設定を置き換える。
 func (s *Service) SetSyncSettings(settings SyncSettings) error {
 	s.mu.Lock()
 	vault := s.use()
@@ -555,10 +555,10 @@ func (s *Service) SetSyncSettings(settings SyncSettings) error {
 	return err
 }
 
-// IssueToken mints a single-use token for one alias.
+// IssueToken は、alias ひとつ分の単回使用トークンを発行する。
 //
-// It is issued when the user asks to open a terminal and is spent by the
-// askpass request that connection makes. Nothing else can obtain one.
+// これはユーザーが端末を開こうとしたときに発行され、その接続が行う askpass の
+// リクエストによって使い切られる。他の何もこれを得ることはできない。
 func (s *Service) IssueToken(alias string) (string, error) {
 	if err := platform.ValidateAlias(alias); err != nil {
 		return "", ErrUnsafeName
@@ -586,14 +586,14 @@ func (s *Service) IssueToken(alias string) (string, error) {
 	return token, nil
 }
 
-// Redeem spends a token and returns the password for its alias.
+// Redeem はトークンを使い切り、その alias のパスワードを返す。
 //
-// The prompt is checked here as well as in the helper, because this is the
-// side that cannot be replaced: a helper compiled by someone else, or the same
-// helper invoked with a different argument, still gets no answer to a question
-// this application has not agreed to answer. The token is spent whether or not
-// the prompt is acceptable, so a wrong prompt cannot be retried with a right
-// one.
+// プロンプトはヘルパーだけでなくここでも検査する。こちら側は置き換えられない側
+// だからだ。他人がコンパイルしたヘルパーも、同じヘルパーを別の引数で呼び出した
+// ものも、このアプリケーションが答えると同意していない問いには、やはり答えを
+// 得られない。プロンプトが受理できるかどうかにかかわらずトークンは使い切られる
+// ので、誤ったプロンプトを正しいもので再試行することは
+// できない。
 func (s *Service) Redeem(token, alias, prompt string, answerable func(alias, prompt string) bool) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -619,11 +619,11 @@ func (s *Service) Redeem(token, alias, prompt string, answerable func(alias, pro
 	return password, nil
 }
 
-// lookupTokenLocked compares in constant time against every live token.
+// lookupTokenLocked は、生きているすべてのトークンと定数時間で比較する。
 //
-// A map lookup would be the obvious thing and would leak, through timing,
-// whether a guessed prefix was getting closer. The set is bounded at
-// MaxPendingTokens, so sweeping it costs nothing worth measuring.
+// マップの検索は素直なやり方だが、推測した接頭辞が近づいているかどうかを、
+// タイミングを通して漏らしてしまう。集合は MaxPendingTokens で上限が定まっている
+// ので、それを走査するコストは測る価値もない。
 func (s *Service) lookupTokenLocked(presented string) (pendingToken, bool) {
 	var found pendingToken
 	matched := false
@@ -645,13 +645,13 @@ func (s *Service) expireLocked() {
 	}
 }
 
-// write seals the vault and commits it through the transaction manager, so a
-// half-written secrets file is not a state this application can reach.
+// write は vault を封じ、トランザクションマネージャを通してコミットする。これに
+// より、書きかけの秘密ファイルは、このアプリケーションが到達しうる状態ではなくなる。
 //
-// A generation is kept, like every other write. The backups are themselves
-// sealed with this vault's key, so an old generation of the vault discloses
-// nothing a copy of the live file does not — and an accident here is one of the
-// few that cannot be undone any other way.
+// 他のすべての書き込みと同じく、世代は保持される。バックアップ自体もこの vault の
+// 鍵で封じられているので、vault の古い世代は、生きたファイルのコピーが明かす以上の
+// ものを明かさない — そしてここでの事故は、他の手段では取り消せない数少ないものの
+// ひとつである。
 func (s *Service) write() error {
 	s.mu.Lock()
 	vault := s.use()
@@ -687,7 +687,7 @@ func (s *Service) write() error {
 	return err
 }
 
-// Aliases returns the hosts with a stored password, or nothing while locked.
+// Aliases は、パスワードが保存されているホストを返す。ロック中は何も返さない。
 func (s *Service) Aliases() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -698,22 +698,22 @@ func (s *Service) Aliases() []string {
 	return vault.Subjects(KindPassword)
 }
 
-// ChangeMasterPassword re-derives the key and re-seals everything it held.
+// ChangeMasterPassword は、鍵を導出し直し、その鍵が保持していたすべてを封じ直す。
 //
-// The vault, the sealed object store settings and every generational backup are
-// sealed with a key derived from the master password. A change that replaced
-// only the vault would leave the rest openable by a password nobody uses any
-// more, which is the same as losing them: the backups exist to be restored
-// from, and a backup nobody can open is not a backup.
+// vault も、封をされたオブジェクトストアの設定も、すべての世代バックアップも、
+// マスターパスワードから導出された鍵で封じられている。vault だけを置き換える変更は、
+// 残りを、もう誰も使わないパスワードで開ける状態のまま残す。それは失うのと同じ
+// ことだ。バックアップは、そこから復元するために存在するのであり、誰にも開けない
+// バックアップはバックアップではない。
 //
-// One transaction. It keeps no generational copies of what it replaces, and
-// that is the one place SkipBackup is still right: a copy of the old vault
-// sealed with the old key would be unopenable the moment this finishes.
-// Everything is staged in the journal, so an interruption can be completed;
-// what it cannot be is rolled back, and Rollback says so rather than pretending.
+// トランザクションはひとつ。置き換えるものの世代コピーは保持しない。そしてそこが、
+// SkipBackup がいまも正しい唯一の場所である。古い鍵で封じられた古い vault のコピー
+// は、これが終わった瞬間に開けなくなるからだ。すべてはジャーナルにステージされる
+// ので、中断されても完了させられる。できないのは巻き戻しであり、Rollback はそれを
+// できるふりをせずに述べる。
 //
-// The remote snapshot is not this function's to re-seal — it belongs to the
-// object store and this package does not import it. The caller pushes.
+// リモートのスナップショットを封じ直すのはこの関数の仕事ではない。それはオブジェクト
+// ストアのものであり、このパッケージはそれを import しない。push は呼び出し側が行う。
 func (s *Service) ChangeMasterPassword(current, next string) error {
 	if ok, err := s.Verify(current); err != nil {
 		return err
@@ -732,12 +732,12 @@ func (s *Service) ChangeMasterPassword(current, next string) error {
 		s.mu.Unlock()
 		return err
 	}
-	// From here the vault holds the new key, so anything it seals is sealed
-	// with it and anything sealed before is opened with the old one.
+	// ここから先、vault は新しい鍵を保持する。したがって、これが封じるものは
+	// 新しい鍵で封じられ、これ以前に封じられたものは古い鍵で開かれる。
 	changes, buildErr := s.reSealed(vault, previous)
 	if buildErr != nil {
-		// Put the old key back: nothing has been written, so the vault in
-		// memory must go on matching the vault on disk.
+		// 古い鍵を戻す。何も書かれていないので、メモリ上の vault はディスク上の
+		// vault と一致し続けなければならない。
 		vault.key = previous
 		s.mu.Unlock()
 		return buildErr
@@ -765,11 +765,11 @@ func (s *Service) ChangeMasterPassword(current, next string) error {
 	return nil
 }
 
-// reSealed reads every file the old key sealed and seals it with the new one.
+// reSealed は、古い鍵が封じたすべてのファイルを読み、新しい鍵で封じ直す。
 //
-// The backups are read directly rather than through the manager, because the
-// manager opens them with the key the service currently holds — which is the
-// new one by the time this runs.
+// バックアップはマネージャ経由ではなく直接読む。マネージャは、サービスがいま
+// 保持している鍵で開くからだ — そしてこれが走る時点では、それは新しい鍵で
+// ある。
 func (s *Service) reSealed(vault *Vault, previous envelope.Key) ([]storage.Change, error) {
 	changes := make([]storage.Change, 0, 8)
 
@@ -810,9 +810,9 @@ func (s *Service) reSealed(vault *Vault, previous envelope.Key) ([]storage.Chang
 		}
 		plaintext, openErr := previous.Open(body)
 		if openErr != nil {
-			// A backup written before the backups were sealed at all is not
-			// this function's to convert, and refusing the whole change over
-			// one is worse than leaving it as it was.
+			// バックアップがそもそも封じられるようになる前に書かれたものは、この
+			// 関数が変換すべきものではない。そのひとつのために変更全体を拒むのは、
+			// そのまま残すより悪い。
 			return nil
 		}
 		resealed, sealErr := vault.SealBytes(plaintext)

@@ -11,10 +11,10 @@ import (
 	"sshc/internal/storage"
 )
 
-// newFileOpsService builds a workspace whose entry file names one included file
-// literally and reaches another through a glob. The two are the whole reason
-// these operations are not a simple rename: a literal Include has to travel
-// with the file it names, and a glob must be left exactly as it is.
+// newFileOpsService は、エントリファイルが 1 つの include 対象ファイルをリテラルに
+// 名指しし、もう 1 つを glob で参照するワークスペースを構築する。この 2 つが、
+// これらの操作が単純な名前変更ではない理由のすべてである。リテラルな Include は
+// 名指しするファイルと共に移動しなければならず、glob はそのまま残さなければならない。
 func newFileOpsService(t *testing.T) (*Service, string) {
 	t.Helper()
 	service, workspace := newTestService(t)
@@ -62,7 +62,7 @@ func TestRenamingAFileCarriesTheIncludeThatNamedIt(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, "work", "lon.conf")); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("the old file is still there: %v", err)
 	}
-	// Byte for byte: a rename moves a file, it does not reformat one.
+	// 1 バイトも変えない: 名前変更はファイルを移動するのであって、整形し直すのではない。
 	if got := readWorkspace(t, root, "work/london.conf"); got != base {
 		t.Errorf("moved contents = %q, want %q", got, base)
 	}
@@ -73,7 +73,7 @@ func TestRenamingAFileCarriesTheIncludeThatNamedIt(t *testing.T) {
 	if strings.Contains(entry, "work/lon.conf") {
 		t.Errorf("the old Include is still there:\n%s", entry)
 	}
-	// The glob was never about this file, so it is untouched.
+	// glob はもともとこのファイルについてのものではなかったので、変更されない。
 	if !strings.Contains(entry, "Include conf.d/*.conf") {
 		t.Errorf("the unrelated glob was disturbed:\n%s", entry)
 	}
@@ -99,18 +99,18 @@ func TestDeletingAFileRemovesTheIncludeThatNamedIt(t *testing.T) {
 	if strings.Contains(entry, "lon.conf") {
 		t.Errorf("an Include still names the deleted file:\n%s", entry)
 	}
-	// An Include naming a file that is not there is a diagnostic ssh prints on
-	// every connection. Removing the line is the point of doing this here
-	// rather than with rm.
+	// 存在しないファイルを名指しする Include は、ssh が接続の
+	// たびに出す診断である。その行を削除することこそ、rm ではなく
+	// ここでこれを行う意味である。
 	if !strings.Contains(entry, "Host bastion") {
 		t.Errorf("the rest of the entry file did not survive:\n%s", entry)
 	}
 }
 
 func TestADeletedFileCanBeRestoredFromHistory(t *testing.T) {
-	// Every other change this application makes can be undone. A delete that
-	// could not would be the one irreversible thing in an application whose
-	// whole promise is that nothing is.
+	// このアプリケーションが行う他のすべての変更は取り消せる。
+	// 取り消せない削除があれば、それは「何も取り消し不能ではない」
+	// ことを約束するアプリケーションの中で唯一の不可逆なものになってしまう。
 	service, root := newFileOpsService(t)
 	base := readWorkspace(t, root, "work/lon.conf")
 
@@ -201,9 +201,9 @@ func TestARenameWhoseBaseIsStaleIsAConflict(t *testing.T) {
 }
 
 func TestRenamingOutOfAGlobsReachIsReported(t *testing.T) {
-	// conf.d/10-home.conf is reached by conf.d/*.conf. Moving it to the
-	// workspace root leaves it on disk and out of the configuration, which ssh
-	// reports as nothing at all.
+	// conf.d/10-home.conf は conf.d/*.conf によって届く。それを
+	// ワークスペースのルートへ移動すると、ディスク上には残るが
+	// 設定からは外れ、ssh はそれを何も無かったかのように報告する。
 	service, root := newFileOpsService(t)
 	base := readWorkspace(t, root, "conf.d/10-home.conf")
 
@@ -224,8 +224,8 @@ func TestRenamingOutOfAGlobsReachIsReported(t *testing.T) {
 }
 
 func TestRenamingWithinAGlobsReachIsNotReported(t *testing.T) {
-	// The same glob still covers the new name, so there is nothing to warn
-	// about and a warning here would teach the user to ignore them.
+	// 同じ glob が新しい名前も引き続きカバーするので、警告すべき
+	// ことは何もなく、ここで警告すればユーザーに警告を無視することを教えてしまう。
 	service, root := newFileOpsService(t)
 	base := readWorkspace(t, root, "conf.d/10-home.conf")
 
@@ -263,7 +263,7 @@ func TestPreviewOfADeleteWritesNothing(t *testing.T) {
 	}
 }
 
-// The explorer can make a directory, journalled like everything else.
+// explorer は、他のすべてと同様にジャーナル記録しつつディレクトリを作れる。
 func TestDirectoryCreateMakesOneAndRefusesAnExistingPath(t *testing.T) {
 	service, workspace := newTestService(t)
 
@@ -279,9 +279,9 @@ func TestDirectoryCreateMakesOneAndRefusesAnExistingPath(t *testing.T) {
 	}
 }
 
-// An empty directory goes; one holding a configuration file does not, because
-// the files have a delete of their own that rewrites the Include lines naming
-// them and this one looks at nothing.
+// 空のディレクトリは削除されるが、設定ファイルを保持する
+// ディレクトリは削除されない。ファイルにはそれを名指しする
+// Include 行を書き換える専用の削除があり、こちらは何も見ないからだ。
 func TestDirectoryDeleteTakesAnEmptyOneAndRefusesAFullOne(t *testing.T) {
 	service, workspace := newTestService(t)
 	if err := os.MkdirAll(filepath.Join(workspace.Root(), "conf.d", "empty"), 0o700); err != nil {
@@ -309,10 +309,10 @@ func TestDirectoryDeleteTakesAnEmptyOneAndRefusesAFullOne(t *testing.T) {
 	}
 }
 
-// A declared group is refused here and named, so the interface can send the
-// user where that operation lives. Deleting one moves its connections,
-// rewrites the generated region, the group settings and the metadata; two
-// screens calling it would be two places for it to drift.
+// 宣言済みグループはここで拒否され、名指しされる。インター
+// フェースがその操作の本来の場所へユーザーを送れるようにする
+// ためである。グループの削除はその connections を移動させ、生成領域、グループ
+// 設定、metadata を書き換える。2 つの画面がそれを呼べば、食い違う場所が 2 つできてしまう。
 func TestDirectoryDeleteRefusesADeclaredGroupAndSaysWhichOne(t *testing.T) {
 	service, workspace := newTestService(t)
 	declareGroup(t, service, "work")

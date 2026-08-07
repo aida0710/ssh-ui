@@ -112,8 +112,8 @@ func TestRegisterProbesThenSendsTheKeyOnStandardInput(t *testing.T) {
 		}
 	}
 
-	// No argument may carry the key, the comment or the alias-derived data:
-	// everything variable travels on standard input.
+	// 鍵・コメント・alias 由来のデータを引数が運んではならない。変動するものは
+	// すべて標準入力を通る。
 	for _, argument := range register.Arguments {
 		if argument == remotekey.Routine {
 			continue

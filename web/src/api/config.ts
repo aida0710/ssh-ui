@@ -24,8 +24,8 @@ export type Notice = components["schemas"]["Notice"];
 export type Diagnostic = components["schemas"]["Diagnostic"];
 export type EffectiveDiff = components["schemas"]["EffectiveDiff"];
 
-// The generated types describe the contract; these guards check the payload the
-// UI actually received, because a type assertion proves nothing at runtime.
+// 生成された型は契約を記述するに過ぎない。これらの防護は UI が
+// 実際に受け取ったペイロードを検査する。型アサーションは実行時には何も証明しない。
 function asRecord(value: unknown): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error("invalid_response");
@@ -137,10 +137,10 @@ export const configApi = {
   async save(request: EditRequest): Promise<SaveResult> {
     return validateSaveResult(await postJSON<unknown>("/api/v1/config/save", request));
   },
-  // Renaming and removing a group are server operations, not edits to a
-  // document the client holds: a group is a directory, so the change is N file
-  // moves plus the Include region plus every IdentityFile that named its keys,
-  // all in one transaction the client could not assemble.
+  // グループの名前変更と削除はサーバー操作であり、クライアントが保持する
+  // ドキュメントへの編集ではない。グループはディレクトリであるため、その変更は
+  // N 個のファイル移動に加えて Include 領域、さらにその鍵を名指すすべての
+  // IdentityFile にまで及び、クライアントには組み立てられない一つのトランザクションとなる。
   async renameGroup(from: string, to: string): Promise<SaveResult> {
     return validateSaveResult(await postJSON<unknown>("/api/v1/config/groups/rename", { from, to }));
   },

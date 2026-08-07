@@ -10,14 +10,14 @@ import (
 )
 
 const (
-	// MaxFileSize bounds how much of one configuration file is read into
-	// memory. Real client configurations are far smaller.
+	// MaxFileSize は、設定ファイルひとつをメモリへ読み込む量の上限。実際の
+	// クライアント設定はこれよりはるかに小さい。
 	MaxFileSize = 1 << 20
 
-	// DirectoryPermission is applied to directories this application creates.
+	// DirectoryPermission は、このアプリケーションが作るディレクトリに適用される。
 	DirectoryPermission fs.FileMode = 0o700
-	// FilePermission is the maximum permission a managed file may carry. A
-	// stricter existing permission is preserved.
+	// FilePermission は、管理対象ファイルが持ちうる最大の権限。既存のより厳しい権限は
+	// そのまま保たれる。
 	FilePermission fs.FileMode = 0o600
 )
 
@@ -26,18 +26,18 @@ var (
 	ErrNotRegularFile = errors.New("path is not a regular file")
 )
 
-// FileSystem is the only path through which this package touches the disk.
-// Tests wrap an OSFileSystem to inject a failure at a chosen stage.
+// FileSystem は、このパッケージがディスクに触れる唯一の経路。テストは
+// OSFileSystem を包み、任意の段階で失敗を注入する。
 type FileSystem interface {
-	// ReadFile reads a regular file without following a symbolic link.
+	// ReadFile は、シンボリックリンクをたどらずに通常ファイルを読む。
 	ReadFile(path string) ([]byte, error)
 	Lstat(path string) (fs.FileInfo, error)
 	ReadDir(path string) ([]fs.DirEntry, error)
-	// Glob returns matches in lexical order.
+	// Glob は辞書順で一致を返す。
 	Glob(pattern string) ([]string, error)
 	MkdirAll(path string, permission fs.FileMode) error
-	// WriteTemp creates a new file in directory, writes contents, applies
-	// permission, flushes it to disk and returns its path.
+	// WriteTemp は directory に新しいファイルを作り、contents を書き、permission を
+	// 適用し、ディスクへフラッシュして、そのパスを返す。
 	WriteTemp(directory, prefix string, permission fs.FileMode, contents []byte) (string, error)
 	Rename(oldPath, newPath string) error
 	Remove(path string) error
@@ -45,7 +45,7 @@ type FileSystem interface {
 	EvalSymlinks(path string) (string, error)
 }
 
-// OSFileSystem is the macOS implementation of FileSystem.
+// OSFileSystem は FileSystem の macOS 実装。
 type OSFileSystem struct{}
 
 func (OSFileSystem) ReadFile(path string) ([]byte, error) {

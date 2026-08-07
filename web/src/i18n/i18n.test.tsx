@@ -27,16 +27,16 @@ function Probe() {
 
 describe("the catalogue", () => {
   it("translates every English message", () => {
-    // TypeScript already refuses a missing key, so this is the assertion the
-    // type system cannot make: that no Japanese entry was left as a copy of
-    // the English one by accident.
+    // TypeScript は既に欠落したキーを拒否する。ここで検証するのは型
+    // システムには検証できないこと——日本語のエントリが誤って
+    // 英語のものそのままのコピーになっていないか、である。
     const untranslated = Object.keys(en).filter((key) => {
       const source = en[key as keyof typeof en];
       const target = ja[key as keyof typeof en];
       return source === target;
     });
-    // These are the ones that are legitimately identical: proper nouns and
-    // strings that are already the same in both languages.
+    // これらは正当に同一なもの——固有名詞と、両言語で
+    // 既に同じ文字列になっている語だ。
     expect(untranslated.sort()).toEqual(
       [
         "diag.hostAlias",
@@ -71,8 +71,8 @@ describe("the catalogue", () => {
       </LanguageProvider>,
     );
 
-    // A missing argument shows the braces rather than the word "undefined",
-    // which in the middle of a sentence would read as content.
+    // 引数が欠けている場合、"undefined" という語ではなく
+    // 波括弧をそのまま表示する。文中の "undefined" は内容に見えてしまうからだ。
     expect(screen.getByText("Local session active · 0.1.0")).toBeInTheDocument();
   });
 });
@@ -102,8 +102,8 @@ describe("the language switch", () => {
       </LanguageProvider>,
     );
 
-    // Detection alone must not write: a user who never touches the switch
-    // leaves persistent storage empty.
+    // 検出するだけで書き込んではならない。切り替えに一度も触れない
+    // ユーザーは、永続ストレージを空のままにしておく。
     expect(window.localStorage.length).toBe(0);
 
     await user.click(screen.getByRole("button", { name: "to japanese" }));
@@ -150,7 +150,7 @@ describe("locale detection", () => {
     });
     vi.spyOn(navigator, "languages", "get").mockReturnValue(["ja"]);
 
-    // The preference is lost, not the shell.
+    // 失われるのは好みの設定であって、シェルではない。
     expect(detectLocale()).toBe("ja");
   });
 });

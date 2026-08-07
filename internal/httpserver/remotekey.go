@@ -13,11 +13,11 @@ import (
 	"sshc/internal/session"
 )
 
-// RemoteKeyHandlers registers a public key on a remote host.
+// RemoteKeyHandlers はリモートホストに公開鍵を登録する。
 //
-// Diagnostics supplies the destination the confirmation displays and the
-// executable directives that connecting would run; the registration itself
-// never reads the configuration a second time.
+// Diagnostics は、確認画面が表示する接続先と、接続時に実行される
+// 実行可能ディレクティブを供給する。登録自体は設定を二度読む
+// ことはない。
 type RemoteKeyHandlers struct {
 	Service     *remotekey.Service
 	Diagnostics *diagnostics.Service
@@ -43,7 +43,7 @@ func remoteKeyProblem(c *echo.Context, err error) error {
 	return problem(c, http.StatusInternalServerError, "registration_failed")
 }
 
-// Plan describes the change without contacting the remote host.
+// Plan はリモートホストに接続せずに変更内容を説明する。
 func (h RemoteKeyHandlers) Plan(c *echo.Context) error {
 	var request api.RemoteKeyPlanRequest
 	if err := decodeJSON(c, &request); err != nil {
@@ -58,8 +58,8 @@ func (h RemoteKeyHandlers) Plan(c *echo.Context) error {
 	}
 	key.Path = request.KeyPath
 
-	// The destination comes from this application's own reading of the
-	// configuration, which needs no process; ssh -G is not run behind a plan.
+	// 接続先はこの application 自身が設定を読んだ結果によるもので、
+	// プロセスを必要としない。plan の裏で ssh -G が実行されることはない。
 	hostname, port, err := h.Diagnostics.Destination(request.Alias)
 	if err != nil {
 		return problem(c, http.StatusBadRequest, "unsafe_destination")
@@ -91,7 +91,7 @@ func (h RemoteKeyHandlers) Plan(c *echo.Context) error {
 	})
 }
 
-// Register installs the key after the confirmation is spent.
+// Register は確認が消費された後に鍵をインストールする。
 func (h RemoteKeyHandlers) Register(c *echo.Context) error {
 	var request api.RemoteKeyRegisterRequest
 	if err := decodeJSON(c, &request); err != nil {
@@ -121,8 +121,8 @@ func (h RemoteKeyHandlers) Register(c *echo.Context) error {
 	return c.JSON(http.StatusOK, api.RemoteKeyRegisterResponse{
 		Outcome:  result.Outcome,
 		ExitCode: result.ExitCode,
-		// ssh names the files it read by absolute path; the account name is
-		// removed before the output leaves this process.
+		// ssh は読み込んだファイルを絶対パスで名指しするため、アカウント名は
+		// 出力がこのプロセスを出る前に取り除かれる。
 		Stderr:    platform.SanitiseHomePaths(result.Stderr, h.Diagnostics.Home()),
 		Truncated: result.Truncated,
 	})

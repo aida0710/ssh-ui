@@ -13,8 +13,8 @@ import {
   sectionHeading,
 } from "../ui/form";
 
-// FileTarget asks the explorer to open one file and put the caret on one line.
-// The line is 1-based, as every line the API reports is.
+// FileTarget はエクスプローラに一つのファイルを開き、キャレットを一行に置くよう
+// 求める。行番号は 1 始まりであり、API が報告するすべての行と同じである。
 export type FileTarget = { path: string; line: number };
 
 type ConfigExplorerProps = {
@@ -27,9 +27,9 @@ function toProblem(error: unknown): Problem {
   return { code: "request_failed", message: "request rejected" };
 }
 
-// lineRange is the offset span of a 1-based line inside the file text. A line
-// past the end clamps to the last one, so a stale target still lands somewhere
-// sensible instead of throwing.
+// lineRange はファイルテキスト内の 1 始まりの行の offset 範囲である。
+// 末尾を越えた行は最後の行に丸められるため、古びた target でも
+// スローせず妥当な場所に落ち着く。
 function lineRange(contents: string, line: number): { start: number; end: number } {
   const lines = contents.split("\n");
   const index = Math.min(Math.max(line, 1), lines.length) - 1;
@@ -63,16 +63,16 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
     void reload();
   }, [reload]);
 
-  // A target arrives from another view, so the file it names has to be loaded
-  // here before anything can be shown.
+  // target は別のビューから届くため、それが名指すファイルは何かを表示する
+  // 前にここで読み込まなければならない。
   useEffect(() => {
     if (target === null) return;
     void open(target.path);
   }, [target]);
 
-  // The caret can only be placed once the loaded file is on screen. Each target
-  // is applied once, so opening the same file by hand afterwards does not drag
-  // the caret back.
+  // キャレットは読み込んだファイルが画面に出て初めて置ける。各 target は
+  // 一度だけ適用されるため、その後で同じファイルを手動で開いても
+  // キャレットを引き戻すことはない。
   useEffect(() => {
     if (target === null || jumped.current === target) return;
     if (file === null || file.file.path !== target.path) return;
@@ -99,10 +99,10 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
     }
   }
 
-  // Renaming and deleting are file operations, not edits, so they send the
-  // bytes that were read as the precondition rather than the draft. A draft
-  // that has not been saved is not what is on disk, and moving a file on the
-  // strength of it would move something the user never looked at.
+  // 名前変更と削除は編集ではなくファイル操作であるため、draft ではなく
+  // 読み込んだ時のバイトを事前条件として送る。保存されていない
+  // draft はディスク上のものではなく、それを根拠にファイルを移動すれば、
+  // ユーザーが一度も見ていないものを移動してしまう。
   async function renameFile() {
     if (file === null || file.file.path === undefined || renameTo === "") return;
     try {
@@ -157,10 +157,10 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
     }
   }
 
-  // Directories are made and removed here too, because a directory is where a
-  // file goes and the explorer is where files live. Neither declares a group:
-  // that changes the entry file's generated region, which belongs to the Groups
-  // screen, and the server refuses a directory a generated Include names.
+  // ディレクトリもここで作成・削除する。ディレクトリはファイルが行く場所で
+  // あり、エクスプローラはファイルが住む場所だからである。どちらもグループを
+  // 宣言しない。それはエントリファイルの生成領域を変えることであり、
+  // Groups 画面に属する。そしてサーバーは生成された Include が名指すディレクトリを拒否する。
   async function createDirectory() {
     if (newPath === "") return;
     try {
@@ -223,9 +223,9 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
         <h3 id="explorer-heading" className={sectionHeading}>{t("explorer.hierarchy")}</h3>
         <ul className="flex flex-col gap-2">
           {overview.files.map((node) => {
-            // Which file the editor is showing was not marked anywhere. With
-            // several files of similar names in the list, the only way to tell
-            // was to read the label above the text box.
+            // エディタがどのファイルを表示しているかは、どこにも印がなかった。
+            // リストに似た名前のファイルが複数あると、それを知る唯一の方法は
+            // テキストボックス上のラベルを読むことだった。
             const current = (node.file.path ?? node.file.absolute) === openPath;
             return (
               <li
@@ -260,9 +260,9 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
                   <div key={`${node.file.absolute}:${include.line}:${include.pattern}`} className="mt-1 text-xs text-ink-muted">
                     <span className="font-mono">{include.pattern}</span>
                     {/*
-                      This was the one string on the screen that was never
-                      translated: an English "inside …" in the middle of a
-                      Japanese panel.
+                      これは画面上で一度も翻訳されなかった唯一の
+                      文字列だった。日本語のパネルの真ん中に英語の
+                      "inside …"。
                     */}
                     {include.condition === undefined ? null : (
                       <span className="ml-1 text-notice-ink">
@@ -293,9 +293,9 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
             className={control}
           />
           {/*
-            The button used to be live with an empty box and the handler
-            returned without doing anything, so the click was a no-op the
-            interface had promised would work.
+            以前はボタンが空の箱でも有効であり、ハンドラは何もせずに
+            戻っていた。そのためクリックは、インターフェースが動くと約束して
+            いたはずの no-op だった。
           */}
           <div className="flex flex-wrap gap-2">
             <button
@@ -355,9 +355,9 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
                 {t("explorer.fileText", { path: file.file.path ?? file.file.absolute })}
               </label>
               {/*
-                Opening another file replaces the draft without asking. Saying
-                the draft differs from what was read is the least this can do
-                before that happens.
+                別のファイルを開くと draft は尋ねられることなく置き換わる。
+                draft が読み込んだものと異なると告げることは、それが
+                起きる前にできる最低限のことである。
               */}
               {modified ? <span className="text-xs text-notice-ink">{t("explorer.unsaved")}</span> : null}
             </div>
@@ -389,10 +389,10 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
               <div className="flex flex-col gap-2 rounded border border-line p-3">
                 <h4 className={sectionHeading}>{t("explorer.fileOperations")}</h4>
                 {/*
-                  The Include lines that name this file travel with it. That is
-                  the whole reason to do this here rather than with mv: a file
-                  moved out from under its Include still parses and quietly
-                  stops applying.
+                  このファイルを名指す Include 行はファイルと共に移動する。
+                  それこそが、mv ではなくここでこれを行う理由のすべて
+                  である。Include の足元から動かされたファイルは依然として
+                  パースされるが、静かに適用されなくなる。
                 */}
                 <p className={hintText}>{t("explorer.fileOperationsNote")}</p>
                 <label htmlFor="rename-file-path" className={fieldLabel}>{t("explorer.renameTo")}</label>
@@ -441,9 +441,9 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
                   )}
                 </div>
                 {/*
-                  Deleting keeps a generational backup, so History offers the
-                  file back. Saying so is what makes the confirmation a
-                  decision rather than a dare.
+                  削除は世代バックアップを保つため、History が
+                  ファイルを取り戻すことができる。そう伝えることが、
+                  確認を無謀な賭けではなく決断にする。
                 */}
                 <p className={hintText}>
                   {modified ? t("explorer.saveOrDiscardFirst") : t("explorer.deleteIsRecoverable")}

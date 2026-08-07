@@ -7,9 +7,9 @@ import (
 	"testing"
 )
 
-// newTestWorkspace builds an isolated home directory. macOS temporary
-// directories are themselves reached through a symbolic link, so tests must
-// compare against workspace.Root() instead of the literal path they built.
+// newTestWorkspace は隔離されたホームディレクトリを組み立てる。macOS の一時
+// ディレクトリ自体がシンボリックリンク経由で到達されるので、テストは自分が
+// 組み立てたリテラルのパスではなく workspace.Root() と比較しなければならない。
 func newTestWorkspace(t *testing.T) *Workspace {
 	t.Helper()
 	home := t.TempDir()
@@ -132,12 +132,12 @@ func TestEnsureDirectoryCreatesPrivateDirectoriesAndRejectsSymlinks(t *testing.T
 	}
 }
 
-// Root is resolved through EvalSymlinks and Home deliberately is not: Home is
-// what this process and its children have in HOME, which is what ssh prints and
-// what SanitiseHomePaths has to match. The two therefore name the same
-// directory in different ways whenever ~/.ssh is reached through a link, and a
-// caller that expands "~" or "%d" and then compares against Root is told the
-// path is outside the workspace when it is the workspace.
+// Root は EvalSymlinks を通して解決され、Home は意図的にそうしない。Home は、この
+// プロセスとその子が HOME に持つ値であり、それが ssh の表示するものであり、
+// SanitiseHomePaths が一致させなければならないものである。したがって ~/.ssh が
+// リンク経由で到達される場合、両者は同じディレクトリを異なるやり方で名指しし、
+// "~" や "%d" を展開してから Root と比較する呼び出し側は、ワークスペースそのもの
+// であるパスについて、それはワークスペースの外だと告げられる。
 func TestNormaliseMapsAHomePathOntoTheResolvedRoot(t *testing.T) {
 	base, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
@@ -156,7 +156,7 @@ func TestNormaliseMapsAHomePathOntoTheResolvedRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The premise: these are two spellings of one directory.
+	// 前提。これらはひとつのディレクトリの二通りの綴りである。
 	if workspace.Root() == filepath.Join(home, ".ssh") {
 		t.Skip("this filesystem did not produce two spellings of the root")
 	}

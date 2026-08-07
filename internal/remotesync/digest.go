@@ -5,9 +5,9 @@ import (
 	"encoding/hex"
 )
 
-// Digest is the content hash used in the manifest. It is the same function the
-// storage layer uses for preconditions, spelled out here so this package does
-// not import the transaction manager to hash a byte slice.
+// Digest は、マニフェストで使う内容ハッシュ。ストレージ層が事前条件に使うのと同じ
+// 関数だが、バイトスライスをハッシュするためだけにトランザクションマネージャを
+// import しないよう、ここに書き下してある。
 func Digest(contents []byte) string {
 	sum := sha256.Sum256(contents)
 	return hex.EncodeToString(sum[:])

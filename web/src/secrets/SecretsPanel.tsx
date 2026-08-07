@@ -26,19 +26,19 @@ import { Notice } from "../ui/surface";
 
 type SecretsPanelProps = {
   api?: IntegrationsApi;
-  // onLock lets the shell shut its own front door. Locking the vault locks the
-  // application, so a panel that only refreshed itself would leave the user
-  // inside a shell whose next request will be refused.
+  // onLock はシェル自身の玄関を閉じさせる。vault をロックすることは
+  // アプリケーションをロックすることなので、自分自身を再読み込みするだけの
+  // パネルでは、次のリクエストが拒否されるシェルの中にユーザーを取り残してしまう。
   onLock?: () => void;
 };
 
-// The two namespaces, drawn apart.
+// 2 つの名前空間を、引き離して描く。
 //
-// They are apart in the format, the API and the types because one namespace
-// would let a host's picker offer a key's passphrase, and picking it would send
-// that passphrase to a remote host as a login password. Drawing them as one
-// list here would put the choice back in front of the user that the format took
-// away, so they are two lists that never hold each other's entries.
+// フォーマットでも API でも型でも分かれているのは、1 つの名前空間だと
+// ホストのピッカーが鍵のパスフレーズを提供してしまい、それを選ぶと
+// そのパスフレーズがログインパスワードとしてリモートホストに送られて
+// しまうからだ。ここで 1 つのリストとして描けば、フォーマットが取り除いた
+// はずの選択をユーザーの前に戻してしまう。だから互いのエントリを
 const kinds: {
   kind: CredentialKind;
   heading: MessageKey;
@@ -78,8 +78,8 @@ export function SecretsPanel({ api = integrationsApi, onLock }: SecretsPanelProp
     try {
       const vault = await api.passwordVault();
       setStatus(vault);
-      // A shut vault is not asked for its contents. Nothing is asked at
-      // startup either: this screen asks for itself, when it needs to.
+      // 決して保持しない 2 つのリストになっている。
+      // 閉じた vault にはその中身を尋ねない。起動時にも何も尋ねない:
       if (!vault.unlocked) {
         setCredentials([]);
         return;
@@ -100,8 +100,8 @@ export function SecretsPanel({ api = integrationsApi, onLock }: SecretsPanelProp
       setError("");
       await reload();
     } catch (caught) {
-      // A refusal the server explains is shown as what it is. "In use" is the
-      // one a person will meet, and it is the one they can act on.
+      // この画面は必要になったときに自分自身のために尋ねる。
+      // サーバーが説明する拒否は、そのままの姿で表示する。「使用中」が
       setError(failureCode(caught) === "credential_in_use" ? t("secrets.inUse") : fallback);
     }
   }
@@ -114,9 +114,9 @@ export function SecretsPanel({ api = integrationsApi, onLock }: SecretsPanelProp
     return <p className={hintText}>{t("secrets.loading")}</p>;
   }
 
-  // Neither existing nor open means the same thing to this screen: there is
-  // nothing to show and a master password is what changes that. What differs is
-  // whether giving one creates the vault or opens it.
+  // 人が出会うものであり、それこそが対処できるものだ。
+  // 存在することと開いていることは、この画面にとって同じ意味ではない:
+  // 表示するものは何もなく、それを変えるのがマスターパスワードだ。異なるのは
   if (!status.unlocked) {
     const creating = !status.exists;
     return (
@@ -151,10 +151,10 @@ export function SecretsPanel({ api = integrationsApi, onLock }: SecretsPanelProp
       setCurrentMaster("");
       setNextMaster("");
       setConfirmMaster("");
-      // What was re-sealed and what was not. The dated copies in the bucket
-      // stay under the old password by design, and a live snapshot that could
-      // not be reached stays under it by accident — the difference matters to
-      // anybody who later restores from one.
+      // それを渡すことが vault を作るのか開くのかという点だ。
+      // 何が再封印され、何がそうならなかったか。バケット内の日付付きコピーは
+      // 設計上、古いパスワードの下にとどまり、届かなかったライブスナップショットは
+      // 偶然にその下にとどまる——その違いは、後でそこから復元する誰にとっても重要だ。
       setChanged(
         result.snapshotResealed
           ? t("secrets.changedWithSnapshot")
@@ -213,8 +213,8 @@ export function SecretsPanel({ api = integrationsApi, onLock }: SecretsPanelProp
                   <li key={credential.name} className="flex flex-wrap items-center gap-3 text-sm">
                     <span className="font-medium">{credential.name}</span>
                     {/*
-                      What points at it, which is what makes deleting it
-                      refusable and what makes one entry worth having.
+                      何がそれを指しているか。それが削除を拒否可能にし、
+                      1 つのエントリを持つ価値にしているものだ。
                     */}
                     <span className={hintText}>
                       {credential.uses.length === 0 ? t("secrets.unused") : credential.uses.join(", ")}
@@ -268,12 +268,12 @@ export function SecretsPanel({ api = integrationsApi, onLock }: SecretsPanelProp
   );
 }
 
-// Start at login, off unless asked for.
+// ログイン時に起動、求められない限りオフ。
 //
-// It lives here because this screen is where the vault is, and what the setting
-// really arranges is a process that holds the key to it. A background service
-// nobody asked for is not something to arrange on somebody's behalf, so the
-// switch starts off and nothing turns it on but this.
+// これがここにあるのは、この画面が vault の在り処だからで、この設定が
+// 実際に手配するのはそれへの鍵を握るプロセスだ。誰も求めていない
+// バックグラウンドサービスは、誰かの代わりに勝手に設定してよいものではない。
+// だからスイッチは既定でオフになっており、これ以外の何もそれをオンにしない。
 function LoginItemSection({ api }: { api: IntegrationsApi }) {
   const t = useTranslate();
   const [item, setItem] = useState<LoginItem | null>(null);

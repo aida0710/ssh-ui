@@ -6,10 +6,10 @@ import (
 )
 
 const (
-	// MaxAliasLength bounds a Host alias this application is willing to place
-	// on a command line.
+	// MaxAliasLength は、このアプリケーションがコマンドラインに載せてよい Host alias
+	// の長さに上限を設ける。
 	MaxAliasLength = 64
-	// MaxHostnameLength is the DNS limit; ssh-keyscan targets may not exceed it.
+	// MaxHostnameLength は DNS の上限。ssh-keyscan の対象はこれを超えてはならない。
 	MaxHostnameLength = 255
 )
 
@@ -19,22 +19,22 @@ var (
 	ErrUnsafePort     = errors.New("port is outside the TCP range")
 )
 
-// safeAliasPattern is deliberately narrower than what OpenSSH accepts.
+// safeAliasPattern は、OpenSSH が受け付ける範囲より意図的に狭くしてある。
 //
-// OpenSSH will happily read a Host alias containing spaces, quotes, '%'
-// tokens or a leading '-'. Such an alias could become an option ("-oProxy
-// Command=..."), could change the meaning of a copied command line, or could
-// escape a string in a terminal automation payload. An alias outside this set
-// is never launched or evaluated; the UI offers the command as copyable text
-// instead.
+// OpenSSH は、空白・引用符・'%' トークン・先頭の '-' を含む Host alias も平気で
+// 読む。そうした alias はオプション（"-oProxyCommand=..."）になりうるし、コピー
+// されたコマンドラインの意味を変えうるし、端末自動化のペイロード内で文字列から
+// 抜け出しうる。この集合の外にある alias が起動されたり評価されたりすることは
+// 決してない。UI は代わりに、コピー可能なテキストとしてそのコマンドを
+// 提示する。
 var safeAliasPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
-// safeHostnamePattern allows DNS names, IPv4 literals and bare IPv6 literals.
-// Brackets are excluded because this application adds them itself when it
-// formats a known_hosts entry for a non-default port.
+// safeHostnamePattern は、DNS 名・IPv4 リテラル・角括弧なしの IPv6 リテラルを許す。
+// 角括弧を除いてあるのは、既定以外のポートに対する known_hosts エントリを整形する
+// ときに、このアプリケーションが自分で付けるからである。
 var safeHostnamePattern = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9._:-]*[A-Za-z0-9])?$`)
 
-// ValidateAlias reports whether alias may be handed to an external program.
+// ValidateAlias は、alias を外部プログラムへ渡してよいかを報告する。
 func ValidateAlias(alias string) error {
 	if len(alias) == 0 || len(alias) > MaxAliasLength || !safeAliasPattern.MatchString(alias) {
 		return ErrUnsafeAlias
@@ -42,7 +42,7 @@ func ValidateAlias(alias string) error {
 	return nil
 }
 
-// ValidateHostname reports whether host may be handed to an external program.
+// ValidateHostname は、host を外部プログラムへ渡してよいかを報告する。
 func ValidateHostname(host string) error {
 	if len(host) == 0 || len(host) > MaxHostnameLength || !safeHostnamePattern.MatchString(host) {
 		return ErrUnsafeHostname
@@ -50,7 +50,7 @@ func ValidateHostname(host string) error {
 	return nil
 }
 
-// ValidatePort reports whether port is a usable TCP port.
+// ValidatePort は、port が使用可能な TCP ポートかを報告する。
 func ValidatePort(port int) error {
 	if port < 1 || port > 65535 {
 		return ErrUnsafePort

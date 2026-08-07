@@ -12,14 +12,14 @@ import (
 	"sshc/internal/platform"
 )
 
-// OutputRunner runs external programs with a direct argv.
+// OutputRunner は、argv を直接指定して外部プログラムを実行する。
 //
-// It never invokes a shell, always supplies a fixed standard input so a child
-// cannot read the terminal, and never keeps more than
-// platform.MaxCapturedOutput bytes of either stream.
+// シェルを起動することは決してなく、子プロセスが端末を読めないよう常に固定の
+// 標準入力を与え、どちらのストリームについても platform.MaxCapturedOutput
+// バイトを超えて保持することはない。
 type OutputRunner struct{}
 
-// NewOutputRunner returns the macOS process adapter.
+// NewOutputRunner は macOS のプロセスアダプタを返す。
 func NewOutputRunner() platform.OutputRunner { return OutputRunner{} }
 
 func (OutputRunner) RunOutput(ctx context.Context, command platform.Command) (platform.Output, error) {
@@ -40,8 +40,8 @@ func (OutputRunner) RunOutput(ctx context.Context, command platform.Command) (pl
 	if command.Env != nil {
 		process.Env = command.Env
 	}
-	// WaitDelay bounds how long Wait blocks on inherited pipes after the
-	// process is killed, so a stuck child cannot hold a request open.
+	// WaitDelay は、プロセスが kill されたあと Wait が継承したパイプ上でどれだけ
+	// ブロックするかに上限を設ける。詰まった子がリクエストを開けたままにできない。
 	process.WaitDelay = 2 * time.Second
 
 	stdout := &boundedBuffer{limit: platform.MaxCapturedOutput, marker: command.StopAfter, stop: stop}
@@ -64,8 +64,8 @@ func (OutputRunner) RunOutput(ctx context.Context, command platform.Command) (pl
 	case runErr == nil:
 		return output, nil
 	case output.Stopped:
-		// The caller asked to stop at the marker, so the non-zero status only
-		// reflects this application's own cancellation.
+		// 呼び出し側がマーカーで止めるよう求めたので、非ゼロのステータスはこの
+		// アプリケーション自身のキャンセルを反映しているにすぎない。
 		output.ExitCode = -1
 		return output, nil
 	case errors.Is(ctx.Err(), context.Canceled):
@@ -82,9 +82,9 @@ func (OutputRunner) RunOutput(ctx context.Context, command platform.Command) (pl
 	}
 }
 
-// boundedBuffer collects at most limit bytes and can stop the process as soon
-// as marker appears. os/exec writes to it from its copying goroutine, so every
-// field is guarded.
+// boundedBuffer は最大 limit バイトを集め、marker が現れた時点でプロセスを止め
+// られる。os/exec がコピー用の goroutine からここへ書くので、すべてのフィールドは
+// 保護されている。
 type boundedBuffer struct {
 	mutex     sync.Mutex
 	buffer    bytes.Buffer
@@ -109,7 +109,7 @@ func (b *boundedBuffer) Write(chunk []byte) (int, error) {
 	}
 
 	if len(b.marker) > 0 && !b.found {
-		// Search across chunk boundaries by keeping the last marker-1 bytes.
+		// 直前の marker-1 バイトを保持して、チャンクの境界をまたいで探索する。
 		window := append(append([]byte(nil), b.tail...), chunk...)
 		if bytes.Contains(window, b.marker) {
 			b.found = true

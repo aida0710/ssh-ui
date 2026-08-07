@@ -1,9 +1,9 @@
-// Package remotekey installs a public key in a remote account's
-// authorized_keys file.
+// Package remotekey は、リモートアカウントの authorized_keys ファイルに公開鍵を
+// インストールする。
 //
-// The remote command is a package constant. The key travels on standard
-// input, where the fixed routine reads it into a shell variable, so no caller
-// input is ever spliced into a command line, a shell string or a here-document.
+// リモートで実行するコマンドはパッケージ定数である。鍵は標準入力を通って渡り、
+// 固定のルーチンがそれをシェル変数へ読み込む。したがって呼び出し側の入力が、
+// コマンドライン・シェル文字列・ヒアドキュメントに差し込まれることは決してない。
 package remotekey
 
 import (
@@ -19,27 +19,27 @@ import (
 )
 
 const (
-	// ProbeMarker is what a POSIX shell must echo back.
+	// ProbeMarker は、POSIX シェルが返してこなければならない語。
 	ProbeMarker = "sshc-posix-shell"
-	// ProbeCommand is the fixed command used to decide whether the remote
-	// account has a POSIX shell. It prints one known word and nothing else.
+	// ProbeCommand は、リモートアカウントに POSIX シェルがあるかを判定するための
+	// 固定コマンド。既知の語をひとつだけ出力し、それ以外は何も出さない。
 	ProbeCommand = `printf '%s\n' sshc-posix-shell`
-	// RemotePath is the file this package appends to.
+	// RemotePath は、このパッケージが追記するファイル。
 	RemotePath = "~/.ssh/authorized_keys"
 
-	// Registration outcomes.
+	// 登録の結果。
 	RegistrationAdded    = "added"
 	RegistrationExisting = "already_present"
 
-	// DefaultTimeout bounds one remote operation.
+	// DefaultTimeout は、リモート操作一回に上限を設ける。
 	DefaultTimeout = 30 * time.Second
 )
 
-// Routine is the complete remote program. It contains no caller input.
+// Routine はリモートで走るプログラムの全体。呼び出し側の入力を一切含まない。
 //
-// The key arrives on standard input and is read into "$key"; grep -x -F
-// compares whole lines literally, so a key that is already present is never
-// duplicated; the permissions are tightened before anything is written.
+// 鍵は標準入力で届き "$key" に読み込まれる。grep -x -F は行全体をリテラルとして
+// 比較するので、すでに存在する鍵が重複することはない。権限は何かを書く前に
+// 締められる。
 const Routine = `set -e
 umask 077
 key=$(cat)
@@ -65,19 +65,19 @@ var (
 	ErrNotAcknowledged   = errors.New("connecting would run a configured command that has not been acknowledged")
 )
 
-// publicKeyPattern accepts one line: a known algorithm name, a base64 blob and
-// an optional comment without any control character.
+// publicKeyPattern が受け付ける行はひとつの形だけ。既知のアルゴリズム名、base64
+// のかたまり、そして制御文字を含まない任意のコメントである。
 var publicKeyPattern = regexp.MustCompile(
 	`^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256|ecdsa-sha2-nistp384|ecdsa-sha2-nistp521|sk-ssh-ed25519@openssh\.com|sk-ecdsa-sha2-nistp256@openssh\.com) ([A-Za-z0-9+/]+={0,3})( [^\x00-\x1f\x7f]*)?$`)
 
-// PublicKey is the key the caller selected. The key vault subsystem chooses
-// it; this package needs only the file it came from and its exact line.
+// PublicKey は、呼び出し側が選んだ鍵。選ぶのは鍵 vault サブシステムで、この
+// パッケージが必要とするのは、その出所のファイルと正確な一行だけである。
 type PublicKey struct {
 	Path string
 	Line string
 }
 
-// ParsePublicKey validates one public key line and returns its fingerprint.
+// ParsePublicKey は公開鍵の一行を検証し、そのフィンガープリントを返す。
 func ParsePublicKey(line string) (PublicKey, string, error) {
 	trimmed := strings.TrimRight(line, "\n")
 	if strings.ContainsAny(trimmed, "\n\r") || !publicKeyPattern.MatchString(trimmed) {
@@ -91,8 +91,8 @@ func ParsePublicKey(line string) (PublicKey, string, error) {
 	return PublicKey{Line: trimmed}, fingerprint, nil
 }
 
-// ManualSteps are the instructions shown for a remote this package will not
-// automate. They describe what to do, they never run anything.
+// ManualSteps は、このパッケージが自動化しないリモートに対して表示する手順。
+// 何をすべきかを説明するだけで、何かを実行することは決してない。
 var ManualSteps = []string{
 	"Open a session to the host yourself and check which shell the account uses.",
 	"Create ~/.ssh with mode 700 and ~/.ssh/authorized_keys with mode 600 if they do not exist.",
@@ -100,7 +100,7 @@ var ManualSteps = []string{
 	"Confirm the file still contains one key per line and that no key was split or duplicated.",
 }
 
-// Plan is what the user confirms before anything runs on the remote host.
+// Plan は、リモートホスト上で何かが走る前にユーザーが確認する内容。
 type Plan struct {
 	Alias       string
 	User        string
@@ -116,7 +116,7 @@ type Plan struct {
 	Manual      []string
 }
 
-// Result is one completed registration.
+// Result は、完了した登録ひとつ分。
 type Result struct {
 	Outcome   string
 	ExitCode  int
@@ -124,27 +124,27 @@ type Result struct {
 	Truncated bool
 }
 
-// Service performs remote registration through the process seam.
+// Service は、プロセスの継ぎ目を通してリモート登録を実行する。
 type Service struct {
 	Runner     platform.OutputRunner
 	Toolchain  platform.Toolchain
 	ConfigPath string
 	Timeout    time.Duration
-	// Environment is the child's complete environment, normally
-	// platform.MinimalEnvironment.
+	// Environment は子プロセスの完全な環境。通常は platform.MinimalEnvironment で
+	// ある。
 	Environment []string
 }
 
-// NewService wires the production dependencies together.
+// NewService は本番用の依存を配線する。
 func NewService(runner platform.OutputRunner, toolchain platform.Toolchain, configPath string) *Service {
 	return &Service{Runner: runner, Toolchain: toolchain, ConfigPath: configPath}
 }
 
-// Plan describes the change without contacting anything.
+// Plan は、どこにも接触せずに変更内容を説明する。
 //
-// valuesFrom records whether the account details came from `ssh -G` or from
-// this application's own reading of the configuration, so the confirmation
-// dialog can say which.
+// valuesFrom は、アカウントの詳細が `ssh -G` から来たのか、このアプリケーション
+// 自身の設定読み取りから来たのかを記録する。確認ダイアログがどちらかを言える
+// ようにするためである。
 func (s Service) Plan(alias string, key PublicKey, fingerprint, user, hostname, port, valuesFrom string) Plan {
 	return Plan{
 		Alias:       alias,
@@ -162,7 +162,7 @@ func (s Service) Plan(alias string, key PublicKey, fingerprint, user, hostname, 
 	}
 }
 
-// Register probes the remote shell and then installs the key.
+// Register はリモートのシェルを調べ、そのうえで鍵をインストールする。
 func (s Service) Register(ctx context.Context, report effective.Report, alias string, key PublicKey, acknowledged bool) (Result, error) {
 	if err := platform.ValidateAlias(alias); err != nil {
 		return Result{}, err

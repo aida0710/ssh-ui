@@ -6,59 +6,59 @@ import (
 	"time"
 )
 
-// MaxCapturedOutput bounds how many bytes of one stream this application keeps
-// in memory for a single external command.
+// MaxCapturedOutput は、外部コマンド一回について、片方のストリームをメモリに
+// どれだけ保持するかの上限。
 const MaxCapturedOutput = 64 << 10
 
 var (
-	// ErrTimedOut reports that a command did not finish within its timeout and
-	// was killed.
+	// ErrTimedOut は、コマンドがタイムアウト内に終わらず kill されたことを報告
+	// する。
 	ErrTimedOut = errors.New("command did not finish before its timeout")
-	// ErrProgramPathNotAbsolute rejects a program that would otherwise be
-	// looked up through PATH.
+	// ErrProgramPathNotAbsolute は、そうしなければ PATH 経由で探されることになる
+	// プログラムを拒否する。
 	ErrProgramPathNotAbsolute = errors.New("program path must be absolute")
 )
 
-// Command is one external process.
+// Command は外部プロセスひとつ。
 //
-// Path is an absolute program path and Arguments is its argv tail. There is no
-// field for a command line, because this application never builds one: nothing
-// here is ever interpreted by a shell.
+// Path は絶対的なプログラムパスで、Arguments はその argv の残り。コマンドライン
+// のためのフィールドはない。このアプリケーションはコマンドラインを組み立てない
+// からだ。ここにあるものがシェルに解釈されることは決してない。
 type Command struct {
 	Path      string
 	Arguments []string
-	// Stdin is the complete standard input. It is always supplied, so a child
-	// never inherits the terminal and never blocks on a prompt.
+	// Stdin は標準入力の全体。常に与えられるので、子プロセスが端末を継承することも、
+	// プロンプトで止まることもない。
 	Stdin []byte
-	// Timeout kills the process when it is exceeded. Zero means the caller's
-	// context is the only bound.
+	// Timeout は、それを超えたときプロセスを kill する。0 は、呼び出し側の context
+	// だけが上限であることを意味する。
 	Timeout time.Duration
-	// StopAfter stops the process as soon as this byte sequence appears in
-	// stdout or stderr. It lets a long-lived command report a decisive result
-	// without waiting for its own timeout.
+	// StopAfter は、このバイト列が stdout か stderr に現れた時点でプロセスを止める。
+	// これにより、長時間動くコマンドが、自身のタイムアウトを待たずに決定的な結果を
+	// 報告できる。
 	StopAfter []byte
-	// Env is the child's complete environment. A nil Env inherits this
-	// process's environment; a non-nil Env replaces it entirely, including
-	// when it is empty. Callers that run an OpenSSH program should pass
-	// MinimalEnvironment so the child cannot be redirected by a variable the
-	// user happens to have exported.
+	// Env は子プロセスの完全な環境。nil の Env はこのプロセスの環境を継承し、nil で
+	// ない Env は、たとえ空でもそれを完全に置き換える。OpenSSH のプログラムを実行する
+	// 呼び出し側は MinimalEnvironment を渡すこと。そうすれば、ユーザーがたまたま
+	// エクスポートしていた変数によって子プロセスの向きを変えられることが
+	// なくなる。
 	Env []string
 }
 
-// askpassVariables are deliberately withheld from every child.
+// askpassVariables は、すべての子プロセスから意図的に取り除かれる。
 //
-// With SSH_ASKPASS and SSH_ASKPASS_REQUIRE set, ssh-add and ssh ask an
-// external program for a passphrase instead of reading the standard input this
-// application supplies, which would move a secret out of this process's
-// control and onto a program it did not choose. DISPLAY is withheld for the
-// same reason.
+// SSH_ASKPASS と SSH_ASKPASS_REQUIRE が設定されていると、ssh-add と ssh は、この
+// アプリケーションが供給する標準入力を読む代わりに、外部プログラムへパスフレーズ
+// を尋ねる。それは秘密を、このプロセスの管理下から、自分で選んだのではない
+// プログラムの上へ移すことになる。DISPLAY を取り除くのも同じ理由から
+// である。
 var minimalEnvironmentVariables = []string{"HOME", "PATH", "LANG", "SSH_AUTH_SOCK"}
 
-// MinimalEnvironment returns the smallest environment an OpenSSH client
-// program needs, taking each value from lookup and omitting the ones that are
-// not set. SSH_AUTH_SOCK is kept because reaching a running agent is a
-// supported operation; SSH_ASKPASS, SSH_ASKPASS_REQUIRE and DISPLAY are not
-// included at all.
+// MinimalEnvironment は、OpenSSH のクライアントプログラムが必要とする最小の環境
+// を返す。各値は lookup から取り、設定されていないものは省く。SSH_AUTH_SOCK を
+// 残すのは、動作中のエージェントへ到達することがサポートされた操作だからである。
+// SSH_ASKPASS、SSH_ASKPASS_REQUIRE、DISPLAY は、そもそもまったく含め
+// ない。
 func MinimalEnvironment(lookup func(name string) (string, bool)) []string {
 	environment := make([]string, 0, len(minimalEnvironmentVariables))
 	for _, name := range minimalEnvironmentVariables {
@@ -69,8 +69,8 @@ func MinimalEnvironment(lookup func(name string) (string, bool)) []string {
 	return environment
 }
 
-// Output is the bounded result of one external command. A non-zero exit status
-// is data, not an error: it is reported in ExitCode with err == nil.
+// Output は、外部コマンド一回の上限付きの結果。非ゼロの終了ステータスはエラー
+// ではなくデータである。err == nil のまま ExitCode に報告される。
 type Output struct {
 	Stdout    []byte
 	Stderr    []byte
@@ -80,16 +80,16 @@ type Output struct {
 	Elapsed   time.Duration
 }
 
-// OutputRunner runs one external program and returns its bounded output.
+// OutputRunner は外部プログラムを一回実行し、上限付きの出力を返す。
 type OutputRunner interface {
 	RunOutput(ctx context.Context, command Command) (Output, error)
 }
 
-// Toolchain locates the OpenSSH programs installed on this machine.
+// Toolchain は、このマシンにインストールされた OpenSSH のプログラムを見つける。
 //
-// Every program this application is willing to run is named here, so a caller
-// can never assemble a program path of its own: it asks for the one it needs
-// and receives an absolute path or an error.
+// このアプリケーションが実行してよいプログラムはすべてここに名前があるので、
+// 呼び出し側が自前でプログラムパスを組み立てることは決してできない。必要なものを
+// 要求し、絶対パスかエラーを受け取る。
 type Toolchain interface {
 	SSH() (string, error)
 	KeyScan() (string, error)

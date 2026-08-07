@@ -1,9 +1,9 @@
 import { expect, openApplication, openSection, test } from "./support/environment";
 
-// The end-to-end suite drives the built binary against a throwaway HOME, so
-// this exercises the real vault file on a real disk. It never launches a
-// terminal and never starts ssh: the askpass helper's own behaviour is covered
-// by cmd/sshc's tests, and the redemption rules by internal/secret's.
+// この end-to-end スイートは使い捨ての HOME に対してビルド済みバイナリ
+// を動かすため、実ディスク上の本物の vault ファイルを検証する。terminal
+// も ssh も決して起動しない。askpass ヘルパー自体の振る舞いは
+// cmd/sshc のテストが、償還規則は internal/secret のテストがカバーする。
 test("stores a password for a host and never shows it again", async ({ page, installation }) => {
   await openApplication(page, installation);
   await openSection(page, "Connections");
@@ -12,7 +12,7 @@ test("stores a password for a host and never shows it again", async ({ page, ins
 
   const panel = page.getByRole("region", { name: "Stored password" });
   await expect(panel).toBeVisible();
-  // The warning is above the field, not behind a disclosure.
+  // 警告はフィールドの上にあり、開示の裏には隠れていない。
   await expect(panel.getByText(/A key is stronger/)).toBeVisible();
 
   await panel.getByLabel("Password for bastion").fill("hunter2");
@@ -21,14 +21,14 @@ test("stores a password for a host and never shows it again", async ({ page, ins
   await expect(panel.getByText("A password is stored for bastion.")).toBeVisible();
   await expect(page.locator("body")).not.toContainText("hunter2");
 
-  // And the file on disk is ciphertext: neither the password nor the alias.
+  // そしてディスク上のファイルは暗号文であり、パスワードも alias も含まない。
   const sealed = await installation.read("sshc/secrets");
   expect(sealed).not.toContain("hunter2");
   expect(sealed).not.toContain("bastion");
 });
 
-// Locking the vault locks the application. It used to lock one panel, which
-// left the user inside a shell whose next request would be refused.
+// vault をロックするとアプリケーション全体がロックされる。かつては 1 つのパネルだ
+// けがロックされ、ユーザーは次の要求が拒否されるシェルの中に取り残されていた。
 test("locking the vault returns the application to its front door", async ({ page, installation }) => {
   await openApplication(page, installation);
   await openSection(page, "Secrets");

@@ -108,23 +108,23 @@ func TestAttachReferencesNeverPointsAtEngineState(t *testing.T) {
 	}
 }
 
-// A home directory reached through a symbolic link is the shape this
-// application says it supports: "a user who keeps ~/.ssh on another volume
-// still works". It is also the shape every macOS temporary directory has, and
-// the ordinary shape for anyone whose ~/.ssh is a link into a dotfiles
-// checkout.
+// シンボリックリンク経由で到達されるホームディレクトリは、このアプリケーションが
+// サポートすると述べている形である。「~/.ssh を別のボリュームに置いているユーザー
+// でも動く」。macOS のあらゆる一時ディレクトリもその形であり、~/.ssh が dotfiles
+// のチェックアウトへのリンクである人にとっては、それが普通の
+// 形だ。
 //
-// Workspace resolves its root through EvalSymlinks and leaves Home as it was
-// given, so the two live in different path spaces. expandKeyPath builds from
-// Home and Contains compares against Root, so on such a machine every
-// IdentityFile ~/.ssh/… is filed as pointing outside the workspace: the key
-// screen reports the whole configuration as unresolved, and a key rename
-// rewrites none of the directives that name it, silently, because a reference
-// judged to be outside cannot be the key being moved.
+// Workspace はルートを EvalSymlinks で解決し、Home は与えられたままにするので、
+// 両者は別のパス空間に住む。expandKeyPath は Home から組み立て、Contains は Root
+// と比較するので、そうしたマシンではすべての IdentityFile ~/.ssh/… がワーク
+// スペースの外を指すものとして記録される。鍵の画面は設定全体を未解決として報告し、
+// 鍵の名前変更はそれを名指しするディレクティブを何ひとつ書き換えない。しかも
+// 黙って、である。外にあると判定された参照は、移動される鍵ではありえないから
+// だ。
 //
-// The workspace here is built from the link, exactly as cmd/sshc builds one
-// from os.UserHomeDir. Every other test in this package resolves the temporary
-// directory first, which is why none of them sees this.
+// ここでのワークスペースはリンクから組み立てる。cmd/sshc が os.UserHomeDir から
+// 組み立てるのとまったく同じである。このパッケージの他のテストはすべて一時
+// ディレクトリを先に解決するので、これに気づくものがひとつもない。
 func TestBuildReferenceIndexResolvesAKeyUnderASymlinkedHome(t *testing.T) {
 	base, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {

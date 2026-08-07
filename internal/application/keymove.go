@@ -13,20 +13,20 @@ import (
 )
 
 var (
-	// ErrKeyRelocateNotSupported refuses an entry that is not a key, and half
-	// of a key pair.
+	// ErrKeyRelocateNotSupported は、鍵ではないエントリと、鍵ペアの
+	// 片方だけを拒否する。
 	ErrKeyRelocateNotSupported = errors.New("only a private key, or a public key with no private key beside it, can be relocated")
-	// ErrKeyRelocateUnchanged refuses a request that would move nothing.
+	// ErrKeyRelocateUnchanged は、何も移動しないリクエストを拒否する。
 	ErrKeyRelocateUnchanged = errors.New("the key already has that name in that group")
-	// ErrKeyRelocateBlocked refuses a relocation that would leave a reference
-	// this application cannot rewrite.
+	// ErrKeyRelocateBlocked は、このアプリケーションが書き換え
+	// られない参照を残してしまう relocation を拒否する。
 	ErrKeyRelocateBlocked = errors.New("relocating this key would leave a reference behind")
-	// ErrKeyReferenceMoved reports a configuration file that changed while the
-	// relocation was being prepared.
+	// ErrKeyReferenceMoved は、relocation の準備中に変更された
+	// 設定ファイルを報告する。
 	ErrKeyReferenceMoved = errors.New("a configuration file changed while the relocation was being prepared")
 )
 
-// Blocker codes are a stable identifier, ':' and the detail it names.
+// Blocker コードは、安定した識別子、':'、それが名指しする詳細である。
 const (
 	BlockerKeyTargetOccupied    = "key_destination_occupied"
 	BlockerKeyUnresolved        = "key_reference_unresolved"
@@ -36,29 +36,29 @@ const (
 	BlockerKeyStateDirectory    = "key_in_state_directory"
 )
 
-// NoteKeychainEntryStale reports that a Keychain entry, if the user made one,
-// still names the key under the path it had before.
+// NoteKeychainEntryStale は、ユーザーが Keychain エントリを
+// 作っていた場合、それが以前のパスの下で鍵を名指ししたままであることを報告する。
 const NoteKeychainEntryStale = "keychain_entry_stale"
 
-// KeyRelocateRequest changes a key's name, its group, or both.
+// KeyRelocateRequest は、鍵の名前、グループ、あるいはその両方を変更する。
 //
-// A nil field means "leave this as it is", which is what lets one operation
-// serve a rename, a move between groups, and both at once. Group is a pointer
-// rather than a string because "" is a real destination: the root of ~/.ssh,
-// where an ungrouped key lives.
+// nil フィールドは「これはそのままにする」を意味し、これに
+// よって 1 つの操作が名前変更、グループ間の移動、両方同時のいずれ
+// にも対応できる。Group が string ではなく pointer なのは、
+// "" が実在の destination — ungrouped な鍵が住む ~/.ssh のルート — だからだ。
 type KeyRelocateRequest struct {
 	KeyID   string
 	NewName *string
 	Group   *string
 }
 
-// RelocatedKeyFile is one file the relocation moved, by workspace-relative path.
+// RelocatedKeyFile は relocation が移動した 1 つのファイルをワークスペース相対パスで表す。
 type RelocatedKeyFile struct {
 	From string `json:"from"`
 	To   string `json:"to"`
 }
 
-// RewrittenKeyReference is one configuration directive the relocation updated.
+// RewrittenKeyReference は、relocation が更新した 1 つの設定ディレクティブである。
 type RewrittenKeyReference struct {
 	Directive  string `json:"directive"`
 	ConfigPath string `json:"configPath"`
@@ -67,7 +67,7 @@ type RewrittenKeyReference struct {
 	To         string `json:"to"`
 }
 
-// KeyRelocateResult is what the relocation did, or what stopped it.
+// KeyRelocateResult は、relocation が行ったこと、あるいはそれを止めたものである。
 type KeyRelocateResult struct {
 	ID            string                  `json:"id"`
 	RelativePath  string                  `json:"relativePath"`
@@ -81,13 +81,13 @@ type KeyRelocateResult struct {
 	Preview       SavePreview             `json:"preview"`
 }
 
-// ValidateDeclaredGroup reports whether a group both parses as a name and is
-// declared by the entry file's generated region.
+// ValidateDeclaredGroup は、あるグループが名前として解析でき、
+// かつエントリファイルの生成領域によって宣言されているかを報告する。
 //
-// It exists so another package can ask what a group is without importing this
-// one's whole use-case layer, and without deciding for itself: the key vault
-// generates into a group directory only when a line in ~/.ssh/config says that
-// directory is a group.
+// これは、別のパッケージがこのパッケージのユースケース層全体を
+// import せずに、また自分で決めることもなく、グループとは
+// 何かを尋ねられるように存在する: 鍵 vault は、~/.ssh/config の行が
+// そのディレクトリはグループだと言っている場合にのみ、グループディレクトリの中に生成する。
 func (s *Service) ValidateDeclaredGroup(name string) error {
 	if err := ValidateGroupName(name); err != nil {
 		return err
@@ -104,27 +104,27 @@ func (s *Service) ValidateDeclaredGroup(name string) error {
 	return ErrGroupNotDeclared
 }
 
-// keyRelocation is one planned move of one file.
+// keyRelocation は、1 つのファイルについて計画された 1 件の移動である。
 type keyRelocation struct {
 	from string
 	to   string
 }
 
-// RelocateKey moves a key and rewrites every configuration directive that names
-// it, in one journalled transaction committed through the configuration
-// manager.
+// RelocateKey は鍵を移動し、それを名指しするすべての設定
+// ディレクティブを、設定マネージャを通してコミットされる
+// 1 つのジャーナル済みトランザクションで書き換える。
 //
-// The manager matters. The key vault has its own, deliberately without the
-// configuration validator, because it writes private keys and a JSON manifest
-// that would be refused as syntax errors. A relocation is the inverse case: its
-// dangerous half is a configuration rewrite, and it must be re-parsed and
-// re-resolved before a byte lands. The key files travel as storage.Move, which
-// the validator never parses, so both halves get the treatment they need.
+// このマネージャが重要だ。鍵 vault は独自のものを持ち、意図的に設定
+// バリデータを持たない。秘密鍵と JSON マニフェストを書き込むが、それらは
+// 構文エラーとして拒否されてしまうからだ。relocation は逆のケースである:
+// その危険な半分は設定の書き換えであり、1 バイトが着地する前に再パース・
+// 再解決されなければならない。鍵ファイルは storage.Move として運ばれ、
+// バリデータはそれを一切パースしないので、両方の半分が必要な扱いを受ける。
 //
-// It refuses rather than guesses. A directive whose path cannot be resolved
-// might be this key; a configuration file outside ~/.ssh cannot be rewritten at
-// all; a destination an Include glob would read would turn a private key into
-// configuration. Each of those blocks the whole transaction and is reported.
+// 推測するのではなく拒否する。パスを解決できないディレクティブは
+// この鍵かもしれない。~/.ssh の外の設定ファイルはそもそも
+// 書き換えられない。Include glob が読むことになる destination は
+// 秘密鍵を設定に変えてしまう。これらはそれぞれトランザクション全体を止め、報告される。
 func (s *Service) RelocateKey(inventory *keys.Inventory, request KeyRelocateRequest) (KeyRelocateResult, error) {
 	s.saveMutex.Lock()
 	defer s.saveMutex.Unlock()
@@ -168,8 +168,8 @@ func (s *Service) RelocateKey(inventory *keys.Inventory, request KeyRelocateRequ
 	return result, nil
 }
 
-// PreviewKeyRelocation prepares the same transaction and returns what it would
-// do without writing anything.
+// PreviewKeyRelocation は同じトランザクションを準備し、何も
+// 書き込まずにそれが行うはずのことを返す。
 func (s *Service) PreviewKeyRelocation(inventory *keys.Inventory, request KeyRelocateRequest) (KeyRelocateResult, error) {
 	s.saveMutex.Lock()
 	defer s.saveMutex.Unlock()
@@ -240,10 +240,10 @@ func (s *Service) planKeyRelocation(inventory *keys.Inventory, request KeyReloca
 		Blockers:     []string{},
 	}
 	if item.Kind == keys.KindPrivateKey {
-		// A passphrase stored in the login Keychain is filed under the key's
-		// absolute path. macOS owns that entry, so nothing here can move it,
-		// and this application does not read the Keychain and cannot even tell
-		// whether one exists.
+		// ログイン Keychain に保存されたパスフレーズは、鍵の絶対パスの
+		// 下に登録される。macOS がそのエントリを所有しているので、
+		// ここでは何もそれを移動できず、このアプリケーションは
+		// Keychain を読まないので、存在するかどうかさえ判別できない。
 		result.Notes = append(result.Notes, NoteKeychainEntryStale)
 	}
 
@@ -302,16 +302,16 @@ func (s *Service) planKeyRelocation(inventory *keys.Inventory, request KeyReloca
 	return prepared, result, nil
 }
 
-// keyRelocationMembers returns the files one relocation moves, the item first.
+// keyRelocationMembers は 1 件の relocation が移動するファイルを対象アイテムから順に返す。
 //
-// A private key takes with it the public key and certificate files that carry
-// its fingerprint and sit beside it under its own name. Anything else that
-// shares the fingerprint is left alone and named, because a file the user gave
-// an unrelated name is a file the user named on purpose.
+// 秘密鍵は、その fingerprint を持ち、同じ名前の下でそばに
+// 置かれている公開鍵と証明書ファイルを一緒に連れていく。
+// fingerprint を共有する他のものはそのまま残され、名指しされる。ユーザー
+// が無関係な名前を付けたファイルは、ユーザーが意図的にそう名付けたファイルだからだ。
 //
-// A public key or certificate can be relocated only on its own, and only when
-// no private key in the inventory belongs to it: OpenSSH still pairs those two
-// files by name, so moving one without the other breaks the pair silently.
+// 公開鍵や証明書は単独でしか relocate できず、インベントリ
+// 中にそれを所有する秘密鍵がない場合に限られる: OpenSSH は
+// それでも 2 つのファイルを名前で対にするので、片方だけ移動するとペアを黙って壊してしまう。
 func keyRelocationMembers(inventory *keys.Inventory, item *keys.Item) (members []keys.Item, skipped []string, err error) {
 	switch item.Kind {
 	case keys.KindPrivateKey:
@@ -341,8 +341,8 @@ func keyRelocationMembers(inventory *keys.Inventory, item *keys.Item) (members [
 	}
 }
 
-// privateKeyFor reports whether a private key in the inventory owns this
-// public key or certificate.
+// privateKeyFor は、インベントリ中の秘密鍵がこの公開鍵や
+// 証明書を所有しているかどうかを報告する。
 func privateKeyFor(inventory *keys.Inventory, item *keys.Item) bool {
 	fingerprint := item.Fingerprint
 	if item.Kind == keys.KindCertificate && item.Certificate != nil {
@@ -360,13 +360,13 @@ func privateKeyFor(inventory *keys.Inventory, item *keys.Item) bool {
 	return false
 }
 
-// keyStem is the part of the base name every moved file shares.
+// keyStem は、移動するすべてのファイルが共有するベース名の部分である。
 //
-// For a private key it is the whole name: OpenSSH derives the public key's name
-// by appending '.pub', and ValidateFileName refuses to create a private key
-// already spelled that way. For a public key or certificate relocated on its
-// own the suffix says what the file is, so it is kept and only the stem
-// changes: renaming 'old.pub' to 'new' produces 'new.pub'.
+// 秘密鍵にとってそれは名前全体である: OpenSSH は '.pub' を
+// 付加して公開鍵の名前を導出し、ValidateFileName は既にその
+// 綴りの秘密鍵の作成を拒否する。単独で relocate される公開鍵や
+// 証明書にとっては、拡張子がそのファイルが何であるかを示すので
+// それは保たれ、stem だけが変わる: 'old.pub' を 'new' に名前変更すると 'new.pub' になる。
 func keyStem(item *keys.Item) string {
 	base := path.Base(filepath.ToSlash(item.RelativePath))
 	if item.Kind == keys.KindPrivateKey {
@@ -380,8 +380,8 @@ func keyStem(item *keys.Item) string {
 	return base
 }
 
-// keyRelocationBlockers reports every reason this relocation would have to
-// guess. Each blocker refuses the whole transaction; nothing is written.
+// keyRelocationBlockers は、この relocation が推測を要する
+// すべての理由を報告する。各 blocker はトランザクション全体を拒否し、何も書き込まれない。
 func (s *Service) keyRelocationBlockers(
 	graph *config.Graph,
 	inventory *keys.Inventory,
@@ -402,8 +402,8 @@ func (s *Service) keyRelocationBlockers(
 			}
 		}
 		if !declared {
-			// A key group mirrors a connection group. Creating keys/marketing
-			// for a group nobody declared is the inference this design avoids.
+			// 鍵グループは connection グループを反映する。誰も宣言していない
+			// グループのために keys/marketing を作るのは、この設計が避ける推測である。
 			blockers = append(blockers, BlockerKeyGroupNotDeclared+":"+group)
 		}
 	}
@@ -415,13 +415,13 @@ func (s *Service) keyRelocationBlockers(
 		}
 		if strings.HasPrefix(relocation.to+"/", keys.StateDirectoryName+"/") ||
 			strings.HasPrefix(relocation.from+"/", keys.StateDirectoryName+"/") {
-			// Trash, backups and journal are engine state. The inventory
-			// already excludes them; this is the second lock on the same door.
+			// ごみ箱、バックアップ、ジャーナルはエンジンの状態である。
+			// インベントリは既にそれらを除外しており、これは同じ扉の 2 番目の鍵である。
 			blockers = append(blockers, BlockerKeyStateDirectory+":"+relocation.to)
 		}
 		if reachedByInclude(graph, absolute) {
-			// A private key read as ssh_config is the worst outcome available,
-			// so a destination an Include glob would reach is refused outright.
+			// 秘密鍵が ssh_config として読まれるのはあり得る中で最悪の結果
+			// であり、Include glob が届く destination は端から拒否される。
 			blockers = append(blockers, BlockerKeyDestinationRead+":"+relocation.to)
 		}
 	}
@@ -429,8 +429,8 @@ func (s *Service) keyRelocationBlockers(
 	for _, member := range members {
 		for _, reference := range member.References {
 			if !s.workspace.Contains(reference.ConfigPath) {
-				// Design §5.3 forbids writing outside ~/.ssh. Moving the key
-				// anyway would leave that file naming a path that is gone.
+				// 設計 §5.3 は ~/.ssh の外への書き込みを禁じる。それでも鍵を
+				// 移動すれば、そのファイルが消えたパスを名指ししたままになる。
 				blockers = append(blockers, BlockerKeyReferenceExternal+":"+s.displayPath(reference.ConfigPath))
 			}
 		}
@@ -447,9 +447,9 @@ func (s *Service) keyRelocationBlockers(
 	return blockers
 }
 
-// reachedByInclude reports whether an Include glob in the graph would read this
-// path. A destination the graph already reaches is a destination where a key
-// file would be parsed as configuration.
+// reachedByInclude は、グラフ中の Include glob がこのパスを
+// 読むことになるかどうかを報告する。グラフが既に届いている
+// destination は、鍵ファイルが設定としてパースされてしまう destination である。
 func reachedByInclude(graph *config.Graph, absolute string) bool {
 	cleaned := filepath.Clean(absolute)
 	for _, node := range graph.Nodes {
@@ -466,14 +466,14 @@ func reachedByInclude(graph *config.Graph, absolute string) bool {
 	return false
 }
 
-// unresolvedKeyRisk reports whether a directive the engine could not resolve
-// might name one of the files this relocation moves.
+// unresolvedKeyRisk は、エンジンが解決できなかったディレクティブがこの
+// relocation が移動するファイルのいずれかを名指ししている可能性があるかどうかを報告する。
 //
-// A path outside the workspace resolved to a definite location that is not one
-// of these files, so it cannot be affected. A relative path has an unknown
-// directory but a known base name, so it matters only when that base name is
-// one being moved. A path carrying an expansion this engine does not implement
-// could become anything at all, so it always matters.
+// ワークスペースの外に解決された確定的な場所は、これらの
+// ファイルのどれでもないので影響を受け得ない。相対パスは
+// ディレクトリが不明だがベース名は分かっているので、その
+// ベース名が移動対象の 1 つである場合にのみ問題になる。この
+// エンジンが実装していない展開を含むパスは何にでもなり得るので、常に問題になる。
 func unresolvedKeyRisk(unresolved keys.UnresolvedReference, members []keys.Item) string {
 	if unresolved.Directive == "IdentityAgent" {
 		return ""
@@ -494,14 +494,14 @@ func unresolvedKeyRisk(unresolved keys.UnresolvedReference, members []keys.Item)
 	}
 }
 
-// rewriteKeyReferences rewrites every directive that names a moved file,
-// producing one change per configuration file.
+// rewriteKeyReferences は、移動したファイルを名指しする
+// すべてのディレクティブを書き換え、設定ファイルごとに 1 つの変更を生む。
 //
-// The form the user wrote — '~/.ssh/…', '%d/…' or an absolute path — is what
-// OpenSSH resolves and what the user recognises, so the prefix survives and
-// only the part below the workspace root is replaced. A value spelled in a form
-// this function cannot decompose is rewritten as an absolute path instead,
-// which always resolves.
+// ユーザーが書いた形 — '~/.ssh/…'、'%d/…'、あるいは絶対パス —
+// は OpenSSH が解決し、ユーザーが認識するものなので、prefix は
+// 生き残り、ワークスペースのルートより下の部分だけが置き換え
+// られる。この関数が分解できない形で綴られた値は、代わりに
+// 常に解決できる絶対パスとして書き換えられる。
 func (s *Service) rewriteKeyReferences(members []keys.Item, relocations []keyRelocation) ([]storage.Change, []RewrittenKeyReference, error) {
 	root := s.workspace.Root()
 	destinations := make(map[string]string, len(relocations))
@@ -538,8 +538,8 @@ func (s *Service) rewriteKeyReferences(members []keys.Item, relocations []keyRel
 			line := &parsed.Lines[index]
 			for argumentIndex := range line.Arguments {
 				argument := &line.Arguments[argumentIndex]
-				// OpenSSH's argument list ends at an unquoted '#', so what
-				// follows one is a comment and is left exactly as written.
+				// OpenSSH の引数リストは、引用されていない '#' で終わるので、
+				// それに続くものはコメントであり、書かれたとおりに残される。
 				if strings.HasPrefix(argument.Raw, "#") {
 					break
 				}
@@ -575,7 +575,7 @@ func (s *Service) rewriteKeyReferences(members []keys.Item, relocations []keyRel
 	return changes, rewritten, nil
 }
 
-// relocationFor reports which moved file a directive argument names.
+// relocationFor は、ディレクティブの引数がどの移動先ファイルを名指ししているかを報告する。
 func relocationFor(destinations map[string]string, root string, workspace *storage.Workspace, value string) (string, bool) {
 	for from := range destinations {
 		if keys.ExpandsTo(workspace, value, filepath.Join(root, filepath.FromSlash(from))) {
@@ -585,8 +585,8 @@ func relocationFor(destinations map[string]string, root string, workspace *stora
 	return "", false
 }
 
-// rewriteKeyValue re-expresses a directive argument for the file's new path,
-// keeping whatever prefix the user used to name the workspace.
+// rewriteKeyValue は、ディレクティブの引数をファイルの新しいパスに合わせて
+// 再表現し、ユーザーがワークスペースを名指しするのに使った prefix をそのまま保つ。
 func rewriteKeyValue(value, from, to, root string) string {
 	if prefix, ok := strings.CutSuffix(filepath.ToSlash(value), from); ok {
 		return prefix + to

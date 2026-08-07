@@ -10,28 +10,28 @@ import (
 	"sshc/internal/platform"
 )
 
-// DefaultEvaluationTimeout bounds one `ssh -G` run. Evaluation never touches
-// the network, so a slow run means something is wrong locally.
+// DefaultEvaluationTimeout は `ssh -G` の実行一回に上限を設ける。評価はネット
+// ワークに触れないので、実行が遅いならローカルで何かがおかしい。
 const DefaultEvaluationTimeout = 10 * time.Second
 
 var (
-	// ErrEvaluationNotConfirmed reports that evaluating this configuration can
-	// run a command and the caller did not present a confirmation.
+	// ErrEvaluationNotConfirmed は、この設定の評価がコマンドを実行しうるのに、
+	// 呼び出し側が確認を提示しなかったことを報告する。
 	ErrEvaluationNotConfirmed = errors.New("evaluating this configuration can run a command and needs explicit confirmation")
-	// ErrOutputTruncated reports that ssh printed more than the capture limit,
-	// so the parsed values would be incomplete and are not returned.
+	// ErrOutputTruncated は、ssh が取り込み上限を超えて出力したため、解析した値が
+	// 不完全になるので返さない、ということを報告する。
 	ErrOutputTruncated = errors.New("ssh -G produced more output than the capture limit")
 )
 
-// Values is the effective configuration OpenSSH reported for one alias.
-// Keywords keeps the output order; Entries keeps every value of a keyword that
-// may appear more than once, such as identityfile.
+// Values は、OpenSSH がひとつの alias について報告した実効設定。
+// Keywords は出力順を保ち、Entries は、identityfile のように複数回現れうる
+// キーワードのすべての値を保つ。
 type Values struct {
 	Keywords []string
 	Entries  map[string][]string
 }
 
-// First returns the first value of keyword, or an empty string.
+// First は keyword の最初の値を返す。なければ空文字列。
 func (v Values) First(keyword string) string {
 	values := v.Entries[strings.ToLower(keyword)]
 	if len(values) == 0 {
@@ -40,11 +40,11 @@ func (v Values) First(keyword string) string {
 	return values[0]
 }
 
-// All returns every value of keyword in output order.
+// All は keyword のすべての値を出力順で返す。
 func (v Values) All(keyword string) []string { return v.Entries[strings.ToLower(keyword)] }
 
-// ParseValues parses `ssh -G` output. Each line is a lowercase keyword, a
-// single space and the rest of the line, which may itself contain spaces.
+// ParseValues は `ssh -G` の出力を解析する。各行は小文字のキーワード、空白ひとつ、
+// そして行の残りで、残りの部分自体が空白を含みうる。
 func ParseValues(stdout []byte) Values {
 	values := Values{Entries: make(map[string][]string)}
 	for _, raw := range strings.Split(string(stdout), "\n") {
@@ -62,8 +62,8 @@ func ParseValues(stdout []byte) Values {
 	return values
 }
 
-// OpenSSHError reports that the installed ssh rejected the request. Stderr is
-// already bounded by the process seam and is meant for display, not for logs.
+// OpenSSHError は、インストールされている ssh がリクエストを拒否したことを報告
+// する。Stderr はプロセスの継ぎ目ですでに上限が課されており、ログ用ではなく表示用。
 type OpenSSHError struct {
 	ExitCode  int
 	Stderr    string
@@ -74,23 +74,23 @@ func (e *OpenSSHError) Error() string {
 	return fmt.Sprintf("ssh exited with status %d", e.ExitCode)
 }
 
-// Evaluator runs `ssh -G` for one alias against a specific configuration file.
+// Evaluator は、特定の設定ファイルに対して alias ひとつ分の `ssh -G` を実行する。
 type Evaluator struct {
 	Runner     platform.OutputRunner
 	Toolchain  platform.Toolchain
 	ConfigPath string
 	Timeout    time.Duration
-	// Environment is the child's complete environment, normally
-	// platform.MinimalEnvironment. A nil value inherits this process's
-	// environment, which is the right default only in a test.
+	// Environment は子プロセスの完全な環境。通常は platform.MinimalEnvironment。
+	// nil ならこのプロセスの環境を継承するが、それが正しい既定なのはテストの中だけで
+	// ある。
 	Environment []string
 }
 
-// Evaluate asks the installed OpenSSH for the effective configuration of alias.
+// Evaluate は、インストールされている OpenSSH に alias の実効設定を尋ねる。
 //
-// confirmed must come from a consumed action token. When the configuration can
-// execute a command during evaluation, Evaluate refuses without it and starts
-// no process at all.
+// confirmed は、消費されたアクショントークンから来なければならない。設定が評価中に
+// コマンドを実行しうる場合、Evaluate はそれなしでは拒否し、プロセスをまったく
+// 起動しない。
 func (e Evaluator) Evaluate(ctx context.Context, report Report, alias string, confirmed bool) (Values, error) {
 	if err := platform.ValidateAlias(alias); err != nil {
 		return Values{}, err

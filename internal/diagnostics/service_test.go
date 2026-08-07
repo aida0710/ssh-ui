@@ -139,9 +139,9 @@ func TestServiceConfigCheckSummarisesTheIncludeGraph(t *testing.T) {
 	}
 }
 
-// TestServiceAuthenticateSanitisesTheHomePathOutOfReportedOutput guards what
-// leaves this process. Verbose ssh output names every file it read by absolute
-// path, which would carry the account name into a response body.
+// TestServiceAuthenticateSanitisesTheHomePathOutOfReportedOutput は、このプロセス
+// から出ていくものを守る。冗長な ssh の出力は読んだファイルをすべて絶対パスで
+// 名指しするので、アカウント名がレスポンスの本文へ運ばれてしまう。
 func TestServiceAuthenticateSanitisesTheHomePathOutOfReportedOutput(t *testing.T) {
 	service := newTestService(t, &scriptedRunner{})
 	home := service.Workspace.Home()
@@ -204,8 +204,8 @@ func TestServiceLaunchesOnlySafeAliases(t *testing.T) {
 		t.Fatalf("aliases = %#v", terminal.aliases)
 	}
 
-	// An alias carrying AppleScript quoting is refused before it reaches the
-	// launcher, never escaped into the automation payload.
+	// AppleScript の引用を含む alias は、ランチャーに届く前に拒否される。自動化の
+	// ペイロードへエスケープして渡されることは決してない。
 	for _, unsafe := range []string{"a b", `bastion" & (do shell script "id") & "`, "a;id"} {
 		if err := service.LaunchTerminal(context.Background(), unsafe); err == nil {
 			t.Errorf("LaunchTerminal(%q) was accepted", unsafe)
@@ -242,11 +242,11 @@ func TestServiceSafetyReportsTheSameEvidenceAsAFreshScan(t *testing.T) {
 	}
 }
 
-// The account name must not be carried out of ssh's own output. It is replaced
-// in the stderr of an authentication test and was not replaced in the values of
-// an evaluation, though both are ssh output put into a response — and the
-// values are the part that always contains a home path, because
-// UserKnownHostsFile and the default IdentityFile list are absolute.
+// アカウント名を ssh 自身の出力の外へ持ち出してはならない。これは認証テストの
+// stderr では置換されていたが、評価の値では置換されていなかった。どちらも
+// レスポンスに入る ssh の出力であり、しかも値の方こそ常にホームのパスを含む。
+// UserKnownHostsFile と既定の IdentityFile 一覧が絶対パスだから
+// である。
 func TestInspectReplacesTheHomeDirectoryInEvaluatedValues(t *testing.T) {
 	workspace := newServiceWorkspace(t, serviceConfig)
 	home := workspace.Home()
@@ -276,12 +276,12 @@ func TestInspectReplacesTheHomeDirectoryInEvaluatedValues(t *testing.T) {
 	}
 }
 
-// The command a user copies is this binary and an alias.
+// ユーザーがコピーするコマンドは、このバイナリと alias である。
 //
-// It used to be five environment variables and a flag, which is what the
-// Terminal button assembles for itself and is not something anybody should
-// type. This one connects the same way: it asks the running application for a
-// stored password and falls back to a plain ssh when there is none.
+// 以前は五つの環境変数とフラグだった。それは Terminal のボタンが自前で組み立てる
+// もので、誰かが打ち込むようなものではない。こちらは同じやり方で接続する。動作中の
+// アプリケーションに保存済みパスワードを求め、なければ素の ssh にフォールバック
+// する。
 func TestTerminalCommandIsThisBinaryAndTheAlias(t *testing.T) {
 	service := &diagnostics.Service{Self: "/Applications/sshc"}
 	command, launchable, warning := service.TerminalCommand("bastion")
@@ -289,13 +289,13 @@ func TestTerminalCommandIsThisBinaryAndTheAlias(t *testing.T) {
 		t.Errorf("TerminalCommand = %q, %v, %q", command, launchable, warning)
 	}
 
-	// An alias this will not put on a command line is still shown, with why.
+	// コマンドラインに載せない alias も、その理由とともに表示される。
 	command, launchable, warning = service.TerminalCommand("-oProxyCommand=id")
 	if launchable || warning == "" {
 		t.Errorf("an unsafe alias = %q, %v, %q", command, launchable, warning)
 	}
 
-	// Without a resolved path a plain ssh still connects.
+	// 解決済みのパスがなくても、素の ssh なら接続できる。
 	plain := &diagnostics.Service{}
 	if command, _, _ := plain.TerminalCommand("bastion"); command != "ssh -- bastion" {
 		t.Errorf("with no path = %q", command)

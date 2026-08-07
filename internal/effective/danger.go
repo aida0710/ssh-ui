@@ -1,9 +1,9 @@
-// Package effective explains and evaluates the configuration OpenSSH will
-// actually use for one Host alias.
+// Package effective は、OpenSSH がひとつの Host alias に対して実際に使う設定を
+// 説明し、評価する。
 //
-// Nothing in this package starts a program unless the caller passed an
-// explicit confirmation obtained from the user, because evaluating an OpenSSH
-// configuration can execute a command all by itself.
+// このパッケージのどれも、ユーザーから得た明示的な確認を呼び出し側が渡さない限り、
+// プログラムを起動しない。OpenSSH の設定を評価すること自体が、コマンドを実行しうる
+// からである。
 package effective
 
 import (
@@ -16,38 +16,38 @@ import (
 	"sshc/internal/config"
 )
 
-// TokenEscapeWarning is displayed next to every executable directive.
+// TokenEscapeWarning は、実行を伴うすべてのディレクティブの隣に表示される。
 //
-// OpenSSH expands %h, %p, %r and friends into the command it runs without
-// quoting them for a shell, so a hostname or user value taken from the
-// configuration can reach that shell unchanged.
+// OpenSSH は %h、%p、%r などを、シェル向けの引用をせずに実行するコマンドへ展開する。
+// そのため、設定から取られたホスト名やユーザーの値が、そのままそのシェルへ届き
+// うる。
 const TokenEscapeWarning = "OpenSSH does not shell-escape the tokens it expands. A hostname, port or user value can reach the shell of this command unchanged."
 
-// Executable is one directive that can make OpenSSH run a program.
+// Executable は、OpenSSH にプログラムを実行させうるディレクティブひとつ。
 type Executable struct {
-	// Keyword is the canonical spelling, or "Match exec" for a Match criterion.
+	// Keyword は正規の綴り。Match の criterion の場合は "Match exec"。
 	Keyword string
-	// Command is the argument text exactly as it appears in the file.
+	// Command は、ファイルに現れるとおりの引数テキスト。
 	Command string
 	Path    string
-	// Line is 1-based.
+	// Line は 1 始まり。
 	Line int
-	// Condition is the enclosing Host or Match header, empty in the global block.
+	// Condition は、それを囲む Host または Match のヘッダー。グローバルブロックでは空。
 	Condition string
-	// OnEvaluate is true when merely evaluating the configuration runs it.
+	// OnEvaluate は、設定を評価するだけでそれが実行される場合に true。
 	OnEvaluate bool
-	// OnConnect is true when establishing a connection runs it.
+	// OnConnect は、接続を確立するとそれが実行される場合に true。
 	OnConnect bool
-	// Overridable is true when a command-line option can disable it for one run.
+	// Overridable は、コマンドラインオプションで一回分だけ無効にできる場合に true。
 	Overridable bool
 }
 
-// Report lists every executable directive reachable from the configuration.
+// Report は、設定から到達できる実行を伴うディレクティブをすべて列挙する。
 //
-// The scan is not narrowed to one alias on purpose. OpenSSH evaluates Match
-// lines while it reads the file, so a Match exec anywhere in the graph can run
-// while any alias is evaluated, and a reader deserves to see every command the
-// file can start rather than a filtered subset.
+// 走査をひとつの alias に絞らないのは意図的である。OpenSSH はファイルを読みながら
+// Match 行を評価するので、グラフのどこにある Match exec も、どの alias の評価中で
+// あっても実行されうる。読み手には、絞り込まれた部分集合ではなく、そのファイルが
+// 起動しうるコマンドをすべて見る資格がある。
 type Report struct {
 	Directives []Executable
 }
@@ -59,7 +59,7 @@ var executableDirectives = map[string]Executable{
 	"remotecommand":     {Keyword: "RemoteCommand", OnConnect: true, Overridable: true},
 }
 
-// Scan collects the executable directives of every file in the graph.
+// Scan は、グラフ内のすべてのファイルから実行を伴うディレクティブを集める。
 func Scan(graph *config.Graph) Report {
 	report := Report{}
 	if graph == nil {
@@ -74,7 +74,7 @@ func Scan(graph *config.Graph) Report {
 			condition := node.File.Condition(block)
 			if block.Kind == config.BlockMatch {
 				for _, criterion := range block.Criteria {
-					// config lowercases Match criterion keywords.
+					// config は Match の criterion キーワードを小文字にする。
 					if criterion.Keyword != "exec" {
 						continue
 					}
@@ -110,7 +110,7 @@ func Scan(graph *config.Graph) Report {
 	return report
 }
 
-// EvaluationNeedsConfirmation reports whether `ssh -G` may run a command.
+// EvaluationNeedsConfirmation は、`ssh -G` がコマンドを実行しうるかを報告する。
 func (r Report) EvaluationNeedsConfirmation() bool {
 	for _, directive := range r.Directives {
 		if directive.OnEvaluate {
@@ -120,14 +120,14 @@ func (r Report) EvaluationNeedsConfirmation() bool {
 	return false
 }
 
-// ConnectionNeedsConfirmation reports whether connecting may run a command.
+// ConnectionNeedsConfirmation は、接続がコマンドを実行しうるかを報告する。
 func (r Report) ConnectionNeedsConfirmation() bool {
 	return len(r.Directives) > 0
 }
 
-// Unavoidable returns the directives no command-line option can disable. A
-// connection that would run one of them starts only after the user confirmed
-// the exact command text.
+// Unavoidable は、どのコマンドラインオプションでも無効にできないディレクティブを
+// 返す。そのいずれかを実行することになる接続は、ユーザーが正確なコマンドテキストを
+// 確認したあとでのみ開始される。
 func (r Report) Unavoidable() []Executable {
 	var remaining []Executable
 	for _, directive := range r.Directives {
@@ -138,11 +138,11 @@ func (r Report) Unavoidable() []Executable {
 	return remaining
 }
 
-// Evidence is a stable digest of what a confirmation dialog must display.
+// Evidence は、確認ダイアログが表示しなければならない内容の安定したダイジェスト。
 //
-// An action token is bound to this value, so a configuration edited between
-// the confirmation and the execution invalidates the confirmation instead of
-// silently running a different command.
+// アクショントークンはこの値に結び付けられるので、確認と実行のあいだに編集された
+// 設定は、黙って別のコマンドを実行するのではなく、その確認を無効に
+// する。
 func (r Report) Evidence() string {
 	entries := make([]string, 0, len(r.Directives))
 	for _, directive := range r.Directives {
@@ -154,8 +154,8 @@ func (r Report) Evidence() string {
 	return hex.EncodeToString(sum[:])
 }
 
-// argumentText returns a directive's argument portion exactly as written,
-// without the indent, keyword, separator or line ending.
+// argumentText は、ディレクティブの引数部分を、インデント・キーワード・区切り・
+// 行末を除いて、書かれたとおりに返す。
 func argumentText(line config.Line) string {
 	var builder strings.Builder
 	for _, argument := range line.Arguments {

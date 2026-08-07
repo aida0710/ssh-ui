@@ -18,11 +18,11 @@ const (
 	journalDirectoryName = "journal"
 	historyDirectoryName = "history"
 	backupDirectoryName  = "backups"
-	// BackupDirectoryName is the same name, for the one caller outside this
-	// package that has to read the directory itself: re-sealing every backup
-	// when the master password changes cannot go through ReadBackup, which
-	// opens with the key the service holds now rather than the one they were
-	// sealed with.
+	// BackupDirectoryName は同じ名前を公開する。このパッケージの外で、ディレクトリを
+	// 自分で読まなければならない唯一の呼び出し側のためである。マスターパスワードが
+	// 変わったときにすべてのバックアップを封じ直す処理は ReadBackup を通せない。
+	// ReadBackup は、封をしたときの鍵ではなく、サービスがいま持っている鍵で開く
+	// からだ。
 	BackupDirectoryName = backupDirectoryName
 	temporaryPrefix     = ".sshc-"
 
@@ -44,9 +44,9 @@ const (
 var (
 	ErrNoChanges     = errors.New("transaction has no changes")
 	ErrDuplicatePath = errors.New("transaction contains the same path twice")
-	// ErrDirectoryNotEmpty refuses to remove a directory that still holds
-	// something. A recursive delete has no place in a journal: rolling it back
-	// would mean restoring contents this transaction never read.
+	// ErrDirectoryNotEmpty は、まだ何かを保持しているディレクトリの削除を拒否する。
+	// 再帰的な削除にジャーナルの居場所はない。それを巻き戻すには、このトランザクション
+	// が一度も読んでいない内容を復元しなければならなくなる。
 	ErrDirectoryNotEmpty   = errors.New("directory is not empty")
 	ErrIrreversibleChange  = errors.New("a committed change that kept no backup cannot be rolled back")
 	ErrMoveTargetExists    = errors.New("move target already exists")
@@ -54,21 +54,21 @@ var (
 	ErrIrreversibleRemoval = errors.New("a committed removal that kept no backup cannot be rolled back")
 )
 
-// Precondition records the state the caller based its new contents on.
+// Precondition は、呼び出し側が新しい内容の前提とした状態を記録する。
 type Precondition struct {
 	Exists bool
 	Digest string
 }
 
-// Change is one file the transaction replaces or creates.
+// Change は、トランザクションが置き換えるか新規作成するファイルひとつ。
 //
-// SkipBackup suppresses the generational backup of the contents this change
-// replaces. It exists for one reason: the previous contents may be a private
-// key, and the design refuses to leave a second copy of key material in
-// ~/.ssh/sshc/backups/. A change that opts out is still journalled and can
-// still be completed after an interruption, but it can no longer be rolled
-// back, and Rollback says so instead of pretending otherwise. The zero value
-// keeps the ordinary behaviour, so an existing caller is unaffected.
+// SkipBackup は、この変更が置き換える内容の世代バックアップを抑止する。理由は
+// ひとつだけだ。以前の内容が秘密鍵かもしれず、この設計は鍵素材の二つ目のコピーを
+// ~/.ssh/sshc/backups/ に残すことを拒む。これを選んだ変更も、ジャーナルには残り、
+// 中断後に完了させることもできるが、もはや巻き戻すことはできない。そして Rollback
+// は、できるふりをせずにその旨を述べる。ゼロ値は従来どおりの挙動を保つので、既存の
+// 呼び出し側には影響が
+// ない。
 type Change struct {
 	Path         string
 	Contents     []byte
@@ -76,81 +76,81 @@ type Change struct {
 	SkipBackup   bool
 }
 
-// Move relocates one file with rename(2) inside the workspace.
+// Move は、ワークスペース内でファイルひとつを rename(2) により移す。
 //
-// A move copies no bytes, so a private key is never duplicated into the
-// generational backup directory, and rename preserves the file's existing
-// permission bits exactly.
+// 移動はバイトをコピーしないので、秘密鍵が世代バックアップのディレクトリへ複製
+// されることはない。また rename は、ファイルの既存の権限ビットをそのまま正確に
+// 保つ。
 type Move struct {
 	From         string
 	To           string
 	Precondition Precondition
 }
 
-// Removal deletes one file.
+// Removal はファイルをひとつ削除する。
 //
-// By default it writes no backup, because its first caller is a permanent
-// delete the user has confirmed twice and copying key material into the backup
-// directory would defeat that decision. Such a removal can be completed after
-// an interruption but not rolled back, and Rollback says so instead of
-// pretending otherwise.
+// 既定ではバックアップを書かない。最初の呼び出し側が、ユーザーが二度確認した恒久
+// 削除であり、鍵素材をバックアップディレクトリへコピーすればその判断を台無しに
+// してしまうからだ。そうした削除は中断後に完了させられるが、巻き戻すことはでき
+// ない。そして Rollback は、できるふりをせずにその旨を
+// 述べる。
 //
-// Backup opts in to the generational copy, for callers deleting something that
-// is not key material — a configuration file the user removed from the
-// explorer. That removal then behaves like every other change this application
-// makes: it is in History and it can be undone.
+// Backup は世代コピーを明示的に選ぶ。鍵素材ではないもの — ユーザーがエクスプ
+// ローラから取り除いた設定ファイルなど — を削除する呼び出し側のためである。その
+// 削除は、このアプリケーションが行う他のすべての変更と同じ振る舞いになる。History
+// に載り、取り消せる。
 type Removal struct {
 	Path         string
 	Precondition Precondition
 	Backup       bool
 }
 
-// DirectoryCreate creates one directory and any missing parent below the root.
+// DirectoryCreate は、ディレクトリひとつと、ルートより下で欠けている親を作る。
 //
-// It exists so that arranging files and creating the places they go can be one
-// transaction. Before it, a caller had to EnsureDirectory outside the journal
-// and accept that a crash between the mkdir and the commit left an empty
-// directory behind.
+// これがあるおかげで、ファイルの配置と、その置き場所を作ることをひとつの
+// トランザクションにできる。これがなかった頃は、呼び出し側はジャーナルの外で
+// EnsureDirectory を呼び、mkdir とコミットのあいだでクラッシュすれば空の
+// ディレクトリが残ることを受け入れるしかなかった。
 type DirectoryCreate struct {
 	Path string
 }
 
-// DirectoryRemoval removes one empty directory.
+// DirectoryRemoval は、空のディレクトリをひとつ取り除く。
 //
-// Only an empty one: a recursive delete cannot be rolled back without
-// restoring contents the transaction never read, so a caller that wants a tree
-// gone lists its files as Removals and its directories here, deepest first.
+// 空のものだけである。再帰的な削除は、トランザクションが一度も読んでいない内容を
+// 復元しない限り巻き戻せない。したがって木をまるごと消したい呼び出し側は、
+// ファイルを Removal として、ディレクトリをここに、深いものから順に列挙する。
 type DirectoryRemoval struct {
 	Path string
 }
 
-// Request is one logical edit spanning any number of files.
+// Request は、任意の数のファイルにまたがる論理的な編集ひとつ。
 //
-// The order is the only one that can work: directories are created first
-// because a change needs somewhere to go, then changes, moves and removals,
-// and directories are removed last because what emptied them was in this same
-// request.
+// この順序だけが成立しうる。変更には置き場所が要るのでディレクトリを最初に作り、
+// 次に変更・移動・削除を行う。ディレクトリの削除を最後にするのは、それらを空に
+// したのがほかならぬこの同じリクエストだから
+// である。
 type Request struct {
 	Operation   string
 	Directories []DirectoryCreate
 	Changes     []Change
 	Moves       []Move
 	Removals    []Removal
-	// RemoveDirectories are applied after everything else, deepest first, and
-	// each must be empty by then.
+	// RemoveDirectories は他のすべてのあとで、深いものから順に適用され、その時点で
+	// それぞれ空でなければならない。
 	RemoveDirectories []DirectoryRemoval
 }
 
-// Result describes a completed transaction.
+// Result は、完了したトランザクションを記述する。
 type Result struct {
 	ID        string
 	BackupDir string
 	Written   []string
 }
 
-// ConflictError reports that the file on disk is not the file the caller
-// edited. Current carries the on-disk contents so the caller can build a
-// three-way diff; Error never includes file contents.
+// ConflictError は、ディスク上のファイルが呼び出し側の編集したファイルではないと
+// 報告する。Current はディスク上の内容を運ぶので、呼び出し側は三方向の差分を作れる。
+// Error がファイルの内容を含むことは決してない。
 type ConflictError struct {
 	Path     string
 	Expected string
@@ -162,12 +162,12 @@ func (e *ConflictError) Error() string {
 	return "external change detected for " + e.Path
 }
 
-// ReadBackup reads one generational backup and opens it.
+// ReadBackup は世代バックアップをひとつ読み、それを開く。
 //
-// Every reader comes through here — the rollback below, and the history screen
-// that offers to restore one file — so there is one place that knows a backup
-// is ciphertext and no caller that can forget and write the sealed bytes over
-// somebody's configuration.
+// 読み手はすべてここを通る — 下の巻き戻しと、ファイルひとつの復元を提案する履歴
+// 画面である。したがって「バックアップは暗号文である」ことを知る場所はひとつだけ
+// になり、それを忘れて封じられたままのバイト列を誰かの設定の上に書いてしまう
+// 呼び出し側は存在しない。
 func (m *Manager) ReadBackup(path string) ([]byte, error) {
 	contents, err := m.workspace.FileSystem().ReadFile(path)
 	if err != nil {
@@ -179,7 +179,7 @@ func (m *Manager) ReadBackup(path string) ([]byte, error) {
 	return m.Unseal(contents)
 }
 
-// Digest is the content hash used for preconditions and journal entries.
+// Digest は、事前条件とジャーナルエントリに使う内容ハッシュ。
 func Digest(contents []byte) string {
 	sum := sha256.Sum256(contents)
 	return hex.EncodeToString(sum[:])
@@ -198,8 +198,8 @@ type journalEntry struct {
 	PreviousDigest string `json:"previousDigest,omitempty"`
 }
 
-// action defaults to write so a journal written before moves and removals
-// existed still replays correctly.
+// action は既定で write にする。移動と削除が存在するより前に書かれたジャーナル
+// でも、正しく再生できるようにするためである。
 func (e journalEntry) action() string {
 	if e.Action == "" {
 		return actionWrite
@@ -207,8 +207,8 @@ func (e journalEntry) action() string {
 	return e.Action
 }
 
-// zeroBytes overwrites a buffer that may hold key material. Like keys.Wipe it
-// is best effort: the Go runtime may already have copied the bytes elsewhere.
+// zeroBytes は、鍵素材を保持しているかもしれないバッファを上書きする。keys.Wipe と
+// 同じくベストエフォート。Go ランタイムがすでに別の場所へコピーしている場合がある。
 func zeroBytes(contents []byte) {
 	for index := range contents {
 		contents[index] = 0
@@ -226,26 +226,26 @@ type journalRecord struct {
 	Entries    []journalEntry `json:"entries"`
 }
 
-// Manager performs journalled, atomic multi-file writes inside a workspace.
+// Manager は、ワークスペース内でジャーナル付きの原子的な複数ファイル書き込みを行う。
 //
-// Validate is an optional check run after preconditions and before anything is
-// journalled or written. The storage layer deliberately knows nothing about
-// configuration syntax; the application layer injects a validator that parses
-// the new contents and re-checks the Include graph, so a syntactically broken
-// file never reaches disk. A nil Validate accepts every request.
+// Validate は、事前条件のあと、ジャーナルへの記録や書き込みの前に走る省略可能な
+// 検査である。ストレージ層は意図的に設定の構文を何も知らない。アプリケーション層が
+// バリデータを注入し、それが新しい内容を解析して Include グラフを再検査するので、
+// 構文的に壊れたファイルがディスクへ届くことはない。Validate が nil なら、すべての
+// リクエストを受け入れる。
 type Manager struct {
 	workspace *Workspace
 	now       func() time.Time
 	random    io.Reader
 	Validate  func(Request) error
-	// Seal and Unseal turn a generational backup into ciphertext and back.
+	// Seal と Unseal は、世代バックアップを暗号文にし、また戻す。
 	//
-	// They are injected because where a secret lives belongs to the secret
-	// package and this one must not import it to ask — the same reasoning that
-	// keeps the key vault from importing it to find a passphrase. A manager
-	// with no Seal writes backups in the clear, which is what this did before
-	// there was a master password to seal them with; every wiring that has one
-	// sets both.
+	// これらを注入するのは、秘密がどこにあるかは secret パッケージの領分であり、
+	// このパッケージはそれを尋ねるために import してはならないからだ — 鍵 vault が
+	// パスフレーズを探すために import しないのと同じ理屈である。Seal を持たない
+	// マネージャは平文でバックアップを書く。マスターパスワードで封じられるように
+	// なる前は、これがそうしていたことだ。マスターパスワードを持つ配線は、いずれも
+	// 両方を設定する。
 	Seal   func(plaintext []byte) ([]byte, error)
 	Unseal func(sealed []byte) ([]byte, error)
 }
@@ -254,12 +254,12 @@ func NewManager(workspace *Workspace, now func() time.Time, random io.Reader) *M
 	return &Manager{workspace: workspace, now: now, random: random}
 }
 
-// Commit validates every change, journals the intent, stages all new contents
-// durably, then applies the entries one at a time.
+// Commit はすべての変更を検証し、意図をジャーナルへ記録し、新しい内容をすべて
+// 永続的にステージし、そのうえでエントリをひとつずつ適用する。
 //
-// Commit does not roll back automatically. A failure leaves a pending journal
-// so the user can choose between completing and restoring, which is the only
-// honest option when several files are involved.
+// Commit は自動では巻き戻さない。失敗すると保留中のジャーナルが残るので、ユーザー
+// は「完了させる」か「復元する」かを選べる。複数のファイルが関わるとき、それが
+// 唯一の誠実な選択肢である。
 func (m *Manager) Commit(request Request) (Result, error) {
 	if len(request.Changes)+len(request.Moves)+len(request.Removals)+
 		len(request.Directories)+len(request.RemoveDirectories) == 0 {
@@ -283,9 +283,9 @@ func (m *Manager) Commit(request Request) (Result, error) {
 		return nil
 	}
 
-	// planned is every directory this request creates, and each of its
-	// ancestors below the root, so a change written into one of them resolves
-	// even though nothing is on disk yet.
+	// planned は、このリクエストが作るすべてのディレクトリと、ルートより下にある
+	// そのそれぞれの祖先である。これにより、そのいずれかに書き込まれる変更は、まだ
+	// ディスク上に何もなくても解決できる。
 	planned := map[string]bool{}
 	for _, create := range request.Directories {
 		cleaned, err := m.workspace.ResolveDirectory(create.Path)
@@ -297,8 +297,8 @@ func (m *Manager) Commit(request Request) (Result, error) {
 		}
 	}
 
-	// Directories first: a change needs somewhere to go, and a move needs a
-	// destination that exists.
+	// ディレクトリが先。変更には置き場所が要り、移動には存在する
+	// 行き先が要る。
 	for _, create := range request.Directories {
 		target, err := m.workspace.ResolveDirectory(create.Path)
 		if err != nil {
@@ -307,9 +307,9 @@ func (m *Manager) Commit(request Request) (Result, error) {
 		if err := claim(target); err != nil {
 			return Result{}, err
 		}
-		// Whether it is already there decides what a rollback does. Removing a
-		// directory this transaction did not create would delete something
-		// nobody asked it to touch.
+		// すでにそこにあるかどうかが、巻き戻しの内容を決める。このトランザクションが
+		// 作っていないディレクトリを取り除けば、誰も触れてくれと頼んでいないものを
+		// 削除することになる。
 		existed := false
 		if _, statErr := fileSystem.Lstat(target); statErr == nil {
 			existed = true
@@ -439,16 +439,16 @@ func (m *Manager) Commit(request Request) (Result, error) {
 		written = append(written, target)
 	}
 
-	// Directory removals last, and each must be empty by the time it runs. The
-	// check is against the disk as this request will leave it: an entry this
-	// same request moves away, removes, or removes as a directory of its own
-	// does not keep its parent alive. It used to be against the disk as it
-	// stands, which meant a caller had to empty a tree in one transaction and
-	// remove it in the next — so an operation could not finish what it started,
-	// and a crash between the two left the empty shell behind.
+	// ディレクトリの削除は最後で、実行される時点でそれぞれ空でなければならない。
+	// 検査は、このリクエストが残すことになるディスクの状態に対して行う。この同じ
+	// リクエストが移動させ、削除し、あるいはディレクトリとして取り除くエントリは、
+	// その親を生かし続けない。以前は現状のディスクに対して検査していたため、呼び出し
+	// 側は一方のトランザクションで木を空にし、次のトランザクションで取り除かねばなら
+	// なかった — つまり操作が自分で始めたことを終えられず、二つのあいだでクラッシュ
+	// すれば空の抜け殻が残った。
 	//
-	// Deepest first is the only order that can work, and sorting here is what
-	// stops a caller having to know that.
+	// 深いものから順が唯一成立する順序であり、ここで整列しておくことが、呼び出し側に
+	// それを知らせずに済ませている。
 	ordered := append([]DirectoryRemoval(nil), request.RemoveDirectories...)
 	sort.SliceStable(ordered, func(i, j int) bool {
 		return strings.Count(ordered[i].Path, string(filepath.Separator)) >
@@ -464,8 +464,8 @@ func (m *Manager) Commit(request Request) (Result, error) {
 		}
 		info, statErr := fileSystem.Lstat(target)
 		if errors.Is(statErr, fs.ErrNotExist) {
-			// Nothing to do, and not an error: removing a directory that is
-			// already gone is the state the caller asked for.
+			// 何もすることがない。エラーでもない。すでに消えているディレクトリを
+			// 取り除くことは、呼び出し側が求めた状態である。
 			continue
 		}
 		if statErr != nil {
@@ -479,9 +479,9 @@ func (m *Manager) Commit(request Request) (Result, error) {
 			return Result{}, err
 		}
 		for _, entry := range contents {
-			// claimed holds every path this request has already taken
-			// responsibility for: the source of a move, a removal, and a
-			// directory removal listed deeper than this one.
+			// claimed は、このリクエストがすでに責任を引き受けたすべてのパスを
+			// 保持する。移動の元、削除、そしてこれより深いところに列挙された
+			// ディレクトリの削除である。
 			if !claimed[filepath.Join(target, entry.Name())] {
 				return Result{}, ErrDirectoryNotEmpty
 			}
@@ -528,11 +528,11 @@ func (m *Manager) Commit(request Request) (Result, error) {
 		return Result{}, err
 	}
 
-	// The directories are made here: after the validator has accepted the
-	// request, so a refused one creates nothing, and before any temporary file
-	// is staged, because a staged file needs its parent to exist. They are
-	// journal entries, so an interrupted commit can be rolled back — which is
-	// the whole reason this is not an EnsureDirectory outside the transaction.
+	// ディレクトリはここで作る。バリデータがリクエストを受理したあとなので、拒否
+	// されたリクエストは何も作らない。そして一時ファイルがステージされる前なので、
+	// ステージされるファイルには親が存在する。これらはジャーナルのエントリなので、
+	// 中断されたコミットは巻き戻せる — これがトランザクションの外の EnsureDirectory で
+	// ない理由のすべてである。
 	for index := range record.Entries {
 		entry := record.Entries[index]
 		if entry.action() != actionMakeDir {
@@ -543,11 +543,11 @@ func (m *Manager) Commit(request Request) (Result, error) {
 		}
 	}
 
-	// Copy the previous contents before anything is replaced or unlinked. A
-	// move needs no copy, because it keeps the single copy of the file; a
-	// replacement always needs one, and a removal needs one exactly when its
-	// caller asked for it. Entries and the staged and previous slices stay
-	// index-aligned throughout Commit.
+	// 何かが置き換えられたり unlink されたりする前に、以前の内容をコピーする。移動に
+	// コピーは不要だ。ファイルの唯一のコピーをそのまま保つからである。置き換えには
+	// 常に必要で、削除には呼び出し側が求めたときにちょうど必要になる。entries と、
+	// staged および previous のスライスは、Commit の全体を通じて添字が対応したまま
+	// である。
 	for index := range record.Entries {
 		entry := &record.Entries[index]
 		if entry.action() != actionWrite && entry.action() != actionRemove {
@@ -578,7 +578,7 @@ func (m *Manager) Commit(request Request) (Result, error) {
 		entry.Backup = backupPath
 	}
 
-	// Stage every new file next to its target so a later rename is atomic.
+	// 新しいファイルはすべて対象の隣にステージし、あとの rename が原子的になるようにする。
 	for index := range record.Entries {
 		entry := &record.Entries[index]
 		if entry.action() != actionWrite {
@@ -662,13 +662,13 @@ func (m *Manager) commitStaged(record *journalRecord, journalPath string) error 
 	return nil
 }
 
-// sourceState hashes a file that is about to be moved or removed and checks the
-// caller's precondition.
+// sourceState は、これから移動または削除されるファイルをハッシュし、呼び出し側の
+// 事前条件を検査する。
 //
-// The bytes are zeroed as soon as the digest exists, because neither a move nor
-// a removal ever needs them again and the file may be a private key. The
-// returned ConflictError deliberately carries no Current contents for the same
-// reason; a three-way diff of key material would be useless and unsafe.
+// ダイジェストができた時点でバイト列をゼロで埋める。移動も削除も二度とそれを必要と
+// せず、そのファイルは秘密鍵かもしれないからだ。返される ConflictError が意図的に
+// Current の内容を運ばないのも同じ理由である。鍵素材の三方向差分は無用でもあり
+// 危険でもある。
 func (m *Manager) sourceState(path string, precondition Precondition) (string, fs.FileMode, error) {
 	contents, mode, exists, err := m.currentState(path)
 	if err != nil {
@@ -690,13 +690,13 @@ func (m *Manager) sourceState(path string, precondition Precondition) (string, f
 	return digest, mode, nil
 }
 
-// Note records a completed action that changed no file, such as revealing a
-// private key.
+// Note は、ファイルを変えなかった完了済みの操作を記録する。秘密鍵の表示などが
+// これにあたる。
 //
-// A note has no staged content, no backup and no journal file, because there is
-// nothing to recover. It exists so history is a complete account of what the
-// application did. By construction it can hold no file contents: it stores only
-// the operation name, the time and the paths involved.
+// note にはステージされた内容もバックアップもジャーナルファイルもない。復旧すべき
+// ものが何もないからだ。これがあるのは、履歴をアプリケーションが行ったことの完全な
+// 記録にするためである。構造上、ファイルの内容を持ちようがない。保存するのは操作名、
+// 時刻、関係したパスだけである。
 func (m *Manager) Note(operation string, paths []string) (Result, error) {
 	if len(paths) == 0 {
 		return Result{}, ErrNoChanges
@@ -750,8 +750,8 @@ func (m *Manager) finish(record *journalRecord, journalPath, status string) erro
 	return fileSystem.SyncDir(filepath.Dir(journalPath))
 }
 
-// currentState reads the file being replaced. The returned mode keeps a
-// stricter existing permission and tightens a looser one to FilePermission.
+// currentState は、置き換えられるファイルを読む。返されるモードは、既存のより
+// 厳しい権限を保ち、より緩いものは FilePermission まで締める。
 func (m *Manager) currentState(path string) (contents []byte, mode fs.FileMode, exists bool, err error) {
 	info, err := m.workspace.FileSystem().Lstat(path)
 	if errors.Is(err, fs.ErrNotExist) {

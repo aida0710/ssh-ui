@@ -27,7 +27,9 @@
 Prescription: a `Card` per group of related settings, one `Row` per setting, the group's explanation under the card rather than between the rows. Multi-line controls (a textarea, a key body) stay stacked, because a caption beside a three-line box reads as a caption for the gap beneath it. The screen's one primary action is the only accent.
 
 **A list of things you act on** — a list where each item carries its own editing controls.
-Prescription: the list becomes rows that say what each item *is*. What you do *to* an item moves to the inspector, which opens for the selected item. Actions that make a new item move to the toolbar. This is what Connections already does, and the pane and the toolbar slot already exist for it.
+Prescription: the list becomes rows that say what each item *is*. What you do *to* an item moves to the inspector, which opens for the selected item. Actions that make a new item, and controls that decide what the list shows, stay inside the screen — at the head of the list pane or at its foot. This is what Connections already does, and the pane already exists for it.
+
+The header has no slot a section can fill, and must not grow one again. It held one, for the Connections tree's arrangement control, and the shell cleared it on every section change: a control that belongs to one list vanished the moment the reader looked anywhere else, and read as chrome belonging to the window. The arrangement control now heads the tree pane, above the filter.
 
 ## Screen assignment
 
@@ -38,7 +40,7 @@ Prescription: the list becomes rows that say what each item *is*. What you do *t
 | Secrets | form | Two lists of stored secrets sit inside it; they become rows, not an inspector — you delete a secret, you do not edit one. |
 | Diagnostics | form | One alias field and a column of results. Results become a card of rows. |
 | Config Explorer | list | The Include hierarchy is the list; the file view is the detail. Already two panes in spirit. |
-| Known Hosts | list | Scan controls to the toolbar; the entries become rows; delete confirmation becomes a `Notice tone="danger"`. |
+| Known Hosts | list | Scan controls head the list inside the screen, not the window's header; the entries become rows; delete confirmation becomes a `Notice tone="danger"`. |
 | History | list | Two lists, no editing. Rows only; no inspector. |
 | Groups | list | The heaviest: seven controls per group, permanently expanded. Editing moves to the inspector. |
 | Keys | form | The largest file, 23 buttons. Assigned "list" here and built as a form: its four independent sections each complete their own action, and none of them is editing one selected thing. |

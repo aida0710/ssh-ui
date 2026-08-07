@@ -10,7 +10,7 @@ import (
 	"sshc/internal/effective"
 )
 
-// fakeLoader serves configuration files from a map so no test reads a disk.
+// fakeLoader は設定ファイルをマップから提供するので、どのテストもディスクを読まない。
 type fakeLoader struct{ files map[string]string }
 
 func (l fakeLoader) ReadFile(name string) ([]byte, error) {

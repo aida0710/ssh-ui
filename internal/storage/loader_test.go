@@ -8,10 +8,10 @@ import (
 	"sshc/internal/config"
 )
 
-// An Include written as "~/.ssh/…" expands against Home, and every judgement
-// about it is made against Root. Where ~/.ssh is reached through a link the two
-// disagree, and the file the user asked for was reported as outside the root
-// and refused for editing — their own configuration, in their own ~/.ssh.
+// "~/.ssh/…" と書かれた Include は Home に対して展開されるが、それに関する判断は
+// すべて Root に対して行われる。~/.ssh がリンク経由で到達される場合、両者は食い
+// 違い、ユーザーが求めたファイルはルートの外にあると報告されて編集を拒まれていた
+// — 自分自身の ~/.ssh にある、自分自身の設定なのに。
 func TestResolverReadsATildeIncludeUnderASymlinkedHome(t *testing.T) {
 	base, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {

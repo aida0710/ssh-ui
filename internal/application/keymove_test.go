@@ -12,9 +12,9 @@ import (
 	"sshc/internal/storage"
 )
 
-// A real Ed25519 key pair, generated once and kept as a constant. Building one
-// per test would be the only slow thing in this package, and the bytes are what
-// make the scanner classify the file as a private key rather than as "other".
+// 本物の Ed25519 鍵ペアを一度だけ生成し、定数として保持する。テストごとに
+// 1 つ作るとしたら、このパッケージで唯一遅い処理になってしまう。そしてこのバイト
+// 列こそが、スキャナーがこのファイルを "other" ではなく秘密鍵として分類する根拠である。
 const (
 	relocateTestPrivate = `-----BEGIN OPENSSH PRIVATE KEY-----
 b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
@@ -27,8 +27,8 @@ M+4pClUTkw5lpI09bLnFAAAADWFpZGFAZXhhbXBsZQECAwQ=
 	relocateTestPublic = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEsFBkGQ4twc4pkMacOU5/IlM+4pClUTkw5lpI09bLnF aida@example\n"
 )
 
-// keyInventory reads the workspace the way the key vault does, so a relocation
-// test exercises the same classification the running application uses.
+// keyInventory は鍵 vault と同じやり方でワークスペースを読むので、
+// relocation のテストは実際に動くアプリケーションが使うのと同じ分類を行使する。
 func keyInventory(t *testing.T, workspace *storage.Workspace) *keys.Inventory {
 	t.Helper()
 	service := keys.NewService(keys.ServiceOptions{
@@ -63,8 +63,8 @@ func TestRelocateKeyRewritesEveryDirectiveThatNamesIt(t *testing.T) {
 	service, workspace := newTestService(t)
 	declareGroup(t, service, "work")
 	writeKeyPair(t, workspace, "id_work")
-	// Two files, three spellings, one of them with a trailing comment: every
-	// byte except the path itself has to survive.
+	// 2 つのファイル、3 通りの綴り、そのうち 1 つには行末コメントが
+	// 付く: パス自体を除くすべてのバイトが生き残らなければならない。
 	const source = "Host build\n\tIdentityFile ~/.ssh/id_work  # the build key\n" +
 		"Host deploy\n\tIdentityFile=%d/.ssh/id_work\n\tCertificateFile ~/.ssh/id_work.pub\n"
 	if err := os.WriteFile(filepath.Join(workspace.Root(), "conf.d", "30-keys.conf"), []byte(source), 0o600); err != nil {
@@ -87,8 +87,8 @@ func TestRelocateKeyRewritesEveryDirectiveThatNamesIt(t *testing.T) {
 			t.Errorf("%s was not created: %v", name, statErr)
 		}
 	}
-	// The spelling the user wrote is what OpenSSH resolves and what they
-	// recognise, so only the part below ~/.ssh changed.
+	// ユーザーが書いた綴りこそ OpenSSH が解決し、ユーザーが
+	// 認識するものなので、~/.ssh より下の部分だけが変わった。
 	want := strings.ReplaceAll(source, "/.ssh/id_work", "/.ssh/keys/work/id_work")
 	if got := readFile(t, workspace, "conf.d/30-keys.conf"); got != want {
 		t.Errorf("configuration =\n%q\nwant\n%q", got, want)
@@ -119,8 +119,8 @@ func TestRelocateKeyRenamesWithoutChangingGroup(t *testing.T) {
 	if got := readFile(t, workspace, "conf.d/30-keys.conf"); got != "Host build\n\tIdentityFile ~/.ssh/id_build\n" {
 		t.Errorf("configuration = %q", got)
 	}
-	// A passphrase in the login Keychain is filed under the old absolute path
-	// and macOS owns that entry, so the result says so every time.
+	// ログイン Keychain のパスフレーズは古い絶対パスの下に登録
+	// されており、macOS がそのエントリを所有しているので、結果は毎回そう述べる。
 	if len(result.Notes) != 1 || result.Notes[0] != NoteKeychainEntryStale {
 		t.Errorf("notes = %#v, want the Keychain warning", result.Notes)
 	}
@@ -130,8 +130,8 @@ func TestRelocateKeyMovesTheWholeFingerprintGroupAndLeavesALookAlike(t *testing.
 	service, workspace := newTestService(t)
 	declareGroup(t, service, "work")
 	writeKeyPair(t, workspace, "id_work")
-	// Same key, a name the user chose. It is not "id_work" plus a suffix, so
-	// moving it would be this application deciding what that name meant.
+	// 同じ鍵だが、ユーザーが選んだ名前である。それは "id_work" に拡張子を足した
+	// ものではないので、移動すればこのアプリケーションがその名前の意味を決めつけることになる。
 	if err := os.WriteFile(filepath.Join(workspace.Root(), "backup_copy.pub"), []byte(relocateTestPublic), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -177,9 +177,9 @@ func TestRelocateKeyRefusesWhileADirectiveCannotBeResolved(t *testing.T) {
 	service, workspace := newTestService(t)
 	declareGroup(t, service, "work")
 	writeKeyPair(t, workspace, "id_work")
-	// A relative IdentityFile is resolved by ssh against its own working
-	// directory, which this application cannot know. It names "id_work", so it
-	// may well be this key.
+	// 相対 IdentityFile は ssh 自身の working directory に対して
+	// 解決されるが、それはこのアプリケーションには分からない。
+	// それは "id_work" を名指ししているので、この鍵である可能性は十分にある。
 	if err := os.WriteFile(filepath.Join(workspace.Root(), "conf.d", "30-keys.conf"),
 		[]byte("Host build\n\tIdentityFile id_work\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -204,9 +204,9 @@ func TestRelocateKeyRefusesADestinationAnIncludeWouldRead(t *testing.T) {
 	service, workspace := newTestService(t)
 	declareGroup(t, service, "work")
 	writeKeyPair(t, workspace, "id_work")
-	// A hand-written Include reaching under keys/ would make the destination a
-	// configuration file. A private key parsed as ssh_config is the worst
-	// outcome available, so this refuses rather than warns.
+	// keys/ の下に届く手書きの Include は、destination を設定
+	// ファイルにしてしまう。秘密鍵が ssh_config としてパースされる
+	// のはあり得る中で最悪の結果なので、これは警告ではなく拒否する。
 	entry := readFile(t, workspace, "config")
 	if err := os.WriteFile(filepath.Join(workspace.Root(), "config"),
 		[]byte("Include keys/work/*\n"+entry), 0o600); err != nil {
@@ -292,8 +292,8 @@ func TestRelocateKeyIsOneTransactionThatCopiesNoKeyMaterial(t *testing.T) {
 		t.Fatal("the relocation reported no transaction")
 	}
 
-	// A move is a rename(2): the bytes never travel through this process, so
-	// the mode survives and no copy reaches the generational backup directory.
+	// 移動は rename(2) である: バイト列がこのプロセスを通って運ばれることは
+	// 決してないので、mode は生き残り、コピーが世代バックアップディレクトリに届くこともない。
 	info, err := os.Lstat(filepath.Join(workspace.Root(), "keys", "work", "id_work"))
 	if err != nil {
 		t.Fatalf("relocated key missing: %v", err)

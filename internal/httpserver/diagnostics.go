@@ -15,13 +15,13 @@ import (
 	"sshc/internal/session"
 )
 
-// DiagnosticsHandlers exposes the separately triggered checks.
+// DiagnosticsHandlers は、個別に起動されるチェック群を公開する。
 type DiagnosticsHandlers struct {
 	Service *diagnostics.Service
 	Actions ActionHandlers
-	// Passwords, AskpassHelper and AskpassURL arm the launch for a host that
-	// has a stored password. All three nil or empty means every launch takes
-	// the plain path, which is what a server without a vault does.
+	// Passwords、AskpassHelper、AskpassURL は、保存されたパスワードを持つ
+	// host に対して起動に武装させる。3 つすべてが nil または空であれば、
+	// すべての起動は素の経路をたどる。これは vault を持たないサーバーのふるまいである。
 	Passwords     *secret.Service
 	AskpassHelper string
 	AskpassURL    string
@@ -36,12 +36,12 @@ func registerDiagnosticsRoutes(engine *echo.Echo, handlers DiagnosticsHandlers) 
 	engine.POST("/api/v1/terminal/launch", handlers.TerminalLaunch)
 }
 
-// addDiagnosticsActions registers the confirmations this subsystem owns.
+// addDiagnosticsActions は、このサブシステムが所有する確認を登録する。
 //
-// Every one of them is bound to the executable directives of the configuration
-// as it stands right now, because that is exactly what the confirmation dialog
-// displays. An edit between the confirmation and the request therefore
-// invalidates the token instead of silently running a different command.
+// そのいずれもが、現時点での設定が持つ実行可能なディレクティブに結び付く。
+// それこそが確認ダイアログの表示内容そのものだからである。したがって、確認と
+// リクエストの間に編集が入ると、別のコマンドを黙って実行するのではなく、
+// トークンが無効になる。
 func addDiagnosticsActions(registry actionRegistry, service *diagnostics.Service) {
 	evidence := func(target string) (string, error) {
 		if err := platform.ValidateAlias(target); err != nil {
@@ -58,15 +58,15 @@ func addDiagnosticsActions(registry actionRegistry, service *diagnostics.Service
 		session.ActionReachability,
 		session.ActionAuthentication,
 		session.ActionTerminalLaunch,
-		// Registering a key opens a connection, so its confirmation shows the
-		// same executable directives that connecting would run.
+		// 鍵を登録すると接続が開かれるので、その確認は接続が実行するのと
+		// 同じ実行可能なディレクティブを示す。
 		session.ActionRemoteKeyRegister,
 	} {
 		registry[kind] = actionKind{evidence: evidence, fail: diagnosticsProblem}
 	}
 }
 
-// diagnosticsProblem maps an evidence-derivation failure onto the wire.
+// diagnosticsProblem は、evidence 導出の失敗を通信形式に対応付ける。
 func diagnosticsProblem(c *echo.Context, err error) error {
 	if errors.Is(err, platform.ErrUnsafeAlias) {
 		return problem(c, http.StatusBadRequest, "unsafe_alias")
@@ -74,8 +74,8 @@ func diagnosticsProblem(c *echo.Context, err error) error {
 	return problem(c, http.StatusInternalServerError, "config_unreadable")
 }
 
-// CheckConfig runs the syntax and Include check. It starts no process, so it
-// needs no action token, only a session and the CSRF header.
+// CheckConfig は構文チェックと Include チェックを実行する。プロセスを
+// 起動しないので action トークンは不要で、セッションと CSRF ヘッダーだけでよい。
 func (h DiagnosticsHandlers) CheckConfig(c *echo.Context) error {
 	report, err := h.Service.ConfigCheck()
 	if err != nil {
@@ -105,10 +105,10 @@ func (h DiagnosticsHandlers) CheckConfig(c *echo.Context) error {
 	return c.JSON(http.StatusOK, response)
 }
 
-// Effective explains one alias and evaluates it when that is allowed.
+// Effective は 1 個の alias を説明し、許されている場合はそれを評価する。
 //
-// An action token is required only when evaluating would run a command, which
-// is the case exactly when the configuration carries a Match exec.
+// action トークンが必要になるのは、評価がコマンドを実行する場合だけである。
+// それはまさに設定が Match exec を持つ場合に一致する。
 func (h DiagnosticsHandlers) Effective(c *echo.Context) error {
 	var request api.AliasRequest
 	if err := decodeJSON(c, &request); err != nil {
@@ -179,7 +179,7 @@ func (h DiagnosticsHandlers) Effective(c *echo.Context) error {
 	return c.JSON(http.StatusOK, response)
 }
 
-// Reachability dials the destination directly.
+// Reachability は接続先へ直接ダイアルする。
 func (h DiagnosticsHandlers) Reachability(c *echo.Context) error {
 	var request api.AliasRequest
 	if err := decodeJSON(c, &request); err != nil {
@@ -205,7 +205,7 @@ func (h DiagnosticsHandlers) Reachability(c *echo.Context) error {
 	})
 }
 
-// Authentication runs the bounded authentication test.
+// Authentication は、上限付きの認証テストを実行する。
 func (h DiagnosticsHandlers) Authentication(c *echo.Context) error {
 	var request api.AuthenticationRequest
 	if err := decodeJSON(c, &request); err != nil {
@@ -236,12 +236,12 @@ func (h DiagnosticsHandlers) Authentication(c *echo.Context) error {
 	})
 }
 
-// TerminalCommand returns the command text for an alias and whether this
-// application is willing to launch it.
+// TerminalCommand は、alias に対するコマンドテキストと、このアプリケーションが
+// それを起動する意思があるかどうかを返す。
 //
-// It deliberately describes an alias it would refuse to launch, because a user
-// whose alias falls outside the safe set still needs to see the command in
-// order to run it themselves after checking it.
+// これは、起動を拒否するはずの alias についても意図的に説明する。
+// alias が安全な集合から外れているユーザーであっても、確認したうえで
+// 自分自身で実行するためにコマンドを見る必要があるからだ。
 func (h DiagnosticsHandlers) TerminalCommand(c *echo.Context) error {
 	var request api.AliasRequest
 	if err := decodeJSON(c, &request); err != nil {
@@ -258,10 +258,10 @@ func (h DiagnosticsHandlers) TerminalCommand(c *echo.Context) error {
 	})
 }
 
-// TerminalLaunch opens Terminal for a confirmed, safe alias.
+// TerminalLaunch は、確認済みで安全な alias に対して Terminal を開く。
 //
-// The alias is checked before the confirmation is spent, so an alias this
-// application will not launch cannot consume a token either.
+// alias は確認が消費される前にチェックされる。したがって、このアプリケーションが
+// 起動しない alias は、トークンを消費することもできない。
 func (h DiagnosticsHandlers) TerminalLaunch(c *echo.Context) error {
 	var request api.AliasRequest
 	if err := decodeJSON(c, &request); err != nil {
@@ -273,9 +273,9 @@ func (h DiagnosticsHandlers) TerminalLaunch(c *echo.Context) error {
 	if allowed, response := h.Actions.consume(c, session.ActionTerminalLaunch, request.Alias); !allowed {
 		return response
 	}
-	// A stored password arms the helper for this one connection. The token is
-	// minted here, after the confirmation was consumed, so a token exists only
-	// for a launch the user has just approved.
+	// 保存されたパスワードは、この 1 個の接続に対してヘルパーを武装させる。
+	// トークンは確認が消費された後、ここで発行される。したがって、トークンが
+	// 存在するのはユーザーがまさに承認した起動に対してだけである。
 	if h.armed(request.Alias) {
 		token, err := h.Passwords.IssueToken(request.Alias)
 		if err != nil {
@@ -322,12 +322,12 @@ func severityName(severity config.Severity) string {
 	}
 }
 
-// armed reports whether this launch should carry the askpass helper.
+// armed は、この起動が askpass ヘルパーを伴うべきかどうかを報告する。
 //
-// Every part has to be present: a vault, an unlocked one, a stored password
-// for this alias, a helper path and an endpoint. A missing piece falls back to
-// the plain launch rather than failing, because a terminal that opens and asks
-// for the password by hand is a working connection.
+// すべての部品がそろっていなければならない: vault、解錠済みであること、
+// この alias 用の保存されたパスワード、ヘルパーのパス、そしてエンドポイント。
+// 欠けている部品があれば、失敗するのではなく素の起動にフォールバックする。
+// 開いて手でパスワードを尋ねる terminal は、それでも正常な接続だからである。
 func (h DiagnosticsHandlers) armed(alias string) bool {
 	return h.Passwords != nil &&
 		h.AskpassHelper != "" &&

@@ -9,13 +9,13 @@ import (
 	"testing"
 )
 
-// FuzzAPIRequestBodies fuzzes every JSON decoder behind the API at once.
+// FuzzAPIRequestBodies は、API 背後の JSON デコーダ全部を一度に fuzz する。
 //
-// One server is built for the whole campaign and each execution posts a body to
-// one route. The invariants are the ones a hostile page in the browser would
-// try to break: the process stays alive and answering, no response grows
-// without bound, every response is still no-store, no response leaks a canary,
-// and the file outside the workspace is never touched.
+// サーバーはキャンペーン全体で 1 つだけ構築され、各実行が
+// 1 つのルートへ body を post する。不変条件は、ブラウザ内の
+// 悪意あるページが破ろうとするであろうもの: プロセスは生き
+// 続けて応答し、レスポンスは際限なく肥大せず、すべてのレスポンスは依然として no-store
+// であり、どのレスポンスも canary を漏らさず、ワークスペース外のファイルは決して触れられない。
 func FuzzAPIRequestBodies(f *testing.F) {
 	fixture := newFixture(f)
 	routes := []string{}
@@ -91,7 +91,7 @@ func FuzzAPIRequestBodies(f *testing.F) {
 			t.Fatalf("a fuzzed request changed the file outside the workspace: %v", err)
 		}
 
-		// Liveness: the server must still answer after whatever it just read.
+		// Liveness: サーバーは、直前に読んだものが何であれ、その後も応答し続けなければならない。
 		health := fixture.doAs(t, fixture.client, http.MethodGet, "/api/v1/health", nil)
 		healthStatus := health.StatusCode
 		readBody(t, health)
@@ -101,11 +101,11 @@ func FuzzAPIRequestBodies(f *testing.F) {
 	})
 }
 
-// fuzzFunctionPattern matches a Go fuzz target declaration.
+// fuzzFunctionPattern は、Go の fuzz target 宣言にマッチする。
 var fuzzFunctionPattern = regexp.MustCompile(`(?m)^func (Fuzz[A-Za-z0-9_]*)\(f \*testing\.F\)`)
 
-// makefileTargetsPattern extracts the FUZZ_TARGETS assignment, including its
-// backslash continuations.
+// makefileTargetsPattern は、バックスラッシュによる継続を
+// 含め、FUZZ_TARGETS の代入を抽出する。
 var makefileTargetsPattern = regexp.MustCompile(`(?s)FUZZ_TARGETS\s*=\s*(.*?)\n\n`)
 
 func TestMakefileFuzzTargetsCoverEveryFuzzFunction(t *testing.T) {

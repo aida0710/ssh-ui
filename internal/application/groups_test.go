@@ -9,9 +9,9 @@ import (
 	"sshc/internal/config"
 )
 
-// groupFixture is the same hierarchy the parent-field version described, said
-// the way the filesystem says it: "work" is nested inside "company" because its
-// directory is, and each host is in the group its file sits in.
+// groupFixture は、parent フィールド版が記述していたのと同じ階層を、
+// ファイルシステムの言い方で述べる: "work" が "company" の中にネストしているのは
+// そのディレクトリがそうだからであり、各 host はそのファイルが置かれたグループに属す。
 func groupFixture() ([]string, Metadata, []HostEntry) {
 	metadata := NewMetadata()
 	metadata.Groups = []GroupMetadata{
@@ -48,8 +48,8 @@ Host build01 web01
 	if got := string(contents); got != want {
 		t.Fatalf("contents =\n%q\nwant\n%q", got, want)
 	}
-	// A member that is not in the projection is not a notice any more: there is
-	// no second list of members to disagree with the files on disk.
+	// 射影に無いメンバーはもはや notice ではない: ディスク上の
+	// ファイルと食い違いうる 2 つ目のメンバー一覧は存在しないからだ。
 	if len(notices) != 0 {
 		t.Fatalf("notices = %#v", notices)
 	}
@@ -69,9 +69,9 @@ func TestCompileGroupsRendersParsableLosslessConfiguration(t *testing.T) {
 	}
 }
 
-// A group name is a directory path, so a hierarchy cannot contain a cycle: the
-// test that proved cycles were excluded is replaced by the one that proves they
-// are unrepresentable.
+// グループ名はディレクトリパスなので、階層は循環を含み得ない:
+// 循環が排除されていることを証明していたテストは、循環が
+// そもそも表現不能であることを証明するテストに置き換えられた。
 func TestAGroupCanNeverBeItsOwnAncestor(t *testing.T) {
 	for _, name := range []string{"a/b/c", "work", "a/b/a"} {
 		seen := map[string]bool{}
@@ -110,9 +110,9 @@ func TestDeclaredGroupsReadsTheRegionAndNothingElse(t *testing.T) {
 		}
 	}
 
-	// An Include the user wrote themselves, outside the markers, declares
-	// nothing: the region is the declaration, not every line that happens to
-	// name a directory.
+	// マーカーの外にユーザー自身が書いた Include は何も宣言しない:
+	// 宣言なのは region であって、たまたまディレクトリを名指しする
+	// すべての行ではない。
 	handWritten := config.Parse([]byte("Include connections/marketing/*.conf\n"))
 	if got := DeclaredGroups(handWritten); len(got) != 0 {
 		t.Errorf("DeclaredGroups outside the region = %#v, want none", got)
@@ -120,9 +120,9 @@ func TestDeclaredGroupsReadsTheRegionAndNothingElse(t *testing.T) {
 }
 
 func TestBuildGroupsViewReportsADirectoryThatWasNeverDeclared(t *testing.T) {
-	// ~/.ssh/connections/marketing exists and no line names it. Adopting it
-	// would mean this application deciding that somebody else's directory is
-	// one of its groups.
+	// ~/.ssh/connections/marketing は存在するが、どの行もそれを
+	// 名指ししない。それを採用するとしたら、このアプリケーションが
+	// 他人のディレクトリを自分のグループの 1 つだと決めつけることになる。
 	views, notices := BuildGroupsView(regionFile(t, "work"), nil, NewMetadata(), []string{"work", "marketing"})
 
 	if len(views) != 1 || views[0].Name != "work" {
@@ -184,22 +184,22 @@ func hasNotice(notices []Notice, code, detail string) bool {
 	return false
 }
 
-// The three group diagnostics reach the screen that shows groups.
+// 3 つのグループ診断は、グループを表示する画面に届く。
 //
-// They were computed, tested, and served by nothing: a directory under
-// connections/ that no Include names, a declared group whose directory is gone,
-// and a declared group with nothing in it were all invisible. Each is a state
-// somebody has to act on, and the first is the one that silently does nothing.
+// それらは計算され、テストされていたが、何にも提供されていなかった: どの
+// Include も名指ししない connections/ 配下のディレクトリ、ディレクトリが消えた
+// 宣言済みグループ、中身のない宣言済みグループは、すべて見えなかった。それぞれは
+// 誰かが対処すべき状態であり、最初のものは黙って何もしないという状態である。
 func TestTheOverviewCarriesTheGroupDiagnostics(t *testing.T) {
 	service, workspace := newTestService(t)
 	declareGroup(t, service, "work", "archive")
 	writeGroupFile(t, workspace, "work", "web.conf", "Host web-1\n\tHostName 203.0.113.10\n")
-	// archive is declared and its directory holds nothing.
-	// scratch is a directory nothing declares.
+	// archive は宣言されており、そのディレクトリは何も保持していない。
+	// scratch は何にも宣言されていないディレクトリである。
 	if err := os.MkdirAll(filepath.Join(workspace.Root(), "connections", "scratch"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	// gone is declared and its directory is not there.
+	// gone は宣言されているが、そのディレクトリは存在しない。
 	declareGroup(t, service, "work", "archive", "gone")
 	if err := os.RemoveAll(filepath.Join(workspace.Root(), "connections", "gone")); err != nil {
 		t.Fatal(err)
@@ -218,7 +218,7 @@ func TestTheOverviewCarriesTheGroupDiagnostics(t *testing.T) {
 			t.Errorf("notices = %#v, want %s for %s", overview.Notices, want.code, want.detail)
 		}
 	}
-	// And the groups themselves travel, with what each holds.
+	// そしてグループ自体も、それぞれが保持するものと共に運ばれる。
 	byName := map[string]GroupView{}
 	for _, group := range overview.Groups {
 		byName[group.Name] = group
@@ -231,19 +231,19 @@ func TestTheOverviewCarriesTheGroupDiagnostics(t *testing.T) {
 	}
 }
 
-// A region with one marker is a damaged region, and saying which four
-// directories are "not declared" is not what happened.
+// マーカーが 1 つしかない region は壊れた region であり、
+// 4 つのディレクトリが「宣言されていない」と言うのは実際に起きたこととは違う。
 //
-// The Include lines are there and OpenSSH reads them. What is missing is the
-// end marker, so this application cannot tell where its own generated lines
-// stop — and every group therefore looked undeclared. Four misleading notices
-// replaced by the one true one.
+// Include 行は存在し、OpenSSH はそれを読む。欠けているのは
+// 終端マーカーであり、このアプリケーションは自分が生成した行が
+// どこで終わるか分からなくなる — そのためすべてのグループが未宣言に
+// 見えてしまった。4 つの誤解を招く notice が、1 つの真実の notice に置き換えられた。
 func TestADamagedRegionIsReportedAsItselfRatherThanAsUndeclaredGroups(t *testing.T) {
 	service, workspace := newTestService(t)
 	declareGroup(t, service, "work")
 	writeGroupFile(t, workspace, "work", "web.conf", "Host web-1\n")
 
-	// Take the end marker out, which is the state a hand edit leaves behind.
+	// 終端マーカーを取り除く。それは手動編集が残す状態である。
 	entry := readFile(t, workspace, "config")
 	damaged := strings.ReplaceAll(entry, RegionEndMarker+"\n", "")
 	if damaged == entry {

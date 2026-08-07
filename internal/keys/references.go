@@ -8,7 +8,7 @@ import (
 	"sshc/internal/storage"
 )
 
-// Reference is one configuration directive that names a key file.
+// Reference は、鍵ファイルを名指しする設定ディレクティブひとつ。
 type Reference struct {
 	Directive    string
 	ConfigPath   string
@@ -18,8 +18,8 @@ type Reference struct {
 	Value        string
 }
 
-// UnresolvedReference is a directive whose argument the engine refuses to
-// guess at, so the UI can show the real reason instead of an invented answer.
+// UnresolvedReference は、エンジンが引数の推測を拒むディレクティブ。UI が、
+// でっちあげの答えではなく本当の理由を表示できるようにするためである。
 type UnresolvedReference struct {
 	Directive  string
 	Value      string
@@ -28,18 +28,18 @@ type UnresolvedReference struct {
 	Reason     string
 }
 
-// Unresolved reason codes.
+// 未解決の理由コード。
 const (
 	ReasonUnsupportedToken = "unsupported_token"
 	ReasonRelativePath     = "relative_path"
 	ReasonOutsideWorkspace = "outside_workspace"
 )
 
-// referencedDirectives are the client directives that name a key file or an
-// agent. Every other directive is ignored by this index.
+// referencedDirectives は、鍵ファイルまたはエージェントを名指しするクライアント
+// ディレクティブ。それ以外のディレクティブは、このインデックスでは無視される。
 var referencedDirectives = []string{"IdentityFile", "CertificateFile", "IdentityAgent"}
 
-// ReferenceIndex maps workspace-relative paths to the directives naming them.
+// ReferenceIndex は、ワークスペース相対のパスを、それを名指しするディレクティブに対応付ける。
 type ReferenceIndex struct {
 	byRelativePath map[string][]Reference
 	agent          []Reference
@@ -54,8 +54,8 @@ func (index *ReferenceIndex) AgentDelegations() []Reference { return index.agent
 
 func (index *ReferenceIndex) Unresolved() []UnresolvedReference { return index.unresolved }
 
-// BuildReferenceIndex walks every file the Include graph reached and records
-// which Hosts name which key file.
+// BuildReferenceIndex は、Include グラフが到達したすべてのファイルを走査し、どの
+// Host がどの鍵ファイルを名指ししているかを記録する。
 func BuildReferenceIndex(graph *config.Graph, workspace *storage.Workspace) *ReferenceIndex {
 	index := &ReferenceIndex{byRelativePath: make(map[string][]Reference)}
 	for _, path := range graph.Order {
@@ -116,8 +116,8 @@ func (index *ReferenceIndex) record(
 		}
 	}
 
-	// Expanded against Home, compared against Root: Normalise is what makes
-	// those the same space when ~/.ssh is reached through a link.
+	// Home に対して展開し、Root に対して比較する。~/.ssh がリンク経由で到達される
+	// とき、その両者を同じ空間にするのが Normalise である。
 	expanded, reason := expandKeyPath(value, workspace.Home())
 	absolute := workspace.Normalise(expanded)
 	if reason != "" {
@@ -142,12 +142,12 @@ func (index *ReferenceIndex) record(
 	index.byRelativePath[relative] = append(index.byRelativePath[relative], reference)
 }
 
-// expandKeyPath resolves an IdentityFile style argument to an absolute path.
+// expandKeyPath は、IdentityFile 形式の引数を絶対パスへ解決する。
 //
-// Only '%d' and a leading '~/' are expanded, because they are the only forms
-// whose meaning is fixed before a destination host is chosen. A relative path
-// is reported rather than guessed at, because OpenSSH resolves it against the
-// working directory of the ssh process, which this application cannot know.
+// 展開するのは '%d' と先頭の '~/' だけである。接続先ホストが決まる前に意味の
+// 定まる形式はそれだけだからだ。相対パスは推測せずに報告する。OpenSSH はそれを
+// ssh プロセスの作業ディレクトリに対して解決するが、このアプリケーションには
+// それが分からない。
 func expandKeyPath(value, home string) (absolute string, reason string) {
 	if value == "" {
 		return "", ReasonUnsupportedToken
@@ -188,8 +188,8 @@ func expandKeyPath(value, home string) (absolute string, reason string) {
 	return filepath.Clean(expanded), ""
 }
 
-// AttachReferences copies the Hosts that name each file onto its inventory
-// item and records the directives the engine could not resolve.
+// AttachReferences は、各ファイルを名指ししている Host をそのインベントリの item
+// へ写し、エンジンが解決できなかったディレクティブを記録する。
 func (inventory *Inventory) AttachReferences(index *ReferenceIndex) {
 	for itemIndex := range inventory.Items {
 		item := &inventory.Items[itemIndex]
@@ -199,15 +199,15 @@ func (inventory *Inventory) AttachReferences(index *ReferenceIndex) {
 	inventory.UnresolvedReferences = index.Unresolved()
 }
 
-// ExpandsTo reports whether an IdentityFile-style argument names this exact
-// file. It is the one way another package may ask that question: expandKeyPath
-// stays unexported so the rule about what this engine refuses to guess — a
-// relative path, an unknown token — is decided in one place.
-// The workspace rather than a bare home, because the answer is a comparison
-// against a path under the root and the two spellings have to be reconciled
-// before it is made. Passing the home alone let a caller compare an expanded
-// "~/.ssh/…" with a path built from the resolved root and be told they were
-// different files.
+// ExpandsTo は、IdentityFile 形式の引数がまさにこのファイルを名指ししているかを
+// 報告する。他のパッケージがその問いを尋ねられる唯一の手段である。expandKeyPath は
+// 非公開のままにしてあるので、このエンジンが何の推測を拒むか — 相対パス、未知の
+// トークン — は一か所で決まる。
+// 素のホームではなくワークスペースを渡す。答えはルート配下のパスとの比較であり、
+// 比較を行う前に二つの綴りを突き合わせておく必要があるからだ。ホームだけを渡すと、
+// 展開された "~/.ssh/…" と、解決済みのルートから組み立てたパスとを比較した
+// 呼び出し側は、それらは別のファイルであると告げられて
+// しまった。
 func ExpandsTo(workspace *storage.Workspace, value, absolute string) bool {
 	expanded, reason := expandKeyPath(value, workspace.Home())
 	return reason == "" && workspace.Normalise(expanded) == workspace.Normalise(absolute)

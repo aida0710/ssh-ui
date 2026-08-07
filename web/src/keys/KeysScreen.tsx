@@ -27,29 +27,29 @@ import {
   type TrashListResponse,
 } from "./api";
 
-// groups are the declared group names, supplied by the shell from the overview.
-// The Keys screen never infers them: a directory is a group because a line in
-// ~/.ssh/config says so, and only the configuration engine reads that line.
+// groups は宣言済みのグループ名で、シェルが overview から渡す。
+// Keys 画面はそれらを推測しない: ディレクトリがグループなのは
+// ~/.ssh/config の行がそう言っているからで、その行を読むのは設定エンジンだけだ。
 //
-// secrets is the vault, and it is a second surface rather than a few more
-// methods on the first: what a key is belongs to this package, and where a
-// passphrase lives belongs to the vault, which is the same separation the
-// server keeps between the key service and the secret service.
+// secrets は vault であり、最初の面にメソッドを数個足したものではなく
+// 第二の面である: 鍵とは何かはこのパッケージに属し、パスフレーズが
+// どこにあるかは vault に属する。これはサーバーが鍵サービスと
+// シークレットサービスの間で保つのと同じ分離だ。
 type KeysScreenProps = { api?: KeysApi; groups?: string[]; secrets?: IntegrationsApi };
 
 type ScreenState = "loading" | "ready" | "error";
 
-// storedFor is the passphrase this key already points at, if any. The vault
-// answers names and what uses them, never values, so this is the only thing the
-// screen can know — and it is enough to say the field may be left empty.
+// storedFor は、この鍵が既に指しているパスフレーズ(あれば)だ。vault は
+// 名前とその使い道には答えるが値には決して答えないので、これが画面に
+// 分かる唯一のことだ——そしてフィールドを空欄のままにしてよいと言うには十分だ。
 function storedFor(phrases: Credential[], item: KeyItem): Credential | undefined {
   return phrases.find((credential) => credential.uses.includes(item.relativePath));
 }
 
-// certificateLines describes an OpenSSH certificate in the terms that decide
-// whether it is usable: who it names, who it is for, and whether it has run
-// out. An expired certificate that only says "certificate" is indistinguishable
-// from a working one, which is the whole reason design §6.3 classifies them.
+// certificateLines は OpenSSH の証明書を、使えるかどうかを決める
+// 観点で記述する: 誰を名指すか、誰のためのものか、期限が切れているか
+// どうかだ。「certificate」とだけ言う期限切れの証明書は動作するものと
+// 見分けがつかない。これが design §6.3 がそれらを分類する理由のすべてだ。
 function certificateLines(
   certificate: KeyCertificate,
   now: number,
@@ -60,8 +60,8 @@ function certificateLines(
   if (certificate.principals.length > 0) {
     lines.push({ text: t("keys.certFor", { principals: certificate.principals.join(", ") }), expired: false });
   } else {
-    // A certificate with no principal is valid for every user on the host that
-    // trusts its CA. That is a fact about its reach, not a missing field.
+    // principal のない証明書は、その CA を信頼するホスト上の全ユーザーに
+    // 対して有効だ。これはフィールドの欠落ではなく、その及ぶ範囲についての事実だ。
     lines.push({ text: t("keys.certAnyPrincipal"), expired: false });
   }
   if (certificate.neverExpires) {
@@ -84,9 +84,9 @@ function certificateLines(
   return lines;
 }
 
-// A row's actions were bare buttons in a table with no rules, so they ran
-// together as text and read as prose rather than as controls. The border and
-// these classes are what separate one key from the next.
+// 行のアクションはルールのないテーブルの中のただのボタンだったので、
+// テキストとして連なり、コントロールではなく文章として読めてしまっていた。
+// ボーダーとこれらのクラスが、鍵同士を隔てるものだ。
 const rowAction = "rounded border border-control-line px-2 py-1 text-xs hover:bg-select-fill disabled:text-ink-faint";
 const rowDanger = "rounded border border-control-line px-2 py-1 text-xs text-danger hover:bg-select-fill";
 
@@ -99,9 +99,9 @@ const noteLabels: Record<string, MessageKey> = {
   keychain_entry_stale: "keys.noteKeychainEntryStale",
 };
 
-// A blocker is a stable code, ':' and the detail it is about. The code decides
-// the sentence and the detail fills it in, so a reason the server adds later
-// still shows the path it names instead of being dropped.
+// ブロッカーは安定したコード、':'、それが指す詳細から成る。コードが
+// 文を決め、詳細がそれを埋める。サーバーが後で追加する理由も、
+// 捨てられることなく、それが指すパスをそのまま表示する。
 const blockerLabels: Record<string, MessageKey> = {
   key_destination_occupied: "keys.blockerTargetOccupied",
   key_reference_unresolved: "keys.blockerUnresolved",
@@ -118,14 +118,14 @@ function describeBlocker(blocker: string, t: Translate): string {
   return t(blockerLabels[code] ?? "keys.blockerOther", { detail });
 }
 
-// renameable reports whether this application can rename a file without having
-// to decide something the user has not told it.
+// renameable は、ユーザーが伝えていないことを決めずに、このアプリケーションが
+// ファイルをリネームできるかどうかを報告する。
 //
-// A private key takes its own public key and certificate with it, so it is
-// always renameable. A public key or certificate is renameable only when no
-// private key in the inventory belongs to it: renaming half of a pair would
-// leave two files that OpenSSH still pairs by name and a reader no longer can,
-// so the server refuses it and the button is not offered either.
+// 秘密鍵は自分の公開鍵と証明書を道連れにするので、常にリネーム
+// 可能だ。公開鍵や証明書がリネーム可能なのは、インベントリ内の
+// どの秘密鍵もそれに属していない場合のみだ: ペアの片方だけをリネームすると、
+// OpenSSH がいまだに名前で対応付けている 2 つのファイルを、読み手が
+// 対応付けられなくなるので、サーバーはそれを拒否し、ボタンも提供されない。
 function renameable(item: KeyItem, items: KeyItem[]): boolean {
   if (item.kind === "private_key") return true;
   if (item.kind !== "public_key" && item.kind !== "certificate") return false;
@@ -137,17 +137,17 @@ function renameable(item: KeyItem, items: KeyItem[]): boolean {
   return !items.some((candidate) => candidate.kind === "private_key" && candidate.fingerprint === fingerprint);
 }
 
-// groupOfKeyPath reads a key's group out of where it sits, mirroring the
-// server's rule: keys/<group>/<file>, and nothing else is in a group.
+// groupOfKeyPath は、鍵が置かれている場所からそのグループを読み取り、
+// サーバーの規則を映す: keys/<group>/<file> であり、それ以外はグループに属さない。
 export function groupOfKeyPath(relativePath: string): string {
   const segments = relativePath.split("/");
   if (segments.length < 3 || segments[0] !== "keys") return "";
   return segments.slice(1, -1).join("/");
 }
 
-// relocateStem is the part of the name the user is being asked to replace. It
-// mirrors the server's rule, so the field starts at the name the relocation
-// would actually change rather than at one the server would refuse.
+// relocateStem は、ユーザーが置き換えるよう求められている名前の部分だ。
+// サーバーの規則を映しているので、フィールドはサーバーが拒否するであろう
+// 名前ではなく、実際に relocation が変える名前から始まる。
 function relocateStem(item: KeyItem): string {
   const base = item.relativePath.split("/").pop() ?? item.relativePath;
   if (item.kind === "private_key") return base;
@@ -157,9 +157,9 @@ function relocateStem(item: KeyItem): string {
   return base;
 }
 
-// agentHolds reports whether the agent is currently holding this key, matched
-// by fingerprint because that is the only thing an agent identity and an
-// inventory item have in common: the agent knows nothing about file paths.
+// agentHolds は、エージェントが現在この鍵を保持しているかどうかを、
+// フィンガープリントで照合して報告する。エージェントの identity とインベントリ
+// 項目に共通するのはそれだけだ——エージェントはファイルパスを何も知らない。
 function agentHolds(inventory: KeyInventoryResponse, item: KeyItem): boolean {
   if (!inventory.agentAvailable || item.fingerprint === "") return false;
   return inventory.agentIdentities.some((identity) => identity.fingerprint === item.fingerprint);
@@ -220,8 +220,8 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
 
   const selected = variants.find((variant) => variant.algorithm === algorithm);
   const inProcess = selected === undefined || selected.inProcess;
-  // Read at render, so a certificate that runs out while this screen is open
-  // stops being described as valid the next time anything refreshes it.
+  // 描画時に読み取るので、この画面が開いている間に期限が切れた証明書は、
+  // 次に何かがそれを更新した時点で「有効」と説明されなくなる。
   const now = Date.now();
 
   async function submitGeneration() {
@@ -258,8 +258,8 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
     setChangingPassphrase(null);
   }
 
-  // The passphrase lives in component state for the duration of one submit and
-  // is cleared on success and on failure. It is never stored anywhere else.
+  // パスフレーズは 1 回の送信の間だけコンポーネント状態にとどまり、
+  // 成功時にも失敗時にもクリアされる。他のどこにも保存されることはない。
   async function submitPassphrase(item: KeyItem) {
     setFailure("");
     try {
@@ -277,9 +277,9 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
     }
   }
 
-  // The agent is asked to give a key back. Nothing is destroyed, so there is no
-  // confirmation: the worst outcome is one more passphrase prompt. The answer
-  // carries what the agent holds afterwards, which is what the screen reloads.
+  // エージェントに鍵を返すよう頼む。何も破棄されないので確認は不要だ:
+  // 最悪の結果はもう一度パスフレーズを求められることだけだ。応答は
+  // その後エージェントが保持しているものを伝え、画面はそれを再読み込みする。
   async function removeFromAgent(keyId: string) {
     try {
       await api.deregisterFromAgent(keyId);
@@ -298,10 +298,10 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
     setRegistering(null);
   }
 
-  // The names are read when the form opens and not before. Nothing is asked at
-  // startup, and a screen that never registers a key never touches the vault.
-  // A shut vault answers nothing, which shows as no picker rather than an
-  // error: this form works without one, and always did.
+  // 名前はフォームが開いたときに読み込まれ、それより前ではない。起動時には
+  // 何も尋ねられず、一度も鍵を登録しない画面は vault に一切触れない。
+  // 閉じた vault は何も答えず、それはエラーではなくピッカーなしとして
+  // 表示される: このフォームは vault がなくても動作するし、以前からそうだった。
   async function loadPhrases() {
     try {
       const listed = await secrets.credentials();
@@ -320,11 +320,11 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
     }
   }
 
-  // Registration holds the passphrase exactly as long as the change-passphrase
-  // form does: for one submit, cleared on success and on failure alike. The
-  // reply is deliberately discarded — refresh re-reads the inventory, so what
-  // the screen shows afterwards is what the agent reports it holds, not what
-  // this request claimed it would.
+  // 登録操作は、パスフレーズ変更フォームとまったく同じ長さだけパスフレーズを
+  // 保持する: 1 回の送信の間だけで、成功時にも失敗時にもクリアされる。
+  // 応答はわざと捨てる——リフレッシュがインベントリを再読み込みするので、
+  // その後画面が示すのは、エージェントが報告する保持内容であって、
+  // このリクエストが主張した内容ではない。
   async function submitRegistration(item: KeyItem) {
     setFailure("");
     try {
@@ -341,10 +341,10 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
     }
   }
 
-  // A public key is not a secret, so this is an ordinary read with no
-  // confirmation and no audit note. It is shown before it is copied for the
-  // same reason every other value on this screen is: what goes on the
-  // clipboard should be the thing the user is looking at.
+  // 公開鍵は秘密ではないので、これは確認も監査記録もない普通の
+  // 読み取りだ。コピーされる前に表示されるのは、この画面の他のすべての
+  // 値と同じ理由による: クリップボードに載るのは、ユーザーが
+  // 見ているものであるべきだ。
   async function showPublicKey(item: KeyItem) {
     setFailure("");
     try {
@@ -362,9 +362,9 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
     setRelocating(null);
   }
 
-  // A blocked relocation is not a failure to report and forget: the server
-  // wrote nothing and said why, so the reasons stay on screen and the form
-  // stays open with what the user typed still in it.
+  // ブロックされた relocation は、報告して忘れるべき失敗ではない:
+  // サーバーは何も書き込まず理由を伝えたので、その理由は画面に残り、
+  // フォームはユーザーが入力した内容を残したまま開いたままになる。
   async function submitRelocation(item: KeyItem) {
     setFailure("");
     setRelocated(null);
@@ -394,10 +394,10 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
     }
   }
 
-  // A key is trashed with its whole fingerprint group — the private key and the
-  // public key beside it — and every IdentityFile that named it is left behind
-  // pointing at nothing. The row already showed which hosts those are; the
-  // button never mentioned them, and one press did the whole thing.
+  // 鍵はフィンガープリントグループ全体——秘密鍵とその隣の公開鍵——ごと
+  // ごみ箱に送られ、それを名指すすべての IdentityFile は
+  // 何も指さないまま取り残される。行は既にそれがどのホストかを示していたのに、
+  // ボタンは一度もそれに触れず、1 回の押下で全体が実行された。
   function trashGroup(item: KeyItem): KeyItem[] {
     const fingerprint = item.fingerprint;
     if (fingerprint === "") return [item];
@@ -594,8 +594,8 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
             {t("keys.trashConfirmHeading", { path: pendingTrash.relativePath })}
           </h3>
           {/*
-            Which files go, so a public key disappearing beside the private one
-            is not a surprise. They travel together because they are one key.
+            公開鍵が秘密鍵の隣から消えても驚かないよう、どのファイルが
+            消えるかを示す。両者は 1 つの鍵だからこそ一緒に移動する。
           */}
           <p className="text-sm text-ink">{t("keys.trashExplain")}</p>
           <ul className="flex flex-col gap-0.5 font-mono text-xs text-ink-muted">
@@ -604,10 +604,10 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
             ))}
           </ul>
           {/*
-            The row already listed the hosts that name this key. Saying it here
-            is the difference between a decision and a surprise on the next
-            connection: an IdentityFile pointing at a file that is not there is
-            something ssh reports and then carries on without.
+            行は既にこの鍵を名指すホストを列挙していた。ここでそれを言うのは、
+            決定と次回接続時の驚きとの違いだ:
+            存在しないファイルを指す IdentityFile は、
+            ssh が報告した上でそのまま続行してしまうものだ。
           */}
           {pendingTrash.references.length === 0 ? (
             <p className={hintText}>{t("keys.trashNoReferences")}</p>
@@ -655,11 +655,11 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
       )}
 
       {/*
-        A file the scanner refused to interpret used to be simply absent from
-        the table, which made an incomplete inventory look like a complete one.
-        Design §6.3 classifies everything under ~/.ssh; these are the entries it
-        could not, and saying so is the difference between "there is nothing
-        else here" and "there is something here I could not read".
+        スキャナが解釈を拒んだファイルは、以前は単にテーブルから欠落していただけで、
+        それは不完全なインベントリを完全なものに見せていた。
+        design §6.3 は ~/.ssh 配下のすべてを分類する。これらはそれが
+        分類できなかった項目であり、そう言うことが「ここには何もない」と
+        「ここには読めなかった何かがある」の違いになる。
       */}
       {inventory.unreadable.length > 0 && (
         <section aria-labelledby="unreadable-heading" className="flex flex-col gap-2">
@@ -727,9 +727,9 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
             </table>
           )
         ) : (
-          // ssh-add talks to whatever SSH_AUTH_SOCK names. Saying "no agent is
-          // running" would be a guess: this process may simply not have been
-          // given the socket. The message says what is missing, not why.
+          // ssh-add は SSH_AUTH_SOCK が指すものと話す。「エージェントが動いていない」
+          // と言うのは推測になる: このプロセスに単にソケットが渡されて
+          // いないだけかもしれない。メッセージは何が足りないかを言い、理由は言わない。
           <p className="text-sm text-notice-ink">
             {t("keys.agentUnavailable")}
           </p>
@@ -771,9 +771,9 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
           <p className="text-sm text-ink-muted">{t("keys.registerNote")}</p>
           <Card>
             {registering.encrypted && (
-              // "Key passphrase", not "Passphrase": the generation form below
-              // has a field of its own, and two controls with one name are two
-              // controls a user cannot tell apart.
+              // 「Passphrase」ではなく「Key passphrase」: 下にある生成フォームには
+              // それ自身のフィールドがあり、同じ名前の 2 つのコントロールでは
+              // ユーザーが見分けられない。
               <Row
                 label={t("keys.keyPassphrase")}
                 {...(storedFor(phrases, registering) === undefined ? {} : { hint: t("keys.typedWins") })}
@@ -800,10 +800,10 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
             </Row>
           </Card>
           {/*
-            A stored passphrase turns adding a key into one action rather than
-            two. Only key passphrases appear here: an account password offered
-            in this picker would be a remote host's login credential handed to a
-            local key, which is why the vault keeps the two namespaces apart.
+            保存されたパスフレーズは、鍵の追加を 2 アクションではなく 1 アクションに
+            変える。ここに現れるのは鍵のパスフレーズだけだ: このピッカーで
+            アカウントパスワードを提供すれば、リモートホストのログイン資格情報を
+            ローカルの鍵に渡すことになる。だからこそ vault は 2 つの名前空間を分けている。
           */}
           {registering.encrypted && storedFor(phrases, registering) !== undefined && (
             <p className={hintText}>
@@ -892,10 +892,10 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
       )}
 
       {/*
-        What a rename did, or what stopped it. Both are the same list of facts:
-        which files moved, which configuration lines were rewritten, and what
-        this application decided not to touch. A rename that only said "done"
-        would hide the part the user cannot check for themselves.
+        リネームが何をしたか、あるいは何がそれを止めたか。どちらも同じ種類の事実の
+        リストだ: どのファイルが移動したか、どの設定行が書き換えられたか、そして
+        このアプリケーションが意図的に触れなかったものは何か。「完了」とだけ言う
+        リネームは、ユーザー自身では確認できない部分を隠してしまう。
       */}
       {relocated !== null && (
         <section

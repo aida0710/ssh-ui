@@ -11,8 +11,8 @@ import (
 	"sshc/internal/platform/macos"
 )
 
-// No test loads a real agent: the runner records what launchctl would have been
-// asked to do and does nothing.
+// 本物のエージェントを読み込むテストはない。ランナーは launchctl が何を求められた
+// はずかを記録するだけで、何もしない。
 type recordingLaunchctl struct{ commands [][]string }
 
 func (r *recordingLaunchctl) RunOutput(_ context.Context, command platform.Command) (platform.Output, error) {
@@ -45,8 +45,8 @@ func TestEnablingWritesAnAgentThatOpensNoBrowserAndLogsNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	written := string(body)
-	// Nothing opens at login, and nothing is redirected: the URL this prints
-	// carries a live bootstrap token, and a log file is not a place for one.
+	// ログイン時には何も開かず、何もリダイレクトしない。これが表示する URL は有効な
+	// ブートストラップトークンを運び、ログファイルはそれを置く場所ではない。
 	if !strings.Contains(written, "<string>-open=false</string>") {
 		t.Errorf("the agent would open a browser at login: %s", written)
 	}
@@ -59,8 +59,8 @@ func TestEnablingWritesAnAgentThatOpensNoBrowserAndLogsNothing(t *testing.T) {
 		t.Errorf("the agent does not name the program: %s", written)
 	}
 
-	// Booted out before being booted in, so a changed path replaces the old one
-	// rather than leaving it loaded.
+	// boot in の前に boot out するので、パスが変わったときは古いものが残らずに
+	// 置き換わる。
 	if len(runner.commands) != 2 ||
 		runner.commands[0][1] != "bootout" || runner.commands[1][1] != "bootstrap" {
 		t.Errorf("launchctl calls = %#v", runner.commands)
@@ -72,7 +72,7 @@ func TestEnablingWritesAnAgentThatOpensNoBrowserAndLogsNothing(t *testing.T) {
 	if item.Enabled() {
 		t.Error("after Disable it is still registered")
 	}
-	// Disabling twice is the state the caller asked for.
+	// 二度無効にすることは、呼び出し側が求めた状態である。
 	if err := item.Disable(context.Background()); err != nil {
 		t.Errorf("Disable twice = %v", err)
 	}

@@ -7,42 +7,42 @@ import (
 	"strings"
 )
 
-// DefaultMaxDepth mirrors OpenSSH's MAX_READCONF_DEPTH.
+// DefaultMaxDepth は OpenSSH の MAX_READCONF_DEPTH に対応する。
 const DefaultMaxDepth = 16
 
-// ErrUnsupportedExpansion is returned for an Include argument whose meaning
-// depends on information the engine does not have. The graph reports the
-// pattern verbatim instead of guessing which files it would match.
+// ErrUnsupportedExpansion は、その意味がエンジンの持たない情報に依存する Include
+// の引数に対して返る。グラフは、どのファイルに一致するかを推測せず、パターンを
+// そのまま報告する。
 var ErrUnsupportedExpansion = errors.New("include pattern uses an unsupported expansion")
 
-// Loader gives the resolver read-only access to configuration files. The
-// storage layer supplies the implementation used in production; tests supply a
-// map-backed fake. Paths and patterns are absolute and already cleaned.
+// Loader は、リゾルバに設定ファイルへの読み取り専用アクセスを与える。本番で使う
+// 実装はストレージ層が供給し、テストはマップに裏打ちされた偽物を供給する。パスと
+// パターンは絶対で、すでに正規化されている。
 type Loader interface {
 	ReadFile(path string) ([]byte, error)
 	Glob(pattern string) ([]string, error)
 }
 
-// Resolver walks an Include graph starting from a user configuration file.
+// Resolver は、ユーザー設定ファイルを起点に Include グラフを走査する。
 //
-// Home is the absolute home directory used for '~' and '%d'. Root is the
-// directory that relative Include arguments resolve against, which OpenSSH
-// defines as ~/.ssh for user configuration files, and is also the only
-// directory this application may write to. Tokens holds the percent tokens
-// that are known before a destination host is chosen; any other token is
-// reported as an unsupported expansion.
+// Home は '~' と '%d' に使う絶対的なホームディレクトリ。Root は相対的な Include
+// 引数の解決基準となるディレクトリで、OpenSSH はユーザー設定ファイルについて
+// これを ~/.ssh と定義しており、このアプリケーションが書き込んでよい唯一の
+// ディレクトリでもある。Tokens は、接続先ホストが決まる前に判明しているパーセント
+// トークンを保持する。それ以外のトークンは、非対応の展開として報告
+// される。
 type Resolver struct {
 	Loader Loader
 	Home   string
 	Root   string
-	// Normalise reconciles a path built from Home with the spelling Root uses,
-	// for the caller that knows the two can differ. A workspace resolves its
-	// root through EvalSymlinks and keeps its home as given, so "~/.ssh/x" and
-	// "<root>/x" are the same file under two names whenever ~/.ssh is reached
-	// through a link — and without this every such Include was reported as
-	// outside the root and refused for editing.
+	// Normalise は、Home から組み立てたパスを Root の綴りと突き合わせる。両者が
+	// 異なりうると知っている呼び出し側のためのものだ。ワークスペースはルートを
+	// EvalSymlinks で解決し、ホームは与えられたまま保持するので、~/.ssh がリンク
+	// 経由で到達される場合は常に "~/.ssh/x" と "<root>/x" が二つの名前を持つ同じ
+	// ファイルになる — そしてこれがないと、そうした Include はすべてルートの外に
+	// あると報告され、編集が拒否されていた。
 	//
-	// Optional: a resolver built without one behaves as it always did.
+	// 省略可能。これを持たずに作られたリゾルバは、従来どおりに振る舞う。
 	Normalise func(string) string
 	Tokens    map[byte]string
 	MaxDepth  int
@@ -55,7 +55,7 @@ func (r Resolver) maxDepth() int {
 	return r.MaxDepth
 }
 
-// expandPattern converts one Include argument into an absolute glob pattern.
+// expandPattern は、Include の引数ひとつを絶対的なグロブパターンに変換する。
 func (r Resolver) expandPattern(argument string) (string, error) {
 	if argument == "" {
 		return "", ErrUnsupportedExpansion
@@ -70,7 +70,7 @@ func (r Resolver) expandPattern(argument string) (string, error) {
 	case strings.HasPrefix(expanded, "~/"):
 		expanded = r.Home + expanded[1:]
 	case strings.HasPrefix(expanded, "~"):
-		// '~user/...' needs a password database lookup the engine does not do.
+		// '~user/...' は、エンジンが行わない passwd データベースの参照を必要とする。
 		return "", ErrUnsupportedExpansion
 	case !strings.HasPrefix(expanded, "/"):
 		expanded = r.Root + "/" + expanded

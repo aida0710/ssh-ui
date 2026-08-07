@@ -12,9 +12,9 @@ import (
 	"sshc/internal/platform/macos"
 )
 
-// These tests run only local, non-networked system programs with a fixed argv:
-// /bin/echo, /bin/cat, /bin/sleep, /usr/bin/false and /usr/bin/yes. They never
-// start ssh, never touch the network and never read the real home directory.
+// ここのテストが実行するのは、固定の argv を持つローカルで非ネットワークな
+// システムプログラムだけである。/bin/echo、/bin/cat、/bin/sleep、/usr/bin/false、
+// /usr/bin/yes。ssh を起動せず、ネットワークに触れず、本物のホームも読まない。
 
 func TestRunOutputCapturesStdoutAndExitStatus(t *testing.T) {
 	runner := macos.NewOutputRunner()

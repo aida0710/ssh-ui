@@ -9,14 +9,14 @@ import (
 	"sshc/internal/platform"
 )
 
-// DiagnosticAlgorithmQueryFailed is reported when the installed OpenSSH could
-// not be asked which algorithms it supports.
+// DiagnosticAlgorithmQueryFailed は、インストールされている OpenSSH に、どの
+// アルゴリズムに対応しているかを尋ねられなかったときに報告される。
 const DiagnosticAlgorithmQueryFailed = "algorithm_query_failed"
 
-// Reason codes explaining why a variant is not generated inside this process.
+// このプロセス内でその variant を生成しない理由を説明する理由コード。
 const ReasonHardwareToken = "hardware_token_required"
 
-// Variant is one key type the user may ask for.
+// Variant は、ユーザーが要求しうる鍵の種類ひとつ。
 type Variant struct {
 	Algorithm Algorithm
 	Bits      int
@@ -25,22 +25,22 @@ type Variant struct {
 	Reason    string
 }
 
-// Catalogue is the set of variants the installed OpenSSH understands.
+// Catalogue は、インストールされている OpenSSH が理解する variant の集合。
 type Catalogue struct {
 	Variants   []Variant
 	Source     string
 	Diagnostic string
 }
 
-// CatalogueReader asks the installed OpenSSH which key algorithms it supports.
+// CatalogueReader は、対応する鍵アルゴリズムをインストール済みの OpenSSH に尋ねる。
 //
-// It runs `ssh -F /dev/null -Q key`, which prints a static list and exits. That
-// invocation reads no configuration file, evaluates no Match block and runs no
-// user-supplied directive, so it is not the `ssh -G` evaluation that roadmap
-// subsystem 5 owns and that this subsystem must not perform.
+// `ssh -F /dev/null -Q key` を実行する。これは静的な一覧を表示して終了する。この
+// 呼び出しは設定ファイルを読まず、Match ブロックを評価せず、ユーザー由来の
+// ディレクティブも実行しない。したがって、ロードマップのサブシステム 5 が所有し、
+// このサブシステムが行ってはならない `ssh -G` の評価ではない。
 //
-// The program path comes from the Toolchain rather than from PATH, because
-// platform.Command refuses a program that is not named by an absolute path.
+// プログラムのパスは PATH ではなく Toolchain から来る。platform.Command は、絶対
+// パスで名指しされていないプログラムを拒否するからである。
 type CatalogueReader struct {
 	Runner    platform.OutputRunner
 	Toolchain platform.Toolchain
@@ -106,9 +106,9 @@ func (reader CatalogueReader) Read(ctx context.Context) Catalogue {
 	return catalogue
 }
 
-// fallbackCatalogue is offered when the installed OpenSSH could not be asked
-// what it supports. Ed25519 is the only entry because it is the one algorithm
-// every supported OpenSSH release accepts, and offering more would be a guess.
+// fallbackCatalogue は、インストール済みの OpenSSH に何に対応しているかを尋ね
+// られなかったときに提示される。項目が Ed25519 だけなのは、サポート対象のすべての
+// OpenSSH リリースが受け付ける唯一のアルゴリズムであり、増やせば当て推量になるからだ。
 func fallbackCatalogue() Catalogue {
 	return Catalogue{
 		Variants:   []Variant{{Algorithm: AlgorithmEd25519, Bits: 256, Label: "Ed25519", InProcess: true}},
@@ -117,13 +117,13 @@ func fallbackCatalogue() Catalogue {
 	}
 }
 
-// HardwareCommand returns the exact argument list a user must run in Terminal
-// for a hardware-backed key.
+// HardwareCommand は、ハードウェアに裏打ちされた鍵のためにユーザーが Terminal で
+// 実行しなければならない引数リストを、そのまま返す。
 //
-// This subsystem never launches Terminal; roadmap subsystem 5 owns that step.
-// Every element is checked against a character set that needs no shell quoting,
-// so the displayed line is unambiguous, no element can be re-read as an option,
-// and nothing here can become AppleScript or shell syntax later.
+// このサブシステムが Terminal を起動することは決してない。その段階はロードマップの
+// サブシステム 5 が所有する。各要素はシェルの引用を必要としない文字集合に対して
+// 検査されるので、表示される行は曖昧さがなく、どの要素もオプションとして読み直され
+// えず、ここにあるものがあとで AppleScript やシェルの構文になることもない。
 func HardwareCommand(algorithm Algorithm, fileName, comment, sshDirectory string) ([]string, error) {
 	var keyType string
 	switch algorithm {
@@ -137,8 +137,8 @@ func HardwareCommand(algorithm Algorithm, fileName, comment, sshDirectory string
 	if err := ValidateFileName(fileName); err != nil {
 		return nil, err
 	}
-	// The stricter rule, because this command line is shown for the user to
-	// run: every argument here has to survive being copied into a shell.
+	// より厳しいルールを使う。このコマンドラインはユーザーが実行するために表示され
+	// るので、ここの各引数はシェルへコピーされても壊れないものでなければならない。
 	if err := ValidateHardwareComment(comment); err != nil {
 		return nil, err
 	}

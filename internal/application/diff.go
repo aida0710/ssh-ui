@@ -6,12 +6,12 @@ import (
 	"sshc/internal/storage"
 )
 
-// MaxDiffLines bounds the quadratic longest-common-subsequence table. A file
-// larger than this is reported as a wholesale replacement with Truncated set,
-// so the UI can say so instead of pretending to show a minimal diff.
+// MaxDiffLines は二次関数的な最長共通部分列テーブルを
+// 制限する。これを超えるファイルは Truncated を立てた
+// 全面置換として報告され、UI は最小差分を装わずに済む。
 const MaxDiffLines = 4000
 
-// DiffOp classifies one line of a save preview.
+// DiffOp は保存プレビューの 1 行を分類する。
 type DiffOp string
 
 const (
@@ -20,8 +20,8 @@ const (
 	DiffDelete  DiffOp = "delete"
 )
 
-// DiffLine is one displayed line. OldLine and NewLine are 1-based and zero when
-// the line exists on only one side.
+// DiffLine は表示される 1 行である。OldLine と NewLine は
+// 1 始まりで、行が片側にしか無いときは 0 になる。
 type DiffLine struct {
 	Op      DiffOp `json:"op"`
 	Text    string `json:"text"`
@@ -29,7 +29,7 @@ type DiffLine struct {
 	NewLine int    `json:"newLine,omitempty"`
 }
 
-// FileDiff is the preview of one file in a pending transaction.
+// FileDiff は保留中のトランザクションにおける 1 ファイルのプレビューである。
 type FileDiff struct {
 	Path      string     `json:"path"`
 	Created   bool       `json:"created,omitempty"`
@@ -40,8 +40,8 @@ type FileDiff struct {
 	Truncated bool       `json:"truncated,omitempty"`
 }
 
-// ConflictReport is the three-way view design §9 requires when the file on disk
-// is no longer the file the user edited.
+// ConflictReport は、ディスク上のファイルがユーザーが
+// 編集した対象と異なる場合に設計 §9 が要求する三者間ビューである。
 type ConflictReport struct {
 	Path           string     `json:"path"`
 	BaseDigest     string     `json:"baseDigest,omitempty"`
@@ -50,9 +50,9 @@ type ConflictReport struct {
 	LocalChange    []DiffLine `json:"localChange"`
 }
 
-// SplitLines splits file contents for display. It drops the final newline and
-// the carriage returns of CRLF files, because the diff view shows text; the
-// bytes written to disk always come from the syntax tree, never from here.
+// SplitLines は表示用にファイル内容を分割する。最終行の改行と
+// CRLF ファイルの復帰文字を落とすのは diff ビューがテキストを
+// 見せるためで、ディスクへ書くバイト列は常に構文木由来である。
 func SplitLines(contents []byte) []string {
 	if len(contents) == 0 {
 		return nil
@@ -65,7 +65,7 @@ func SplitLines(contents []byte) []string {
 	return parts
 }
 
-// DiffLines computes a minimal line diff through a longest common subsequence.
+// DiffLines は最長共通部分列によって最小の行差分を計算する。
 func DiffLines(before, after []string) []DiffLine {
 	if len(before) > MaxDiffLines || len(after) > MaxDiffLines {
 		return replacementDiff(before, after)
@@ -123,7 +123,7 @@ func replacementDiff(before, after []string) []DiffLine {
 	return lines
 }
 
-// BuildFileDiff previews one file change.
+// BuildFileDiff は 1 ファイルの変更をプレビューする。
 func BuildFileDiff(path string, before, after []byte) FileDiff {
 	beforeLines := SplitLines(before)
 	afterLines := SplitLines(after)
@@ -143,8 +143,8 @@ func BuildFileDiff(path string, before, after []byte) FileDiff {
 	return diff
 }
 
-// BuildConflictReport explains an external change: what the other writer did to
-// the base, and what the user's pending edit would have done to the same base.
+// BuildConflictReport は外部での変更を説明する: 他の書き手がベースに対して
+// 行ったことと、ユーザーの保留中の編集が同じベースに対して行っていたはずのことである。
 func BuildConflictReport(path string, base, disk, edited []byte) ConflictReport {
 	return ConflictReport{
 		Path:           path,

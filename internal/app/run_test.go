@@ -155,7 +155,7 @@ func (stubKeyAgent) Add(context.Context, platform.AgentAddRequest) error {
 }
 func (stubKeyAgent) Remove(context.Context, string) error { return platform.ErrAgentUnavailable }
 
-// keyVaultSession drives the wired process the way the browser does.
+// keyVaultSession は、ブラウザと同じやり方で配線済みのプロセスを動かす。
 type keyVaultSession struct {
 	base    string
 	client  *http.Client
@@ -172,8 +172,8 @@ func (call keyVaultSession) do(method, path string, body []byte, headers map[str
 	}
 	request.AddCookie(call.cookie)
 	request.Header.Set("Content-Type", "application/json")
-	// Fetch Metadata and the CSRF token accompany every API request, a read as
-	// much as a write: the cookie is not scoped to a port and the token is.
+	// Fetch Metadata と CSRF トークンは、書き込みだけでなく読み取りも含め、すべての
+	// API リクエストに伴う。Cookie はポートで区切られないが、トークンは区切られる。
 	request.Header.Set("Sec-Fetch-Site", "same-origin")
 	request.Header.Set("X-SSHC-CSRF", call.csrf)
 	if method != http.MethodGet {
@@ -189,11 +189,11 @@ func (call keyVaultSession) do(method, path string, body []byte, headers map[str
 	return response
 }
 
-// The key vault must not share the transaction manager that application.Service
-// owns, because that manager carries a configuration validator which parses
-// every written file as ssh_config. A trash manifest is JSON, so sharing would
-// reject a soft delete as a configuration syntax error. Generating a key and
-// then trashing it through the wired process proves the separation holds.
+// 鍵 vault は、application.Service が持つトランザクションマネージャを共有しては
+// ならない。そのマネージャは設定バリデータを抱えており、書かれるすべてのファイルを
+// ssh_config として解析するからだ。ごみ箱マニフェストは JSON なので、共有すると
+// ソフト削除が設定の構文エラーとして拒否されてしまう。配線済みのプロセスを通して
+// 鍵を生成し、そのあとごみ箱へ送ることで、この分離が保たれていることを示す。
 func TestRunExposesTheKeyVaultAndItsTrashThroughTheWiredProcess(t *testing.T) {
 	home := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(home, ".ssh"), 0o700); err != nil {
@@ -254,8 +254,8 @@ func TestRunExposesTheKeyVaultAndItsTrashThroughTheWiredProcess(t *testing.T) {
 	}
 	call := keyVaultSession{base: base, client: client, cookie: cookies[0], csrf: bootstrapBody.CsrfToken, testing: t}
 
-	// Every route is behind the master password, so setting one is part of
-	// starting the application rather than part of a test about keys.
+	// すべてのルートはマスターパスワードの後ろにあるので、パスワードの設定は、鍵に
+	// 関するテストの一部ではなくアプリケーション起動の一部である。
 	unlocked := call.do(http.MethodPost, "/api/v1/passwords/initialise",
 		[]byte(`{"passphrase":"a master password for this run"}`), nil)
 	if unlocked.StatusCode != http.StatusOK {
@@ -296,8 +296,8 @@ func TestRunExposesTheKeyVaultAndItsTrashThroughTheWiredProcess(t *testing.T) {
 		t.Fatalf("the key is still in the workspace: %v", statErr)
 	}
 
-	// The configuration surface must still work: the two subsystems share a
-	// workspace, so a broken separation would show up here as well.
+	// 設定の面も引き続き動かなければならない。二つのサブシステムはワークスペースを
+	// 共有しているので、分離が壊れていればここにも現れる。
 	overview := call.do(http.MethodGet, "/api/v1/config/overview", nil, nil)
 	overview.Body.Close()
 	if overview.StatusCode != http.StatusOK {
@@ -362,16 +362,16 @@ func (listener *trackingListener) Close() error {
 	return listener.Listener.Close()
 }
 
-// The prompt rule asks who is asking, not only what shape the question is.
+// プロンプトのルールは、問いの形だけでなく、誰が尋ねているかを問う。
 //
-// A keyboard-interactive prompt is written by the remote server, so the shape
-// rule alone hands a stored password to any server that sends something ending
-// in "password:". Requiring the prompt to name the user and host this alias
-// resolves to is what OpenSSH's own password prompt does.
+// keyboard-interactive のプロンプトはリモートサーバーが書くので、形のルールだけ
+// では "password:" で終わる何かを送ってくるどのサーバーにも保存済みパスワードを
+// 渡してしまう。この alias が解決するユーザーとホストをプロンプトが名指ししている
+// ことを要求するのは、OpenSSH 自身のパスワードプロンプトがしていることである。
 func TestTheBoundPromptRequiresTheProjectedHost(t *testing.T) {
 	shape := func(prompt string) bool { return strings.HasSuffix(prompt, "password: ") }
-	// With nothing to project, the shape rule stands alone: a host this
-	// application cannot read is not a host it refuses to connect to.
+	// 射影するものがなければ、形のルールだけが残る。このアプリケーションが読めない
+	// ホストは、接続を拒否するホストではない。
 	unprojected := boundPrompt(shape, func(string) (string, string, bool) { return "", "", false })
 	if !unprojected("bastion", "ops@203.0.113.10's password: ") {
 		t.Error("an unprojectable host was refused")
@@ -380,10 +380,10 @@ func TestTheBoundPromptRequiresTheProjectedHost(t *testing.T) {
 		t.Error("the shape rule stopped applying")
 	}
 
-	// With a projection, the prompt has to name it. A keyboard-interactive
-	// prompt is written by the remote server, and this is what stops one
-	// shaped like a password question from collecting a password for a
-	// different account.
+	// 射影があるなら、プロンプトはそれを名指ししていなければならない。
+	// keyboard-interactive のプロンプトはリモートサーバーが書くものであり、これが、
+	// パスワードの問いの形をしたプロンプトが別アカウントのパスワードを集めてしまう
+	// のを止めている。
 	projected := boundPrompt(shape, func(string) (string, string, bool) {
 		return "ops", "203.0.113.10", true
 	})
@@ -398,7 +398,7 @@ func TestTheBoundPromptRequiresTheProjectedHost(t *testing.T) {
 	}
 }
 
-// A nil shape rule answers nothing. A missing rule must never mean "allow".
+// 形のルールが nil なら何にも答えない。ルールがないことが「許可」を意味してはならない。
 func TestTheBoundPromptWithNoShapeRuleAnswersNothing(t *testing.T) {
 	if boundPrompt(nil, nil)("bastion", "ops@host's password: ") {
 		t.Error("a nil shape rule allowed a prompt")

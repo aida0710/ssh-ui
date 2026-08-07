@@ -19,9 +19,9 @@ import (
 
 var (
 	ErrUnknownKey = errors.New("no key with that identifier is in the inventory")
-	// ErrNoPublicKey reports a private key with no public half beside it. The
-	// agent is removed from by public key, so without one there is nothing to
-	// hand ssh-add.
+	// ErrNoPublicKey は、隣に公開鍵の片割れがない秘密鍵を報告する。エージェントから
+	// の取り消しは公開鍵で行うので、それがなければ ssh-add に渡すものが
+	// 何もない。
 	ErrNoPublicKey                 = errors.New("this key has no public half, which is what removing it from the agent needs")
 	ErrInvalidFileName             = errors.New("file name is not a safe single path segment")
 	ErrInvalidComment              = errors.New("comment contains characters this application will not put in a command line")
@@ -29,36 +29,36 @@ var (
 	ErrUnknownGroup                = errors.New("no declared group of that name")
 )
 
-// KeysDirectoryName is the directory holding one subdirectory per group. It
-// mirrors the connections directory the configuration engine owns; the name is
-// duplicated rather than imported because the import would run the wrong way.
+// KeysDirectoryName は、グループごとにサブディレクトリをひとつ持つディレクトリ。
+// 設定エンジンが所有する connections ディレクトリを映したものである。import すると
+// 依存の向きが逆になるので、import ではなく名前を重複させてある。
 const KeysDirectoryName = "keys"
 
-// fileNamePattern accepts one safe path segment. A leading dot, a slash and a
-// '..' segment are all impossible under this pattern, so a request cannot name
-// a file outside ~/.ssh even before Workspace.ResolveForWrite sees it.
+// fileNamePattern は、安全なパスセグメントをひとつだけ受け付ける。先頭のドット、
+// スラッシュ、'..' セグメントはこのパターンでは不可能なので、
+// Workspace.ResolveForWrite が見る前から、~/.ssh の外のファイルは名指しできない。
 var fileNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 
-// hardwareCommentPattern accepts only characters that need no shell quoting,
-// because a hardware key's comment is shown inside a copyable ssh-keygen
-// command line and the user runs that line themselves.
+// hardwareCommentPattern は、シェルの引用を必要としない文字だけを受け付ける。
+// ハードウェア鍵のコメントは、コピー可能な ssh-keygen のコマンドラインの中に表示
+// され、ユーザーはその行を自分で実行するからである。
 var hardwareCommentPattern = regexp.MustCompile(`^[A-Za-z0-9@._+=:,/-]{0,127}$`)
 
-// commentPattern is the rule for a comment this application embeds itself.
+// commentPattern は、このアプリケーション自身が埋め込むコメントのルール。
 //
-// A software key is generated in process and its comment goes to
-// ssh.MarshalPrivateKey, so it reaches no shell and needs no quoting. It was
-// held to the hardware rule anyway, which refused a space — the character an
-// ordinary comment is most likely to contain, and the one `ssh-keygen -C "work
-// laptop"` puts there. What is refused here is what would damage the file or
-// the line it is written on: a newline, a carriage return or a nul.
+// ソフトウェア鍵はプロセス内で生成され、そのコメントは ssh.MarshalPrivateKey へ
+// 渡るので、シェルには届かず引用も要らない。それでもハードウェア用のルールが
+// 適用されており、空白が拒否されていた — 普通のコメントに最も入りやすい文字であり、
+// `ssh-keygen -C "work laptop"` がそこに入れる文字である。ここで拒否するのは、
+// ファイルや、それが書かれる行を壊すもの、すなわち改行、復帰、ヌルで
+// ある。
 var commentPattern = regexp.MustCompile(`^[^\x00\r\n]{0,127}$`)
 
-// safeArgumentPattern is the final check applied to every element of a command
-// line this application displays.
+// safeArgumentPattern は、このアプリケーションが表示するコマンドラインの各要素に
+// 最後に適用される検査。
 var safeArgumentPattern = regexp.MustCompile(`^[A-Za-z0-9@%_+=:,./-]+$`)
 
-// ValidateFileName rejects anything that is not a safe single path segment.
+// ValidateFileName は、安全な単一パスセグメントでないものをすべて拒否する。
 func ValidateFileName(name string) error {
 	if !fileNamePattern.MatchString(name) {
 		return ErrInvalidFileName
@@ -72,17 +72,17 @@ func ValidateFileName(name string) error {
 	return nil
 }
 
-// reservedFileNames are the names OpenSSH and this application already give a
-// meaning inside ~/.ssh.
+// reservedFileNames は、OpenSSH とこのアプリケーションが ~/.ssh の中ですでに
+// 意味を与えている名前。
 //
-// Writing a key to one of them would not merely be confusing: generating a key
-// called "config" into an empty workspace would create the entry configuration
-// file and fill it with a private key. An existing file is protected by the
-// transaction precondition, so only a fresh workspace is exposed, but the name
-// policy should refuse a name the application itself depends on rather than
-// rely on something already occupying it. The comparison is case-insensitive
-// because macOS filesystems are case-insensitive by default, so "Config" and
-// "config" are the same file.
+// そこへ鍵を書くのは、単に紛らわしいというだけでは済まない。空のワークスペースに
+// "config" という名前の鍵を生成すれば、エントリ設定ファイルが作られ、その中身が
+// 秘密鍵になる。既存のファイルはトランザクションの事前条件で守られるので、危険に
+// さらされるのは新しいワークスペースだけだが、名前のポリシーは、すでに何かが
+// 占めていることに頼るのではなく、アプリケーション自身が依存する名前を拒否すべき
+// である。比較は大文字小文字を区別しない。macOS のファイルシステムは既定で大文字
+// 小文字を区別せず、"Config" と "config" は同じファイルだから
+// である。
 var reservedFileNames = map[string]bool{
 	"config":           true,
 	"known_hosts":      true,
@@ -94,8 +94,8 @@ var reservedFileNames = map[string]bool{
 	"sshc":             true,
 }
 
-// ValidateComment rejects a comment that would damage the key file or the line
-// it is written on. It is the rule for a key this application generates itself.
+// ValidateComment は、鍵ファイルや、それが書かれる行を壊すコメントを拒否する。
+// これは、このアプリケーションが自ら生成する鍵のためのルールである。
 func ValidateComment(comment string) error {
 	if !commentPattern.MatchString(comment) {
 		return ErrInvalidComment
@@ -103,8 +103,8 @@ func ValidateComment(comment string) error {
 	return nil
 }
 
-// ValidateHardwareComment rejects a comment this application would have to
-// quote inside the ssh-keygen command line it shows for a hardware key.
+// ValidateHardwareComment は、ハードウェア鍵のために表示する ssh-keygen の
+// コマンドライン内で、引用しなければならなくなるコメントを拒否する。
 func ValidateHardwareComment(comment string) error {
 	if !hardwareCommentPattern.MatchString(comment) {
 		return ErrInvalidComment
@@ -112,9 +112,9 @@ func ValidateHardwareComment(comment string) error {
 	return nil
 }
 
-// Service is the key vault use-case layer. It owns no HTTP and no UI concern,
-// reads only through the storage filesystem seam, and writes only through the
-// journalled transaction manager.
+// Service は鍵 vault のユースケース層。HTTP も UI の関心事も持たず、読み取りは
+// ストレージのファイルシステムの継ぎ目を通してのみ、書き込みはジャーナル付きの
+// トランザクションマネージャを通してのみ行う。
 type Service struct {
 	workspace    *storage.Workspace
 	transactions *storage.Manager
@@ -123,15 +123,15 @@ type Service struct {
 	agent        platform.KeyAgent
 	now          func() time.Time
 	random       io.Reader
-	// validateGroup is injected because what a group is belongs to the
-	// configuration engine — a group exists when an Include line declares it —
-	// and this package must not import that engine to ask.
+	// validateGroup を注入するのは、グループとは何かが設定エンジンの領分だからである
+	// — Include 行が宣言したときにグループは存在する — そしてこのパッケージは、それを
+	// 尋ねるためにそのエンジンを import してはならない。
 	validateGroup func(string) error
-	// storedPassphrase answers with the passphrase kept for a key, if there is
-	// one and the vault is open. Injected for the same reason as validateGroup:
-	// where a secret lives belongs to the secret package, and this one must not
-	// import it to ask. A nil one means nothing is stored, which is how this
-	// behaved before anything was.
+	// storedPassphrase は、ある鍵のために保持されているパスフレーズがあり、vault が
+	// 開いていれば、それを答える。注入する理由は validateGroup と同じである。秘密が
+	// どこにあるかは secret パッケージの領分であり、このパッケージはそれを尋ねるために
+	// import してはならない。nil なら何も保存されていないことを意味し、それは何も保存
+	// されていなかった頃の振る舞いである。
 	storedPassphrase func(relativePath string) (string, bool)
 }
 
@@ -161,13 +161,13 @@ func NewService(options ServiceOptions) *Service {
 	}
 }
 
-// SetStoredPassphrase installs the lookup after construction, for the wiring
-// that builds this service before the vault it would ask.
+// SetStoredPassphrase は、構築後にこの参照関数を取り付ける。尋ねる相手の vault より
+// 先にこのサービスを組み立てる配線のためである。
 func (service *Service) SetStoredPassphrase(lookup func(relativePath string) (string, bool)) {
 	service.storedPassphrase = lookup
 }
 
-// entryPath is the user configuration file the Include graph starts from.
+// entryPath は、Include グラフの起点となるユーザー設定ファイル。
 func (service *Service) entryPath() string {
 	return filepath.Join(service.workspace.Root(), "config")
 }
@@ -176,7 +176,7 @@ func (service *Service) absolutePath(relativePath string) string {
 	return filepath.Join(service.workspace.Root(), relativePath)
 }
 
-// Inventory classifies the workspace and attaches the Hosts that name each file.
+// Inventory はワークスペースを分類し、各ファイルを名指しする Host を付与する。
 func (service *Service) Inventory() (*Inventory, error) {
 	inventory, err := NewScanner(service.workspace).Scan()
 	if err != nil {
@@ -190,15 +190,15 @@ func (service *Service) Inventory() (*Inventory, error) {
 	return inventory, nil
 }
 
-// Algorithms reports the variants the installed OpenSSH supports.
+// Algorithms は、インストールされている OpenSSH が対応する variant を報告する。
 func (service *Service) Algorithms(ctx context.Context) Catalogue {
 	return service.catalogue.Read(ctx)
 }
 
-// HardwareCommand returns the ssh-keygen argument list for a hardware method.
+// HardwareCommand は、ハードウェアの方式に対する ssh-keygen の引数リストを返す。
 //
-// The command names the full path under the group, so the command the user runs
-// by hand puts the key exactly where this application would have put it.
+// このコマンドはグループ配下のフルパスを名指しするので、ユーザーが手で実行しても、
+// このアプリケーションが置いたであろう場所にちょうど鍵が置かれる。
 func (service *Service) HardwareCommand(algorithm Algorithm, fileName, group, comment string) ([]string, error) {
 	directory, err := service.groupDirectory(group)
 	if err != nil {
@@ -207,9 +207,9 @@ func (service *Service) HardwareCommand(algorithm Algorithm, fileName, group, co
 	return HardwareCommand(algorithm, fileName, comment, service.absolutePath(directory))
 }
 
-// groupDirectory validates a group and returns the workspace-relative directory
-// its keys live in. An empty group is the root of ~/.ssh, where an ungrouped
-// key belongs.
+// groupDirectory はグループを検証し、その鍵が置かれるワークスペース相対の
+// ディレクトリを返す。グループが空の場合は ~/.ssh のルートで、グループなしの鍵は
+// そこに属する。
 func (service *Service) groupDirectory(group string) (string, error) {
 	if group == "" {
 		return ".", nil
@@ -223,18 +223,18 @@ func (service *Service) groupDirectory(group string) (string, error) {
 	return path.Join(KeysDirectoryName, group), nil
 }
 
-// GenerateRequest is one in-process key generation.
+// GenerateRequest は、プロセス内での鍵生成ひとつ分。
 //
-// Unencrypted must be set explicitly for an empty passphrase, so an accidentally
-// blank field can never silently produce an unprotected key.
+// パスフレーズを空にするには Unencrypted を明示的に設定しなければならない。うっかり
+// 空欄になったフィールドから、保護されない鍵が黙って生まれることは決してない。
 type GenerateRequest struct {
 	Algorithm Algorithm
 	Bits      int
 	FileName  string
-	// Group puts the pair in that group's key directory. It is a separate,
-	// separately validated field rather than part of FileName: concatenating a
-	// caller-supplied group into the name would defeat the single-segment rule
-	// that stops a key being written to "config".
+	// Group は、そのグループの鍵ディレクトリにペアを置く。FileName の一部ではなく、
+	// 別個に検証される独立したフィールドである。呼び出し側から渡されたグループを名前へ
+	// 連結すると、鍵が "config" に書かれるのを止めている単一セグメントのルールを
+	// 破ってしまうからだ。
 	Group       string
 	Comment     string
 	Passphrase  []byte
@@ -252,9 +252,9 @@ type GenerateResult struct {
 	TransactionID      string
 }
 
-// Generate creates a software key pair inside this process and commits both
-// files in one journalled transaction. The passphrase never reaches argv, the
-// environment or another process, and it is overwritten before Generate returns.
+// Generate は、このプロセス内でソフトウェアの鍵ペアを作り、両方のファイルを
+// ひとつのジャーナル付きトランザクションでコミットする。パスフレーズが argv、環境、
+// 別プロセスに届くことは決してなく、Generate が返る前に上書きされる。
 func (service *Service) Generate(request GenerateRequest) (GenerateResult, error) {
 	defer Wipe(request.Passphrase)
 
@@ -320,7 +320,7 @@ func (service *Service) Generate(request GenerateRequest) (GenerateResult, error
 	}, nil
 }
 
-// PassphraseChange re-encrypts one private key.
+// PassphraseChange は、秘密鍵ひとつを再暗号化する。
 type PassphraseChange struct {
 	KeyID       string
 	Current     []byte
@@ -336,20 +336,20 @@ type PassphraseResult struct {
 	TransactionID string
 }
 
-// ChangePassphrase decrypts a key with the current passphrase and writes it
-// back encrypted with the new one, in one journalled transaction guarded by the
-// digest of the file it read.
+// ChangePassphrase は、現在のパスフレーズで鍵を復号し、新しいパスフレーズで暗号化
+// して書き戻す。読み取ったファイルのダイジェストで守られた、ひとつのジャーナル付き
+// トランザクションで行う。
 //
-// The transaction opts out of the generational backup, because the contents it
-// replaces are the user's private key and the design refuses to leave a second
-// copy of key material in ~/.ssh/sshc/backups/. The rename that installs the
-// new key is atomic, so an interruption leaves either the old key or the new
-// one; an interrupted change can be completed but not rolled back.
+// このトランザクションは世代バックアップを取らない。置き換える内容がユーザーの
+// 秘密鍵であり、この設計は鍵素材の二つ目のコピーを ~/.ssh/sshc/backups/ に残すこと
+// を拒むからだ。新しい鍵を設置する rename は原子的なので、中断されても古い鍵か
+// 新しい鍵のどちらかが残る。中断された変更は完了させられるが、巻き戻すことは
+// できない。
 //
-// x/crypto's parser does not expose the comment stored inside an OpenSSH
-// private key, so the comment is taken from a public key file whose fingerprint
-// matches. When no such file exists the new key carries no comment and the
-// result says so through NoteCommentNotPreserved; the engine never invents one.
+// x/crypto のパーサは OpenSSH の秘密鍵の中に保存されたコメントを公開しないので、
+// コメントは、フィンガープリントが一致する公開鍵ファイルから取る。そうしたファイル
+// が存在しなければ、新しい鍵はコメントを持たず、結果は NoteCommentNotPreserved で
+// その旨を伝える。エンジンがコメントをでっちあげることは決してない。
 func (service *Service) ChangePassphrase(change PassphraseChange) (PassphraseResult, error) {
 	defer Wipe(change.Current)
 	defer Wipe(change.New)
@@ -409,7 +409,7 @@ func (service *Service) ChangePassphrase(change PassphraseChange) (PassphraseRes
 	}, nil
 }
 
-// RevealResult is the answer to a confirmed private-key reveal.
+// RevealResult は、確認済みの秘密鍵表示に対する答え。
 type RevealResult struct {
 	ID            string
 	RelativePath  string
@@ -419,12 +419,12 @@ type RevealResult struct {
 	TransactionID string
 }
 
-// Reveal returns the bytes of one private key.
+// Reveal は、秘密鍵ひとつのバイト列を返す。
 //
-// The audit record is written before the bytes are returned, so a reveal that
-// could not be recorded does not happen. The record names the file and the time
-// and never contains key material. Reveal deliberately has no other caller: the
-// ordinary detail API never returns private key bytes.
+// 監査記録はバイト列が返される前に書かれるので、記録できなかった表示は起こらない。
+// 記録はファイルと時刻を名指しし、鍵素材を含むことは決してない。Reveal に他の
+// 呼び出し側が存在しないのは意図的である。通常の詳細 API が秘密鍵のバイト列を
+// 返すことはない。
 func (service *Service) Reveal(keyID string) (RevealResult, error) {
 	inventory, err := service.Inventory()
 	if err != nil {
@@ -455,7 +455,7 @@ func (service *Service) Reveal(keyID string) (RevealResult, error) {
 	}, nil
 }
 
-// PublicKeyResult is the text of one public key or certificate file.
+// PublicKeyResult は、公開鍵ファイルまたは証明書ファイルひとつのテキスト。
 type PublicKeyResult struct {
 	ID           string
 	RelativePath string
@@ -464,16 +464,16 @@ type PublicKeyResult struct {
 	Comment      string
 }
 
-// PublicKey returns the text of one public key or certificate.
+// PublicKey は、公開鍵または証明書ひとつのテキストを返す。
 //
-// This is deliberately not Reveal. A public key is not a secret, so there is no
-// confirmation, no audit note and no Cache-Control dance: those exist because
-// private key material is disclosed, and nothing here discloses any. The kind
-// check is what keeps that true — it accepts only what the scanner classified
-// as a public key or a certificate, so a private key's identifier reaches this
-// function and is refused rather than read. Classification is by content and
-// permissions, not by a .pub suffix, so a private key misnamed id_rsa.pub is
-// refused too.
+// これは意図的に Reveal ではない。公開鍵は秘密ではないので、確認も、監査の記録も、
+// Cache-Control の小細工もない。それらは秘密鍵の素材が開示されるからこそ存在する
+// のであって、ここでは何ひとつ開示されない。そしてそれを真に保っているのが kind の
+// 検査である。スキャナが公開鍵または証明書と分類したものだけを受け付けるので、
+// 秘密鍵の識別子がこの関数に届いても、それは読まれるのではなく拒否される。分類は
+// .pub という接尾辞ではなく内容と権限によって行われるので、id_rsa.pub と誤って
+// 名付けられた秘密鍵についても、同じく拒否
+// される。
 func (service *Service) PublicKey(keyID string) (PublicKeyResult, error) {
 	inventory, err := service.Inventory()
 	if err != nil {
@@ -496,10 +496,10 @@ func (service *Service) PublicKey(keyID string) (PublicKeyResult, error) {
 	}, nil
 }
 
-// ConfirmationSubject names the kind of operation a one-time confirmation
-// covers. It is this package's own vocabulary; the HTTP layer maps the session
-// package's action kinds onto it, so the use-case layer needs no dependency on
-// how a session is authenticated.
+// ConfirmationSubject は、ワンタイムの確認が対象とする操作の種類を表す。これは
+// このパッケージ自身の語彙であり、HTTP 層が session パッケージのアクション種別を
+// これに対応付ける。そのためユースケース層は、セッションがどう認証されるかに依存
+// しなくてよい。
 type ConfirmationSubject string
 
 const (
@@ -507,18 +507,18 @@ const (
 	ConfirmPurgeEntry ConfirmationSubject = "purge_entry"
 )
 
-// ErrUnknownConfirmation reports a confirmation subject this application does
-// not issue tokens for.
+// ErrUnknownConfirmation は、このアプリケーションがトークンを発行しない確認対象を
+// 報告する。
 var ErrUnknownConfirmation = errors.New("unknown confirmation subject")
 
-// ConfirmationEvidence digests exactly what a confirmation dialog would show
-// for one operation, so a token can be bound to it.
+// ConfirmationEvidence は、ある操作について確認ダイアログが表示するであろう内容を
+// そのままダイジェストにする。トークンをそれに結び付けられるようにするためである。
 //
-// The digest is recomputed when the token is spent. If the key or the trash
-// entry changed in between, the digests differ and the confirmation is refused,
-// because the user agreed to the thing they were shown and not to whatever
-// replaced it. Only a digest is produced: no key material, and no path, ever
-// leaves this function.
+// ダイジェストはトークンが使われるときに再計算される。その間に鍵やごみ箱のエントリ
+// が変わっていればダイジェストは食い違い、確認は拒否される。ユーザーが同意したのは
+// 見せられたものであって、それを置き換えた何かではないからだ。生成されるのは
+// ダイジェストだけである。鍵素材も、パスも、この関数から出ていくことは
+// 決してない。
 func (service *Service) ConfirmationEvidence(subject ConfirmationSubject, target string) (string, error) {
 	switch subject {
 	case ConfirmRevealKey:
@@ -543,8 +543,8 @@ func (service *Service) revealEvidence(keyID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// The file's digest is taken and the buffer is erased immediately; the
-	// evidence never holds the bytes themselves.
+	// ファイルのダイジェストを取り、バッファは直ちに消去する。evidence が
+	// バイト列そのものを保持することは決してない。
 	contentsDigest := storage.Digest(contents)
 	Wipe(contents)
 
@@ -559,8 +559,8 @@ func (service *Service) purgeEvidence(entryID string) (string, error) {
 	fields := []string{string(ConfirmPurgeEntry), manifest.EntryID, manifest.DeletedAt}
 	for _, file := range manifest.Files {
 		fields = append(fields, file.OriginalPath, file.TrashPath, file.Kind, file.Fingerprint, file.Permission)
-		// A file that has since disappeared changes what the dialog lists, so
-		// its presence is part of what the user is confirming.
+		// その後に消えたファイルは、ダイアログが列挙する内容を変える。したがって
+		// その存在も、ユーザーが確認している内容の一部である。
 		if _, statErr := service.workspace.FileSystem().Lstat(filepath.Join(service.workspace.Root(), file.TrashPath)); statErr == nil {
 			fields = append(fields, "present")
 			continue
@@ -570,8 +570,8 @@ func (service *Service) purgeEvidence(entryID string) (string, error) {
 	return digestFields(fields...), nil
 }
 
-// digestFields hashes a field list with an unambiguous separator, so two
-// different field lists can never produce the same digest by concatenation.
+// digestFields は、曖昧さのない区切りでフィールドの並びをハッシュする。異なる
+// 二つのフィールド並びが、連結によって同じダイジェストになることはありえない。
 func digestFields(fields ...string) string {
 	hash := sha256.New()
 	for _, field := range fields {
@@ -581,7 +581,7 @@ func digestFields(fields ...string) string {
 	return hex.EncodeToString(hash.Sum(nil))
 }
 
-// RegisterRequest asks the user's ssh-agent to load one key.
+// RegisterRequest は、鍵をひとつ読み込むようユーザーの ssh-agent に求める。
 type RegisterRequest struct {
 	KeyID           string
 	Passphrase      []byte
@@ -598,15 +598,15 @@ type RegisterResult struct {
 	Identities       []platform.AgentIdentity
 }
 
-// Register loads a private key into the user's ssh-agent, optionally storing
-// its passphrase in the login Keychain.
+// Register は秘密鍵をユーザーの ssh-agent へ読み込ませ、任意でそのパスフレーズを
+// ログインキーチェーンへ保存する。
 //
-// Only a key the inventory currently contains can be registered, so a trashed
-// key and anything under ~/.ssh/sshc are unreachable by construction. The
-// passphrase is overwritten before Register returns, and the registration is
-// recorded in history without it. The audit note is written only after the
-// agent accepted the key, so a refused registration leaves no record claiming
-// it happened.
+// 登録できるのは、いまインベントリに含まれる鍵だけである。したがって、ごみ箱に
+// ある鍵と ~/.ssh/sshc 配下のものは、構造上到達できない。パスフレーズは Register
+// が返る前に上書きされ、登録はそれを含まずに履歴へ記録される。監査の記録が書かれる
+// のはエージェントが鍵を受け付けたあとだけなので、拒否された登録が、それが起きたと
+// 主張する記録を残すことは
+// ない。
 func (service *Service) Register(ctx context.Context, request RegisterRequest) (RegisterResult, error) {
 	defer Wipe(request.Passphrase)
 
@@ -622,10 +622,10 @@ func (service *Service) Register(ctx context.Context, request RegisterRequest) (
 		return RegisterResult{}, ErrUnknownKey
 	}
 
-	// A stored passphrase is used when the caller supplied none, which is what
-	// turns adding a key to the agent into one action rather than two. It is
-	// never preferred over one that was typed: the person at the keyboard is
-	// more current than the file.
+	// 呼び出し側が何も渡さなかったときには、保存されているパスフレーズを使う。それが、
+	// エージェントへの鍵の追加を二段階ではなく一度の操作にしている。ただし、打ち込まれた
+	// ものより優先されることは決してない。キーボードの前にいる人の方が、ファイルよりも
+	// 新しいからである。
 	passphrase := request.Passphrase
 	if len(passphrase) == 0 && service.storedPassphrase != nil {
 		if stored, ok := service.storedPassphrase(item.RelativePath); ok {
@@ -661,18 +661,18 @@ func (service *Service) Register(ctx context.Context, request RegisterRequest) (
 	}, nil
 }
 
-// Deregister takes one key back out of the agent.
+// Deregister は、鍵ひとつをエージェントから取り戻す。
 //
-// A key could be handed to the agent and not taken back, so purging it left the
-// agent holding material the user had just destroyed, and the screen that lists
-// what the agent holds could only list it.
+// 鍵をエージェントに渡したまま取り戻せないことがありえた。そのため鍵を完全削除
+// しても、ユーザーがたったいま破棄した素材をエージェントが持ち続け、エージェントの
+// 保持内容を並べる画面は、それを並べることしかできなかった。
 //
-// `ssh-add -d` reads the *public* key, so this needs the public half to exist.
-// Removing an identity whose public key is gone is a thing only the agent
-// protocol can do directly, and this application talks to the agent through
-// ssh-add on purpose; when the public key is missing the agent is left alone
-// and the caller is told, rather than a removal being claimed that did not
-// happen.
+// `ssh-add -d` は *公開* 鍵を読むので、これには公開鍵の片割れが存在する必要がある。
+// 公開鍵が失われた identity の削除は、エージェントのプロトコルだけが直接できること
+// であり、このアプリケーションは意図的に ssh-add 経由でエージェントと話す。公開鍵が
+// 見つからないときは、行われていない削除を主張するのではなく、エージェントには手を
+// 触れずに呼び出し側へその旨を
+// 伝える。
 func (service *Service) Deregister(ctx context.Context, keyID string) error {
 	if service.agent == nil {
 		return platform.ErrAgentUnavailable
@@ -696,8 +696,8 @@ func (service *Service) Deregister(ctx context.Context, keyID string) error {
 	return err
 }
 
-// publicKeyFor finds the public half of a private key by fingerprint, falling
-// back to the conventional ".pub" name beside it.
+// publicKeyFor は、秘密鍵の公開鍵の片割れをフィンガープリントで探し、見つから
+// なければ、隣にある慣例的な ".pub" という名前へフォールバックする。
 func publicKeyFor(inventory *Inventory, item *Item) (*Item, bool) {
 	for index := range inventory.Items {
 		candidate := &inventory.Items[index]
@@ -714,9 +714,9 @@ func publicKeyFor(inventory *Inventory, item *Item) (*Item, bool) {
 	return nil, false
 }
 
-// AgentIdentities reports what the agent currently holds. The second return
-// value is false when no agent is reachable, so the UI can say so instead of
-// showing an empty list that looks like a working agent.
+// AgentIdentities は、エージェントがいま保持しているものを報告する。二つ目の
+// 戻り値は、到達できるエージェントがないときに false になる。UI が、動いている
+// エージェントに見える空リストではなく、その旨を言えるようにするためだ。
 func (service *Service) AgentIdentities(ctx context.Context) ([]platform.AgentIdentity, bool) {
 	if service.agent == nil || !service.agent.Available(ctx) {
 		return nil, false
@@ -728,8 +728,8 @@ func (service *Service) AgentIdentities(ctx context.Context) ([]platform.AgentId
 	return identities, true
 }
 
-// commentForKey recovers a private key's comment from a public key file with
-// the same fingerprint.
+// commentForKey は、同じフィンガープリントを持つ公開鍵ファイルから秘密鍵の
+// コメントを復元する。
 func commentForKey(inventory *Inventory, item *Item) (string, []string) {
 	if item.Fingerprint != "" {
 		for _, candidate := range inventory.Items {

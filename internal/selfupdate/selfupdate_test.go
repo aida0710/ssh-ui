@@ -11,9 +11,9 @@ import (
 	"sshc/internal/selfupdate"
 )
 
-// A newer version is a later one, compared as numbers. Compared as strings,
-// 0.10.0 is older than 0.9.0, and offering that as an update walks the user
-// backwards.
+// より新しいバージョンとは、数値として比較して後のものである。文字列として比較
+// すると 0.10.0 は 0.9.0 より古くなり、それを更新として提示すればユーザーを後ろへ
+// 歩かせることになる。
 func TestNewerComparesNumbersAndNotText(t *testing.T) {
 	for _, test := range []struct {
 		current, candidate string
@@ -24,8 +24,8 @@ func TestNewerComparesNumbersAndNotText(t *testing.T) {
 		{"1.0.0", "1.0.0", false},
 		{"v1.2.3", "v1.2.4", true},
 		{"1.2.3", "1.2.3", false},
-		// A build that is not a release is told there is one, and never told
-		// how far behind it is.
+		// リリースでないビルドには、リリースがあることは伝え、どれだけ遅れているかは
+		// 決して伝えない。
 		{"dev", "0.1.0", true},
 		{"0.1.0", "dev", true},
 	} {
@@ -35,7 +35,7 @@ func TestNewerComparesNumbersAndNotText(t *testing.T) {
 	}
 }
 
-// serve is a fake GitHub, so no test reaches the real one.
+// serve は偽の GitHub。どのテストも本物には到達しない。
 func serve(t *testing.T, handler http.HandlerFunc) selfupdate.Checker {
 	t.Helper()
 	mux := http.NewServeMux()
@@ -71,7 +71,7 @@ func TestLatestSaysWhenNothingIsPublished(t *testing.T) {
 	}
 }
 
-// A draft is not published, whatever the API calls it.
+// ドラフトは、API が何と呼ぼうと公開されたものではない。
 func TestLatestIgnoresADraft(t *testing.T) {
 	checker := serve(t, func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"tag_name": "v0.2.0", "draft": true})

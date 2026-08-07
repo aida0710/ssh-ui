@@ -20,11 +20,11 @@ import (
 	"sshc/internal/storage"
 )
 
-// hostileArguments are values OpenSSH itself would accept inside a Host line,
-// or that a user could type, and that would change the meaning of a command
-// line, an AppleScript string or a remote shell string if they were passed
-// through unchanged. "\x00" and "\n" are written as escapes on purpose: a raw
-// control character in a source file is invisible in review.
+// hostileArguments は、OpenSSH 自身が Host 行の中で受け入れるであろう値、あるいは
+// ユーザーが打ち込みうる値であり、そのまま渡されればコマンドライン、AppleScript の
+// 文字列、リモートシェルの文字列の意味を変えてしまう値である。"\x00" と "\n" を
+// 意図してエスケープで書いてあるのは、ソースファイル中の生の制御文字がレビューでは
+// 見えないからである。
 var hostileArguments = []string{
 	"-oProxyCommand=/bin/sh",
 	"-oPermitLocalCommand=yes",
@@ -53,7 +53,7 @@ var hostileArguments = []string{
 	strings.Repeat("a", 65),
 }
 
-// aliasRoute is one route that turns an alias into an external effect.
+// aliasRoute は、alias を外部効果に変える route の 1 つである。
 type aliasRoute struct {
 	path string
 	kind string
@@ -82,8 +82,8 @@ func TestNoRouteEverPutsAHostileValueOnACommandLine(t *testing.T) {
 	f := newFixture(t)
 	publicKey := string(bytes.TrimSpace(f.read("id_ed25519.pub")))
 
-	// Positive control: a safe alias must reach the process seam, and must
-	// arrive after a "--" separator as one complete argument.
+	// 正のコントロール: 安全な alias は process seam に届かねばならず、
+	// "--" separator の後に 1 つの完全な argument として到達しなければならない。
 	f.runner.reset()
 	f.runner.answer(func(platform.Command) (platform.Output, error) {
 		return platform.Output{Stdout: []byte("hostname 203.0.113.10\nport 2222\n")}, nil
@@ -98,21 +98,21 @@ func TestNoRouteEverPutsAHostileValueOnACommandLine(t *testing.T) {
 	}
 	assertAliasArrivesInert(t, control[0].Arguments, "bastion")
 
-	// Hostile half. Every hostile value fails platform.ValidateAlias, so the
-	// property asserted is the decisive one: no external effect happens at all.
+	// 敵対的な側。あらゆる敵対的な値は platform.ValidateAlias に
+	// 落ちるため、ここで主張する性質は決定的なもの: 外部効果が一切起きないことである。
 	//
-	// Asserting instead that a hostile value "arrives inert somewhere in argv"
-	// would be unusable here: values such as "-" and "." are substrings of the
-	// fixed options and of the configuration path, so a substring rule would
-	// fire on arguments this application hard-codes.
+	// 代わりに敵対的な値が「argv のどこかに無害な形で届く」ことを
+	// 主張するのは、ここでは使い物にならない: "-" や "." のような値は
+	// 固定オプションや設定パスの部分文字列でもあるため、部分文字列規則では
+	// このアプリケーションがハードコードする argument にまで反応してしまう。
 	for _, route := range aliasRoutes() {
 		for _, hostile := range hostileArguments {
 			t.Run(route.path+" "+quoteForName(hostile), func(t *testing.T) {
 				f.runner.reset()
 				f.terminal.reset()
-				// A token is issued for the hostile target where that is
-				// possible, so the request is refused by the alias rule rather
-				// than only by the token rule.
+				// 敵対的な target に対しても、それが可能な場合は token を
+				// 発行する。そうすることで、リクエストは token rule だけでなく
+				// alias rule によって拒否される。
 				issued := f.tryActionToken(route.kind, hostile)
 				body := route.body(hostile)
 				if key, ok := body["publicKey"]; ok && key == "" {
@@ -131,8 +131,8 @@ func TestNoRouteEverPutsAHostileValueOnACommandLine(t *testing.T) {
 	}
 }
 
-// assertAliasArrivesInert fails unless alias appears in argv exactly once, as
-// the whole element immediately after the "--" separator.
+// assertAliasArrivesInert は、alias が argv の中に、"--" separator
+// 直後の要素全体としてちょうど 1 回現れない限り失敗する。
 func assertAliasArrivesInert(t testing.TB, arguments []string, alias string) {
 	t.Helper()
 	separator := -1
@@ -165,14 +165,14 @@ func assertAliasArrivesInert(t testing.TB, arguments []string, alias string) {
 	}
 }
 
-// TestTheProcessSeamRefusesAHostileAliasWithoutTheHTTPGuard drives the seam
-// with no handler in front of it.
+// TestTheProcessSeamRefusesAHostileAliasWithoutTheHTTPGuard は、
+// 前段に handler を置かずに継ぎ目を直接駆動する。
 //
-// The HTTP test above cannot tell which of the two alias checks refused a
-// request: the handler validates, and so does the code that builds the command.
-// Deleting either one alone leaves the other standing, so that test would
-// survive a mutation that genuinely removed a defence. This one calls the
-// command builders directly, so each layer is answerable for itself.
+// 上の HTTP テストでは、2 つの alias check のどちらがリクエストを
+// 拒否したのか区別できない: handler も検証するし、コマンドを
+// 組み立てるコードも検証する。片方だけ消してももう片方が残るため、
+// そのテストは本物の防御を取り除いた mutation を生き延びてしまう。
+// このテストは command builder を直接呼ぶので、各層が自分自身に対して責任を持つ。
 func TestTheProcessSeamRefusesAHostileAliasWithoutTheHTTPGuard(t *testing.T) {
 	runner := &recordingRunner{}
 	evaluator := effective.Evaluator{
@@ -191,7 +191,7 @@ func TestTheProcessSeamRefusesAHostileAliasWithoutTheHTTPGuard(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Positive control: a safe alias reaches the runner through both seams.
+	// 正のコントロール: 安全な alias は両方の継ぎ目を通ってランナーに届く。
 	runner.reset()
 	if _, err := evaluator.Evaluate(context.Background(), effective.Report{}, "bastion", true); err != nil {
 		t.Fatalf("Evaluate(bastion) = %v", err)
@@ -227,13 +227,13 @@ func TestTheProcessSeamRefusesAHostileAliasWithoutTheHTTPGuard(t *testing.T) {
 }
 
 func TestTerminalLaunchNeverBuildsAppleScriptFromInput(t *testing.T) {
-	// The script itself must have no substitution point at all.
+	// スクリプト自体には置換点が一切あってはならない。
 	//
-	// The plan's list also forbade the AppleScript concatenation operator, but
-	// the committed script uses it to join a *constant* prefix to `quoted form
-	// of targetAlias`, which is the safe construction rather than the unsafe
-	// one. What must not exist is a point where caller text is formatted into
-	// the script, which is what these four spellings would be.
+	// plan のリストは AppleScript の連結演算子も禁じていたが、
+	// コミットされたスクリプトはそれを使って *定数* の prefix を
+	// `quoted form of targetAlias` に連結しており、これは危険な方ではなく
+	// 安全な構成である。存在してはならないのは、呼び出し元のテキストが
+	// スクリプトへと書式化される点であり、これら 4 通りの綴りはまさにそれに当たる。
 	for _, forbidden := range []string{"%s", "%v", "%q", "${"} {
 		if strings.Contains(macos.TerminalScript, forbidden) {
 			t.Fatalf("TerminalScript contains a substitution point %q", forbidden)
@@ -249,7 +249,7 @@ func TestTerminalLaunchNeverBuildsAppleScriptFromInput(t *testing.T) {
 	runner := &recordingRunner{}
 	terminal := macos.Terminal{Runner: runner, Program: "/usr/bin/osascript", Timeout: 5 * time.Second}
 
-	// Positive control.
+	// Positive control。
 	if err := terminal.Launch(context.Background(), "bastion"); err != nil {
 		t.Fatalf("Launch(bastion) = %v", err)
 	}
@@ -271,7 +271,7 @@ func TestTerminalLaunchNeverBuildsAppleScriptFromInput(t *testing.T) {
 		t.Fatal("the alias was concatenated into the script")
 	}
 
-	// Hostile half.
+	// Hostile half。
 	for _, hostile := range hostileArguments {
 		t.Run(quoteForName(hostile), func(t *testing.T) {
 			runner.reset()
@@ -291,8 +291,8 @@ func TestRemoteRegistrationNeverInterpolatesInputIntoTheRemoteShell(t *testing.T
 
 	publicKey := string(bytes.TrimSpace(f.read("id_ed25519.pub")))
 
-	// Positive control: a real registration reaches the seam twice — the POSIX
-	// probe and the fixed routine — and the key travels on stdin, never in argv.
+	// 正のコントロール: 本物の登録は継ぎ目に 2 回届く — POSIX の
+	// probe と固定の routine — そして key は stdin を伝わり、argv には決して乗らない。
 	f.runner.reset()
 	f.runner.answer(func(command platform.Command) (platform.Output, error) {
 		if strings.Contains(strings.Join(command.Arguments, " "), remotekey.ProbeCommand) {
@@ -325,7 +325,7 @@ func TestRemoteRegistrationNeverInterpolatesInputIntoTheRemoteShell(t *testing.T
 		}
 	}
 
-	// The routine is a constant: no input can change a byte of it.
+	// この routine は定数である: どんな入力も 1 バイトたりとも変えられない。
 	before := remotekey.Routine
 	for _, hostile := range hostileArguments {
 		t.Run(quoteForName(hostile), func(t *testing.T) {
@@ -344,9 +344,9 @@ func TestRemoteRegistrationNeverInterpolatesInputIntoTheRemoteShell(t *testing.T
 		})
 	}
 
-	// A public key line that could become more than one authorized_keys entry,
-	// or that is not a key at all, is refused by the parser before anything
-	// reaches a remote host.
+	// 2 つ以上の authorized_keys entry になりうる public key line、
+	// あるいはそもそも key ではない行は、何かがリモートホストに
+	// 届くより前に parser によって拒否される。
 	for _, line := range []string{
 		"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGZpeHR1cmVrZXlmaXh0dXJla2V5Zml4dHVyZWtl a\nssh-ed25519 AAAA b",
 		"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGZpeHR1cmVrZXlmaXh0dXJla2V5Zml4dHVyZWtl a\x00b",
@@ -360,12 +360,12 @@ func TestRemoteRegistrationNeverInterpolatesInputIntoTheRemoteShell(t *testing.T
 		}
 	}
 
-	// A comment carrying shell metacharacters is accepted, and that is correct
-	// rather than an oversight: OpenSSH allows any comment, and the fixed
-	// routine only ever expands the key inside double quotes, so a ";" in a
-	// comment is inert. The plan expected a refusal here; refusing would reject
-	// keys real users hold without closing anything. What must not survive is a
-	// line separator, which is the case immediately above.
+	// shell のメタ文字を含む comment は受け入れられる。これは見落と
+	// しではなく正しい: OpenSSH はどんな comment も許すし、固定の
+	// routine は key を常に double quote の中でしか展開しないため、
+	// comment 中の ";" は無害である。plan はここで拒否を期待していたが、
+	// 拒否すれば何も塞がないまま実在ユーザーの key を弾いてしまう。生き
+	// 残ってはならないのは line separator であり、それはすぐ上のケースである。
 	metacharacters := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGZpeHR1cmVrZXlmaXh0dXJla2V5Zml4dHVyZWtl a; rm -rf ~"
 	if _, _, err := remotekey.ParsePublicKey(metacharacters); err != nil {
 		t.Errorf("ParsePublicKey rejected a legitimate comment: %v", err)
@@ -388,7 +388,7 @@ func TestNoRouteWritesOutsideTheWorkspaceOrThroughASymbolicLink(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Positive control: an ordinary path inside the workspace is accepted.
+	// 正のコントロール: ワークスペース内の普通のパスは受け入れられる。
 	base := string(f.read("config"))
 	accepted := f.do(http.MethodPost, "/api/v1/config/save", mustJSON(t, map[string]any{
 		"kind": "file_raw", "path": "config", "base": base, "raw": base + "\n# appended by the positive control\n",
@@ -434,7 +434,7 @@ func TestNoRouteWritesOutsideTheWorkspaceOrThroughASymbolicLink(t *testing.T) {
 		})
 	}
 
-	// A symbolic link inside the workspace must not be written through.
+	// ワークスペース内の symbolic link を通して書き込まれてはならない。
 	linked := filepath.Join(f.root, "linked.conf")
 	if err := os.Symlink(outside, linked); err != nil {
 		t.Fatal(err)
@@ -455,10 +455,10 @@ func TestNoRouteWritesOutsideTheWorkspaceOrThroughASymbolicLink(t *testing.T) {
 		t.Fatal("a write followed a symbolic link out of the workspace")
 	}
 
-	// A directory component swapped for a symbolic link between the read and
-	// the save must be refused too. This is the time-of-check/time-of-use case
-	// the README describes as best effort; best effort still means refusing the
-	// swap it can see.
+	// read と save の間でディレクトリ構成要素が symbolic link に
+	// すり替えられた場合も拒否せねばならない。これは README が best
+	// effort と述べる time-of-check/time-of-use のケースである。best effort
+	// であっても、見えているすり替えを拒否することに変わりはない。
 	swapped := filepath.Join(f.root, "swapped")
 	if err := os.MkdirAll(swapped, 0o700); err != nil {
 		t.Fatal(err)
@@ -493,14 +493,14 @@ func TestNoRouteWritesOutsideTheWorkspaceOrThroughASymbolicLink(t *testing.T) {
 	}
 }
 
-// TestTheWorkspaceGuardRefusesTraversalAndSymlinksWithoutTheHTTPLayer holds the
-// workspace guard answerable on its own.
+// TestTheWorkspaceGuardRefusesTraversalAndSymlinksWithoutTheHTTPLayer は、
+// workspace guard 単体に責任を持たせる。
 //
-// Writing through a symbolic link is blocked twice over: ResolveForWrite walks
-// the path and refuses a link component, and OSFileSystem.ReadFile opens with
-// O_NOFOLLOW so the save's own precondition read fails first. Defence in depth
-// is welcome, but it means the end-to-end test above still passes when either
-// guard alone is deleted. This one calls the guard directly.
+// symbolic link を通した書き込みは二重に阻まれる: ResolveForWrite が
+// パスをたどって link の構成要素を拒否し、OSFileSystem.ReadFile は
+// O_NOFOLLOW で開くため save 自身の precondition read が先に失敗する。
+// 多層防御は歓迎すべきものだが、それは上の end-to-end テストがどちらか片方の guard
+// だけを消しても通ってしまうことを意味する。このテストは guard を直接呼ぶ。
 func TestTheWorkspaceGuardRefusesTraversalAndSymlinksWithoutTheHTTPLayer(t *testing.T) {
 	home := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(home, ".ssh", "conf.d"), 0o700); err != nil {
@@ -514,9 +514,9 @@ func TestTheWorkspaceGuardRefusesTraversalAndSymlinksWithoutTheHTTPLayer(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The workspace resolves its own root, and on macOS t.TempDir() hands back
-	// a /var symlink, so every candidate below is built from the resolved root
-	// rather than from the path this test happened to be given.
+	// ワークスペースは自分自身の root を解決し、macOS では t.TempDir() が
+	// /var の symlink を返すため、以下の候補はすべて、このテストに
+	// たまたま渡されたパスではなく、解決済みの root から組み立てる。
 	root := workspace.Root()
 	outside := filepath.Join(filepath.Dir(root), "private-notes", "canary.txt")
 	if err := os.WriteFile(outside, []byte(canaryOutsideContents), 0o600); err != nil {
@@ -529,7 +529,7 @@ func TestTheWorkspaceGuardRefusesTraversalAndSymlinksWithoutTheHTTPLayer(t *test
 		t.Fatal(err)
 	}
 
-	// Positive control: an ordinary path inside the workspace resolves.
+	// 正のコントロール: ワークスペース内の普通のパスは解決できる。
 	if _, err := workspace.ResolveForWrite(filepath.Join(root, "conf.d", "20-new.conf")); err != nil {
 		t.Fatalf("ResolveForWrite on an ordinary path = %v", err)
 	}
@@ -566,9 +566,9 @@ func TestTheWorkspaceGuardRefusesTraversalAndSymlinksWithoutTheHTTPLayer(t *test
 func TestAnAliasOpenSSHWouldAcceptIsStillRefusedForEveryExternalEffect(t *testing.T) {
 	f := newFixture(t)
 
-	// A configuration file may legitimately contain a Host line this
-	// application will never launch. Reading it must be lossless; acting on it
-	// must be refused. Those two rules have to hold at the same time.
+	// 設定ファイルには、このアプリケーションが決して起動しない
+	// Host line が正当に含まれうる。読み込みは無損失でなければならず、それを実行することは
+	// 拒否せねばならない。この 2 つの規則は同時に成り立つ必要がある。
 	source := []byte("Host -oProxyCommand=id\n\tHostName 203.0.113.10\n" +
 		"Host \"bastion evil\"\n\tUser ops\n" +
 		"Host with\x00nul\n\tUser ops\n")
@@ -614,9 +614,9 @@ func TestAnAliasOpenSSHWouldAcceptIsStillRefusedForEveryExternalEffect(t *testin
 		})
 	}
 
-	// POST /api/v1/terminal/command is deliberately allowed to answer for an
-	// unsafe alias: design §6.5 says the UI offers a copyable command instead of
-	// launching. It must say so, and must not claim the alias is launchable.
+	// POST /api/v1/terminal/command は、unsafe な alias に対しても
+	// 意図的に応答を許されている: design §6.5 は、UI が起動の代わりにコピー可能なコマンドを
+	// 提示すると定めている。そう述べねばならず、alias が起動可能だと主張してはならない。
 	response := f.do(http.MethodPost, "/api/v1/terminal/command", mustJSON(t, map[string]any{
 		"alias": "bastion evil",
 	}))
@@ -629,7 +629,7 @@ func TestAnAliasOpenSSHWouldAcceptIsStillRefusedForEveryExternalEffect(t *testin
 	}
 }
 
-// quoteForName makes a hostile value usable as a subtest name.
+// quoteForName は、敵対的な値を subtest 名として使えるようにする。
 func quoteForName(value string) string {
 	replaced := strings.NewReplacer("\x00", "<nul>", "\n", "<lf>", "\r", "<cr>", "\t", "<tab>", " ", "_", "/", "_")
 	if value == "" {

@@ -10,9 +10,9 @@ import (
 	"testing"
 )
 
-// The prompts OpenSSH actually emits, transcribed. The point of this table is
-// that only the first is answerable; the rest are questions this helper must
-// never answer, and the host key one is the reason the function exists.
+// OpenSSH が実際に出すプロンプトを書き写したもの。この表の要点は、答えてよいのが
+// 最初のひとつだけで、残りはこのヘルパーが決して答えてはならない問いだという
+// ことだ。ホスト鍵のものは、この関数が存在する理由そのものである。
 func TestAnswerablePromptAcceptsOnlyThePasswordPrompt(t *testing.T) {
 	answerable := []string{
 		"ops@203.0.113.10's password: ",
@@ -35,11 +35,11 @@ func TestAnswerablePromptAcceptsOnlyThePasswordPrompt(t *testing.T) {
 		"Enter passphrase for /Users/tester/.ssh/id_rsa: ",
 		"Verification code: ",
 		"Enter your one-time token: ",
-		"(ops@203.0.113.10) Password: ",   // keyboard-interactive, a different flow
+		"(ops@203.0.113.10) Password: ",   // keyboard-interactive、別のフロー
 		"Enter PIN for authenticator: ",   // FIDO
 		"Confirm user presence for key: ", // FIDO
 		"password",
-		"Enter passphrase for key 'x': ops@h's password: ", // both, refused
+		"Enter passphrase for key 'x': ops@h's password: ", // 両方に該当、拒否される
 	}
 	for _, prompt := range refused {
 		if AnswerablePrompt(prompt) {
@@ -78,8 +78,8 @@ func TestAskpassWritesOnlyThePasswordOnStandardOutput(t *testing.T) {
 	if status != askpassOK {
 		t.Fatalf("status = %d, stderr = %q", status, errOut.String())
 	}
-	// One trailing newline, which OpenSSH strips, so a password ending in a
-	// space survives intact.
+	// 末尾の改行ひとつは OpenSSH が取り除くので、空白で終わるパスワードもそのまま
+	// 無傷で残る。
 	if out.String() != "hunter2 \n" {
 		t.Errorf("stdout = %q, want %q", out.String(), "hunter2 \n")
 	}
@@ -92,8 +92,8 @@ func TestAskpassWritesOnlyThePasswordOnStandardOutput(t *testing.T) {
 }
 
 func TestAskpassWritesNothingOnStandardOutputWhenItRefuses(t *testing.T) {
-	// A helper that printed a diagnostic on stdout would hand that diagnostic
-	// to OpenSSH as the password. Every refusal path is checked, not one.
+	// 標準出力に診断メッセージを出すヘルパーは、それを OpenSSH にパスワードとして
+	// 渡してしまう。ひとつではなく、拒否経路のすべてを検査する。
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 	}))
@@ -131,9 +131,9 @@ func TestAskpassWritesNothingOnStandardOutputWhenItRefuses(t *testing.T) {
 }
 
 func TestAskpassRefusesAnEndpointThatIsNotLoopback(t *testing.T) {
-	// The endpoint arrives in an environment variable, so it is input. An
-	// exported SSHC_ASKPASS_URL pointing elsewhere would turn this helper
-	// into an exfiltration tool for the password it is about to fetch.
+	// エンドポイントは環境変数で渡される以上それは入力である。別の場所を指す
+	// SSHC_ASKPASS_URL がエクスポートされていれば、このヘルパーは、いま取得しようと
+	// しているパスワードの持ち出し道具になってしまう。
 	reached := false
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		reached = true
@@ -166,9 +166,9 @@ func TestAskpassRefusesAnEndpointThatIsNotLoopback(t *testing.T) {
 }
 
 func TestAskpassDistinguishesNothingStoredFromRefused(t *testing.T) {
-	// "There is no password for this host, or the vault is locked" and "the
-	// request was rejected" are different things to tell someone staring at a
-	// Terminal window.
+	// 「このホストにパスワードがない、または vault がロックされている」ことと
+	// 「リクエストが拒否された」ことは、Terminal のウィンドウを見つめている人に
+	// 伝える内容として別物である。
 	for status, want := range map[int]int{
 		http.StatusNotFound:            askpassNoEntry,
 		http.StatusConflict:            askpassNoEntry,
@@ -192,8 +192,8 @@ func TestAskpassDistinguishesNothingStoredFromRefused(t *testing.T) {
 }
 
 func TestAskpassRefusesAnEmptyPasswordFromTheServer(t *testing.T) {
-	// An empty answer is indistinguishable at the prompt from a wrong one, and
-	// writing it would spend one of the password attempts for nothing.
+	// 空の回答はプロンプト上で誤ったパスワードと区別がつかず、それを書けばパスワードの
+	// 試行回数を無駄にひとつ消費することになる。
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"password":""}`))
 	}))
@@ -211,11 +211,11 @@ func TestAskpassRefusesAnEmptyPasswordFromTheServer(t *testing.T) {
 }
 
 func TestOpenSSHsInvocationIsRecognisedAsTheHelperAndNotAsTheApplication(t *testing.T) {
-	// SSH_ASKPASS names a program. OpenSSH execs it with the prompt as its
-	// only argument — no shell, so no subcommand word can reach it. Reading
-	// argv[1] as a subcommand meant the real invocation fell through to the
-	// application, which started a second server and opened a browser while
-	// ssh waited for a password that was never sent.
+	// SSH_ASKPASS はプログラムを指定する。OpenSSH はプロンプトだけを引数としてそれを
+	// exec する — シェルがないので、サブコマンドの語が届く余地はない。argv[1] を
+	// サブコマンドとして読んでいたため、実際の起動はアプリケーション側へ落ち、二つ目の
+	// サーバーを立ててブラウザを開く一方で、ssh は決して送られてこないパスワードを
+	// 待ち続けた。
 	environment := fullEnvironment("http://127.0.0.1:1/askpass")
 	arguments, ok := askpassInvocation(
 		[]string{"/opt/sshc", "ops@203.0.113.10's password: "}, environment.lookup)
@@ -239,9 +239,9 @@ func TestTheSubcommandStillWorksForRunningItByHand(t *testing.T) {
 }
 
 func TestAnOrdinaryStartIsNotTurnedIntoTheHelper(t *testing.T) {
-	// The application must still start normally, including when a stale
-	// variable is lying about in the environment: both the token and the
-	// endpoint are required before this binary becomes a password helper.
+	// 環境に古い変数が転がっている場合も含め、アプリケーションは通常どおり起動しなければ
+	// ならない。このバイナリがパスワードヘルパーになるには、トークンとエンドポイントの
+	// 両方が必要である。
 	for name, environment := range map[string]askpassEnvironment{
 		"nothing set":    {},
 		"only the token": {TokenVariable: "one-time-token"},

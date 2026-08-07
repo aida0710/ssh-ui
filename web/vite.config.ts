@@ -12,8 +12,8 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./vitest.setup.ts"],
     restoreMocks: true,
-    // Vitest must never collect a Playwright spec: e2e/*.spec.ts drives a real
-    // browser against a real binary and would fail meaninglessly under jsdom.
+    // Vitest は Playwright の spec を決して収集してはならない。e2e/*.spec.ts は本物の
+    // ブラウザを本物のバイナリに対して動かすため、jsdom 下では無意味に失敗する。
     include: ["src/**/*.test.{ts,tsx}"],
   },
 });

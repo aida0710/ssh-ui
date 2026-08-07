@@ -65,8 +65,8 @@ func TestDeleteRemovesOnlyTheRequestedLinesThroughTheTransactionManager(t *testi
 		t.Error("unrelated lines were not preserved")
 	}
 
-	// The backup is what makes the deletion recoverable, and the journal is
-	// what makes it replayable; both come from committing through the manager.
+	// 削除を復元可能にするのはバックアップであり、再生可能にするのはジャーナルで
+	// ある。どちらもマネージャ経由でコミットすることから得られる。
 	backup, err := os.ReadFile(filepath.Join(result.BackupDir, "known_hosts"))
 	if err != nil || !bytes.Equal(backup, []byte(fixtureFile)) {
 		t.Fatalf("backup = %q, %v", backup, err)
@@ -80,9 +80,9 @@ func TestDeleteRemovesOnlyTheRequestedLinesThroughTheTransactionManager(t *testi
 	}
 }
 
-// TestDeleteRefusesWhenTheLineOnDiskChanged is the stale-precondition case: the
-// user confirmed a deletion against a line that has since been edited, so the
-// request must be refused rather than removing whatever now occupies that line.
+// TestDeleteRefusesWhenTheLineOnDiskChanged は事前条件が古くなった場合のケース。
+// ユーザーは、その後に編集された行に対して削除を確認した。したがってリクエストは、
+// いまその行を占めているものを取り除くのではなく、拒否されなければならない。
 func TestDeleteRefusesWhenTheLineOnDiskChanged(t *testing.T) {
 	service := newTestService(t, fixtureFile, &stubRunner{})
 
@@ -92,7 +92,7 @@ func TestDeleteRefusesWhenTheLineOnDiskChanged(t *testing.T) {
 	}
 	target := knownhosts.Target{Line: listing.Lines[0].Number, Digest: storage.Digest([]byte(listing.Lines[0].Raw))}
 
-	// Something else rewrites the file after the user was shown that line.
+	// ユーザーにその行を見せたあとで、別の何かがファイルを書き直す。
 	edited := strings.Replace(fixtureFile, "admin@example", "someone@else", 1)
 	if err := os.WriteFile(service.Path(), []byte(edited), 0o600); err != nil {
 		t.Fatal(err)
@@ -147,7 +147,7 @@ func TestAddRequiresAFingerprintOrAnExplicitAcknowledgement(t *testing.T) {
 		t.Fatalf("known_hosts = %q, want %q", contents, want)
 	}
 
-	// A repeated add is a no-op rather than a duplicate line.
+	// 追加の繰り返しは、重複行ではなく何もしない操作になる。
 	if _, err := service.Add(candidate, fixtureFingerprint, false); err != nil {
 		t.Fatalf("repeated Add = %v", err)
 	}

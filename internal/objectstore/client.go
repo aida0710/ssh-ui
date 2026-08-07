@@ -12,71 +12,70 @@ import (
 )
 
 var (
-	// ErrPreconditionFailed reports that the object changed since it was last
-	// read. It is the compare-and-swap failing, which is the whole point of
-	// this client: it is how "auto" sync cannot clobber another machine.
+	// ErrPreconditionFailed は、最後に読んだあとにオブジェクトが変化したことを報告
+	// する。compare-and-swap の失敗であり、それこそがこのクライアントの存在意義で
+	// ある。「auto」同期が他のマシンを踏み潰さないのは、これによる。
 	ErrPreconditionFailed = errors.New("the object changed since it was last read")
-	// ErrNotFound reports that no object exists under that key.
+	// ErrNotFound は、そのキーの下にオブジェクトが存在しないことを報告する。
 	ErrNotFound = errors.New("no object under that key")
-	// ErrRefused reports any other rejection. The body is not carried: an S3
-	// error document names the bucket and the request id, and neither belongs
-	// in a message this application shows.
+	// ErrRefused は、それ以外の拒否をすべて報告する。本文は持ち回らない。S3 の
+	// エラードキュメントはバケット名とリクエスト ID を名指しするが、どちらもこの
+	// アプリケーションが表示するメッセージに入れてよいものではない。
 	ErrRefused = errors.New("the object store refused the request")
-	// ErrBothConditions rejects a call that sets If-Match and If-None-Match at
-	// once. It is a programming error, caught before a request is sent.
+	// ErrBothConditions は、If-Match と If-None-Match を同時に設定した呼び出しを
+	// 拒否する。これはプログラミングの誤りであり、リクエストを送る前に捕まえる。
 	ErrBothConditions = errors.New("If-Match and If-None-Match are mutually exclusive")
-	// ErrObjectTooLarge refuses a body above the single-request limit.
+	// ErrObjectTooLarge は、単一リクエストの上限を超える本文を拒否する。
 	ErrObjectTooLarge = errors.New("the object is too large for a single request")
 )
 
-// MaxObjectBytes is the largest snapshot this client will send or accept.
+// MaxObjectBytes は、このクライアントが送受信する最大のスナップショットサイズ。
 //
-// S3 allows 5 GiB in one PUT and this is far below that, because a ~/.ssh is
-// kilobytes and anything approaching this ceiling means something has gone
-// wrong rather than that someone has a large configuration.
+// S3 は 1 回の PUT で 5 GiB を許すが、これはそれよりはるかに小さい。~/.ssh は
+// キロバイト単位であり、この上限に近づくというのは、誰かの設定が大きいという
+// ことではなく、何かがおかしいということだからだ。
 const MaxObjectBytes = 256 << 20
 
-// Object is a fetched object and its entity tag.
+// Object は、取得したオブジェクトとその entity tag。
 type Object struct {
 	Body []byte
-	// ETag identifies this exact version. It is what a later conditional write
-	// is compared against, and it is the only thing this client remembers
-	// about the remote.
+	// ETag は、このバージョンそのものを識別する。あとで条件付き書き込みを行う際の
+	// 比較対象であり、このクライアントがリモートについて覚えている唯一のもので
+	// ある。
 	ETag string
 }
 
-// Client speaks the part of the S3 API this application needs.
+// Client は、このアプリケーションが必要とする範囲の S3 API を話す。
 type Client struct {
 	HTTP *http.Client
-	// Endpoint is the account endpoint, for example
-	// https://<account>.r2.cloudflarestorage.com. It must be https.
+	// Endpoint はアカウントのエンドポイント。たとえば
+	// https://<account>.r2.cloudflarestorage.com。https でなければならない。
 	Endpoint string
 	Bucket   string
-	// Region is "auto" for R2.
+	// Region は R2 では "auto"。
 	Region string
 	Creds  Credentials
 	Now    func() time.Time
 }
 
-// ErrInsecureEndpoint refuses a plaintext endpoint that is not loopback. The
-// body is encrypted before it gets here, but the credentials are not, and a
-// signature replayed off the wire is a live request until its clock skew
-// window closes.
+// ErrInsecureEndpoint は、ループバックでない平文のエンドポイントを拒否する。
+// 本文はここへ届く前に暗号化されているが、資格情報はそうではない。回線から
+// 拾った署名を再生すれば、そのクロックスキューの窓が閉じるまでは有効な
+// リクエストである。
 var ErrInsecureEndpoint = errors.New("the object store endpoint must be https unless it is loopback")
 
-// loopbackHosts may be reached over plain http.
+// loopbackHosts は、平文の http で到達してよいホスト。
 //
-// This exists so the client can be exercised against a real S3 implementation
-// — SeaweedFS or MinIO on this machine, or a service container in CI — which
-// is the only way to find out what a real server does with a conditional PUT.
-// A loopback connection cannot be observed off the machine, so there is
-// nothing for TLS to protect there; anything else must be https.
+// これがあるのは、このクライアントを本物の S3 実装 — このマシン上の SeaweedFS か
+// MinIO、あるいは CI のサービスコンテナ — に対して動かせるようにするためである。
+// 本物のサーバーが条件付き PUT に何をするかを知る方法は、それしかない。
+// ループバック接続はマシンの外からは観測できないので、そこには TLS が守るものが
+// ない。それ以外はすべて https でなければならない。
 //
-// "localhost" is included because that is how a CI service container is
-// reached. It is a name rather than a literal, so in principle it could
-// resolve elsewhere; the exception is bounded to plaintext transport of a
-// request whose body is already ciphertext, and the alternative is having no
-// integration coverage at all.
+// "localhost" を含めているのは、CI のサービスコンテナへそう到達するからである。
+// リテラルではなく名前なので、原理的には別の場所へ解決されうる。この例外は、本文が
+// すでに暗号文であるリクエストの平文トランスポートに限定されており、そうしない
+// 場合の代案は、統合テストの網羅をまったく持たないことである。
 var loopbackHosts = map[string]bool{"127.0.0.1": true, "::1": true, "localhost": true}
 
 func (c Client) now() time.Time {
@@ -108,7 +107,7 @@ func (c Client) objectURL(key string) (string, error) {
 	return parsed.String(), nil
 }
 
-// Get fetches the object and its ETag.
+// Get は、オブジェクトとその ETag を取得する。
 func (c Client) Get(ctx context.Context, key string) (Object, error) {
 	response, err := c.do(ctx, http.MethodGet, key, nil, "", "")
 	if err != nil {
@@ -126,7 +125,7 @@ func (c Client) Get(ctx context.Context, key string) (Object, error) {
 	return Object{Body: body, ETag: response.Header.Get("ETag")}, nil
 }
 
-// Head returns the ETag without the body.
+// Head は、本文なしで ETag を返す。
 func (c Client) Head(ctx context.Context, key string) (string, error) {
 	response, err := c.do(ctx, http.MethodHead, key, nil, "", "")
 	if err != nil {
@@ -136,13 +135,13 @@ func (c Client) Head(ctx context.Context, key string) (string, error) {
 	return response.Header.Get("ETag"), nil
 }
 
-// Put writes the object and returns the new ETag.
+// Put はオブジェクトを書き、新しい ETag を返す。
 //
-// ifMatch and ifNoneMatch are the compare-and-swap. Exactly one of them is
-// used by this application's callers: If-None-Match: * for the first write,
-// and If-Match: <the ETag we last saw> for every write after it. An
-// unconditional write is possible but no caller here makes one, because a
-// write that cannot fail is a write that can overwrite another machine.
+// ifMatch と ifNoneMatch が compare-and-swap である。このアプリケーションの
+// 呼び出し側が使うのは、そのうちちょうど一方だけだ。最初の書き込みには
+// If-None-Match: *、それ以降のすべての書き込みには If-Match: <最後に見た ETag>。
+// 無条件の書き込みも可能だが、ここの呼び出し側は誰もそれをしない。失敗しえない
+// 書き込みは、他のマシンを上書きしうる書き込みだからである。
 func (c Client) Put(ctx context.Context, key string, body []byte, ifMatch, ifNoneMatch string) (string, error) {
 	if ifMatch != "" && ifNoneMatch != "" {
 		return "", ErrBothConditions
@@ -199,10 +198,10 @@ func (c Client) do(ctx context.Context, method, key string, body []byte, ifMatch
 	case http.StatusNotFound:
 		return nil, ErrNotFound
 	case http.StatusPreconditionFailed, http.StatusConflict:
-		// 412 is the documented answer to a failed If-Match or If-None-Match.
-		// 409 is here because a store that serialises conflicting writes may
-		// answer with it instead, and both mean the same thing to a caller:
-		// somebody else got there first.
+		// 412 は、If-Match または If-None-Match の失敗に対する文書化された答え。
+		// 409 をここに入れているのは、衝突する書き込みを直列化するストアが代わりに
+		// これを返すことがあるからで、呼び出し側にとって両者の意味は同じ。すなわち、
+		// 誰かが先に到達した、ということである。
 		return nil, ErrPreconditionFailed
 	default:
 		return nil, ErrRefused

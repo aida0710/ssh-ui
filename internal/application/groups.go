@@ -6,23 +6,23 @@ import (
 	"sshc/internal/config"
 )
 
-// Group notice codes.
+// グループの notice コード。
 const (
-	// NoticeGroupNotDeclared marks a directory under connections/ that no
-	// Include line names. It is not a group: nothing reads it.
+	// NoticeGroupNotDeclared は、どの Include 行も名指ししない connections/
+	// 配下のディレクトリに印を付ける。それはグループではない: 何にも読まれないからだ。
 	NoticeGroupNotDeclared = "group_not_declared"
-	// NoticeGroupDirectoryMissing marks a declared group whose directory does
-	// not exist yet.
+	// NoticeGroupDirectoryMissing は、ディレクトリがまだ存在しない
+	// 宣言済みグループに印を付ける。
 	NoticeGroupDirectoryMissing = "group_directory_missing"
-	// NoticeGroupEmpty marks a declared group with no connections in it.
+	// NoticeGroupEmpty は、connections が 1 つもない宣言済みグループに印を付ける。
 	NoticeGroupEmpty = "group_empty"
-	// NoticeGroupFileUnreached marks a .conf file sitting directly under
-	// connections/, which belongs to no group and which nothing includes.
+	// NoticeGroupFileUnreached は、connections/ の直下にあり、
+	// どのグループにも属さず、何にも include されない .conf ファイルに印を付ける。
 	NoticeGroupFileUnreached = "group_file_unreached"
 )
 
-// GroupView is one group as the UI sees it: where it lives, whether it is
-// declared, and the presentation metadata attached to its name.
+// GroupView は、UI から見た 1 つのグループである: どこにあるか、
+// 宣言されているか、その名前に付いたプレゼンテーション metadata である。
 type GroupView struct {
 	Name             string    `json:"name"`
 	Parent           string    `json:"parent,omitempty"`
@@ -36,13 +36,13 @@ type GroupView struct {
 	DirectoryPresent bool      `json:"directoryPresent"`
 }
 
-// DeclaredGroups returns the group names the entry file's generated region
-// names, in the order the Include lines appear.
+// DeclaredGroups は、エントリファイルの生成領域が名指しする
+// グループ名を、Include 行が現れる順序で返す。
 //
-// The filesystem is not consulted. A directory is a group because a line in
-// ~/.ssh/config says to read it, not because it exists: inferring membership
-// from a directory that happens to be there would silently adopt a layout
-// somebody else built for another purpose.
+// ファイルシステムは参照されない。ディレクトリがグループなのは
+// ~/.ssh/config の中の行がそれを読めと言っているからであり、
+// 存在するからではない。たまたまそこにあるディレクトリから
+// メンバーシップを推測すれば、誰かが別の目的で作った layout を黙って採用してしまう。
 func DeclaredGroups(file *config.File) []string {
 	start, end, found, err := FindRegion(file)
 	if err != nil || !found {
@@ -72,12 +72,12 @@ func DeclaredGroups(file *config.File) []string {
 	return names
 }
 
-// BuildGroupsView assembles what the Groups screen shows: the declared groups
-// with their presentation metadata and member counts, plus a notice for every
-// way the declaration and the disk disagree.
+// BuildGroupsView は、Groups 画面が表示するものを組み立てる:
+// プレゼンテーション metadata とメンバー数を伴う宣言済み
+// グループに加え、宣言とディスクが食い違うあらゆる形についての notice である。
 //
-// present is the set of directories that exist under connections/, workspace
-// relative and slash separated, as the caller found them.
+// present は、呼び出し元が見つけたとおりの、connections/ 配下に
+// 実在するディレクトリの集合であり、ワークスペース相対でスラッシュ区切りである。
 func BuildGroupsView(entry *config.File, hosts []HostEntry, metadata Metadata, present []string) ([]GroupView, []Notice) {
 	declared := DeclaredGroups(entry)
 	declaredSet := make(map[string]bool, len(declared))
@@ -122,9 +122,9 @@ func BuildGroupsView(entry *config.File, hosts []HostEntry, metadata Metadata, p
 		if !view.DirectoryPresent {
 			notices = appendNotice(notices, Notice{Code: NoticeGroupDirectoryMissing, Detail: name, Path: view.Directory})
 		} else if view.MemberCount == 0 {
-			// The include_no_match diagnostic this produces is still reported.
-			// Suppressing a real diagnostic because this application generated
-			// the line that caused it would be the wrong kind of tidy.
+			// これが生む include_no_match 診断は、それでも報告される。
+			// このアプリケーションが原因となった行を生成したからといって
+			// 本物の診断を抑制するのは、間違った種類の「整頓」だろう。
 			notices = appendNotice(notices, Notice{Code: NoticeGroupEmpty, Detail: name, Path: view.Directory})
 		}
 		views = append(views, view)
@@ -140,13 +140,13 @@ func BuildGroupsView(entry *config.File, hosts []HostEntry, metadata Metadata, p
 	return views, notices
 }
 
-// CompileGroups renders the group settings as ordinary Host blocks.
+// CompileGroups は、グループ設定を普通の Host ブロックとしてレンダリングする。
 //
-// A parent block lists its own members and every member of its descendants, so
-// a child inherits by being named in both blocks while its own block is read
-// first. declared is the group set in the order the region declares it; the
-// hierarchy comes from the names, because a name that contains its parent
-// cannot disagree with a parent field.
+// 親ブロックは自身のメンバーと子孫のすべてのメンバーを列挙する
+// ので、子は両方のブロックに名指しされることで継承しつつ、
+// 自身のブロックが先に読まれる。declared は region が宣言する
+// 順序のグループ集合である。階層は名前から来る。親を含む名前は、
+// parent フィールドと食い違いようがないからだ。
 func CompileGroups(declared []string, metadata Metadata, hosts []HostEntry, ending string) ([]byte, []Notice) {
 	if ending == "" {
 		ending = "\n"
@@ -223,8 +223,8 @@ func CompileGroups(declared []string, metadata Metadata, hosts []HostEntry, endi
 	return []byte(builder.String()), notices
 }
 
-// groupMembers collects a group's own members and those of every group nested
-// inside it, in the order the hosts were projected.
+// groupMembers は、グループ自身のメンバーとその内部にネストした
+// すべてのグループのメンバーを、host が射影された順序で集める。
 func groupMembers(direct map[string][]string, aliasOrder []string, name string) []string {
 	collected := make(map[string]bool)
 	for candidate, aliases := range direct {
@@ -244,7 +244,7 @@ func groupMembers(direct map[string][]string, aliasOrder []string, name string) 
 	return members
 }
 
-// InsertIncludeLine writes an Include directive at the given index.
+// InsertIncludeLine は、指定された index に Include ディレクティブを書き込む。
 func InsertIncludeLine(file *config.File, relative string, index int) error {
 	line, err := buildLine("", "Include", []string{relative}, dominantEnding(file))
 	if err != nil {
@@ -257,12 +257,12 @@ func InsertIncludeLine(file *config.File, relative string, index int) error {
 	return nil
 }
 
-// declaredGroupSet is the group set a save declares.
+// declaredGroupSet は、保存が宣言するグループ集合である。
 //
-// A group reaches the region because it is already declared there, or because
-// the user made one by giving it presentation or settings in metadata. The
-// filesystem is deliberately not a source: a directory somebody else created
-// under connections/ is reported, never adopted.
+// グループが region に届くのは、既にそこで宣言されているか、
+// ユーザーが metadata でプレゼンテーションや settings を与えて
+// 1 つ作ったからである。ファイルシステムは意図的にソースではない:
+// 誰かが connections/ 配下に作ったディレクトリは報告されるだけで、決して採用されない。
 func declaredGroupSet(entry *config.File, metadata Metadata) []string {
 	seen := make(map[string]bool)
 	names := make([]string, 0)
@@ -286,9 +286,9 @@ func declaredGroupSet(entry *config.File, metadata Metadata) []string {
 	return GroupNameOrder(names, order)
 }
 
-// NoticeGroupDirectoryCreated marks a group directory this save creates.
+// NoticeGroupDirectoryCreated は、この保存が作るグループディレクトリに印を付ける。
 //
-// Directory creation happens outside the journal — Commit resolves a write path
-// against real directories, so the directory has to be there first — which is
-// why it is worth saying out loud rather than leaving as an invisible effect.
+// ディレクトリの作成はジャーナルの外で起こる — Commit は実在のディレクトリに
+// 対して書き込みパスを解決するので、ディレクトリが先に存在していなければ
+// ならない — だからこそ見えない効果として残すのではなく、はっきり言う価値がある。
 const NoticeGroupDirectoryCreated = "group_directory_created"

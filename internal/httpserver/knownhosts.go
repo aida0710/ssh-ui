@@ -13,10 +13,10 @@ import (
 	"sshc/internal/storage"
 )
 
-// maxDeleteTargets bounds one deletion request.
+// maxDeleteTargets は一度の削除リクエストの上限を定める。
 const maxDeleteTargets = 256
 
-// KnownHostsHandlers exposes known_hosts search and maintenance.
+// KnownHostsHandlers は known_hosts の検索と保守を公開する。
 type KnownHostsHandlers struct {
 	Service *knownhosts.Service
 	Actions ActionHandlers
@@ -29,12 +29,12 @@ func registerKnownHostsRoutes(engine *echo.Echo, handlers KnownHostsHandlers) {
 	engine.POST("/api/v1/known-hosts/add", handlers.Add)
 }
 
-// addKnownHostsActions registers the confirmations this subsystem owns.
+// addKnownHostsActions はこのサブシステムが持つ確認を登録する。
 //
-// A change to the file is bound to the file's current contents, so an edit
-// between the confirmation and the request invalidates the token. A scan is
-// bound to the host being scanned instead, because it changes nothing on disk
-// and its target is the only thing worth pinning.
+// ファイルへの変更はその時点の内容に紐づくため、確認とリクエ
+// ストの間に編集が入るとトークンは無効になる。一方スキャンは
+// ディスク上の何も変えず、スキャン対象のホストの方に紐づく。
+// 留め金として意味を持つのは、その対象だけだからだ。
 func addKnownHostsActions(registry actionRegistry, service *knownhosts.Service) {
 	fileEvidence := func(string) (string, error) { return service.Evidence() }
 	for _, kind := range []string{session.ActionKnownHostsDelete, session.ActionKnownHostsAdd} {
@@ -75,8 +75,8 @@ func knownHostsProblem(c *echo.Context, err error) error {
 	return problem(c, http.StatusInternalServerError, "known_hosts_failed")
 }
 
-// List returns the entries matching an optional query. It reads only, so it
-// needs no confirmation.
+// List はクエリに合致するエントリを返す。読むだけなので、
+// 確認は要らない。
 func (h KnownHostsHandlers) List(c *echo.Context) error {
 	query := c.Request().URL.Query().Get("query")
 	if len(query) > maxAliasLength {
@@ -106,7 +106,7 @@ func (h KnownHostsHandlers) List(c *echo.Context) error {
 	return c.JSON(http.StatusOK, response)
 }
 
-// Delete removes the confirmed entries through the transaction manager.
+// Delete はトランザクションマネージャ経由で確認済みのエントリを削除する。
 func (h KnownHostsHandlers) Delete(c *echo.Context) error {
 	var request api.KnownHostsDeleteRequest
 	if err := decodeJSON(c, &request); err != nil {
@@ -130,7 +130,7 @@ func (h KnownHostsHandlers) Delete(c *echo.Context) error {
 	return c.JSON(http.StatusOK, api.KnownHostsChangeResponse{Changed: true, TransactionId: result.ID})
 }
 
-// Scan asks ssh-keyscan for a host's keys. Every candidate is unverified.
+// Scan はホストの鍵を ssh-keyscan に尋ねる。候補はすべて未検証である。
 func (h KnownHostsHandlers) Scan(c *echo.Context) error {
 	var request api.KnownHostsScanRequest
 	if err := decodeJSON(c, &request); err != nil {
@@ -161,14 +161,14 @@ func (h KnownHostsHandlers) Scan(c *echo.Context) error {
 			KeyType:     candidate.KeyType,
 			Key:         candidate.Key,
 			Fingerprint: candidate.Fingerprint,
-			// Never anything but false: a scan cannot establish identity.
+			// 常に false 以外にはならない。スキャンは身元を証明できない。
 			Verified: candidate.Verified,
 		})
 	}
 	return c.JSON(http.StatusOK, response)
 }
 
-// Add writes one host key after it was proven or explicitly acknowledged.
+// Add は証明されたか明示的に了承された後、ホスト鍵を 1 つ書き込む。
 func (h KnownHostsHandlers) Add(c *echo.Context) error {
 	var request api.KnownHostsAddRequest
 	if err := decodeJSON(c, &request); err != nil {

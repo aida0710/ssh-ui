@@ -3,18 +3,18 @@ import { CheckboxField, Field, control, fieldLabel, hintText } from "../ui/form"
 import { Button, Card } from "../ui/surface";
 import { useTranslate } from "../i18n/context";
 
-// The three things about a group that exist only in metadata.json.
+// グループについての、metadata.json にのみ存在する三つのこと。
 //
-// The same division as the connection's: what a file records goes in the main
-// pane, what only this application knows goes here. Renaming a group moves
-// directories and rewrites Include lines; giving it a colour does not.
+// 接続と同じ区分である。ファイルが記録するものはメインペインへ、
+// このアプリケーションだけが知るものはここへ。グループの名前変更は
+// ディレクトリを移動し Include 行を書き換えるが、colour を与えることはしない。
 export function GroupInspector({
   group,
   members,
   onUpdate,
 }: {
   group: GroupMetadata;
-  // Its connections, which decide whether hiding is offered at all.
+  // その接続。hiding をそもそも提示するかどうかを決める。
   members: string[];
   onUpdate: (patch: Partial<GroupMetadata>) => void;
 }) {
@@ -30,9 +30,9 @@ export function GroupInspector({
           <input
             id={`group-colour-${group.name}`}
             type="color"
-            // A colour input has no empty state, so an unset colour shows a
-            // neutral swatch and clearing is its own act.
-            value={colour === "" ? "#8e8e93" /* palette-exempt: the native control's own neutral */ : colour}
+            // colour 入力欄には空の状態がないため、未設定の colour は
+            // 中立の見本を示し、クリア操作はそれ自体独立した行為である。
+            value={colour === "" ? "#8e8e93" /* palette-exempt: ネイティブコントロール自身の中立色 */ : colour}
             onChange={(event) => onUpdate({ colour: event.target.value })}
             className="h-8 w-14 rounded border border-control-line bg-control"
           />
@@ -54,10 +54,10 @@ export function GroupInspector({
         </Field>
 
         {/*
-          Hiding is for a group whose purpose is to hold other groups. One with
-          connections of its own would take them out of view with it, so the
-          control is refused there rather than left to set a flag that quietly
-          does nothing.
+          hiding は他のグループを保持することが目的のグループのための
+          ものである。自分自身の接続を持つグループではそれらも
+          一緒に見えなくなってしまうため、黙って何もしないフラグを
+          立てさせるのではなく、そこではコントロールを拒否する。
         */}
         <CheckboxField
           label={t("groups.hide", { name: group.name })}

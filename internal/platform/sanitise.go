@@ -2,16 +2,16 @@ package platform
 
 import "strings"
 
-// SanitiseHomePaths rewrites the user's home directory to "~" in text.
+// SanitiseHomePaths は、テキスト中のユーザーのホームディレクトリを "~" に書き換える。
 //
-// Verbose OpenSSH output names every file it read by absolute path, so the
-// captured stderr of a connection attempt would otherwise carry the account
-// name of the person running this application into a response body. The text
-// is still shown, because the user needs it to understand a failure; only the
-// part that identifies their account is removed.
+// 冗長な OpenSSH の出力は、読んだファイルをすべて絶対パスで名指しする。そのため、
+// 接続試行で取り込んだ stderr は、そうしなければ、このアプリケーションを動かして
+// いる人のアカウント名をレスポンス本文へ運んでしまう。テキスト自体は引き続き
+// 表示する。失敗を理解するためにユーザーが必要とするからだ。取り除くのは、
+// アカウントを特定する部分だけである。
 //
-// An empty or root home is ignored: rewriting "/" would mangle every absolute
-// path in the output without hiding anything.
+// ホームが空またはルートの場合は無視する。"/" を書き換えれば、何も隠さないまま
+// 出力中のあらゆる絶対パスを壊してしまう。
 func SanitiseHomePaths(text, home string) string {
 	cleaned := strings.TrimRight(home, "/")
 	if cleaned == "" {

@@ -141,7 +141,7 @@ func TestRestoreRefusesWhenItWouldHaveToGuess(t *testing.T) {
 		t.Fatalf("Trash error = %v", err)
 	}
 
-	// A different file now occupies the original path.
+	// いまはその元のパスを別のファイルが占めている。
 	if err := os.WriteFile(filepath.Join(root, "id_work"), []byte("something else\n"), 0o600); err != nil {
 		t.Fatalf("occupy the original path: %v", err)
 	}

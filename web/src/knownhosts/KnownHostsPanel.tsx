@@ -13,13 +13,13 @@ import { Notice } from "../ui/surface";
 
 type KnownHostsPanelProps = { api?: IntegrationsApi };
 
-// Deleting a host key is destructive and scanning one contacts a host, so both
-// are started deliberately: a deletion asks a second time before it is sent,
-// and a scanned key is presented as a candidate rather than as a fact.
+// ホスト鍵の削除は破壊的で、スキャンはホストに接続するので、
+// どちらも意図的に始める: 削除は送信前にもう一度尋ね、
+// スキャンした鍵は事実としてではなく候補として提示する。
 //
-// Adding a candidate is the only way a scanned key becomes trusted, and it
-// costs either a fingerprint the user obtained somewhere else or an explicit
-// acknowledgement that they are trusting a key nobody verified.
+// スキャンした鍵が信頼される唯一の方法は候補を追加することであり、
+// それにはユーザーが他所で入手したフィンガープリント、または誰も
+// 検証していない鍵を信頼するという明示的な了承のどちらかが要る。
 export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps) {
   const t = useTranslate();
   const [query, setQuery] = useState("");
@@ -86,9 +86,9 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
     }
   }
 
-  // The confirmation never inherits a proof or an acknowledgement. Both are
-  // dropped when it closes and again when it opens, so what the user gave for
-  // one key can never be spent on another.
+  // 確認は証拠や了承を決して引き継がない。どちらも閉じるときと
+  // 開くときの両方で捨てられるので、ある鍵のために与えたものが
+  // 別の鍵に使われることは決してない。
   function resetAdd() {
     setExpectedFingerprint("");
     setAcknowledged(false);
@@ -107,9 +107,9 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
   async function confirmAdd() {
     if (!adding) return;
     const typed = expectedFingerprint.trim();
-    // A typed fingerprint is a claim about this key. If it disagrees with the
-    // key that was scanned the user is looking at a different key than the one
-    // they were told about, which is shown rather than sent to the server.
+    // 入力されたフィンガープリントは、この鍵についての主張だ。もし
+    // スキャンされた鍵と食い違えば、ユーザーは説明された鍵とは別の鍵を
+    // 見ていることになる。それはサーバーに送るのではなく画面に表示する。
     if (typed !== "" && typed !== adding.fingerprint) {
       setError(t("kh.fingerprintMismatch", { typed, scanned: adding.fingerprint }));
       return;
@@ -151,11 +151,11 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
       ) : null}
 
       {/*
-        Scanning is what a user comes here to do; reading the file is how they
-        check the result. The control sat below the whole listing, so reaching
-        it meant scrolling past every host already known. Its results travel
-        with it: leaving them behind would have put the candidate list below the
-        file the user was scanning in order to add to.
+        スキャンはユーザーがここに来て行うことであり、ファイルを読むのは
+        結果を確認する方法だ。コントロールは一覧全体の下にあったので、
+        そこに到達するには既知のホストすべてを越えてスクロールする必要があった。
+        結果はそれと共に移動する: 元の位置に残していたら、候補リストは
+        ユーザーが追加しようとスキャンしているファイルより下に置かれてしまっていた。
       */}
       <div className="flex flex-wrap items-end gap-2">
         <Field label={t("kh.hostToScan")}>
@@ -180,9 +180,9 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
                 <td className="pr-3">{candidate.host}</td>
                 <td className="pr-3 text-ink-muted">{candidate.keyType}</td>
                 <td className="pr-3 text-ink-muted">{candidate.fingerprint}</td>
-                {/* A scan cannot establish identity, so the label describes how
-                    the key was obtained and never repeats a claim of the
-                    response. */}
+                {/* スキャンでは identity を確立できないので、ラベルは鍵をどう
+                    取得したかを説明し、応答の
+                    主張を繰り返すことは決してない。 */}
                 <td className="pr-3 text-notice-ink">{t("kh.unverified")}</td>
                 <td>
                   <button

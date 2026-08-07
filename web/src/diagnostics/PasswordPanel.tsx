@@ -13,21 +13,21 @@ import { Notice } from "../ui/surface";
 
 type PasswordPanelProps = {
   api?: IntegrationsApi;
-  // The host this panel stores a password for. The panel is only rendered
-  // inside a host editor, so there is always one.
+  // このパネルがパスワードを保存する対象のホスト。パネルはホストエディタの
+  // 内側でしかレンダリングされないため、常に一つ存在する。
   alias: string;
 };
 
-// The stored-password panel.
+// 保存済みパスワードのパネル。
 //
-// Three things are true at once here and the panel has to say all of them: the
-// vault may not exist, it may exist and be locked, and this host may or may not
-// have a password in it. Collapsing those into one state would produce the
-// classic "it says nothing is saved, but something is" confusion, because a
-// locked vault genuinely cannot tell.
-// The codes the server reports, mapped to what they mean for this host. An
-// unknown code is shown as itself rather than swallowed: a rule added on the
-// server and not here should be visible, not invisible.
+// ここでは三つのことが同時に真であり得て、パネルはそのすべてを
+// 述べなければならない。vault は存在しないかもしれず、存在して
+// ロックされているかもしれず、このホストにはパスワードがあるかもしれないし、
+// ないかもしれない。それらを一つの状態に潰せば、「何も保存されていないと言うが、
+// 実は何かある」という典型的な混乱を生む。ロックされた vault は本当に分からないからである。
+// サーバーが報告するコードを、このホストにとっての意味へ対応付ける。
+// 未知のコードは飲み込まずそのまま表示する。サーバーには追加された
+// がここにはない規則は、見えなくなるのではなく見える必要がある。
 const eligibilityKeys: Record<string, MessageKey> = {
   password_authentication_off: "password.blocker.authenticationOff",
   alias_not_simple: "password.blocker.aliasNotSimple",
@@ -55,8 +55,8 @@ export function PasswordPanel({ api = integrationsApi, alias }: PasswordPanelPro
     try {
       const vault = await api.passwordVault();
       setStatus(vault);
-      // A shut vault is not asked for its names. Nothing is asked at startup
-      // either: this panel asks for itself, when the host it belongs to is open.
+      // 閉じた vault には名前を尋ねない。起動時にも何も尋ねない。
+      // このパネルは自分が属するホストが開かれたとき、自分自身で尋ねる。
       setCredentials(vault.unlocked ? (await api.credentials()).credentials : []);
     } catch {
       setError(t("password.statusFailed"));
@@ -67,10 +67,10 @@ export function PasswordPanel({ api = integrationsApi, alias }: PasswordPanelPro
     void reload();
   }, [reload]);
 
-  // What stands between this host and a stored password is read from the
-  // configuration and known_hosts. The panel used to state the host-key
-  // precondition as prose under the field and check nothing, which is a
-  // sentence the user has to verify by hand for every host.
+  // このホストと保存されたパスワードの間に何があるかは、設定
+  // と known_hosts から読み取る。パネルは以前、ホスト鍵の事前条件
+  // をフィールドの下の散文として述べるだけで何も検査しておらず、ユーザーが
+  // すべてのホストについて手で確認しなければならない一文だった。
   useEffect(() => {
     let active = true;
     setEligibility(null);
@@ -80,8 +80,8 @@ export function PasswordPanel({ api = integrationsApi, alias }: PasswordPanelPro
         if (active) setEligibility(report);
       })
       .catch(() => {
-        // A panel that cannot read the configuration says nothing about it
-        // rather than claiming the host is fine.
+        // 設定を読めないパネルは、ホストが問題ないと主張するの
+        // ではなく、それについて何も言わない。
         if (active) setEligibility(null);
       });
     return () => {
@@ -89,9 +89,9 @@ export function PasswordPanel({ api = integrationsApi, alias }: PasswordPanelPro
     };
   }, [api, alias]);
 
-  // Every typed secret is dropped when the host changes. A passphrase left in
-  // a field while the user navigates is a secret sitting in the DOM for no
-  // reason.
+  // 入力されたすべての秘密は、ホストが変わると破棄される。ユーザーが
+  // 移動する間フィールドに残されたパスフレーズは、理由もなく DOM 内に
+  // 座っている秘密である。
   useEffect(() => {
     setPassphrase("");
     setPassword("");
@@ -99,11 +99,11 @@ export function PasswordPanel({ api = integrationsApi, alias }: PasswordPanelPro
     setError("");
   }, [alias]);
 
-  // The vault status and the names are two documents, and an action on one of
-  // them changes the other: storing a password adds a name, pointing a host at
-  // a name adds a subject. So each action keeps the answer it was given and
-  // fetches the other half, rather than re-reading both and contradicting the
-  // answer it just got.
+  // vault のステータスと名前は二つのドキュメントであり、片方への操作が
+  // もう片方を変える。パスワードを保存すれば名前が増え、ホストを
+  // 名前へ向ければ対象が増える。そのため各操作は、両方を
+  // 読み直して今得たばかりの答えと矛盾するのではなく、与えられた
+  // 答えを保ちながらもう半分だけを取得する。
   async function run(operation: () => Promise<PasswordVaultStatus>, failure: string) {
     setError("");
     setBusy(true);
@@ -139,9 +139,9 @@ export function PasswordPanel({ api = integrationsApi, alias }: PasswordPanelPro
 
   const stored = status.aliases.includes(alias);
   const minimum = status.minPassphraseLength ?? 12;
-  // Account passwords only. A picker that offered a key's passphrase would let
-  // one press send that passphrase to a remote host as a login password, which
-  // is the reason the two namespaces are two namespaces.
+  // アカウントパスワードのみ。鍵のパスフレーズを提示するピッカーでは、
+  // 一度の押下でそのパスフレーズをリモートホストへログインパスワードとして
+  // 送ってしまう。それこそが、二つの名前空間が二つに分かれている理由である。
   const sharable = credentials.filter((credential) => credential.kind === "password");
   const uses = sharable.find((credential) => credential.uses.includes(alias));
   const blocked = (eligibility?.blockers ?? []).length > 0;
@@ -150,9 +150,9 @@ export function PasswordPanel({ api = integrationsApi, alias }: PasswordPanelPro
     <section aria-label={t("password.heading")} className={sectionCard}>
       <h3 className={sectionHeading}>{t("password.heading")}</h3>
       {/*
-        The sentence that must not be a tooltip. A stored password is the
-        remote account's credential, and a key is stronger; someone deciding
-        whether to use this should read that before the field, not after.
+        ツールチップにしてはならない一文。保存されたパスワードはリモート
+        アカウントの資格情報であり、鍵の方が強い。これを使うか
+        どうかを決める者は、フィールドの後ではなく前にそれを読むべきである。
       */}
       <p className={hintText}>{t("password.warning")}</p>
       {error === "" ? null : <Notice tone="danger">{error}</Notice>}
@@ -180,8 +180,9 @@ export function PasswordPanel({ api = integrationsApi, alias }: PasswordPanelPro
       ) : !status.unlocked ? (
         <>
           {/*
-            A locked vault cannot say whether this host has a password. Saying
-            "none stored" here would be a guess, and a wrong one half the time.
+            ロックされた vault は、このホストにパスワードがあるかどうかを
+            言えない。ここで「none stored」と言えば推測になり、
+            半分は外れる推測になる。
           */}
           <p className="text-sm text-ink-muted">{t("password.locked")}</p>
           <Field label={t("password.passphrase")}>
@@ -205,10 +206,11 @@ export function PasswordPanel({ api = integrationsApi, alias }: PasswordPanelPro
         <>
           <p className="text-sm text-ink-muted">{t("password.stored", { alias })}</p>
           {/*
-            Which name, when it is not this host's own. A shared secret is the
-            reason names exist, and someone about to forget it here should know
-            whether they are removing one host's password or their own reference
-            to a password several hosts use.
+            自分自身のホストのものでない場合、どの名前か。共有された
+            秘密こそが名前の存在理由であり、ここでそれを忘れようと
+            している者は、一つのホストのパスワードを削除しているのか、
+            複数のホストが使うパスワードへの自分自身の参照を削除
+            しているのかを知っておくべきである。
           */}
           {uses === undefined || uses.name === alias ? null : (
             <p className={hintText}>{t("password.usesName", { name: uses.name })}</p>
@@ -259,8 +261,8 @@ export function PasswordPanel({ api = integrationsApi, alias }: PasswordPanelPro
             </ul>
           )}
           {/*
-            An existing name first, because the second field makes a new secret
-            and the first makes this host share one that already exists.
+            既存の名前をまず示す。二つ目のフィールドは新しい秘密を作り、
+            一つ目はこのホストに既存の秘密を共有させるからである。
           */}
           {sharable.length === 0 ? null : (
             <div className="flex flex-wrap items-end gap-3">

@@ -6,14 +6,14 @@ import (
 	"sshc/internal/config"
 )
 
-// How confidently a source can be explained.
+// 出所をどれだけ確信をもって説明できるか。
 const (
 	SourceExact    = "exact"
 	SourceWildcard = "wildcard"
 	SourceGlobal   = "global"
 )
 
-// Why a projection cannot be shown as one tidy inheritance chain.
+// 射影を、ひとつの整った継承の連鎖として示せない理由。
 const (
 	ComplexityWildcardPattern   = "wildcard_pattern"
 	ComplexityNegatedPattern    = "negated_pattern"
@@ -25,9 +25,9 @@ const (
 	ComplexityJumpDepth         = "jump_depth_exceeded"
 )
 
-// Source is one place a value came from. Winner marks the value OpenSSH keeps,
-// because the first value read wins; the others are listed so a reader can see
-// what is being shadowed.
+// Source は、値の出どころひとつ。Winner は OpenSSH が採用する値を示す。最初に
+// 読まれた値が勝つからだ。他のものも列挙するのは、何が影に隠れているかを読み手が
+// 見られるようにするためである。
 type Source struct {
 	Keyword   string
 	Value     string
@@ -38,9 +38,9 @@ type Source struct {
 	Winner    bool
 }
 
-// Complexity records a reason the engine refuses to present its projection as
-// the whole truth. The UI shows these as complex external rules and defers to
-// `ssh -G` for the authoritative value.
+// Complexity は、エンジンが自身の射影を全体の真実として提示することを拒む理由を
+// 記録する。UI はこれらを複雑な外部ルールとして示し、権威ある値については
+// `ssh -G` に委ねる。
 type Complexity struct {
 	Code      string
 	Path      string
@@ -49,17 +49,17 @@ type Complexity struct {
 	Detail    string
 }
 
-// Projection is the engine's own reading of the configuration for one alias.
+// Projection は、ひとつの alias に対するエンジン自身の設定の読み。
 type Projection struct {
 	Alias        string
 	Sources      []Source
 	Complexities []Complexity
 }
 
-// Simple reports whether every value could be attributed without a caveat.
+// Simple は、すべての値が但し書きなしに帰属できたかを報告する。
 func (p Projection) Simple() bool { return len(p.Complexities) == 0 }
 
-// Value returns the winning source for keyword.
+// Value は、keyword について勝った出所を返す。
 func (p Projection) Value(keyword string) (Source, bool) {
 	wanted := strings.ToLower(keyword)
 	for _, source := range p.Sources {
@@ -70,21 +70,21 @@ func (p Projection) Value(keyword string) (Source, bool) {
 	return Source{}, false
 }
 
-// Project walks the configuration in load order and attributes each keyword to
-// the first block that set it, which is what OpenSSH does.
+// Project は設定を読み込み順に走査し、各キーワードを、それを最初に設定した
+// ブロックへ帰属させる。これは OpenSSH がしていることである。
 //
-// Load order is not file order. OpenSSH reads an Include at the point the line
-// sits, so a block written below an Include is read after the whole of the
-// included file — and first value wins, so the included file beats it. Walking
-// the graph file by file would put every block of the entry file ahead of every
-// included one, which reverses exactly the case the generated group region
-// depends on: the Includes sit above the user's catch-all so a group's value
-// beats the default, and file-order attribution would report the default.
+// 読み込み順はファイル順ではない。OpenSSH は Include をその行のある位置で読むので、
+// Include より下に書かれたブロックは、include されたファイル全体のあとで読まれる —
+// そして最初の値が勝つので、include されたファイルの方が勝つ。ファイル単位でグラフ
+// を走査すると、エントリファイルのすべてのブロックが include された側のすべてより
+// 前に来てしまい、生成されたグループのリージョンが依存しているまさにその場合を
+// 逆転させる。Include はユーザーの catch-all の上に置かれ、グループの値が既定に
+// 勝つようになっているのに、ファイル順の帰属は既定を報告してしまう。
 //
-// Match blocks never contribute a value: their criteria depend on state that
-// only exists while connecting. A Match block anywhere in the graph is instead
-// recorded as a complexity, because it can also shadow a value this projection
-// attributes to a later Host block.
+// Match ブロックが値を寄与することは決してない。その条件は、接続中にしか存在しない
+// 状態に依存するからである。代わりに、グラフのどこかにある Match ブロックは
+// complexity として記録される。それは、この射影があとの Host ブロックへ帰属させた
+// 値を、影に隠すこともできるからだ。
 func Project(graph *config.Graph, alias string) Projection {
 	projection := Projection{Alias: alias}
 	if graph == nil {
@@ -177,12 +177,12 @@ func Project(graph *config.Graph, alias string) Projection {
 	return projection
 }
 
-// walkLoadOrder visits one file's blocks and directives in the order OpenSSH
-// reads them, descending into each Include where its line sits.
+// walkLoadOrder は、ひとつのファイルのブロックとディレクティブを OpenSSH が読む
+// 順に訪れ、各 Include をその行のある位置で降りていく。
 //
-// chain stops a cycle. A file included twice is walked twice, which is what
-// OpenSSH does; the second read contributes nothing because the first value has
-// already been claimed.
+// chain は循環を止める。二度 include されたファイルは二度走査される。OpenSSH が
+// そうするからだ。二度目の読みは何も寄与しない。最初の値がすでに取られているから
+// である。
 func walkLoadOrder(
 	graph *config.Graph,
 	filePath string,
@@ -224,7 +224,7 @@ func walkLoadOrder(
 	}
 }
 
-// blockApplies reports whether a block governs alias and how it matched.
+// blockApplies は、ブロックが alias を支配するか、そしてどう一致したかを報告する。
 func blockApplies(block config.Block, alias string) (kind string, applies bool) {
 	switch block.Kind {
 	case config.BlockGlobal:
@@ -249,9 +249,9 @@ func blockApplies(block config.Block, alias string) (kind string, applies bool) 
 	return "", false
 }
 
-// MatchPattern implements OpenSSH's match_pattern: '*' matches any sequence,
-// '?' matches exactly one character, comparison is case-insensitive, and no
-// other metacharacter is special.
+// MatchPattern は OpenSSH の match_pattern を実装する。'*' は任意の並びに、'?' は
+// ちょうど 1 文字に一致し、比較は大文字小文字を区別せず、他のメタ文字に特別な意味は
+// ない。
 func MatchPattern(pattern, value string) bool {
 	loweredPattern := strings.ToLower(pattern)
 	loweredValue := strings.ToLower(value)

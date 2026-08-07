@@ -14,29 +14,29 @@ import (
 )
 
 var (
-	// ErrGroupExists refuses a rename onto a group that already exists, because
-	// merging two sets of settings is a decision this application will not make.
+	// ErrGroupExists は、既に存在するグループへの名前変更を拒否する。
+	// 2 組の設定をマージすることは、このアプリケーションが下さない決定だからだ。
 	ErrGroupExists = errors.New("a group of that name already exists")
-	// ErrGroupSelfNesting refuses moving a group inside itself.
+	// ErrGroupSelfNesting は、グループを自分自身の中へ移動することを拒否する。
 	ErrGroupSelfNesting = errors.New("a group cannot be nested inside itself")
 )
 
-// NoticeGroupDirectoryLeftover names a directory a rename could not remove.
+// NoticeGroupDirectoryLeftover は、名前変更が削除できなかったディレクトリを名指しする。
 //
-// storage.Move moves files. Renaming the directory itself would need a journal
-// action with a precondition for a thing that has no digest and a rollback
-// story to match, which is a storage-layer design decision and not a group
-// feature. So a rename is N file moves and the empty source directory stays,
-// exactly as a restore from the trash already leaves its entry directory.
+// storage.Move はファイルを移動する。ディレクトリ自体の名前変更には、ダイジェストを持た
+// ないものに対する事前条件と、それに見合う巻き戻しの仕組みを持つジャーナルアクションが
+// 必要になる。これはグループの機能ではなく、ストレージ層の設計上の決定である。だから
+// 名前変更は N 回のファイル移動であり、空になった元のディレクトリはそのまま残る。
+// ちょうど、ごみ箱からの復元が既にそのエントリディレクトリを残しているのと同じだ。
 const NoticeGroupDirectoryLeftover = "group_directory_leftover"
 
-// RenameGroup renames a group and everything that names it, in one journalled
-// transaction: every connection file under connections/<old>, every key under
-// keys/<old>, every IdentityFile that pointed into that key directory, the
-// generated Include region, the compiled settings file and metadata.json.
+// RenameGroup は、グループとそれを名指しするすべてのものを 1 つのジャーナル済み
+// トランザクションで名前変更する: connections/<old> 配下のすべての connection ファイル、
+// keys/<old> 配下のすべての鍵、その鍵ディレクトリを指していたすべての IdentityFile、
+// 生成された Include region、コンパイル済み settings ファイル、metadata.json である。
 //
-// Nested groups travel with their parent, because a group name is a directory
-// path and renaming the parent directory renames the child's too.
+// ネストしたグループはその親と共に移動する。グループ名は
+// ディレクトリパスであり、親ディレクトリの名前変更は子の名前も変えるからだ。
 func (s *Service) RenameGroup(inventory *keys.Inventory, from, to string) (SaveResult, error) {
 	s.saveMutex.Lock()
 	defer s.saveMutex.Unlock()
@@ -45,12 +45,12 @@ func (s *Service) RenameGroup(inventory *keys.Inventory, from, to string) (SaveR
 	})
 }
 
-// DeleteGroup removes a group's declaration and relocates its connections into
-// another group, or to the workspace root when destination is empty.
+// DeleteGroup は、グループの宣言を削除し、その connections を
+// 別のグループへ、destination が空ならワークスペースのルートへ再配置する。
 //
-// No configuration file is ever deleted. The trash is for keys; there is no
-// configuration trash, and inventing one as a side effect of removing a group
-// would be the worst possible place to introduce it.
+// 設定ファイルが削除されることは決してない。ごみ箱は鍵のため
+// にあり、設定用のごみ箱は存在しない。グループを削除する
+// 副作用としてそれを新設するのは、導入するにはこれ以上ないほど悪い場所だろう。
 func (s *Service) DeleteGroup(inventory *keys.Inventory, name, destination string) (SaveResult, error) {
 	s.saveMutex.Lock()
 	defer s.saveMutex.Unlock()
@@ -59,7 +59,7 @@ func (s *Service) DeleteGroup(inventory *keys.Inventory, name, destination strin
 	})
 }
 
-// commitGroupPlan runs one group plan through the same commit path a save uses.
+// commitGroupPlan は、1 つのグループプランを保存と同じコミット経路に通す。
 func (s *Service) commitGroupPlan(plan func(*config.Graph) (planned, error)) (SaveResult, error) {
 	graph, err := s.resolve()
 	if err != nil {
@@ -100,7 +100,7 @@ func (s *Service) commitGroupPlan(plan func(*config.Graph) (planned, error)) (Sa
 	return SaveResult{TransactionID: result.ID, Written: written, Preview: prepared.preview}, nil
 }
 
-// groupRelocation is one file a group operation moves.
+// groupRelocation は、グループ操作が移動する 1 つのファイルである。
 type groupRelocation struct {
 	from string
 	to   string
@@ -127,12 +127,12 @@ func (s *Service) planGroupRename(graph *config.Graph, inventory *keys.Inventory
 		case name == from:
 			renamed[name] = to
 		case strings.HasPrefix(name, from+"/"):
-			// A nested group's name contains its parent's, so renaming the
-			// parent renames it too. Leaving it behind would strand its files.
+			// ネストしたグループの名前は親の名前を含むので、親の名前
+			// 変更はそれも変える。置き去りにすればそのファイルが取り残されてしまう。
 			renamed[name] = to + strings.TrimPrefix(name, from)
 		case name == to || strings.HasPrefix(name, to+"/"):
-			// Merging two sets of settings is a decision with no obviously
-			// right answer, so it is refused rather than guessed.
+			// 2 組の設定をマージすることには明らかに正しい答えがない
+			// 決定なので、推測するのではなく拒否する。
 			return planned{}, ErrGroupExists
 		}
 	}
@@ -189,9 +189,9 @@ func (s *Service) planGroupDelete(graph *config.Graph, inventory *keys.Inventory
 		}
 	}
 
-	// Every file in the group and its descendants moves to one destination:
-	// flattening is what "this group is gone" means, and it is stated in the
-	// preview rather than being a surprise.
+	// グループとその子孫のすべてのファイルは 1 つの destination へ
+	// 移動する: 平坦化することが「このグループは無くなる」という
+	// ことの意味であり、驚きではなくプレビューで明言される。
 	moved := make(map[string]string, len(removed))
 	for candidate := range removed {
 		moved[candidate] = destination
@@ -199,11 +199,11 @@ func (s *Service) planGroupDelete(graph *config.Graph, inventory *keys.Inventory
 	return s.planGroupLayout(graph, inventory, "config.group_delete", moved, next, true)
 }
 
-// planGroupLayout builds the one transaction a group rename or delete needs.
+// planGroupLayout は、グループの名前変更や削除に必要な 1 つのトランザクションを構築する。
 //
-// renamed maps each affected group name to the group its files move into; an
-// empty destination means the workspace root. next is the group set the region
-// must declare afterwards.
+// renamed は、影響を受ける各グループ名を、そのファイルの
+// 移動先グループへ対応付ける。空の destination はワークスペースの
+// ルートを意味する。next は、region がその後に宣言すべきグループ集合である。
 func (s *Service) planGroupLayout(
 	graph *config.Graph,
 	inventory *keys.Inventory,
@@ -260,15 +260,15 @@ func (s *Service) planGroupLayout(
 		prepared.directories = append(prepared.directories, directory)
 	}
 	for _, relocation := range connectionMoves {
-		// Every alias declared in the file changes path, so its metadata entry
-		// changes identity. Doing it in this transaction is what stops the
-		// entry becoming an orphan the user has to re-associate by hand.
+		// ファイルで宣言されたすべての alias はパスが変わるので、
+		// その metadata エントリも identity が変わる。これを同じトランザクションで
+		// 行うことが、エントリがユーザーの手作業での再関連付けを要する孤児になるのを防ぐ。
 		updated = RelocateHostIdentities(updated, relocation.from, relocation.to)
 	}
 	updated.Groups = renameGroupMetadata(updated.Groups, renamed, discardPresentation)
 
-	// A key that moves is a key whose IdentityFile lines have to follow, and
-	// that is the same rewrite a key relocation performs.
+	// 移動する鍵は、IdentityFile 行が追従しなければならない鍵で
+	// あり、それは鍵の relocation が行うのと同じ書き換えである。
 	keyRelocations := make([]keyRelocation, 0, len(keyMoves))
 	members := make([]keys.Item, 0, len(keyMoves))
 	for _, relocation := range keyMoves {
@@ -280,8 +280,8 @@ func (s *Service) planGroupLayout(
 		keyRelocations = append(keyRelocations, keyRelocation{from: relocation.from, to: relocation.to})
 	}
 	if blockers := s.keyRelocationBlockers(graph, inventory, members, keyRelocations, "", false); len(blockers) > 0 {
-		// A rename that would half-apply is refused entirely: the same rule a
-		// key relocation applies, because it is the same rewrite.
+		// 半端にしか適用できない名前変更は丸ごと拒否される: 鍵の
+		// relocation が適用するのと同じ規則である。同じ書き換えだからだ。
 		return planned{}, &GroupBlockedError{Blockers: blockers}
 	}
 	changes, _, err := s.rewriteKeyReferences(members, keyRelocations)
@@ -323,8 +323,8 @@ func (s *Service) planGroupLayout(
 	prepared.preview.Diffs = append(prepared.preview.Diffs,
 		BuildFileDiff(entryFileName, diskOrNil(entryContents, entryExists), entryUpdated))
 
-	// The settings file names the group in a comment and lists its members, so
-	// it is regenerated from the layout this transaction produces.
+	// settings ファイルはコメントでグループを名指しし、メンバーを
+	// 列挙するので、このトランザクションが生む layout から再生成される。
 	pending := map[string][]byte{filepath.Clean(s.entryPath): entryUpdated}
 	gone := map[string]bool{}
 	for _, move := range prepared.moves {
@@ -378,10 +378,10 @@ func (s *Service) planGroupLayout(
 	prepared.preview.Diffs = append(prepared.preview.Diffs,
 		BuildFileDiff(s.displayPath(metadataChange.Path), previousMetadata, metadataChange.Contents))
 
-	// The directories this operation empties go with it, deepest first, in the
-	// same transaction. One that still holds something is left alone and said
-	// out loud: the files in a group move with it, but a directory nothing
-	// declares does not, because nothing knows where it should end up.
+	// この操作が空にするディレクトリは、深い方から順に同じトランザクションで一緒に削除される。
+	// 何かを保持したままのディレクトリはそのまま残され、明言される:
+	// グループのファイルはグループと共に移動するが、何にも宣言されていない
+	// ディレクトリは移動しない。どこへ行くべきか誰も知らないからだ。
 	sources := make([]string, 0, len(renamed)*2)
 	for name := range renamed {
 		sources = append(sources, GroupDirectory(name), GroupKeyDirectory(name))
@@ -401,11 +401,11 @@ func (s *Service) planGroupLayout(
 			Code: NoticeGroupDirectoryLeftover, Detail: name, Path: directory,
 		})
 	}
-	// A delete with no destination lands its connections directly under
-	// connections/, which no Include names. That is the operation working as
-	// designed, and it is also a connection leaving the configuration, so it is
-	// said here — before the save — rather than being left for the user to
-	// notice when something stops resolving.
+	// destination のない削除は、その connections をどの Include も
+	// 名指ししない connections/ の直下に置く。それは設計どおりに
+	// 動作しているということであり、同時に connection が設定から
+	// 外れるということでもある。だからそれは保存の前、ここで
+	// 述べられる。何かが解決しなくなってからユーザーが気づくのに任せるのではなく。
 	for _, relocation := range connectionMoves {
 		if _, inGroup := GroupOfPath(relocation.to); inGroup {
 			continue
@@ -417,17 +417,17 @@ func (s *Service) planGroupLayout(
 	return prepared, nil
 }
 
-// GroupBlockedError reports the reasons a group operation refused. It carries
-// the same blocker codes a key relocation produces, because it is the same
-// rewrite that would have had to happen.
+// GroupBlockedError は、グループ操作が拒否した理由を報告する。
+// 鍵の relocation が生むのと同じ blocker コードを運ぶ。
+// 起こるはずだった書き換えが同じものだからだ。
 type GroupBlockedError struct {
 	Blockers []string
 }
 
 func (e *GroupBlockedError) Error() string { return "group operation blocked" }
 
-// groupFileMoves lists every file below one of the affected group directories
-// and where it goes.
+// groupFileMoves は、影響を受けるグループディレクトリの
+// いずれかの下にあるすべてのファイルと、その移動先を列挙する。
 func (s *Service) groupFileMoves(renamed map[string]string, root string, directoryOf func(string) string) ([]groupRelocation, error) {
 	names := make([]string, 0, len(renamed))
 	for name := range renamed {
@@ -449,21 +449,21 @@ func (s *Service) groupFileMoves(renamed map[string]string, root string, directo
 		destination := renamed[name]
 		for _, entry := range entries {
 			if entry.IsDir() {
-				// A nested group is a separate entry in renamed with its own
-				// destination, so its files are not moved twice from here.
+				// ネストしたグループは renamed の中で独自の destination を
+				// 持つ別のエントリなので、ここからそのファイルが二重に移動されることはない。
 				continue
 			}
-			// With no destination the file lands directly under its own tree —
-			// connections/ or keys/ — rather than in a group. For a connection
-			// that means nothing reads it, which the preview now says outright.
-			// For a key it means nothing has changed except its directory.
+			// destination がない場合、ファイルはグループの中ではなく
+			// 自身のツリーの直下 — connections/ または keys/ — に置かれる。
+			// connection にとってそれは何にも読まれないことを意味し、プレビューは今やそれを
+			// はっきり述べる。鍵にとってはディレクトリ以外は何も変わらないことを意味する。
 			//
-			// Both roots are treated the same on purpose. Aiming a key at the
-			// workspace root instead, as this did, gave it the directory ".",
-			// which AbsolutePath refuses because it is the root; the whole
-			// delete then failed with "path is outside the ssh directory", and
-			// a group holding a key could not be deleted at all without naming
-			// somewhere else to put it.
+			// 両方のルートは意図的に同じに扱う。以前はこれが行っていた
+			// ように鍵をワークスペースのルートへ向けると、ディレクトリが
+			// "." になり、AbsolutePath はそれをルートだからという理由で
+			// 拒否していた。削除全体は "path is outside the ssh directory" で
+			// 失敗し、鍵を保持するグループは、置き先を別に名指ししない限り
+			// 一切削除できなかった。
 			target := root + "/" + entry.Name()
 			if destination != "" {
 				target = directoryOf(destination) + "/" + entry.Name()
@@ -474,13 +474,13 @@ func (s *Service) groupFileMoves(renamed map[string]string, root string, directo
 	return moves, nil
 }
 
-// renameGroupMetadata rewrites the presentation entries a group operation
-// affects.
+// renameGroupMetadata は、グループ操作が影響するプレゼンテーション
+// エントリを書き換える。
 //
-// A rename carries the colour, note and settings to the new name, because it is
-// the same group under another name. A delete discards them: the destination is
-// a different group with presentation of its own, and silently repainting it in
-// the deleted group's colour would be a change nobody asked for.
+// 名前変更は色、note、settings を新しい名前へ運ぶ。別名の下の
+// 同じグループだからだ。削除はそれらを破棄する: destination は
+// 独自のプレゼンテーションを持つ別のグループであり、削除された
+// グループの色で黙って塗り直すのは、誰も求めていない変更になってしまう。
 func renameGroupMetadata(groups []GroupMetadata, renamed map[string]string, discard bool) []GroupMetadata {
 	updated := make([]GroupMetadata, 0, len(groups))
 	for _, group := range groups {
@@ -506,26 +506,26 @@ func groupOrder(metadata Metadata) map[string]int {
 	return order
 }
 
-// resolveOverlay resolves the graph against a filesystem that has already had
-// this transaction applied.
+// resolveOverlay は、このトランザクションを既に適用したファイル
+// システムに対してグラフを解決する。
 func (s *Service) resolveOverlay(pending map[string][]byte, gone map[string]bool) (*config.Graph, error) {
 	resolver := s.resolver
 	resolver.Loader = overlayLoader{base: s.resolver.Loader, pending: pending, gone: gone}
 	return resolver.Resolve(s.entryPath)
 }
 
-// emptiedDirectories works out which of these directories this transaction
-// leaves empty, and which still hold something.
+// emptiedDirectories は、このトランザクションがこれらの
+// ディレクトリのうちどれを空にし、どれがまだ何かを保持しているかを割り出す。
 //
-// Removable ones come back deepest first, which is the order the journal
-// applies them in and the only order that can work: a parent is empty only once
-// its children are gone. A directory that is not there at all is neither.
+// 削除可能なものは深い順に返る。それはジャーナルが適用する
+// 順序であり、機能しうる唯一の順序である: 親は子がすべて
+// 無くなって初めて空になる。そもそも存在しないディレクトリはどちらでもない。
 func (s *Service) emptiedDirectories(sources []string, moving map[string]bool) (removable, left []string, err error) {
 	root := s.workspace.Root()
-	// Only the directories this operation is vacating are candidates. A
-	// subdirectory nobody declared is not one, even when it happens to be
-	// empty: it is not this operation's to remove, and it keeps the group
-	// directory above it alive.
+	// 候補となるのは、この操作が明け渡そうとしているディレクトリ
+	// だけである。誰も宣言していないサブディレクトリは、たとえ
+	// たまたま空であっても候補ではない。それはこの操作が削除する
+	// ものではなく、その上のグループディレクトリを生かし続ける。
 	ours := map[string]bool{}
 	for _, source := range sources {
 		ours[source] = true
@@ -545,7 +545,7 @@ func (s *Service) emptiedDirectories(sources []string, moving map[string]bool) (
 		for _, entry := range entries {
 			child := relative + "/" + entry.Name()
 			if !entry.IsDir() {
-				// A file this transaction is not moving keeps the directory.
+				// このトランザクションが移動させないファイルは、ディレクトリを存続させる。
 				if !moving[child] {
 					empties = false
 				}
@@ -568,7 +568,7 @@ func (s *Service) emptiedDirectories(sources []string, moving map[string]bool) (
 		}
 		if !seen[relative] {
 			seen[relative] = true
-			// Deepest first: this runs after its children have been appended.
+			// 深い順から: これは子が追加され終えた後に実行される。
 			removable = append(removable, relative)
 		}
 		return true, nil

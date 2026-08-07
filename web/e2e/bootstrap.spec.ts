@@ -11,8 +11,8 @@ test("exchanges the fragment for a session and removes it from the address bar",
   await expect(sessionStatus(page)).toContainText("Local session active");
 
   expect(await page.evaluate(() => window.location.hash)).toBe("");
-  // HttpOnly is what makes this empty. A cookie readable from script would be
-  // readable by anything that got a foothold in the page.
+  // これが空になるのは HttpOnly のおかげだ。スクリプトから
+  // 読める cookie は、ページに足がかりを得た何にでも読めてしまう。
   expect(await page.evaluate(() => document.cookie)).toBe("");
 
   const cookies = await context.cookies();
@@ -30,8 +30,8 @@ test("refuses a replayed bootstrap fragment in a fresh browser context", async (
   const first = await browser.newContext();
   const firstPage = await first.newPage();
   await firstPage.goto(installation.url);
-  // Reaching the front door is what proves the session was established: the
-  // vault status is read through a route that still requires one.
+  // フロントドアに到達できることが、セッションが確立された
+  // 証拠だ。vault 状態は、セッションを依然として要求するルート経由で読み取られる。
   await expect(firstPage.getByLabel("Master password", { exact: true })).toBeVisible();
   await first.close();
 
@@ -67,10 +67,10 @@ test("enforces the content security policy in the browser, not only in the heade
       "form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; require-trusted-types-for 'script'",
   );
 
-  // An inline script must not run. Appending a script element with textContent
-  // injects one, and there are now two things in the way: require-trusted-types
-  // refuses the assignment itself, and script-src 'self' would refuse to run
-  // the result. Either is a pass; what must not happen is the script running.
+  // インラインスクリプトは実行されてはならない。textContent 付きの
+  // script 要素を追加すればそれを注入することになるが、今や 2 つの壁がある。
+  // require-trusted-types が代入自体を拒否し、script-src 'self' が結果
+  // の実行を拒否する。どちらでも合格であり、起きてはならないのはスクリ
   const inlineRan = await page.evaluate(async () => {
     const marker = "__sshc_inline_marker";
     try {
@@ -78,7 +78,7 @@ test("enforces the content security policy in the browser, not only in the heade
       element.textContent = `window.${marker} = true;`;
       document.head.appendChild(element);
     } catch {
-      // Refused before it was even a script element with content in it.
+      // プトの実行だ。内容を持つ script 要素になる前に、既に拒否されている。
       return false;
     }
     await new Promise((done) => setTimeout(done, 100));
@@ -86,8 +86,8 @@ test("enforces the content security policy in the browser, not only in the heade
   });
   expect(inlineRan, "an inline script executed despite the policy").toBe(false);
 
-  // connect-src 'self' must block a fetch to another origin before it leaves
-  // the machine, so this assertion needs no network.
+  // connect-src 'self' は、他オリジンへの fetch がマシンを
+  // 出る前に阻止するはずであり、この検証にネットワークは要らない。
   const crossOrigin = await page.evaluate(async () => {
     try {
       await fetch("https://example.invalid/collect", { mode: "no-cors" });
@@ -103,8 +103,8 @@ test("keeps no secret in persistent browser storage", async ({ page, installatio
   await openApplication(page, installation);
   await expect(sessionStatus(page)).toContainText("Local session active");
 
-  // Nothing is written until the user chooses a language, so an untouched
-  // session leaves both stores empty exactly as before.
+  // ユーザーが言語を選ぶまで何も書き込まれないため、手を
+  // 付けていないセッションは以前と同じく両ストアを空のままにする。
   expect(
     await page.evaluate(() => ({
       local: window.localStorage.length,
@@ -114,10 +114,10 @@ test("keeps no secret in persistent browser storage", async ({ page, installatio
 
   await page.getByLabel("Language").selectOption("ja");
 
-  // An allowlist rather than a count. A count would have passed just as well
-  // with a session token in place of the language, and checking the value is
-  // what makes that impossible: nothing but "en" or "ja" may be stored, and
-  // nothing but the two preference keys may exist.
+  // 数ではなく許可リストで見る。数だけなら、言語の代わりに
+  // セッショントークンが入っていても同様に通ってしまう。値を
+  // 確認することでそれを不可能にする。保存されてよいのは
+  // "en" か "ja" だけで、存在してよいのは 2 つの設定キーだけだ。
   const stored = await page.evaluate(() => ({
     keys: Object.keys(window.localStorage).sort(),
     language: window.localStorage.getItem("sshc.language"),
@@ -132,8 +132,8 @@ test("keeps the chosen appearance, and writes nothing else", async ({ page, inst
   await openApplication(page, installation);
   await expect(sessionStatus(page)).toContainText("Local session active");
 
-  // The application starts following the system, which is a choice not to
-  // store anything.
+  // アプリケーションはシステムに従う状態で起動するが、これは
+  // 何も保存しないという選択である。
   expect(await page.evaluate(() => Object.keys(window.localStorage))).toEqual([]);
 
   await page.getByLabel("Appearance").selectOption("dark");
@@ -142,8 +142,8 @@ test("keeps the chosen appearance, and writes nothing else", async ({ page, inst
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 
-  // Returning to System is reachable, which is why the control has three
-  // values rather than two.
+  // System へ戻ることができるため、このコントロールは 2 値
+  // ではなく 3 値を持つ。
   await page.getByLabel("Appearance").selectOption("system");
   await page.getByLabel("Language").selectOption("ja");
 
@@ -165,31 +165,31 @@ test("keeps the chosen language across a reload, and translates the panels", asy
   await page.getByLabel("Language").selectOption("ja");
   await expect(page.getByRole("button", { name: "鍵", exact: true })).toBeVisible();
 
-  // A panel, not just the shell: the provider has to be above the section
-  // being rendered, and only a real page proves that.
+  // シェルだけでなくパネルでも。provider は描画される
+  // セクションより上位になければならず、それは実ページでしか証明できない。
   await page.getByRole("button", { name: "鍵", exact: true }).click();
   await expect(page.getByRole("heading", { name: "鍵", level: 2 })).toBeVisible();
   await expect(page.getByRole("button", { name: "鍵を作成" })).toBeVisible();
 
-  // The choice outlives the page, and so now does the session. This used to
-  // assert the opposite: a reload could not restore the session, and the proof
-  // that the language had survived was that the *refusal* arrived in Japanese.
-  // The refusal was a defect the test had written down as a fact.
+  // 選択はページより長生きし、今やセッションもそうなった。
+  // このテストはかつて逆を検証していた。リロードはセッションを
+  // 復元できず、言語が生き残った証拠は*拒否*が日本語で届く
+  // ことだった。その拒否は、テストが事実として書き留めていた不具合だった。
   await page.reload();
-  // The shell comes back in Japanese, which is the choice outliving the page,
-  // and it comes back at all, which is the session outliving it. The open
-  // section is not remembered and is not meant to be, so the panel is reached
-  // again rather than expected to still be there.
+  // シェルは日本語で戻ってくる。これは選択がページより長生きしたとい
+  // うことであり、そもそも戻ってくること自体がセッションがページより
+  // 長生きしたということだ。開いていたセクションは記憶されないし、その
+  // 必要もないため、まだそこにあると期待せずパネルへ改めて到達する。
   await expect(page.getByRole("button", { name: "鍵", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "鍵", exact: true }).click();
   await expect(page.getByRole("button", { name: "鍵を作成" })).toBeVisible();
   expect(await page.evaluate(() => Object.keys(window.localStorage).sort())).toEqual(["sshc.language"]);
 });
 
-// The fragment is spent on first use and taken out of the address bar, so a
-// reload arrives with the cookie and nothing else. Until the session could be
-// renewed from that cookie, every reload left the application dead until the
-// binary was started again.
+// フラグメントは初回使用で消費されアドレスバーから取り
+// 除かれるため、リロードは cookie だけを携えて到着する。
+// その cookie からセッションを更新できるようになるまで、
+// リロードのたびにバイナリを再起動するまでアプリケーションは死んでいた。
 test("survives a reload", async ({ page, installation }) => {
   await openApplication(page, installation);
   await openSection(page, "Connections");
@@ -202,8 +202,8 @@ test("survives a reload", async ({ page, installation }) => {
     page.getByRole("navigation", { name: "Connections" }).getByRole("button", { name: "bastion" }),
   ).toBeVisible();
 
-  // And the renewed token works for a write, which is the half a reload used to
-  // lose: the cookie was always fine, the token was not.
+  // そして更新されたトークンは書き込みにも使える。これは
+  // リロードが失っていた半分だ。cookie は常に無事で、トークンだけが無事でなかった。
   await page.getByRole("navigation", { name: "Connections" }).getByRole("button", { name: "bastion" }).click();
   await page.getByLabel("Port", { exact: true }).fill("2255");
   expect(await clickAndAwait(page, "Save changes", "/api/v1/config/save")).toBe(200);

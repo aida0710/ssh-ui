@@ -8,36 +8,36 @@ import (
 	"path/filepath"
 )
 
-// ErrProgramNotFound reports that an OpenSSH program is not installed in any
-// directory this application is willing to run programs from.
+// ErrProgramNotFound は、このアプリケーションがプログラムを実行してよいどの
+// ディレクトリにも、その OpenSSH プログラムが入っていないことを報告する。
 var ErrProgramNotFound = errors.New("OpenSSH program not found")
 
-// Toolchain finds OpenSSH programs at fixed absolute paths.
+// Toolchain は、固定の絶対パスで OpenSSH のプログラムを見つける。
 //
-// PATH is deliberately not consulted: the program this application runs must
-// not depend on the environment it inherited. /usr/bin comes first because the
-// design targets the OpenSSH that ships with macOS; the Homebrew prefixes are
-// fallbacks for a machine where Apple's copy was removed.
+// PATH は意図的に参照しない。このアプリケーションが実行するプログラムが、継承した
+// 環境に依存してはならないからだ。/usr/bin が最初なのは、macOS に同梱される
+// OpenSSH を設計上の対象にしているからである。Homebrew の prefix は、Apple の
+// コピーが取り除かれたマシンのためのフォールバックだ。
 type Toolchain struct {
 	Directories []string
 	Stat        func(string) (fs.FileInfo, error)
 }
 
-// NewToolchain returns the default macOS search order.
+// NewToolchain は、macOS の既定の探索順を返す。
 func NewToolchain() Toolchain {
 	return Toolchain{Directories: []string{"/usr/bin", "/opt/homebrew/bin", "/usr/local/bin"}}
 }
 
-// SSH returns the absolute path of the ssh client.
+// SSH は ssh クライアントの絶対パスを返す。
 func (t Toolchain) SSH() (string, error) { return t.find("ssh") }
 
-// KeyScan returns the absolute path of ssh-keyscan.
+// KeyScan は ssh-keyscan の絶対パスを返す。
 func (t Toolchain) KeyScan() (string, error) { return t.find("ssh-keyscan") }
 
-// KeyGen returns the absolute path of ssh-keygen.
+// KeyGen は ssh-keygen の絶対パスを返す。
 func (t Toolchain) KeyGen() (string, error) { return t.find("ssh-keygen") }
 
-// KeyAdd returns the absolute path of ssh-add.
+// KeyAdd は ssh-add の絶対パスを返す。
 func (t Toolchain) KeyAdd() (string, error) { return t.find("ssh-add") }
 
 func (t Toolchain) find(program string) (string, error) {

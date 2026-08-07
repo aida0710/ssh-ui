@@ -3,8 +3,8 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// The application is behind the master password, so every test that expects a
-// shell has to be given an open vault. The lock screen has tests of its own.
+// アプリケーションはマスターパスワードの向こうにあるため、シェルを期待する
+// テストにはすべて開いた vault を与える必要がある。ロック画面には専用のテストがある。
 const openVault = () =>
   Promise.resolve({ exists: true, unlocked: true, aliases: [] as string[], minPassphraseLength: 12 });
 import { App } from "./App";
@@ -60,14 +60,14 @@ describe("App", () => {
 
     await screen.findByRole("heading", { name: "sshc" });
 
-    // The groups are named lists, not headings. A heading here would collide
-    // with the panels' own <h2>s: Playwright matches accessible names by
-    // substring, so a nav heading "Keys and hosts" makes a page-level query for
-    // the heading "Keys" match twice.
+    // グループは見出しではなく名前付きリストである。ここに見出しを置くと
+    // パネル自身の<h2>と衝突する。Playwright はアクセシブルネームを
+    // 部分一致で照合するため、nav の見出し"Keys and hosts"は見出し
+    // "Keys"を探すページレベルのクエリを二重にヒットさせてしまう。
     expect(screen.getByRole("list", { name: "Keys and hosts" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Keys and hosts" })).toBeNull();
 
-    // Every section button keeps the name it had.
+    // どの section ボタンも元の名前のままである。
     for (const label of [
       "Connections",
       "Config",
@@ -96,8 +96,8 @@ describe("App", () => {
 
     await screen.findByText("connections panel");
 
-    // No content offered, no toggle. A pane that is always offered and usually
-    // empty teaches people not to open it.
+    // 中身がなければトグルも出さない。常に提示されながら
+    // 大抵空なペインは、人に開かせない習慣を教えてしまう。
     expect(screen.queryByRole("button", { name: /details/i })).toBeNull();
 
     await user.click(screen.getByRole("button", { name: "offer inspector" }));
@@ -178,7 +178,7 @@ describe("App", () => {
     await user.click(await screen.findByRole("button", { name: "Keys" }));
 
     expect(screen.getByText("keys panel")).toBeInTheDocument();
-    // The shell owns the only status region; a panel must not add a second.
+    // ステータス領域を持つのはシェルだけであり、パネルが二つ目を追加してはならない。
     expect(screen.getAllByRole("status")).toHaveLength(1);
   });
 
@@ -214,7 +214,7 @@ describe("App", () => {
     await user.click(await screen.findByRole("button", { name: "Remote Keys" }));
 
     expect(screen.getByText("remote keys panel")).toBeInTheDocument();
-    // The shell owns the only status region; a panel must not add a second.
+    // ステータス領域を持つのはシェルだけであり、パネルが二つ目を追加してはならない。
     expect(screen.getAllByRole("status")).toHaveLength(1);
   });
 
@@ -273,10 +273,10 @@ describe("App", () => {
     expect(exchange).toHaveBeenCalledTimes(1);
     expect(health).toHaveBeenCalledTimes(1);
   });
-  // The panels translate into English when they are rendered outside the
-  // provider, which is what lets a component test render one on its own. That
-  // convenience is a hazard here: a shell that stopped mounting the provider
-  // would look correct in English and stay English for everyone else.
+  // パネルはプロバイダの外でレンダリングされると英語に翻訳される。これにより
+  // コンポーネントテストが単体でレンダリングできるようになっている。だが
+  // この便利さはここでは危険でもある。プロバイダのマウントをやめたシェルは
+  // 英語のままでも正しく見えてしまい、他の全員にとっても英語のままになる。
   it("renders every panel inside the language provider", async () => {
     const user = userEvent.setup();
     render(
@@ -289,12 +289,12 @@ describe("App", () => {
       </LanguageProvider>,
     );
 
-    // The shell itself translates.
+    // シェル自身が翻訳を行う。
     expect(await screen.findByRole("status")).toHaveTextContent(ja["shell.active"].replace("{version}", "0.1.0"));
     expect(screen.getByRole("button", { name: ja["section.keys"] })).toBeInTheDocument();
 
-    // And the section it switches to is inside the same provider, so a panel
-    // reached through the shell is translated too.
+    // 切り替え先の section も同じプロバイダ内にあるため、シェルを
+    // 経由して到達したパネルも翻訳される。
     await user.click(screen.getByRole("button", { name: ja["section.keys"] }));
     expect(screen.getByText("keys panel")).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: ja["shell.primaryNavigation"] })).toBeInTheDocument();
@@ -317,8 +317,8 @@ describe("App", () => {
 
     await user.selectOptions(screen.getByLabelText("Language"), "ja");
 
-    // The label changed; which panel is open did not. Section identity is not
-    // the section's name.
+    // 変わったのはラベルであり、開いているパネルは変わっていない。section の
+    // 識別子は section の名前ではない。
     expect(screen.getByRole("button", { name: ja["section.history"] })).toHaveAttribute("aria-current", "page");
     expect(screen.getByText("history panel")).toBeInTheDocument();
   });

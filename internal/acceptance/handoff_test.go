@@ -11,8 +11,8 @@ import (
 	"sshc/internal/httpserver"
 )
 
-// The running application leaves a handoff, and `sshc <alias>` is what reads
-// it. This drives the same request that command makes.
+// 実行中のアプリケーションは handoff を残し、それを読むのが
+// `sshc <alias>` である。これはそのコマンドと同じリクエストを駆動する。
 func TestTheHandoffLetsTheCommandLineAskForOneConnection(t *testing.T) {
 	f := newFixture(t)
 
@@ -29,7 +29,7 @@ func TestTheHandoffLetsTheCommandLineAskForOneConnection(t *testing.T) {
 		t.Errorf("the handoff names %q, the server is at %q", found.URL, f.baseURL)
 	}
 
-	// The command line has no session and no CSRF token, and needs neither.
+	// コマンドラインには session も CSRF トークンもなく、どちらも要らない。
 	response := f.doAnonymous(http.MethodPost, httpserver.ConnectPath,
 		[]byte(`{"alias":"bastion"}`), func(request *http.Request) {
 			request.Header.Set(handoff.HeaderName, found.Secret)
@@ -51,7 +51,7 @@ func TestTheHandoffLetsTheCommandLineAskForOneConnection(t *testing.T) {
 		t.Errorf("answer = %+v", answer)
 	}
 
-	// Without the secret it says nothing at all.
+	// secret がなければ、何も語らない。
 	refused := f.doAnonymous(http.MethodPost, httpserver.ConnectPath, []byte(`{"alias":"bastion"}`))
 	defer func() { _ = refused.Body.Close() }()
 	if refused.StatusCode != http.StatusForbidden {

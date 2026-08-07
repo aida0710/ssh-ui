@@ -16,15 +16,15 @@ import (
 	"sshc/internal/storage"
 )
 
-// Two machines and a real bucket.
+// 二台のマシンと、本物のバケット。
 //
-// The hermetic suite proves this against a fake that behaves as the
-// specification says, which proves the fake was written from the
-// specification. This proves the compare-and-swap against a server that did
-// not read this repository.
+// 密閉されたスイートは、仕様どおりに振る舞う偽物に対してこれを示すが、それは
+// その偽物が仕様から書かれたことを示すにすぎない。こちらは、このリポジトリを
+// 読んでいないサーバーに対して compare-and-swap が成り立つことを
+// 示す。
 //
-// It skips unless SSHC_TEST_S3_ENDPOINT names one; `make integration` starts
-// SeaweedFS in a container and sets it.
+// SSHC_TEST_S3_ENDPOINT がサーバーを指していなければスキップする。`make integration`
+// はコンテナで SeaweedFS を起動し、それを設定する。
 func integrationBucket(t *testing.T) (objectstore.Client, string) {
 	t.Helper()
 	endpoint := os.Getenv("SSHC_TEST_S3_ENDPOINT")
@@ -51,8 +51,8 @@ func integrationBucket(t *testing.T) (objectstore.Client, string) {
 	}, endpoint
 }
 
-// realInstallation is newInstallation pointed at a real server instead of the
-// in-process fake. Each test gets its own object key so runs do not collide.
+// realInstallation は、プロセス内の偽物ではなく本物のサーバーに向けた
+// newInstallation。実行どうしが衝突しないよう、各テストは自前のオブジェクトキーを持つ。
 func realInstallation(t *testing.T, files map[string]string) installation {
 	t.Helper()
 	client, endpoint := integrationBucket(t)
@@ -104,17 +104,17 @@ func TestAgainstARealBucketASnapshotTravelsBetweenTwoMachines(t *testing.T) {
 		"keys/work/id_ed25519": "-----BEGIN OPENSSH PRIVATE KEY-----\nnot really\n",
 		"sshc/metadata.json":   `{"schemaVersion":2}`,
 	})
-	// The object key is fixed, so a bucket that has been used before already
-	// holds a snapshot and the conditional write refuses. That is the client
-	// behaving correctly, and it used to make this test pass exactly once per
-	// container: the second run failed on the object the first run had left,
-	// which is not a test anyone can run often.
+	// オブジェクトキーは固定なので、以前に使われたことのあるバケットにはすでに
+	// スナップショットがあり、条件付き書き込みは拒否される。それはクライアントが
+	// 正しく振る舞っているということであり、以前はそのせいでこのテストがコンテナ
+	// あたりちょうど一度しか通らなかった。二度目の実行は、一度目が残したオブジェクト
+	// の上で失敗した。それでは誰も頻繁には走らせられない。
 	//
-	// A real machine meeting an occupied bucket pulls first, and so does this
-	// one. Pulling teaches it the ETag, which turns the push into the If-Match
-	// it should be. Pull answers ErrNothingToApply together with a complete
-	// result when the workspace already matches — that is the shape of the API,
-	// not a failure, and applying that result is what records the ETag.
+	// 実際のマシンは、埋まっているバケットに出会えばまず pull する。これも同じことを
+	// する。pull すれば ETag を知るので、push は本来あるべき If-Match になる。
+	// ワークスペースがすでに一致している場合、Pull は完全な結果とともに
+	// ErrNothingToApply を答える — それは API の形であって失敗ではなく、その結果を
+	// apply することが ETag を記録する。
 	result, err := first.service.Pull(context.Background(), syncPassphrase)
 	switch {
 	case err == nil, errors.Is(err, remotesync.ErrNothingToApply):
@@ -122,10 +122,10 @@ func TestAgainstARealBucketASnapshotTravelsBetweenTwoMachines(t *testing.T) {
 			t.Fatalf("Apply of the snapshot already in the bucket = %v", err)
 		}
 	case errors.Is(err, remotesync.ErrNoSnapshot), errors.Is(err, objectstore.ErrNotFound):
-		// An empty bucket — the state a fresh container starts in. There is
-		// nothing to learn from it, and the push is the write that creates the
-		// object. ErrNoSnapshot is what the service answers; ErrNotFound is what
-		// the client under it answers, and either can reach here.
+		// 空のバケット — 新しいコンテナが始まる状態である。そこから学ぶものは何もなく、
+		// push はオブジェクトを作る書き込みになる。サービスが答えるのは ErrNoSnapshot で、
+		// その下のクライアントが答えるのは ErrNotFound。どちらもここへ届き
+		// うる。
 	default:
 		t.Fatalf("Pull before push = %v", err)
 	}
@@ -145,8 +145,8 @@ func TestAgainstARealBucketASnapshotTravelsBetweenTwoMachines(t *testing.T) {
 		t.Fatalf("Apply = %v", err)
 	}
 
-	// Byte for byte through a real network round trip, including the CRLF and
-	// the trailing spaces.
+	// 本物のネットワーク往復を通しても、CRLF と末尾の空白を含めて 1 バイト
+	// 違わない。
 	if got := second.read(t, "config"); got != "Host bastion\r\n\tPort 2222   \n" {
 		t.Errorf("config = %q", got)
 	}
@@ -156,8 +156,8 @@ func TestAgainstARealBucketASnapshotTravelsBetweenTwoMachines(t *testing.T) {
 }
 
 func TestAgainstARealBucketAStalePushIsRefused(t *testing.T) {
-	// The property the word "automatic" rests on, checked against a server
-	// that did not read this repository.
+	// 「自動」という語が乗っている性質を、このリポジトリを読んでいないサーバーに
+	// 対して検査する。
 	first := realInstallation(t, map[string]string{"config": "first\n"})
 	if err := first.service.Push(context.Background(), syncPassphrase); err != nil &&
 		!errors.Is(err, remotesync.ErrRemoteMoved) {

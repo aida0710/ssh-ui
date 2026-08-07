@@ -1,10 +1,9 @@
-# The acceptance gate, run for every push and every pull request.
+# 受け入れのゲート。すべての push とすべての pull request で走る。
 #
-# The jobs are the four commands README.md already documents, split so a red
-# tick names the thing that broke rather than "the build". Nothing here is
-# stricter than what `make test`, `make verify-generated` and `make e2e` do
-# locally: CI is where they are guaranteed to have been run, not a second
-# standard.
+# ジョブは README.md がすでに記載している四つのコマンドであり、赤いチェックが
+# 「ビルド」ではなく壊れたものを名指しできるよう分けてある。ここには、ローカルの
+# `make test`、`make verify-generated`、`make e2e` より厳しいものは何もない。CI は
+# それらが確かに実行されたことを保証する場所であって、二つ目の基準ではない。
 name: CI
 
 on:
@@ -15,8 +14,8 @@ on:
 permissions:
   contents: read
 
-# A second push to the same branch supersedes the first; only the tip is worth
-# a runner. `main` is excluded so its history keeps a complete record.
+# 同じブランチへの二度目の push は一度目を置き換える。ランナーを使う価値があるのは
+# 先端だけである。`main` を除外してあるのは、その履歴に完全な記録を残すためだ。
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
@@ -29,14 +28,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          # The version comes from go.mod so the toolchain can only be changed
-          # in one place.
+          # バージョンは go.mod から来る。ツールチェーンを変えられる場所を
+          # 一か所に限るためである。
           go-version-file: go.mod
           cache-dependency-path: go.sum
 
-      # gofmt is the whole of this project's Go style. `gofmt -l` prints the
-      # files that differ from it and says nothing when there are none, so the
-      # file list is both the failure and its explanation.
+      # このプロジェクトの Go のスタイルは gofmt がすべてである。`gofmt -l` は
+      # それと異なるファイルを表示し、ひとつもなければ何も言わない。したがって
+      # ファイルの一覧が、失敗そのものであり、その説明でもある。
       - name: gofmt
         run: |
           unformatted="$(gofmt -l .)"
@@ -55,8 +54,8 @@ jobs:
       - name: go test
         run: go test ./...
 
-      # The race detector is a separate step because it is the slow one, and a
-      # data race is a different failure from a wrong answer.
+      # race detector を別のステップにしてあるのは、それが遅い方だからであり、
+      # またデータ競合は、誤った答えとは別種の失敗だからである。
       - name: go test -race
         run: go test -race ./...
 
@@ -74,13 +73,14 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      # `npm ci` installs exactly the locked versions and fails if the lockfile
-      # and package.json disagree. This project pins every dependency, so an
-      # unpinned drift should stop the build rather than be installed.
+      # `npm ci` はロックされたバージョンをそのままインストールし、lockfile と
+      # package.json が食い違えば失敗する。このプロジェクトはすべての依存を固定
+      # するので、固定を外れたずれは、インストールされるのではなくビルドを止める
+      # べきである。
       - run: npm ci
 
-      # There is no ESLint here; the type checker is the lint. It runs over the
-      # application and over the end-to-end suite, which has its own tsconfig.
+      # ここに ESLint はない。lint の役目は型検査が担う。アプリケーションと、
+      # 自前の tsconfig を持つエンドツーエンドのスイートの両方に対して走る。
       - name: Typecheck
         run: npm run typecheck
 
@@ -106,9 +106,9 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci --prefix web
 
-      # api/openapi.yaml is the single source for the Go models and the
-      # TypeScript types. This regenerates both and fails on any difference, so
-      # a hand-edited generated file cannot reach main.
+      # api/openapi.yaml は、Go のモデルと TypeScript の型にとって唯一の源で
+      # ある。ここで両方を再生成し、差分があれば失敗させる。これにより、手で
+      # 編集された生成物が main へ届くことはない。
       - name: make verify-generated
         run: make verify-generated
 
@@ -128,20 +128,21 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci --prefix web
 
-      # The binary is the askpass helper, so it has to exist before ssh runs.
+      # このバイナリが askpass ヘルパーそのものなので、ssh が走る前に存在して
+      # いなければならない。
       - name: Build the binary
         run: make build
 
-      # Two servers this suite cannot fake usefully: a real S3 implementation,
-      # because the whole sync design rests on what a real one does with a
-      # conditional PUT, and a real sshd, because whether OpenSSH accepts what
-      # the askpass helper hands it is not something a stub can answer.
+      # このスイートが有用な形では偽装できないサーバーが二つある。本物の S3 実装 —
+      # 同期の設計全体が、本物のそれが条件付き PUT に何をするかの上に立っている
+      # ため — と、本物の sshd である。askpass ヘルパーが渡したものを OpenSSH が
+      # 受け取るかどうかは、スタブに答えられる問いではない。
       - name: Start SeaweedFS and sshd
         run: make integration-up
 
       - name: Create the bucket
-        # The client deliberately has no CreateBucket: the application never
-        # makes one, so the harness does it instead of widening the client.
+        # クライアントには意図的に CreateBucket がない。アプリケーションが
+        # バケットを作らないので、クライアントを広げる代わりにハーネスが行う。
         run: |
           docker exec sshc-s3 sh -c '
             mkdir -p /data/buckets/sshc-test' || true
@@ -180,10 +181,10 @@ jobs:
       - name: Build the binary
         run: make build
 
-      # The UI is embedded in the binary from a committed bundle, so a change to
-      # web/src that was never rebuilt ships an old interface to anyone who
-      # builds from a clean checkout. `make build` above has just regenerated
-      # it; a difference here means the commit forgot to.
+      # UI はコミット済みのバンドルからバイナリへ埋め込まれる。したがって、
+      # ビルドし直されないままの web/src の変更は、クリーンなチェックアウトから
+      # ビルドした人へ古いインターフェースを配ることになる。上の `make build` が
+      # いま再生成したので、ここに差分があればコミットがそれを忘れたということだ。
       - name: The committed bundle matches the sources
         run: |
           if ! git diff --exit-code -- internal/ui/dist; then
@@ -191,8 +192,8 @@ jobs:
             exit 1
           fi
 
-      # Chromium only. The suite drives the built binary over localhost and
-      # asserts on the bytes it writes, not on how a particular engine paints.
+      # Chromium のみ。このスイートはビルド済みのバイナリを localhost 越しに
+      # 動かし、それが書くバイト列を表明する。特定のエンジンの描画は見ない。
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
         working-directory: web

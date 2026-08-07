@@ -29,8 +29,8 @@ afterEach(() => {
 });
 
 describe("integrationsApi.addKnownHost", () => {
-  // The action kinds are owned by the server's session package. Spelling this
-  // differently here would mint a token the server refuses.
+  // アクションの種類はサーバーのセッションパッケージが所有する。ここで綴りを
+  // 変えれば、サーバーが拒否するトークンを作ってしまう。
   it("uses the committed action vocabulary", () => {
     expect(KNOWN_HOSTS_ADD_ACTION_KIND).toBe("known_hosts.add");
   });
@@ -47,8 +47,8 @@ describe("integrationsApi.addKnownHost", () => {
 
     const [actionPath, actionInit] = fetcher.mock.calls[0] as [string, RequestInit];
     expect(actionPath).toBe("/api/v1/actions");
-    // Only the operation and its target: the evidence the token is bound to is
-    // derived on the server, at issue and at consume time.
+    // 含まれるのは操作と target だけである。トークンが紐付く証跡は
+    // 発行時と消費時にサーバー側で導出される。
     expect(JSON.parse(String(actionInit.body))).toEqual({
       kind: "known_hosts.add",
       target: "new.example.com",

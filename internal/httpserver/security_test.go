@@ -58,10 +58,10 @@ func TestSecurityRejectsCrossSiteAndWrongHost(t *testing.T) {
 	}
 }
 
-// TestSecurityRefusesEveryAPIRequestFromAnotherSite drives the middleware
-// alone, with a handler that would answer 204 for anything that reaches it, so
-// the refusal can only come from the Fetch Metadata check under test rather
-// than from a handler-level guard behind it.
+// TestSecurityRefusesEveryAPIRequestFromAnotherSite は middleware だけを
+// 動かす。届いたものには何でも 204 を返すハンドラを使うことで、
+// 拒否がテスト対象の Fetch Metadata チェックからしか来得ないように
+// し、その先にあるハンドラレベルの防護からは来ないようにする。
 func TestSecurityRefusesEveryAPIRequestFromAnotherSite(t *testing.T) {
 	manager, bootstrap, err := session.NewManager(bytes.NewReader(bytes.Repeat([]byte{0x37}, 96)))
 	if err != nil {
@@ -100,16 +100,16 @@ func TestSecurityRefusesEveryAPIRequestFromAnotherSite(t *testing.T) {
 				request.Header.Set("Sec-Fetch-Site", test.fetchSite)
 			}
 			request.AddCookie(&http.Cookie{Name: SessionCookie, Value: credentials.SessionID})
-			// A read carries the token now, so the refusal under test is the
-			// Fetch Metadata one rather than a missing token.
+			// 読み取りが今トークンを運ぶので、テスト対象の拒否は欠けたトークン
+			// ではなく Fetch Metadata の方によるものである。
 			request.Header.Set(CSRFHeader, credentials.CSRFToken)
 			response := httptest.NewRecorder()
 			e.ServeHTTP(response, request)
 			if response.Code != test.want {
 				t.Fatalf("status = %d, want %d", response.Code, test.want)
 			}
-			// The problem code is asserted, not merely the status: a 403 from
-			// the host check or from CSRF would otherwise look like a pass.
+			// status だけでなく problem code もアサートする。host チェックや
+			// CSRF による 403 では、そうしないと成功のように見えてしまうからだ。
 			if test.wantCode != "" && !strings.Contains(response.Body.String(), test.wantCode) {
 				t.Fatalf("body = %q, want the %q problem code", response.Body.String(), test.wantCode)
 			}
@@ -117,15 +117,15 @@ func TestSecurityRefusesEveryAPIRequestFromAnotherSite(t *testing.T) {
 	}
 }
 
-// TestSecurityBoundsABodyAHandlerReadsWithoutItsOwnLimit covers the half of the
-// ceiling that no registered route can reach today.
+// TestSecurityBoundsABodyAHandlerReadsWithoutItsOwnLimit は、上限のうち
+// 現状どの登録済みルートも到達できない半分をカバーする。
 //
-// Every handler in the tree applies its own limit at or below
-// MaxRequestBodyCeiling, and a request that declares an oversized length is
-// refused before any handler runs, so the MaxBytesReader wrapper only matters
-// for a route added later that reads its body without a limit of its own, over
-// a chunked request that declares no length at all. That is exactly the route
-// this test registers.
+// ツリー内のすべてのハンドラは MaxRequestBodyCeiling 以下の自前の
+// 制限をかけており、大きすぎる長さを宣言したリクエストはどのハンドラ
+// が実行される前にも拒否される。したがって MaxBytesReader wrapper が
+// 意味を持つのは、後で追加され自前の制限なしに body を読むルートが、
+// 長さを一切宣言しない chunked リクエストを扱う場合だけだ。それが
+// まさにこのテストが登録するルートである。
 func TestSecurityBoundsABodyAHandlerReadsWithoutItsOwnLimit(t *testing.T) {
 	manager, bootstrap, err := session.NewManager(bytes.NewReader(bytes.Repeat([]byte{0x44}, 96)))
 	if err != nil {
@@ -161,8 +161,8 @@ func TestSecurityBoundsABodyAHandlerReadsWithoutItsOwnLimit(t *testing.T) {
 	request.Header.Set("Sec-Fetch-Site", "same-origin")
 	request.Header.Set(CSRFHeader, credentials.CSRFToken)
 	request.AddCookie(&http.Cookie{Name: SessionCookie, Value: credentials.SessionID})
-	// A chunked request declares no length, so the Content-Length refusal
-	// cannot fire and the reader is the only thing bounding this body.
+	// chunked リクエストは長さを宣言しないため、Content-Length による
+	// 拒否は発動できず、この body を制限するのは reader だけになる。
 	request.ContentLength = -1
 	request.TransferEncoding = []string{"chunked"}
 
@@ -203,8 +203,8 @@ func TestSecurityNavigationHeadersAndAPIAuthentication(t *testing.T) {
 	run := func(method, path string, authenticated, csrf bool) *httptest.ResponseRecorder {
 		request := httptest.NewRequest(method, path, nil)
 		request.Host = "127.0.0.1:43123"
-		// Every API request the frontend makes carries Fetch Metadata, a read
-		// as much as a write; only Origin is specific to a state change.
+		// フロントエンドが送るすべての API リクエストは Fetch Metadata を運ぶ。
+		// 読み取りも書き込みと同様であり、Origin だけが状態変更に固有である。
 		request.Header.Set("Sec-Fetch-Site", "same-origin")
 		if method != http.MethodGet {
 			request.Header.Set(echo.HeaderOrigin, "http://127.0.0.1:43123")
@@ -240,8 +240,8 @@ func TestSecurityNavigationHeadersAndAPIAuthentication(t *testing.T) {
 	if got := run(http.MethodGet, "/api/v1/test", false, false).Code; got != http.StatusUnauthorized {
 		t.Fatalf("unauthenticated GET = %d", got)
 	}
-	// A read needs the token too: a cookie is not scoped to a port, so another
-	// server on 127.0.0.1 receives it, and the token never travels there.
+	// 読み取りにもトークンが要る。cookie はポートに紐づかないため、
+	// 127.0.0.1 上の別のサーバーがそれを受け取ってしまうが、トークンは決してそこへ渡らない。
 	if got := run(http.MethodGet, "/api/v1/test", true, false).Code; got != http.StatusForbidden {
 		t.Fatalf("GET with the cookie and no token = %d", got)
 	}
@@ -290,8 +290,8 @@ func TestSecurityRejectionDoesNotEchoRequestValues(t *testing.T) {
 	}
 }
 
-// runGuarded drives the middleware alone with a session that exists, so the
-// only thing that can refuse is the gate under test.
+// runGuarded は既存のセッションで middleware だけを動かす。よって
+// 拒否し得るのはテスト対象のゲートだけになる。
 func runGuarded(t *testing.T, host string, security Security, credentials session.Credentials, method, path string) *httptest.ResponseRecorder {
 	t.Helper()
 	e := echo.New()
@@ -328,11 +328,11 @@ func gatedSecurity(t *testing.T, unlocked func() bool) (Security, string, sessio
 	return security, host, credentials
 }
 
-// The application is the thing behind the master password now, not each screen
-// in turn.
+// application はもはやマスターパスワードの向こう側にあるものであり、
+// 各画面が個別にそうなのではない。
 //
-// The exemptions are the gate itself and the two things that must work before
-// there is anything to unlock. Everything else answers vault_locked.
+// 除外されているのはゲート自身と、そもそも解錠すべき何かが生じる
+// 前に動く必要のある 2 つのものである。それ以外は vault_locked を返す。
 func TestEveryRouteButTheGateRefusesWhileTheVaultIsShut(t *testing.T) {
 	security, host, credentials := gatedSecurity(t, func() bool { return false })
 
@@ -371,8 +371,8 @@ func TestEveryRouteButTheGateRefusesWhileTheVaultIsShut(t *testing.T) {
 	}
 }
 
-// A gate with nothing wired to it is shut. A forgotten wiring must not be the
-// difference between a locked application and an open one.
+// 何も配線されていないゲートは施錠されている。配線し忘れが、施錠
+// された application と開いた application の違いになってはならない。
 func TestAMiddlewareWithNoVaultToAskIsShut(t *testing.T) {
 	security, host, credentials := gatedSecurity(t, nil)
 	if recorder := runGuarded(t, host, security, credentials, http.MethodGet, "/api/v1/keys"); recorder.Code != http.StatusConflict {
@@ -380,8 +380,8 @@ func TestAMiddlewareWithNoVaultToAskIsShut(t *testing.T) {
 	}
 }
 
-// An open vault changes nothing else: the gate is one more check, not a
-// replacement for the session and the CSRF token.
+// 開いた vault は他には何も変えない。ゲートは追加のチェックの 1 つで
+// あり、セッションと CSRF トークンの代わりではない。
 func TestAnOpenVaultStillRequiresTheSessionAndTheToken(t *testing.T) {
 	security, host, credentials := gatedSecurity(t, func() bool { return true })
 	if recorder := runGuarded(t, host, security, credentials, http.MethodGet, "/api/v1/keys"); recorder.Code != http.StatusOK {
@@ -393,18 +393,18 @@ func TestAnOpenVaultStillRequiresTheSessionAndTheToken(t *testing.T) {
 	}
 }
 
-// alwaysUnlocked opens the gate for the tests that are about something else.
-// The gate has tests of its own, above.
+// alwaysUnlocked は、別の事柄を扱うテストのためにゲートを開く。
+// ゲート自体のテストは上にある。
 func alwaysUnlocked() bool { return true }
 
-// A cookie is not scoped to a port, and neither is a site.
+// cookie はポートに紐づかず、site もまたそうである。
 //
-// Another server on 127.0.0.1 — a development server on some other port —
-// receives this application's session cookie, because SameSite compares scheme
-// and registrable domain and an IP is the whole site. The cookie alone must
-// therefore not be enough to read anything: the CSRF token lives in the page's
-// memory and never travels to that other port, so requiring it on reads as
-// well as writes is what makes a leaked cookie worth nothing.
+// 127.0.0.1 上の別のサーバー——他のポートで動く開発用サーバー——が
+// この application のセッション cookie を受け取ってしまう。SameSite は
+// scheme と registrable domain を比較し、IP はそれ自体が site のすべて
+// だからだ。したがって cookie だけでは何も読めてはならない。CSRF
+// トークンはページのメモリに存在してその別ポートへは渡らないため、
+// 書き込みだけでなく読み取りにも要求することで、漏洩した cookie を無価値にする。
 func TestReadsRequireTheTokenAsWellAsTheCookie(t *testing.T) {
 	security, host, credentials := gatedSecurity(t, func() bool { return true })
 
@@ -415,8 +415,8 @@ func TestReadsRequireTheTokenAsWellAsTheCookie(t *testing.T) {
 	if recorder := runGuarded(t, host, security, credentials, http.MethodGet, "/api/v1/keys"); recorder.Code != http.StatusOK {
 		t.Errorf("GET with both = %d, want 200", recorder.Code)
 	}
-	// Renewing is how a page that has lost its token gets one, so it cannot be
-	// asked for a token it is asking for.
+	// 更新はトークンを失ったページがそれを得る手段であるため、まさに
+	// 求めているそのトークンを求められるわけにはいかない。
 	if recorder := runGuarded(t, host, security, withoutToken, http.MethodPost, "/api/v1/session/renew"); recorder.Code != http.StatusOK {
 		t.Errorf("renew with no token = %d, want it to pass", recorder.Code)
 	}

@@ -7,15 +7,15 @@ import (
 	"testing"
 )
 
-// FuzzParseValues fuzzes the parser for `ssh -G` output.
+// FuzzParseValues は `ssh -G` 出力のパーサをファズする。
 //
-// The bytes come from a program this application started but does not control,
-// and the result decides what the UI reports as the effective configuration.
-// The invariant is that the parse is total and lossless in the only sense that
-// matters: every non-empty line contributes exactly one value, every keyword is
-// listed once, in output order, lowercased, and First agrees with the first
-// entry. A parser that dropped, duplicated or reordered a value would show the
-// user a configuration OpenSSH is not going to use.
+// このバイト列は、このアプリケーションが起動したものの、制御はしていないプログラム
+// から来る。そして結果は、UI が実効設定として報告する内容を決める。不変条件は、
+// 解析が全域的であり、かつ重要な意味において無損失であることだ。空でない各行は
+// ちょうどひとつの値を寄与し、各キーワードは出力順に一度だけ小文字で列挙され、
+// First は最初のエントリと一致する。値を落としたり、重複させたり、並べ替えたりする
+// パーサは、OpenSSH が使うつもりのない設定をユーザーに見せることに
+// なる。
 func FuzzParseValues(f *testing.F) {
 	transcript, err := os.ReadFile(filepath.Join("testdata", "ssh-g-output.txt"))
 	if err != nil {

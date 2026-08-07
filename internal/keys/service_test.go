@@ -16,8 +16,8 @@ import (
 	"sshc/internal/storage"
 )
 
-// steppingClock advances one second per call so two transactions in one test
-// never share an identifier.
+// steppingClock は呼び出しごとに 1 秒進めるので、ひとつのテスト内の二つの
+// トランザクションが識別子を共有することはない。
 func steppingClock(start time.Time) func() time.Time {
 	current := start
 	return func() time.Time {
@@ -26,8 +26,8 @@ func steppingClock(start time.Time) func() time.Time {
 	}
 }
 
-// newQueryRunner answers the algorithm query with the output of a real
-// OpenSSH 10.2p1 installation, captured once and kept as a constant.
+// newQueryRunner は、実物の OpenSSH 10.2p1 の出力でアルゴリズムの問い合わせに
+// 答える。一度取得して定数として保持したものである。
 func newQueryRunner() *fakeRunner {
 	return &fakeRunner{output: platform.Output{Stdout: []byte(opensshQueryOutput)}}
 }
@@ -37,17 +37,17 @@ func newTestService(t *testing.T, runner platform.OutputRunner) (*Service, *stor
 	return newServiceWithAgent(t, runner, nil)
 }
 
-// newServiceWithAgent builds the service the way the application does, through
-// ServiceOptions, so the agent seam is proven to reach the Service rather than
-// being assigned to an unexported field by the test.
+// newServiceWithAgent は、アプリケーションと同じやり方で、ServiceOptions を通して
+// サービスを組み立てる。これにより、エージェントの継ぎ目が、テストが非公開フィールド
+// へ代入したものではなく、実際に Service へ届いていることが示される。
 func newServiceWithAgent(t *testing.T, runner platform.OutputRunner, agent platform.KeyAgent) (*Service, *storage.Workspace) {
 	t.Helper()
 	workspace := newTestWorkspace(t)
 	clock := steppingClock(time.Date(2026, 8, 5, 9, 0, 0, 0, time.UTC))
 	manager := storage.NewManager(workspace, clock, rand.Reader)
-	// The application seals every generational backup with the master
-	// password, so these tests do too: without it they would prove things
-	// about a shape of backup the application no longer writes.
+	// アプリケーションはすべての世代バックアップをマスターパスワードで封じるので、
+	// これらのテストもそうする。そうしないと、アプリケーションがもう書かない形の
+	// バックアップについて何かを示すだけになってしまう。
 	manager.Seal = sealForTest
 	manager.Unseal = unsealForTest
 	service := NewService(ServiceOptions{
@@ -62,13 +62,13 @@ func newServiceWithAgent(t *testing.T, runner platform.OutputRunner, agent platf
 	return service, workspace
 }
 
-// assertNoKeyMaterialInBackups walks the generational backup directory and
-// fails if any file there holds a private key in the clear.
+// assertNoKeyMaterialInBackups は世代バックアップのディレクトリを走査し、そこに
+// 平文の秘密鍵を持つファイルがあれば失敗させる。
 //
-// It used to mean the directory held no copy at all, which is why a passphrase
-// change could not be undone. It now holds a sealed copy, and this is what
-// keeps that safe: the bytes on disk must be unreadable without the master
-// password. Sealing is what changed, not the rule about plaintext.
+// 以前はディレクトリがコピーをまったく持たないことを意味していた。だからこそ
+// パスフレーズの変更を取り消せなかったのである。いまは封をしたコピーを持ち、それを
+// 安全に保つのがこれだ。ディスク上のバイト列は、マスターパスワードなしでは読めて
+// はならない。変わったのは封をすることであって、平文についてのルールではない。
 func assertNoKeyMaterialInBackups(t *testing.T, workspace *storage.Workspace) {
 	t.Helper()
 	backups := filepath.Join(workspace.StateDir(), "backups")
@@ -302,10 +302,10 @@ func TestChangePassphraseRewritesTheKeyAndKeepsItsComment(t *testing.T) {
 	}
 }
 
-// A passphrase change replaces a private key, and the transaction manager keeps
-// a generational backup of everything it replaces. That backup would be a
-// second copy of the user's private key, which the design forbids: the trash is
-// the only place key material is ever duplicated to.
+// パスフレーズの変更は秘密鍵を置き換えるものであり、トランザクションマネージャは
+// 置き換えるすべてについて世代バックアップを保持する。そのバックアップはユーザーの
+// 秘密鍵の二つ目のコピーになり、設計はそれを禁じている。鍵素材が複製される場所は
+// ごみ箱だけである。
 func TestChangePassphraseKeepsKeyMaterialOutOfTheBackupDirectory(t *testing.T) {
 	service, workspace := newTestService(t, newQueryRunner())
 	if _, err := service.Generate(GenerateRequest{
@@ -406,9 +406,9 @@ func TestAlgorithmsAreReadThroughTheCommandSeam(t *testing.T) {
 	}
 }
 
-// A confirmation is bound to a digest of what the dialog displayed. The digest
-// must change when the key on disk changes, or a user who confirmed one key
-// would be authorising whatever replaced it.
+// 確認は、ダイアログが表示した内容のダイジェストに結び付けられる。ディスク上の鍵が
+// 変われば、そのダイジェストも変わらなければならない。さもなければ、ある鍵を確認
+// したユーザーが、それを置き換えた何かを承認したことになってしまう。
 func TestConfirmationEvidenceTracksWhatTheUserWasShown(t *testing.T) {
 	service, workspace := newTestService(t, newQueryRunner())
 	generateWorkKey(t, service)
@@ -428,7 +428,7 @@ func TestConfirmationEvidenceTracksWhatTheUserWasShown(t *testing.T) {
 		t.Fatalf("evidence is not stable for an unchanged key: %q then %q", first, again)
 	}
 
-	// The same fingerprint at a different path is a different confirmation.
+	// 同じフィンガープリントでもパスが違えば、別の確認である。
 	if _, err := service.Generate(GenerateRequest{
 		Algorithm:  AlgorithmEd25519,
 		FileName:   "id_other",
@@ -445,7 +445,7 @@ func TestConfirmationEvidenceTracksWhatTheUserWasShown(t *testing.T) {
 		t.Fatalf("two different keys produced the same evidence")
 	}
 
-	// Replacing the file behind the same path must invalidate the evidence.
+	// 同じパスの背後にあるファイルを置き換えたら、evidence は無効にならなければならない。
 	replacement, _, _ := newKeyPairFixture(t, "different passphrase")
 	if err := os.WriteFile(filepath.Join(workspace.Root(), "id_work"), replacement, 0o600); err != nil {
 		t.Fatalf("replace key: %v", err)
@@ -485,7 +485,7 @@ func TestConfirmationEvidenceForATrashEntryTracksItsListing(t *testing.T) {
 		t.Fatalf("evidence is empty")
 	}
 
-	// Removing a file from the entry changes what the dialog would list.
+	// エントリからファイルをひとつ取り除けば、ダイアログが列挙する内容が変わる。
 	if err := os.Remove(filepath.Join(workspace.Root(), StateDirectoryName, "trash", trashed.EntryID, "id_work.pub")); err != nil {
 		t.Fatalf("remove trashed public key: %v", err)
 	}
@@ -502,9 +502,9 @@ func TestConfirmationEvidenceForATrashEntryTracksItsListing(t *testing.T) {
 	}
 }
 
-// fakeAgent records every registration request without touching a real agent.
-// The passphrase is copied on arrival because Register wipes the caller's
-// buffer before it returns.
+// fakeAgent は、本物のエージェントに触れずにすべての登録リクエストを記録する。
+// パスフレーズは到着時にコピーする。Register は返る前に呼び出し側のバッファを
+// 消去するからである。
 type fakeAgent struct {
 	available   bool
 	requests    []platform.AgentAddRequest
@@ -675,7 +675,7 @@ func TestRegisterAndIdentitiesReportAnUnreachableAgentHonestly(t *testing.T) {
 	}
 }
 
-// A registration the agent refused must not be recorded as one that happened.
+// エージェントが拒否した登録が、起きた登録として記録されてはならない。
 func TestRegisterRecordsNothingWhenTheAgentRefuses(t *testing.T) {
 	agent := &fakeAgent{available: true, addError: platform.ErrAgentRejected}
 	service, workspace := newServiceWithAgent(t, newQueryRunner(), agent)
@@ -716,10 +716,10 @@ func TestValidateFileNameRefusesNamesTheApplicationDependsOn(t *testing.T) {
 	}
 }
 
-// PublicKey is the one key route with no confirmation behind it, so what stops
-// it being a way to read a private key is the kind check and nothing else.
-// These tests hold that check to the classifier's judgement rather than to the
-// file's name.
+// PublicKey は、背後に確認を持たない唯一の鍵ルートである。したがって、これが秘密鍵
+// を読む手段になるのを止めているのは kind の検査であって、それ以外の何物でもない。
+// ここのテストは、その検査を、ファイル名ではなく分類器の判断に対して
+// 縛る。
 func TestPublicKeyReadsThePublicHalfAndRefusesThePrivateOne(t *testing.T) {
 	service, _ := newTestService(t, newQueryRunner())
 
@@ -758,8 +758,8 @@ func TestPublicKeyReadsThePublicHalfAndRefusesThePrivateOne(t *testing.T) {
 		t.Fatalf("the public route returned private key material")
 	}
 
-	// The private key of the same pair is refused, so the unconfirmed route
-	// cannot be turned into a reveal by passing the other identifier.
+	// 同じペアの秘密鍵は拒否される。したがって、別の識別子を渡すことで、確認のない
+	// ルートを表示に変えることはできない。
 	if _, err := service.PublicKey(generated.ID); !errors.Is(err, ErrUnknownKey) {
 		t.Fatalf("PublicKey(private key) error = %v, want ErrUnknownKey", err)
 	}
@@ -768,8 +768,8 @@ func TestPublicKeyReadsThePublicHalfAndRefusesThePrivateOne(t *testing.T) {
 func TestPublicKeyRefusesAPrivateKeyWearingAPublicName(t *testing.T) {
 	service, workspace := newTestService(t, newQueryRunner())
 
-	// Classification is by content and permissions, never by the suffix. A
-	// private key saved as id_decoy.pub must still be refused here.
+	// 分類は内容と権限によるもので、接尾辞によることは決してない。id_decoy.pub として
+	// 保存された秘密鍵も、ここでは拒否されなければならない。
 	generated, err := service.Generate(GenerateRequest{
 		Algorithm:   AlgorithmEd25519,
 		FileName:    "id_decoy",
@@ -806,9 +806,9 @@ func TestPublicKeyRefusesAPrivateKeyWearingAPublicName(t *testing.T) {
 	t.Fatalf("the decoy file is not in the inventory")
 }
 
-// declaredGroups is the seam the running application fills with the
-// configuration engine's answer. A test supplies its own, so this package
-// proves it asks rather than deciding.
+// declaredGroups は、動作中のアプリケーションが設定エンジンの答えで埋める継ぎ目。
+// テストは自前のものを供給するので、このパッケージが自分で決めるのではなく尋ねて
+// いることが示される。
 func declaredGroups(names ...string) func(string) error {
 	allowed := make(map[string]bool, len(names))
 	for _, name := range names {
@@ -863,8 +863,8 @@ func TestGenerateWritesIntoTheGroupDirectory(t *testing.T) {
 			t.Errorf("%s permission = %04o, want 0600", name, info.Mode().Perm())
 		}
 	}
-	// The identifier follows the path, so a key in a group is addressable the
-	// same way as one at the root.
+	// 識別子はパスに従うので、グループ内の鍵も、ルートにあるものと同じやり方で
+	// 指定できる。
 	if result.ID != ItemID("keys/work/id_work") {
 		t.Errorf("id = %q, want the identifier of its path", result.ID)
 	}
@@ -881,7 +881,7 @@ func TestGenerateRefusesAGroupNothingDeclares(t *testing.T) {
 	}); !errors.Is(err, ErrUnknownGroup) {
 		t.Fatalf("Generate error = %v, want ErrUnknownGroup", err)
 	}
-	// A refusal leaves nothing behind, not even the directory it would need.
+	// 拒否は何も残さない。必要になったはずのディレクトリすら残さない。
 	if _, statErr := os.Lstat(filepath.Join(workspace.Root(), "keys")); !errors.Is(statErr, fs.ErrNotExist) {
 		t.Errorf("a refused generation created the keys directory: %v", statErr)
 	}
@@ -890,8 +890,8 @@ func TestGenerateRefusesAGroupNothingDeclares(t *testing.T) {
 func TestGenerateStillRefusesAReservedFileNameInsideAGroup(t *testing.T) {
 	service, _ := newGroupKeyService(t, "work")
 
-	// The reserved-name rule is about names this application depends on, and it
-	// applies at every depth: keys/work/config is still a file called config.
+	// 予約名のルールは、このアプリケーションが依存する名前についてのものであり、
+	// どの深さでも適用される。keys/work/config も、やはり config という名前のファイルだ。
 	for _, name := range []string{"config", "known_hosts", "id_work.pub"} {
 		if _, err := service.Generate(GenerateRequest{
 			Algorithm:  AlgorithmEd25519,
@@ -911,8 +911,8 @@ func TestHardwareCommandNamesTheGroupDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("HardwareCommand error = %v", err)
 	}
-	// The user runs this by hand, so it has to put the key where this
-	// application would have put it.
+	// ユーザーがこれを手で実行するので、このアプリケーションが置いたであろう場所に
+	// 鍵を置かなければならない。
 	want := filepath.Join(workspace.Root(), "keys", "work", "id_yubikey")
 	found := false
 	for _, argument := range command {
@@ -925,9 +925,9 @@ func TestHardwareCommandNamesTheGroupDirectory(t *testing.T) {
 	}
 }
 
-// A software key's comment is embedded by ssh.MarshalPrivateKey and reaches no
-// command line, so the shell-quoting rule the hardware path needs does not
-// apply to it. "work laptop" is what people actually type.
+// ソフトウェア鍵のコメントは ssh.MarshalPrivateKey が埋め込むもので、コマンドライン
+// には届かない。したがって、ハードウェアの経路が必要とするシェル引用のルールは
+// これには当てはまらない。"work laptop" は、人が実際に打ち込むものである。
 func TestValidateCommentAcceptsAnOrdinaryComment(t *testing.T) {
 	for _, comment := range []string{"work laptop", "aida@mbp", "", "backup key 2026"} {
 		if err := ValidateComment(comment); err != nil {
@@ -944,8 +944,8 @@ func TestValidateCommentStillRefusesWhatWouldBreakAFile(t *testing.T) {
 	}
 }
 
-// The hardware path builds an ssh-keygen command line for the user to run, so
-// it keeps the stricter rule.
+// ハードウェアの経路は、ユーザーが実行するための ssh-keygen コマンドラインを
+// 組み立てるので、より厳しいルールを保つ。
 func TestHardwareCommentKeepsTheShellSafeRule(t *testing.T) {
 	if err := ValidateHardwareComment("work laptop"); err == nil {
 		t.Error("ValidateHardwareComment accepted a space, which would need quoting in the shown command")
@@ -955,10 +955,10 @@ func TestHardwareCommentKeepsTheShellSafeRule(t *testing.T) {
 	}
 }
 
-// A key can be handed to the agent and could not be taken back. Purging the key
-// left its identity loaded, so the material the user had just destroyed was
-// still there to authenticate with, and the screen that lists what the agent
-// holds had nothing to offer but the list.
+// 鍵をエージェントに渡したまま取り戻せないことがありえた。鍵を完全削除しても
+// その identity は読み込まれたままで、ユーザーがたったいま破棄した素材が依然として
+// そこにあって認証に使え、エージェントの保持内容を並べる画面には、その一覧を出す
+// こと以外にできることがなかった。
 func TestDeregisterTakesTheKeyBackOutOfTheAgent(t *testing.T) {
 	agent := &fakeAgent{available: true}
 	service, _ := newServiceWithAgent(t, newQueryRunner(), agent)
@@ -1002,10 +1002,10 @@ func TestDeregisterSaysSoWhenThereIsNoAgent(t *testing.T) {
 	}
 }
 
-// A key whose passphrase is stored is added to the agent in one action rather
-// than two. The lookup is injected, the same way validateGroup is: where a
-// secret lives belongs to the secret package, and this one must not import it
-// to ask.
+// パスフレーズが保存されている鍵は、二段階ではなく一度の操作でエージェントに追加
+// される。この参照関数は validateGroup と同じやり方で注入される。秘密がどこにある
+// かは secret パッケージの領分であり、このパッケージはそれを尋ねるために import
+// してはならない。
 func TestRegisterUsesAStoredPassphraseWhenNoneIsTyped(t *testing.T) {
 	agent := &fakeAgent{available: true}
 	service, workspace := newServiceWithAgent(t, newQueryRunner(), agent)
@@ -1025,8 +1025,8 @@ func TestRegisterUsesAStoredPassphraseWhenNoneIsTyped(t *testing.T) {
 	}
 }
 
-// A typed passphrase always wins: the person at the keyboard is more current
-// than the file.
+// 打ち込まれたパスフレーズが常に勝つ。キーボードの前にいる人の方が、ファイルよりも
+// 新しいからだ。
 func TestATypedPassphraseBeatsTheStoredOne(t *testing.T) {
 	agent := &fakeAgent{available: true}
 	service, _ := newServiceWithAgent(t, newQueryRunner(), agent)
@@ -1043,7 +1043,7 @@ func TestATypedPassphraseBeatsTheStoredOne(t *testing.T) {
 	}
 }
 
-// Nothing stored is how this behaved before anything was, and still does.
+// 何も保存されていない状態の振る舞いは、何も保存できなかった頃と同じで、いまもそうだ。
 func TestRegisterWithoutAStoredPassphraseSendsWhatItWasGiven(t *testing.T) {
 	agent := &fakeAgent{available: true}
 	service, _ := newServiceWithAgent(t, newQueryRunner(), agent)
@@ -1059,13 +1059,13 @@ func TestRegisterWithoutAStoredPassphraseSendsWhatItWasGiven(t *testing.T) {
 	}
 }
 
-// A passphrase change can be undone now.
+// パスフレーズの変更は、いまでは取り消せる。
 //
-// It kept no backup because the previous contents are a private key and a copy
-// of one in ~/.ssh/sshc/backups/ was worse than the lost undo. The backups
-// are sealed with the master password now, so that reason is gone — and this is
-// the write where an accident is least recoverable: get the new passphrase
-// wrong and the key is a key nobody can open.
+// 以前はバックアップを取らなかった。置き換える内容が秘密鍵であり、そのコピーが
+// ~/.ssh/sshc/backups/ にあることは、取り消しを失うことより悪かったからだ。いま
+// バックアップはマスターパスワードで封じられるので、その理由は消えた — そして
+// ここは、事故が最も回復しにくい書き込みでもある。新しいパスフレーズを打ち間違え
+// れば、その鍵は誰にも開けない鍵になる。
 func TestChangingAPassphraseKeepsASealedBackup(t *testing.T) {
 	workspace := newTestWorkspace(t)
 	clock := steppingClock(time.Date(2026, 8, 5, 9, 0, 0, 0, time.UTC))
@@ -1125,9 +1125,9 @@ func TestChangingAPassphraseKeepsASealedBackup(t *testing.T) {
 	}
 }
 
-// sealForTest stands in for the vault's key. It is reversible and obviously not
-// the identity: the bytes on disk must not be the bytes that went in, or a
-// guard that greps a backup for key material would pass on plaintext.
+// sealForTest は vault の鍵の代役である。可逆であり、かつ明らかに恒等写像では
+// ない。ディスク上のバイト列は入ってきたバイト列と違わねばならず、さもなければ
+// バックアップを鍵素材で grep する検査が平文の上を素通りしてしまう。
 func sealForTest(plaintext []byte) ([]byte, error) {
 	sealed := make([]byte, 0, len(plaintext)+len(testSealMarker))
 	sealed = append(sealed, testSealMarker...)

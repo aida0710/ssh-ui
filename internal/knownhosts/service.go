@@ -20,8 +20,8 @@ var (
 	ErrUnsupportedKeyType  = errors.New("unsupported host key type")
 )
 
-// supportedKeyTypes is the set this application will write into known_hosts.
-// Anything else is refused rather than copied through unchecked.
+// supportedKeyTypes は、このアプリケーションが known_hosts に書き込む種別の集合。
+// それ以外は、検査せずに通すのではなく拒否する。
 var supportedKeyTypes = map[string]bool{
 	"ssh-ed25519":                        true,
 	"ssh-rsa":                            true,
@@ -36,32 +36,32 @@ var supportedKeyTypes = map[string]bool{
 
 var base64Pattern = regexp.MustCompile(`^[A-Za-z0-9+/]+={0,3}$`)
 
-// Target identifies one entry to remove. Digest is the hash of the exact line
-// the user saw, so a file edited in the meantime cannot lose the wrong line.
+// Target は削除するエントリひとつを特定する。Digest はユーザーが見た行そのものの
+// ハッシュなので、その間に編集されたファイルで違う行を失うことはない。
 type Target struct {
 	Line   int
 	Digest string
 }
 
-// Listing is the searchable view of the file.
+// Listing は、このファイルの検索可能なビュー。
 type Listing struct {
 	Path  string
 	Lines []Line
 }
 
-// Service reads and edits known_hosts through the transaction manager.
+// Service は、トランザクションマネージャを通して known_hosts を読み書きする。
 type Service struct {
 	Workspace *storage.Workspace
 	Manager   *storage.Manager
 	Scanner   Scanner
 }
 
-// NewService wires the production dependencies together.
+// NewService は本番用の依存を配線する。
 func NewService(workspace *storage.Workspace, manager *storage.Manager, scanner Scanner) *Service {
 	return &Service{Workspace: workspace, Manager: manager, Scanner: scanner}
 }
 
-// Path is the known_hosts file this service manages.
+// Path は、このサービスが管理する known_hosts ファイル。
 func (s *Service) Path() string { return filepath.Join(s.Workspace.Root(), "known_hosts") }
 
 func (s *Service) read() ([]byte, error) {
@@ -72,7 +72,7 @@ func (s *Service) read() ([]byte, error) {
 	return contents, err
 }
 
-// Listing returns the entries matching query.
+// Listing は query に一致するエントリを返す。
 func (s *Service) Listing(query string) (Listing, error) {
 	contents, err := s.read()
 	if err != nil {
@@ -81,8 +81,8 @@ func (s *Service) Listing(query string) (Listing, error) {
 	return Listing{Path: s.Path(), Lines: Search(ParseFile(contents), query)}, nil
 }
 
-// Evidence is a digest of the current file. An action token for a known_hosts
-// change is bound to it, so an external edit invalidates the confirmation.
+// Evidence は現在のファイルのダイジェスト。known_hosts の変更に対するアクション
+// トークンはこれに結び付けられるので、外部からの編集は確認を無効にする。
 func (s *Service) Evidence() (string, error) {
 	contents, err := s.read()
 	if err != nil {
@@ -91,17 +91,17 @@ func (s *Service) Evidence() (string, error) {
 	return storage.Digest(contents), nil
 }
 
-// Scan asks ssh-keyscan for the keys of one host. The candidates it returns are
-// never trusted by this call; Add decides that separately.
+// Scan は、あるホストの鍵を ssh-keyscan に尋ねる。返される候補は、この呼び出しに
+// おいて信頼されることはない。その判断は Add が別途行う。
 func (s *Service) Scan(ctx context.Context, host string, port int) ([]Candidate, error) {
 	return s.Scanner.Scan(ctx, host, port)
 }
 
-// Delete removes the requested lines and leaves every other byte untouched.
+// Delete は、求められた行を取り除き、それ以外のバイトには一切触れない。
 //
-// Each target carries the digest of the line the user was shown. A line that no
-// longer hashes to it is refused, so a file edited between the confirmation and
-// the request cannot lose a line nobody agreed to remove.
+// 各 target は、ユーザーに表示された行のダイジェストを持つ。もはやそのハッシュに
+// ならない行は拒否される。したがって、確認とリクエストのあいだに編集されたファイル
+// で、誰も削除に同意していない行が失われることはない。
 func (s *Service) Delete(targets []Target) (storage.Result, error) {
 	contents, err := s.read()
 	if err != nil {
@@ -137,11 +137,11 @@ func (s *Service) Delete(targets []Target) (storage.Result, error) {
 	return s.commit("known_hosts.delete", contents, remaining.Render())
 }
 
-// Add appends one scanned key after the user proved it is the key they meant.
+// Add は、ユーザーが意図した鍵であると証明したうえで、スキャンした鍵を 1 行追加する。
 //
-// Either expectedFingerprint matches the key's real fingerprint, or the user
-// acknowledged explicitly that the key is unverified. The line is rebuilt from
-// validated parts rather than trusting the text a client sent.
+// expectedFingerprint が鍵の実際のフィンガープリントと一致するか、ユーザーがその鍵
+// は未検証であると明示的に承認したかのいずれかである。行は、クライアントが送って
+// きたテキストを信用せず、検証済みの部品から組み立て直される。
 func (s *Service) Add(candidate Candidate, expectedFingerprint string, acknowledged bool) (storage.Result, error) {
 	if !supportedKeyTypes[candidate.KeyType] {
 		return storage.Result{}, ErrUnsupportedKeyType
@@ -175,7 +175,7 @@ func (s *Service) Add(candidate Candidate, expectedFingerprint string, acknowled
 	file := ParseFile(contents)
 	for _, line := range file.Lines {
 		if strings.TrimSpace(line.Raw) == newLine {
-			// Exact duplicate: nothing to write.
+			// 完全な重複。書くものはない。
 			return storage.Result{}, nil
 		}
 	}

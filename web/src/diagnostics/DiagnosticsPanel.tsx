@@ -24,17 +24,17 @@ import { Notice } from "../ui/surface";
 
 type DiagnosticsPanelProps = {
   api?: IntegrationsApi;
-  // The host to diagnose. The standalone section leaves it undefined and asks
-  // for an alias; the Host editor already knows which connection is open, so it
-  // passes one and no alias field is rendered. A fixed host also skips the
-  // configuration read, which describes the file set rather than this host and
-  // is what the Config section is for.
+  // 診断対象のホスト。独立した section はこれを undefined のままにして
+  // alias を尋ねるが、ホストエディタは既にどの接続が開いているか
+  // 知っているため、それを渡し alias フィールドはレンダリングされない。固定
+  // されたホストは設定の読み込みも省く。それはこのホストでは
+  // なくファイル集合を記述するものであり、Config section の役目である。
   host?: string;
 };
 
-// Every check on this screen is started by the user on purpose. Opening the
-// panel reads the configuration, which runs nothing; each of the other
-// operations spends a confirmation and may start a process.
+// この画面のすべての検査はユーザーが意図して開始する。パネルを開く
+// ことは設定を読むだけで何も実行しない。他の各操作は
+// 確認を消費し、プロセスを起動し得る。
 export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPanelProps) {
   const t = useTranslate();
   const embedded = host !== undefined;
@@ -64,9 +64,9 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
     };
   }, [api, embedded]);
 
-  // Every result on this panel is about one host. Opening a different one must
-  // clear them, or a reachability verdict earned by the previous connection
-  // would sit under the new one's name and read as its own.
+  // このパネルのすべての結果は一つのホストについてのものである。別の
+  // ホストを開けばそれらを消さなければならない。さもなければ前の
+  // 接続が得た到達性の判定が新しい名前の下に座り、自分のものであるかのように読めてしまう。
   useEffect(() => {
     setEffective(null);
     setReach(null);
@@ -89,10 +89,10 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
 
   const directives = effective?.executableDirectives ?? [];
 
-  // Every check is one entry here rather than one hand-written button, because
-  // the guard is the point: an alias is required and a second check must not
-  // start while the first is still running. Written out four times, a fifth
-  // check would eventually be added without one of them.
+  // すべての検査は手書きのボタン一つずつではなく、ここでの一つの
+  // エントリである。要点は防護にある。alias は必須であり、最初の
+  // 検査が実行中は二つ目を始めてはならない。四回書き出せば、五つ目の
+  // 検査がいずれそのどちらかを欠いたまま追加されてしまう。
   const checks: { label: string; start: () => void }[] = [
     {
       label: t("diag.explain"),
@@ -196,11 +196,12 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
       ) : null}
 
       {/*
-        A failed `ssh -G` answers 200 with the reason inside it, so nothing
-        throws and the panel used to render silence: the sources table is empty,
-        there may be no executable directive, and every other block is
-        conditional. Pressing Explain looked like it did nothing at all. What
-        OpenSSH said about its own refusal is the only thing that explains it.
+        失敗した`ssh -G`は理由を内側に持つ 200 を返すため何も
+        スローせず、パネルは以前沈黙をレンダリングしていた。ソース
+        テーブルは空で、実行可能なディレクティブがないこともあり、
+        他のどのブロックも条件付きである。Explain を押しても
+        何もしていないように見えていた。OpenSSH が自身の拒否に
+        ついて語ったことだけが、それを説明する唯一のものである。
       */}
       {effective?.failure.failed ? (
         <div className="rounded border border-control-line p-3 text-sm">
@@ -251,20 +252,21 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
       ) : null}
 
       {/*
-        Every candidate is listed, not only the winner. OpenSSH keeps the first
-        value it reads for a keyword, so "why is it this and not that" is a
-        question about the lines that lost, and a table that hides them cannot
-        answer it. The winner is marked rather than being the only row.
+        勝者だけでなくすべての候補を列挙する。OpenSSH は
+        keyword について最初に読んだ値を保つため、「なぜこれで
+        あってあれではないのか」は負けた行についての問いであり、
+        それらを隠すテーブルはそれに答えられない。勝者は唯一の行に
+        なるのではなく、印を付けられる。
       */}
       {effective && effective.sources.length > 0 ? (
-        // Five columns of paths and conditions do not fit a narrow window, and
-        // the page must not be the thing that scrolls sideways.
+        // パスと条件の五つの列は狭いウィンドウには収まらず、
+        // ページが横にスクロールするものになってはならない。
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             {/*
-              The caption explains the table; it never said what the columns
-              were. A path, a condition and a verdict rendered as three
-              unlabelled greys are not self-describing.
+              キャプションはテーブルを説明するが、列が何であるかは
+              一度も述べていなかった。パス、条件、判定を
+              三つの無ラベルな灰色として描いても、自己説明的にはならない。
             */}
             <caption className={`mb-2 text-left ${hintText}`}>{t("diag.sourcesCaption")}</caption>
             <thead>
@@ -297,10 +299,10 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
       ) : null}
 
       {/*
-        Design §5.5 and §6.1 both ask for the connection route to be visible,
-        and a hop this engine could not resolve is marked rather than guessed.
-        Rendering only the resolved hops would turn "we do not know" into a
-        confident-looking gap in the chain.
+        design §5.5 と§6.1 はどちらも接続経路が見えることを
+        求めており、このエンジンが解決できなかったホップは推測される
+        のではなく印が付けられる。解決できたホップだけを描けば、
+        「分からない」ことが連鎖の中の自信ありげな空白に変わってしまう。
       */}
       {effective && effective.route.length > 0 ? (
         <div className={`${sectionCard} text-sm`}>
@@ -328,9 +330,9 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
       ) : null}
 
       {/*
-        The engine refuses to invent a value it cannot derive. These notes are
-        where it says so, and they are the difference between "this is the
-        answer" and "OpenSSH is the authority for this one".
+        エンジンは導出できない値を捏造することを拒否する。これらの
+        注記はそう述べる場所であり、「これが答えである」ことと
+        「これについては OpenSSH が権威である」ことの違いである。
       */}
       {effective && effective.complexities.length > 0 ? (
         <div className="rounded border border-notice-line p-3 text-sm">
@@ -353,9 +355,9 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
         <div className={`${sectionCard} text-sm`}>
           <h3 className={sectionHeading}>{t("diag.reachability")}</h3>
           {/*
-            The address and the verdict were one sentence joined by a dash. They
-            are two different facts — where it dialled, and what happened — and
-            the address is the one worth reading in a fixed pitch.
+            アドレスと判定はダッシュで繋いだ一つの文だった。これらは
+            二つの異なる事実——どこへ発信したか、何が起きたか——であり、
+            アドレスは等幅で読む価値のある方である。
           */}
           <p className="font-mono text-xs text-ink">{reach.address}</p>
           <p className="text-ink">{reach.outcome}</p>
@@ -395,9 +397,9 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
             ) : null}
           </div>
           {/*
-            An alias this application refuses to launch still gets its command,
-            and copying is the whole point of showing it. Design §6.5 allows the
-            copy and withholds only the launch.
+            このアプリケーションが起動を拒否する alias にも、その
+            コマンドは与えられる。それを見せる目的はコピーできる
+            ことに尽きる。design §6.5 はコピーを許し、起動だけを差し止める。
           */}
           {terminal.launchable ? null : <p className="text-notice-ink">{terminal.warning}</p>}
         </div>

@@ -17,48 +17,48 @@ import (
 	"sshc/internal/secret"
 )
 
-// AskpassPath is where the helper asks for a password.
+// AskpassPath はヘルパーがパスワードを尋ねる先である。
 //
-// It is deliberately not under /api/. The API surface is for the browser and
-// is guarded by a session cookie, a CSRF header and Fetch Metadata; the helper
-// is not a browser and has none of those. This endpoint authenticates by a
-// single-use token instead, and the route table test — which only inspects
-// /api/ paths — is therefore not weakened by its existence.
+// これはわざと /api/ の配下に置いていない。API 表面はブラウザ向けで、
+// セッション cookie と CSRF ヘッダ、Fetch Metadata で守られているが、
+// ヘルパーはブラウザではなく、そのいずれも持たない。このエンドポイントは
+// 代わりに使い捨てトークンで認証しており、/api/ パスしか調べない
+// ルート表のテストは、この存在によって弱まることはない。
 const AskpassPath = "/askpass"
 
-// AskpassTokenHeader carries the one-time token.
+// AskpassTokenHeader はワンタイムトークンを運ぶ。
 //
-// A custom header and a JSON content type both make this a request no browser
-// will send cross-origin without a preflight, and this server answers no
-// preflight, so no web page can reach the endpoint however much it knows about
-// it.
+// 独自ヘッダと JSON の content type の両方により、このリクエストは
+// プリフライトなしにはどのブラウザもクロスオリジンで送れず、この
+// サーバーはプリフライトに応えないので、どんな Web ページもこの
+// エンドポイントについてどれほど知っていても到達できない。
 const AskpassTokenHeader = "X-SSHC-Askpass"
 
-// maxAskpassBody bounds the helper's request. A prompt is a line of text.
+// maxAskpassBody はヘルパーのリクエストの上限を定める。プロンプトは 1 行のテキストである。
 const maxAskpassBody = 8 << 10
 
-// PasswordHandlers serves the vault and the helper.
+// PasswordHandlers は vault とヘルパーを提供する。
 type PasswordHandlers struct {
 	Service *secret.Service
-	// Eligibility answers what stands between an alias and a stored password.
-	// It is injected because the answer comes from the configuration graph and
-	// known_hosts, neither of which the vault knows anything about. A nil
-	// function means nothing is checked, which is what the vault did before
-	// this existed.
+	// Eligibility は alias と保存されたパスワードの間に何があるかを答える。
+	// これが注入されているのは、答えが設定グラフと known_hosts から
+	// 来るためで、そのどちらについても vault は何も知らない。nil の
+	// 関数は何もチェックしないことを意味し、これはこの仕組みができる
+	// 前に vault がしていたことである。
 	Eligibility func(alias string) (application.PasswordEligibility, error)
-	// Answerable is the prompt rule. It is injected rather than imported so
-	// that the rule and the helper that also applies it cannot drift into two
-	// different rules without a test noticing.
+	// Answerable はプロンプトの規則である。import ではなく注入している
+	// のは、その規則とそれを適用するヘルパーとが、テストに気づかれず
+	// 別々の規則へとずれてしまうことがないようにするためだ。
 	Answerable func(alias, prompt string) bool
-	// ResealSnapshot pushes the workspace again under a new master password, so
-	// the bucket's live snapshot stops being one only the old password opens.
-	// It is injected because where a snapshot goes belongs to the object store,
-	// and a nil one means this machine has no bucket to update.
+	// ResealSnapshot は新しいマスターパスワードでワークスペースを再度 push し、
+	// bucket の最新スナップショットが古いパスワードでしか開けないままにはしない。
+	// これが注入されているのは、スナップショットの行き先が object store に
+	// 属する事柄だからで、nil はこのマシンに更新すべき bucket がないことを意味する。
 	ResealSnapshot func(ctx context.Context, passphrase string) error
 }
 
-// snapshotProblemCode names why the bucket was not updated, in the same
-// vocabulary the sync screen already uses.
+// snapshotProblemCode は bucket が更新されなかった理由を、sync 画面が
+// すでに使っている語彙と同じ言葉で名付ける。
 func snapshotProblemCode(err error) string {
 	switch {
 	case errors.Is(err, remotesync.ErrNotConfigured):
@@ -89,8 +89,8 @@ func registerPasswordRoutes(engine *echo.Echo, handlers PasswordHandlers) {
 	engine.POST(AskpassPath, handlers.Askpass)
 }
 
-// status is the one response every route in this file returns. It carries
-// which hosts have a password and never a password.
+// status はこのファイルの全ルートが返す唯一のレスポンスである。
+// どのホストがパスワードを持つかを運び、パスワードそのものは運ばない。
 func (h PasswordHandlers) status(c *echo.Context) error {
 	exists, err := h.Service.Exists()
 	if err != nil {
@@ -133,17 +133,17 @@ func (h PasswordHandlers) Unlock(c *echo.Context) error {
 	return h.status(c)
 }
 
-// Change replaces the master password and re-seals what it held.
+// Change はマスターパスワードを置き換え、それが保持していたものを再封印する。
 //
-// The bucket's live snapshot is sealed with the same password, so it is pushed
-// again here — the vault cannot do it, because where a snapshot goes belongs to
-// the object store and the secret package does not import it. The dated copies
-// beside it are deliberately left alone: they are history, and re-sealing every
-// one of them would mean downloading and re-uploading the whole bucket.
+// bucket の最新スナップショットは同じパスワードで封印されているため、
+// ここで再び push する — vault にはできない。スナップショットの行き先は
+// object store に属する事柄であり、secret パッケージはそれを import
+// していないからだ。その脇の日付付きコピーはわざと手を付けず残してある。それらは
+// 履歴であり、全部の再封印は bucket 全体のダウンロードと再アップロードを意味する。
 //
-// A push that fails does not undo the change. The local half is done, and
-// saying so is more use than pretending it is not: the answer carries whether
-// the bucket was updated and why not.
+// push が失敗しても変更は元に戻らない。ローカル側はすでに完了して
+// おり、そう伝える方が取り繕うより役に立つ。応答には bucket が
+// 更新されたかどうかと、されなかった理由が含まれる。
 func (h PasswordHandlers) Change(c *echo.Context) error {
 	var request api.ChangeMasterPasswordRequest
 	if err := decodeJSON(c, &request); err != nil {
@@ -183,7 +183,7 @@ func (h PasswordHandlers) Lock(c *echo.Context) error {
 	return h.status(c)
 }
 
-// Eligible reports what stands between an alias and a stored password.
+// Eligible は alias と保存されたパスワードの間に何があるかを報告する。
 func (h PasswordHandlers) Eligible(c *echo.Context) error {
 	alias := c.Param("alias")
 	if err := platform.ValidateAlias(alias); err != nil {
@@ -243,15 +243,15 @@ func eligibilityNotice(notice application.Notice) api.Notice {
 	return described
 }
 
-// kindOf reads the namespace out of the path. There are two and there will not
-// quietly be a third: an unknown one is refused here rather than defaulted,
-// because defaulting would mean a typo silently chose a namespace.
+// kindOf はパスから namespace を読み取る。namespace は 2 つあり、
+// 黙って 3 つ目が増えることはない。未知の namespace は既定値にせず
+// ここで拒否する。既定値にすると、typo が黙って namespace を選ぶことになるからだ。
 func kindOf(c *echo.Context) (secret.Kind, bool) {
 	kind := secret.Kind(c.Param("kind"))
 	return kind, secret.ValidKind(kind)
 }
 
-// credentialProblem maps the vault's refusals onto answers a screen can act on.
+// credentialProblem は vault の拒否を画面が扱える応答に変換する。
 func credentialProblem(c *echo.Context, err error, uses []string) error {
 	switch {
 	case errors.Is(err, secret.ErrLocked):
@@ -268,9 +268,9 @@ func credentialProblem(c *echo.Context, err error, uses []string) error {
 	}
 }
 
-// listCredentials answers names and what uses them. Never a value: a screen
-// that could read a secret would be a screen a compromised browser could read
-// it from, and choosing needs only the name.
+// listCredentials は名前とそれを使うものを答える。値は決して返さ
+// ない。secret を読める画面は、乗っ取られたブラウザがそこから
+// 読み取れる画面でもあり、選択には名前だけあれば十分だからだ。
 func (h PasswordHandlers) listCredentials(c *echo.Context) error {
 	listed, err := h.Service.Credentials()
 	if err != nil {
@@ -359,10 +359,10 @@ func (h PasswordHandlers) Store(c *echo.Context) error {
 	if err := decodeJSON(c, &request); err != nil {
 		return problem(c, http.StatusBadRequest, "invalid_request")
 	}
-	// A blocker means the stored password could never be offered, so storing
-	// it would put a secret on disk that has no use. Refusing is checked here
-	// rather than only in the interface, because the interface is replaceable
-	// and this side is not.
+	// blocker があるということは、保存したパスワードが決して提示され
+	// ないことを意味し、保存すれば使い道のない secret をディスクに
+	// 置くことになる。interface だけでなくここでも拒否を確認するのは、
+	// interface は差し替え可能でも、こちら側はそうではないからだ。
 	if h.Eligibility != nil {
 		report, err := h.Eligibility(alias)
 		if err != nil {
@@ -404,13 +404,13 @@ type askpassResponse struct {
 	Password string `json:"password"`
 }
 
-// Askpass answers the helper.
+// Askpass はヘルパーに応答する。
 //
-// Every refusal is the same shape from outside — a status and no body — so
-// this endpoint cannot be used to enumerate which aliases have a password. The
-// helper distinguishes only "nothing stored or locked" from "refused", because
-// those are different things to tell someone staring at a Terminal window, and
-// neither reveals anything to a caller without a valid token.
+// すべての拒否は外から見て同じ形——status のみで body がない——
+// なので、このエンドポイントはどの alias にパスワードがあるかを
+// 列挙する手段にはならない。ヘルパーは「何も保存されていないか施錠中」と
+// 「拒否された」しか区別しない。Terminal を見つめる人に伝える内容としては
+// この 2 つが別物であり、有効なトークンを持たない呼び出し元には何も明かさない。
 func (h PasswordHandlers) Askpass(c *echo.Context) error {
 	request := c.Request()
 	if request.Header.Get(echo.HeaderContentType) != "application/json" {
@@ -431,7 +431,7 @@ func (h PasswordHandlers) Askpass(c *echo.Context) error {
 
 	answerable := h.Answerable
 	if answerable == nil {
-		// No rule means no answer. A nil predicate must never mean "allow".
+		// 規則がなければ応答もない。nil の predicate が「許可」を意味してはならない。
 		return c.NoContent(http.StatusForbidden)
 	}
 

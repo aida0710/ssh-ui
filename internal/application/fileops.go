@@ -12,59 +12,59 @@ import (
 )
 
 var (
-	// ErrCannotTouchEntryFile refuses to rename or delete the file ssh reads
-	// first. Everything else in the workspace is reached through it, so moving
-	// it out of the way would not relocate a configuration, it would end one.
+	// ErrCannotTouchEntryFile は、ssh が最初に読むファイルの
+	// 名前変更や削除を拒否する。ワークスペースの他のすべてはそれを経由して
+	// 到達するので、それをどければ設定を移動させたことにはならず、終わらせることになる。
 	ErrCannotTouchEntryFile = errors.New("the entry configuration file cannot be renamed or deleted here")
-	// ErrDestinationExists refuses a rename onto a file that is already there.
-	// Merging two configurations is a decision this application will not make.
+	// ErrDestinationExists は既に存在するファイルへの名前変更を拒否する。
+	// 2 つの設定をマージすることは、このアプリケーションが下さない決定である。
 	ErrDestinationExists = errors.New("a file already exists at that path")
-	// ErrSamePath refuses a rename that goes nowhere.
+	// ErrSamePath は、どこへも行かない名前変更を拒否する。
 	ErrSamePath = errors.New("the destination is the file itself")
-	// ErrFileNotFound reports that the file named is not there to operate on.
+	// ErrFileNotFound は、指定されたファイルが操作対象として存在しないことを報告する。
 	ErrFileNotFound = errors.New("no such file in the workspace")
-	// ErrNotADirectory refuses a directory operation aimed at a file.
+	// ErrNotADirectory は、ファイルに向けたディレクトリ操作を拒否する。
 	ErrNotADirectory = errors.New("that path is not a directory")
 )
 
-// GroupDeclaredError refuses a directory operation on a declared group and says
-// which group it is, so the interface can send the user where that operation
-// actually lives.
+// GroupDeclaredError は、宣言済みグループへのディレクトリ操作を
+// 拒否し、それがどのグループかを伝える。インターフェースがその
+// 操作の本来の場所へユーザーを送れるようにするためである。
 type GroupDeclaredError struct{ Group string }
 
 func (e *GroupDeclaredError) Error() string { return "that directory is a declared group" }
 
 const (
-	// NoticeIncludeNoLongerMatches warns that a pattern which used to reach
-	// this file will not reach it under its new name. The file is still on
-	// disk and ssh will simply stop reading it, which is the kind of silence
-	// this application exists to prevent.
+	// NoticeIncludeNoLongerMatches は、これまでこのファイルに
+	// 届いていたパターンが、新しい名前ではもう届かなくなることを
+	// 警告する。ファイルはディスク上に残るが、ssh は単に読むのを
+	// やめてしまう。これはこのアプリケーションが防ぐために存在する種類の沈黙である。
 	NoticeIncludeNoLongerMatches = "include_no_longer_matches"
-	// NoticeIncludeNotRewritten marks an Include that names this file in a
-	// form this application will not rewrite — an absolute path, or one that
-	// starts with a tilde. Rewriting it would mean guessing what the author
-	// meant by it, so it is reported and left exactly as it was.
+	// NoticeIncludeNotRewritten は、このアプリケーションが書き換え
+	// ない形式でこのファイルを名指しする Include に印を付ける —
+	// 絶対パス、あるいはチルダで始まるものである。書き換えるとしたら
+	// 作者の意図を推測することになるので、報告した上でそのまま残す。
 	NoticeIncludeNotRewritten = "include_not_rewritten"
-	// NoticeIncludeNowUnreached warns that a rename has put the file
-	// somewhere no Include reaches.
+	// NoticeIncludeNowUnreached は、名前変更によってファイルが
+	// どの Include も届かない場所に置かれたことを警告する。
 	NoticeIncludeNowUnreached = "include_now_unreached"
-	// NoticeDirectoryCreated and NoticeDirectoryRemoved report what a directory
-	// operation did, so the preview has something to show: a directory has no
-	// contents to diff.
+	// NoticeDirectoryCreated と NoticeDirectoryRemoved は、
+	// ディレクトリ操作が何を行ったかを報告する。ディレクトリには
+	// diff すべき中身がないので、プレビューに表示するものが必要だからだ。
 	NoticeDirectoryCreated = "directory_created"
 	NoticeDirectoryRemoved = "directory_removed"
 )
 
-// hasGlobMetacharacter reports whether a pattern selects by shape rather than
-// by name. A pattern that names one file is rewritten when that file moves; a
-// pattern that describes a set is left alone, because it was never about this
-// file in particular.
+// hasGlobMetacharacter は、パターンが名前ではなく形で選択して
+// いるかどうかを報告する。1 つのファイルを名指しするパターンは
+// そのファイルが移動すると書き換えられる。集合を表すパターンは
+// そのまま残される。もともとこの特定のファイルについてのものではなかったからだ。
 func hasGlobMetacharacter(pattern string) bool {
 	return strings.ContainsAny(pattern, "*?[")
 }
 
-// includeEdges returns every Include edge in the graph, in file order, so the
-// rewriting below visits each naming file once and deterministically.
+// includeEdges はグラフ中のすべての Include エッジをファイル順で
+// 返す。これにより後段の書き換えが、名指しする各ファイルを一度だけ、決定的に訪れる。
 func includeEdges(graph *config.Graph) []config.Edge {
 	var edges []config.Edge
 	for _, path := range graph.Order {
@@ -77,13 +77,13 @@ func includeEdges(graph *config.Graph) []config.Edge {
 	return edges
 }
 
-// RenameFile moves one configuration file and rewrites the Include lines that
-// named it, in one journalled transaction.
+// RenameFile は 1 つの設定ファイルを移動し、それを名指ししていた
+// Include 行を 1 つのジャーナル済みトランザクションで書き換える。
 //
-// A file is loaded because something includes it. Moving the file without the
-// line that names it would leave a configuration that still parses and quietly
-// stops applying, which is the failure this whole application is built to make
-// impossible to reach by accident.
+// ファイルが読み込まれるのは、何かがそれを include しているから
+// である。それを名指しする行なしにファイルを移動すれば、構文的には
+// 通るのに黙って適用されなくなる設定が残る。これはこの
+// アプリケーション全体が、うっかり起こせないよう作られている種類の失敗である。
 func (s *Service) planFileRename(graph *config.Graph, request EditRequest) (planned, error) {
 	source, err := AbsolutePath(s.workspace.Root(), request.Path)
 	if err != nil {
@@ -155,13 +155,13 @@ func (s *Service) planFileRename(graph *config.Graph, request EditRequest) (plan
 	return prepared, nil
 }
 
-// planFileDelete removes one configuration file and the Include lines that
-// named it.
+// planFileDelete は 1 つの設定ファイルと、それを名指ししていた
+// Include 行を削除する。
 //
-// The removal keeps a generational backup, so it appears in History as
-// restorable like every other change. That is the difference between deleting
-// a configuration file and purging a key: the key delete is confirmed twice
-// and deliberately keeps nothing.
+// この削除は世代バックアップを保つので、他のすべての変更と
+// 同じく History で復元可能として現れる。それが設定ファイルの
+// 削除と鍵の purge との違いである。鍵の削除は 2 回確認され、
+// 意図的に何も残さない。
 func (s *Service) planFileDelete(graph *config.Graph, request EditRequest) (planned, error) {
 	target, err := AbsolutePath(s.workspace.Root(), request.Path)
 	if err != nil {
@@ -212,7 +212,7 @@ func (s *Service) planFileDelete(graph *config.Graph, request EditRequest) (plan
 	return prepared, nil
 }
 
-// rewrite is one file whose Include lines changed.
+// rewrite は Include 行が変わった 1 つのファイルである。
 type rewrite struct {
 	absolute string
 	display  string
@@ -220,13 +220,13 @@ type rewrite struct {
 	updated  []byte
 }
 
-// rewriteIncludes points every literal Include at the file's new path, or
-// removes the line when there is no new path.
+// rewriteIncludes は、すべてのリテラルな Include をファイルの
+// 新しいパスへ向け直す。新しいパスがない場合は行を削除する。
 //
-// Only a pattern that resolves to exactly the workspace-relative path being
-// moved is touched. An absolute path, a tilde, or a glob is reported and left
-// alone: rewriting those would mean deciding what their author meant, and this
-// application does not edit bytes it cannot account for.
+// 移動対象のワークスペース相対パスにちょうど解決するパターンだけが
+// 変更される。絶対パス、チルダ、glob は報告した上でそのまま
+// 残される。それらを書き換えるとしたら作者の意図を決めつけることに
+// なり、このアプリケーションは説明のつかないバイトは編集しない。
 func (s *Service) rewriteIncludes(
 	graph *config.Graph, absolute, from, to string,
 ) ([]rewrite, []Notice, error) {
@@ -283,8 +283,8 @@ func (s *Service) rewriteIncludes(
 	return rewrites, notices, nil
 }
 
-// applyIncludeEdits rewrites or removes the named 1-based lines. Removal walks
-// backwards so the earlier indices stay valid.
+// applyIncludeEdits は指定された 1 始まりの行を書き換えるか削除する。
+// 削除は後ろから前へ進むので、前の方のインデックスが有効なまま保たれる。
 func applyIncludeEdits(file *config.File, lines []int, to string) ([]byte, error) {
 	sorted := append([]int(nil), lines...)
 	for index := 0; index < len(sorted); index++ {
@@ -315,9 +315,9 @@ func applyIncludeEdits(file *config.File, lines []int, to string) ([]byte, error
 	return file.Render(), nil
 }
 
-// appendRewrites puts each rewritten file into the transaction with its own
-// precondition, so an Include edited outside this application since the graph
-// was read stops the whole thing rather than half of it.
+// appendRewrites は、書き換えた各ファイルを固有の事前条件と
+// ともにトランザクションへ入れる。グラフを読んだ後にこのアプリケーションの
+// 外で Include が編集されていた場合、全体が止まるのであって、半端に終わることはない。
 func (s *Service) appendRewrites(prepared *planned, rewrites []rewrite) error {
 	for _, item := range rewrites {
 		prepared.changes = append(prepared.changes, storage.Change{
@@ -341,9 +341,9 @@ func matchesTarget(edge config.Edge, absolute string) bool {
 	return false
 }
 
-// patternWouldMatch reports whether a glob that reached the old path also
-// reaches the new one, so a rename inside the same directory does not raise a
-// warning about a pattern that is still perfectly correct.
+// patternWouldMatch は、旧パスに届いていた glob が新しいパスにも
+// 届くかどうかを報告する。同じディレクトリ内での名前変更が、
+// 依然として完全に正しいパターンについて警告を出さないようにするためである。
 func patternWouldMatch(edge config.Edge, root, to string) bool {
 	expanded := edge.Expanded
 	if expanded == "" {
@@ -357,9 +357,9 @@ func patternWouldMatch(edge config.Edge, root, to string) bool {
 	return matched
 }
 
-// anyPatternStillMatches reports whether some Include already reaches the file
-// at its new path, so a rename into a directory a glob covers is not reported
-// as unreachable.
+// anyPatternStillMatches は、いずれかの Include が新しいパスの
+// ファイルに既に届いているかどうかを報告する。glob が
+// カバーするディレクトリへの名前変更が、到達不能として報告されないようにするためである。
 func anyPatternStillMatches(graph *config.Graph, root, absolute, to string) bool {
 	for _, edge := range includeEdges(graph) {
 		if !matchesTarget(edge, absolute) {
@@ -372,12 +372,12 @@ func anyPatternStillMatches(graph *config.Graph, root, absolute, to string) bool
 	return false
 }
 
-// planDirectoryCreate makes one directory, journalled like everything else.
+// planDirectoryCreate は、他のすべてと同様にジャーナル記録しつつ 1 つのディレクトリを作る。
 //
-// It does not declare a group. A directory under connections/ that no Include
-// names is read by nothing, and the overview says so as group_not_declared —
-// which is the honest answer, because declaring one changes the entry file's
-// generated region and that belongs to the Groups screen.
+// グループを宣言することはしない。どの Include も名指ししない
+// connections/ 配下のディレクトリは何にも読まれず、overview は
+// それを group_not_declared として正直に伝える。宣言すると
+// エントリファイルの生成領域が変わり、それは Groups 画面の領分だからである。
 func (s *Service) planDirectoryCreate(graph *config.Graph, request EditRequest) (planned, error) {
 	target, err := AbsolutePath(s.workspace.Root(), request.Path)
 	if err != nil {
@@ -400,15 +400,15 @@ func (s *Service) planDirectoryCreate(graph *config.Graph, request EditRequest) 
 	}, nil
 }
 
-// planDirectoryDelete removes one empty directory.
+// planDirectoryDelete は空のディレクトリを 1 つ削除する。
 //
-// Empty only: removing a tree would mean deleting configuration files whose
-// Include lines this transaction never looked at, and the files have a delete
-// of their own that does look. A directory a generated Include line declares as
-// a group is refused outright — that removal moves connections, rewrites the
-// region, the group settings and the metadata, and the Groups screen is where
-// that operation lives. Two screens calling it would be two places for it to
-// drift apart.
+// 空のときだけ。ツリーごと削除するとしたら、このトランザクションが
+// 見ていない Include 行を持つ設定ファイルまで削除することになる。
+// そうしたファイルには、それを見る専用の削除がある。生成された
+// Include 行がグループとして宣言しているディレクトリは端から
+// 拒否される。その削除は connections を移動させ、region、
+// グループ設定、metadata を書き換える操作であり、それは Groups
+// 画面の領分である。2 つの画面がそれを呼ぶとしたら、食い違う場所が 2 つできることになる。
 func (s *Service) planDirectoryDelete(graph *config.Graph, request EditRequest) (planned, error) {
 	target, err := AbsolutePath(s.workspace.Root(), request.Path)
 	if err != nil {
@@ -439,7 +439,7 @@ func (s *Service) planDirectoryDelete(graph *config.Graph, request EditRequest) 
 	}, nil
 }
 
-// declaredGroupAt reports whether this path is a group the entry file declares.
+// declaredGroupAt は、このパスがエントリファイルの宣言するグループかどうかを報告する。
 func (s *Service) declaredGroupAt(graph *config.Graph, relative string) (string, bool) {
 	node := graph.Nodes[s.entryPath]
 	if node == nil || node.File == nil {

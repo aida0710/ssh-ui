@@ -17,8 +17,8 @@ func connectEngine(t *testing.T, handlers ConnectHandlers) *echo.Echo {
 	return engine
 }
 
-// Without the secret this endpoint says nothing at all — not that the alias is
-// unknown, not that a password is stored, not that one is not.
+// secret がなければ、このエンドポイントは何も語らない——alias が
+// 未知であることも、パスワードが保存されていることも、いないことも。
 func TestConnectRefusesWithoutTheSecretAndSaysNothingElse(t *testing.T) {
 	engine := connectEngine(t, ConnectHandlers{Secret: "the secret for this run"})
 
@@ -34,8 +34,8 @@ func TestConnectRefusesWithoutTheSecretAndSaysNothingElse(t *testing.T) {
 	}
 }
 
-// A server that could not write its handoff accepts nothing, rather than
-// accepting everything.
+// handoff を書けなかったサーバーは、すべてを受け入れるのではなく
+// 何も受け入れない。
 func TestConnectWithNoSecretConfiguredRefusesEveryone(t *testing.T) {
 	engine := connectEngine(t, ConnectHandlers{})
 	recorder := send(t, engine, http.MethodPost, ConnectPath, `{"alias":"bastion"}`,
@@ -45,8 +45,8 @@ func TestConnectWithNoSecretConfiguredRefusesEveryone(t *testing.T) {
 	}
 }
 
-// With no vault the answer is a connection without a token, which is a working
-// connection: OpenSSH asks for the password itself.
+// vault がない場合の答えはトークンなしの接続であり、それは正常な接続である。
+// OpenSSH 自身がパスワードを尋ねる。
 func TestConnectAnswersWithoutATokenWhenNothingIsStored(t *testing.T) {
 	const secret = "the secret for this run"
 	engine := connectEngine(t, ConnectHandlers{

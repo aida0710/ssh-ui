@@ -9,23 +9,23 @@ import (
 	"sshc/internal/api"
 )
 
-// LoginItemController turns "start at login" on and off.
+// LoginItemController は「ログイン時に起動」の on/off を切り替える。
 //
-// It is an interface rather than the macOS type so this package goes on
-// knowing nothing about launchd, and so no test registers an agent.
+// macOS の型ではなく interface にしてあるのは、このパッケージが
+// launchd について何も知らないままでよく、テストも agent を登録しないで済むためだ。
 type LoginItemController interface {
 	Enabled() bool
 	Enable(ctx context.Context, program string) error
 	Disable(ctx context.Context) error
 }
 
-// LoginItemHandlers serve the setting.
+// LoginItemHandlers はこの設定を提供する。
 type LoginItemHandlers struct {
-	// Controller is nil on a platform this is not built for, and on a build
-	// that could not resolve its own path. Either way the setting reports
-	// itself unsupported rather than pretending to work.
+	// Controller は、対応していないプラットフォーム向けのビルドや、
+	// 自身のパスを解決できなかったビルドでは nil になる。どちらの場合も
+	// 設定は動くふりをせず、非対応であると報告する。
 	Controller LoginItemController
-	// Program is the absolute path launchd would be told to run.
+	// Program は launchd に実行させる絶対パスである。
 	Program string
 }
 
@@ -48,10 +48,10 @@ func (h LoginItemHandlers) answer(c *echo.Context) error {
 
 func (h LoginItemHandlers) Status(c *echo.Context) error { return h.answer(c) }
 
-// Set starts or stops the agent.
+// Set は agent を起動または停止する。
 //
-// Off is the default and stays the default: nothing here runs unless the user
-// asked for it in this request.
+// Off が既定値であり既定値のままである。ユーザーがこのリクエストで
+// 求めない限り、ここでは何も実行されない。
 func (h LoginItemHandlers) Set(c *echo.Context) error {
 	var request api.LoginItem
 	if err := decodeJSON(c, &request); err != nil {

@@ -158,10 +158,10 @@ func TestServerSPAFallbackRequiresHTMLNavigation(t *testing.T) {
 			request := httptest.NewRequest(test.method, test.path, nil)
 			request.Host = "127.0.0.1:43123"
 			request.Header.Set("Accept", test.accept)
-			// A same-origin navigation carries this header. The "raw API
-			// namespace" case needs it because its unnormalised path begins
-			// with /api/, so the API rules apply to it; the assertion it makes
-			// is still that such a path never yields the SPA document.
+			// same-origin の navigation はこのヘッダを運ぶ。「raw API
+			// namespace」のケースでこれが必要なのは、その正規化前のパスが
+			// /api/ で始まり、API のルールが適用されるからだ。このテストが
+			// 主張するのは、そうしたパスが決して SPA の文書を返さないということである。
 			request.Header.Set("Sec-Fetch-Site", "same-origin")
 			if test.auth {
 				request.AddCookie(&http.Cookie{Name: SessionCookie, Value: credentials.SessionID})
@@ -225,15 +225,15 @@ type fakeAddr string
 func (address fakeAddr) Network() string { return string(address) }
 func (address fakeAddr) String() string  { return string(address) }
 
-// A reload has a cookie and no CSRF token, so renewing one cannot itself
-// require one. It is exempt from that check exactly as the bootstrap is, and
-// guarded by everything else: a valid session, the Origin, and Fetch Metadata —
-// none of which a cross-site page can produce, because SameSite=Strict withholds
-// the cookie and Sec-Fetch-Site cannot be forged.
+// reload には cookie があり CSRF トークンはない。したがって更新自体が
+// トークンを要求することはできない。bootstrap とまったく同様にこの
+// チェックからは除外されているが、それ以外——有効なセッション、
+// Origin、Fetch Metadata——はすべて守られている。cross-site のページはこれらを作れない。
+// SameSite=Strict が cookie を与えず、Sec-Fetch-Site も偽造できないからだ。
 func newRenewServer(t *testing.T) (*echo.Echo, session.Credentials) {
 	t.Helper()
-	// A varying source: a constant one makes every token identical, which would
-	// let this pass on an implementation that handed the old token back.
+	// 変化するソースである。一定のソースではすべてのトークンが同一になり、
+	// 古いトークンをそのまま返す実装でもこのテストを通してしまう。
 	manager, bootstrap, err := session.NewManager(&varyingReader{})
 	if err != nil {
 		t.Fatal(err)
@@ -297,9 +297,9 @@ func TestRenewIssuesATokenWithoutPresentingOne(t *testing.T) {
 	if answer.CSRFToken == "" || answer.CSRFToken == credentials.CSRFToken {
 		t.Fatalf("csrfToken = %q, want a fresh one", answer.CSRFToken)
 	}
-	// The retired one no longer verifies, which the renew route itself shows:
-	// a second renew presenting the old token is still fine, but the manager
-	// has moved on.
+	// 退役したトークンはもう検証を通らない。これは renew ルート自身が
+	// 示している。古いトークンを提示した 2 回目の renew はそれでも問題なく
+	// 通るが、manager の方はすでに先へ進んでいる。
 	if sendRenewRequest(t, engine, "/api/v1/session/renew", credentials.SessionID, "").Code != http.StatusOK {
 		t.Error("a second renew was refused")
 	}

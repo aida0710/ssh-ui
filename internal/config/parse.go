@@ -2,14 +2,14 @@ package config
 
 import "strings"
 
-// File is a parsed configuration file. Rendering an unmodified File returns
-// the original bytes exactly.
+// File は解析済みの設定ファイル。変更していない File をレンダリングすると、元の
+// バイト列がそのまま返る。
 type File struct {
 	Lines []Line
 }
 
-// Parse splits source into lines and classifies each one. Parse never fails:
-// input it cannot decompose is preserved as LineUnstructured.
+// Parse は source を行に分割し、それぞれを分類する。Parse は決して失敗しない。
+// 分解できない入力は LineUnstructured として保存される。
 func Parse(source []byte) *File {
 	file := &File{}
 	remaining := string(source)
@@ -21,7 +21,7 @@ func Parse(source []byte) *File {
 	return file
 }
 
-// Render returns the file contents.
+// Render はファイルの内容を返す。
 func (f *File) Render() []byte {
 	var builder strings.Builder
 	for _, line := range f.Lines {

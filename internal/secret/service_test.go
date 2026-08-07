@@ -28,8 +28,8 @@ func newService(t *testing.T) (*secret.Service, string) {
 	return secret.NewService(workspace, storage.NewManager(workspace, time.Now, rand.Reader), time.Now), home
 }
 
-// newClockedService owns time, so an idle day can be a line of test rather
-// than a day of waiting.
+// newClockedService は時間を所有するので、アイドルな 1 日を、丸一日待つのでは
+// なくテストの 1 行にできる。
 func newClockedService(t *testing.T, now func() time.Time) (*secret.Service, string) {
 	t.Helper()
 	home := t.TempDir()
@@ -88,8 +88,8 @@ func TestInitialiseWritesASealedFileAndUnlockReadsItBack(t *testing.T) {
 		t.Error("the written file contains the password or the alias in clear")
 	}
 
-	// A second service over the same workspace is a second run of the
-	// application, which is the case that matters.
+	// 同じワークスペースに対する二つ目のサービスは、アプリケーションの二度目の実行で
+	// あり、それが重要な場合である。
 	reopened := mustReopen(t, home)
 	if err := reopened.Unlock(passphrase); err != nil {
 		t.Fatalf("Unlock = %v", err)
@@ -109,8 +109,8 @@ func mustReopen(t *testing.T, home string) *secret.Service {
 }
 
 func TestInitialiseRefusesToReplaceAnExistingVault(t *testing.T) {
-	// Replacing it would destroy every stored password, and an encrypted file
-	// whose key is gone has no recovery path.
+	// 置き換えれば保存済みのパスワードがすべて破壊されるし、鍵が失われた暗号化
+	// ファイルに復旧の道はない。
 	service, home := newService(t)
 	if err := service.Initialise(passphrase); err != nil {
 		t.Fatal(err)
@@ -156,8 +156,8 @@ func TestUnlockRefusesTheWrongPassphraseAndStaysLocked(t *testing.T) {
 }
 
 func TestLockForgetsTheKeyAndEveryPendingToken(t *testing.T) {
-	// A token outliving the lock would let a connection started before it
-	// still collect a password afterwards.
+	// ロックより長生きするトークンがあれば、ロック前に始まった接続がロック後も
+	// パスワードを取得できてしまう。
 	service, _ := newService(t)
 	if err := service.Initialise(passphrase); err != nil {
 		t.Fatal(err)
@@ -204,8 +204,8 @@ func TestATokenIsSpentByItsFirstUse(t *testing.T) {
 }
 
 func TestATokenIsBoundToItsAlias(t *testing.T) {
-	// A stolen token must be worth at most the one host the user just chose to
-	// connect to, not the whole vault.
+	// 盗まれたトークンの価値は、多くともユーザーがいま接続を選んだホスト一つ分で
+	// あるべきで、vault 全体であってはならない。
 	service := unlockedWithPassword(t)
 	if err := service.Set("nas", "other-secret"); err != nil {
 		t.Fatal(err)
@@ -221,9 +221,9 @@ func TestATokenIsBoundToItsAlias(t *testing.T) {
 }
 
 func TestRedeemAppliesThePromptRuleAndSpendsTheTokenAnyway(t *testing.T) {
-	// The server side of the rule cannot be replaced by recompiling the
-	// helper. And a token that survived a refused prompt could be retried with
-	// an acceptable one, which would make the rule advisory.
+	// サーバー側のルールは、ヘルパーを再コンパイルしても置き換えられない。そして、
+	// 拒否されたプロンプトを生き延びたトークンを、受理されるもので再試行できるなら、
+	// そのルールは単なる推奨になってしまう。
 	service := unlockedWithPassword(t)
 
 	token, err := service.IssueToken("bastion")
@@ -303,14 +303,14 @@ func TestRenameCarriesThePasswordThroughAWrite(t *testing.T) {
 	}
 }
 
-// The vault keeps generations like every other file, and every one of them is
-// unreadable.
+// vault は他のすべてのファイルと同じく世代を保持し、そのどれもが
+// 読めない。
 //
-// It used to keep none, on the reasoning that old copies of a password store
-// are not something anyone wants left behind. What that cost was the undo: a
-// vault damaged by an accident had nothing to go back to. The backups are
-// sealed with this vault's own key now, so an old generation discloses nothing
-// a copy of the live file does not.
+// 以前はひとつも保持していなかった。パスワードストアの古いコピーが残されるのは
+// 誰も望まないだろう、という理屈である。その代償が取り消しだった。事故で壊れた
+// vault には、戻る先が何もなかったのである。いまバックアップはこの vault 自身の
+// 鍵で封じられているので、古い世代が明かすものは、生きたファイルのコピーが明かす
+// もの以上ではない。
 func TestTheVaultKeepsGenerationsAndNoneOfThemIsReadable(t *testing.T) {
 	service, home := newService(t)
 	if err := service.Initialise(passphrase); err != nil {
@@ -326,7 +326,7 @@ func TestTheVaultKeepsGenerationsAndNoneOfThemIsReadable(t *testing.T) {
 	found := 0
 	_ = filepath.Walk(backups, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info == nil || info.IsDir() {
-			return nil //nolint:nilerr // a missing backup directory fails below
+			return nil //nolint:nilerr // バックアップディレクトリがなければ下で失敗する
 		}
 		if !strings.Contains(filepath.ToSlash(path), "secrets") {
 			return nil
@@ -361,9 +361,9 @@ func unlockedWithPassword(t *testing.T) *secret.Service {
 	return service
 }
 
-// The service's credential surface, which is what every screen and every route
-// goes through. A locked vault answers ErrLocked rather than an empty list,
-// because "we cannot see" and "there is none" are different facts.
+// サービスの資格情報まわりの面。すべての画面とすべてのルートが通る場所である。
+// ロックされた vault は空リストではなく ErrLocked を答える。「見えない」と
+// 「存在しない」は別の事実だからだ。
 func TestCredentialsThroughTheService(t *testing.T) {
 	service, _ := newService(t)
 	if err := service.Initialise(passphrase); err != nil {
@@ -389,7 +389,7 @@ func TestCredentialsThroughTheService(t *testing.T) {
 		t.Fatalf("credentials = %#v, want office used by both", listed)
 	}
 
-	// The whole point of a name: one entry, rotated once, for both machines.
+	// 名前の要点そのもの。エントリはひとつ、ローテーションは一度、対象は両方のマシン。
 	if err := service.SetCredential(secret.KindPassword, "office", "rotated"); err != nil {
 		t.Fatal(err)
 	}
@@ -412,8 +412,8 @@ func TestCredentialsThroughTheService(t *testing.T) {
 	}
 }
 
-// The separation, again at the service, because a route reaches this and not
-// the vault directly.
+// 分離を、今度はサービスで確かめる。ルートが到達するのは vault 直接ではなく
+// ここだからである。
 func TestTheServiceWillNotCrossTheNamespaces(t *testing.T) {
 	service, _ := newService(t)
 	if err := service.Initialise(passphrase); err != nil {
@@ -426,9 +426,9 @@ func TestTheServiceWillNotCrossTheNamespaces(t *testing.T) {
 	}
 }
 
-// The object store's settings are sealed with the same master password and kept
-// beside the vault, not inside it. The vault travels — remotesync.Collect names
-// sshc/secrets outright — and the key to the bucket must not be in the bucket.
+// オブジェクトストアの設定は同じマスターパスワードで封じられ、vault の中ではなく
+// 隣に置かれる。vault は移動する — remotesync.Collect は sshc/secrets を明示的に
+// 名指しする — のであり、バケットへの鍵がバケットの中にあってはならない。
 func TestSyncSettingsAreSealedBesideTheVaultAndNotInIt(t *testing.T) {
 	service, home := newService(t)
 	if err := service.Initialise(passphrase); err != nil {
@@ -451,7 +451,7 @@ func TestSyncSettingsAreSealedBesideTheVaultAndNotInIt(t *testing.T) {
 		t.Errorf("settings = %#v, want %#v", read, settings)
 	}
 
-	// Not in the vault, and not readable from either file.
+	// vault の中にはなく、どちらのファイルからも読めない。
 	vault, err := os.ReadFile(vaultPath(home))
 	if err != nil {
 		t.Fatal(err)
@@ -470,9 +470,9 @@ func TestSyncSettingsAreSealedBesideTheVaultAndNotInIt(t *testing.T) {
 	}
 }
 
-// Never configured is a state, not a failure: a machine that has not been given
-// settings answers the zero value so the screen can show an empty form rather
-// than an error.
+// 一度も設定されていないことは失敗ではなく状態である。設定を与えられていない
+// マシンはゼロ値を答えるので、画面はエラーではなく空のフォームを表示
+// できる。
 func TestSyncSettingsAnswerEmptyBeforeTheyAreEverSet(t *testing.T) {
 	service, _ := newService(t)
 	if err := service.Initialise(passphrase); err != nil {
@@ -503,10 +503,10 @@ func TestSyncSettingsRefuseAShutVault(t *testing.T) {
 	}
 }
 
-// A vault that stays open for the life of the process is a vault that is open
-// while the laptop is in a bag. Nothing is asked at startup, so the cost of
-// shutting it is one master password on the next use, and the reach of leaving
-// it open is every password and every key passphrase.
+// プロセスの寿命のあいだ開いたままの vault は、ノートパソコンが鞄の中にあるあいだも
+// 開いている vault である。起動時には何も尋ねないので、閉じることの代償は次に使う
+// ときのマスターパスワード 1 回であり、開いたままにすることが及ぶ範囲は、すべての
+// パスワードとすべての鍵のパスフレーズである。
 func TestAVaultLeftUntouchedShutsItself(t *testing.T) {
 	clock := time.Date(2026, 8, 6, 9, 0, 0, 0, time.UTC)
 	service, _ := newClockedService(t, func() time.Time { return clock })
@@ -524,7 +524,7 @@ func TestAVaultLeftUntouchedShutsItself(t *testing.T) {
 	if _, err := service.IssueToken("bastion"); !errors.Is(err, secret.ErrLocked) {
 		t.Errorf("IssueToken after the idle timeout = %v, want ErrLocked", err)
 	}
-	// And it is the master password that opens it again, not merely asking.
+	// そして再び開けるのはマスターパスワードであって、単に尋ねることではない。
 	if err := service.Unlock(passphrase); err != nil {
 		t.Fatalf("Unlock = %v", err)
 	}
@@ -543,8 +543,8 @@ func TestUsingASecretPutsTheClockBackToZero(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Three quarters of the way there, four times over: a working day of use
-	// is not an idle day, however long it adds up to.
+	// 4 分の 3 まで進んだところを 4 回。使われている 1 日は、合計でどれだけ経とうと
+	// アイドルな 1 日ではない。
 	for range 4 {
 		clock = clock.Add(secret.IdleTimeout - secret.IdleTimeout/4)
 		if got := service.PasswordFor("bastion"); got != "hunter2" {
@@ -556,9 +556,9 @@ func TestUsingASecretPutsTheClockBackToZero(t *testing.T) {
 	}
 }
 
-// An open browser tab reads the status every time a screen mounts. If that
-// counted as use, one forgotten tab would hold the vault open for as long as
-// the machine is on, which is the thing the timeout exists to stop.
+// 開いたブラウザタブは、画面がマウントされるたびにステータスを読む。それが使用と
+// 数えられるなら、忘れられたタブひとつが、マシンの電源が入っているあいだじゅう
+// vault を開いたままにしてしまう。タイムアウトはまさにそれを止めるためにある。
 func TestReadingTheStatusDoesNotHoldTheVaultOpen(t *testing.T) {
 	clock := time.Date(2026, 8, 6, 9, 0, 0, 0, time.UTC)
 	service, _ := newClockedService(t, func() time.Time { return clock })
@@ -580,11 +580,11 @@ func TestReadingTheStatusDoesNotHoldTheVaultOpen(t *testing.T) {
 	}
 }
 
-// Verify answers "is this the master password?" without changing anything.
+// Verify は「これはマスターパスワードか」に、何も変えずに答える。
 //
-// It is what lets the snapshot use the master password instead of a second one:
-// a typed password can be checked before it is used as a key, so a typo becomes
-// a refusal here rather than an archive nobody can open.
+// スナップショットが二つ目のパスワードではなくマスターパスワードを使えるのは、
+// これのおかげだ。打ち込まれたパスワードは、鍵として使う前に検査できる。だから
+// 打ち間違いは、誰にも開けないアーカイブではなく、ここでの拒否になる。
 func TestVerifyAnswersWhetherThatIsTheMasterPassword(t *testing.T) {
 	service, _ := newService(t)
 	if _, err := service.Verify(passphrase); !errors.Is(err, secret.ErrNoVault) {
@@ -603,20 +603,20 @@ func TestVerifyAnswersWhetherThatIsTheMasterPassword(t *testing.T) {
 		t.Errorf("Verify with the wrong password = %v, %v, want false and no error", ok, err)
 	}
 
-	// And it answers from the file, so a shut vault can still be asked. The
-	// screen that asks is the one that has just been told the vault is shut.
+	// そしてファイルから答えるので、閉じた vault にも尋ねられる。尋ねる画面は、
+	// vault が閉じていると告げられたばかりの画面である。
 	service.Lock()
 	if ok, err := service.Verify(passphrase); err != nil || !ok {
 		t.Errorf("Verify on a locked vault = %v, %v", ok, err)
 	}
 }
 
-// Every generational backup is ciphertext, and the vault is what opens it.
+// すべての世代バックアップは暗号文であり、それを開くのが vault である。
 //
-// A backup of a private key used to be a copy of that key sitting in
-// ~/.ssh/sshc/backups/, which is why the writes that could produce one asked
-// for no backup at all and could therefore never be undone. Sealing them is
-// what buys back the undo.
+// 秘密鍵のバックアップは、以前はその鍵のコピーが ~/.ssh/sshc/backups/ に置かれる
+// ことを意味していた。だからこそ、それを生みうる書き込みはバックアップをまったく
+// 求めず、その結果、決して取り消せなかった。封をすることが、その取り消しを買い
+// 戻している。
 func TestBackupsAreSealedWithTheMasterPasswordAndOpenedWithIt(t *testing.T) {
 	service, _ := newService(t)
 	if err := service.Initialise(passphrase); err != nil {
@@ -640,9 +640,9 @@ func TestBackupsAreSealedWithTheMasterPasswordAndOpenedWithIt(t *testing.T) {
 		t.Errorf("OpenBackup returned %q", opened)
 	}
 
-	// A shut vault seals nothing and opens nothing. The application is behind
-	// the master password precisely so this cannot happen while anything is
-	// being written, and it fails loudly rather than writing in the clear.
+	// 閉じた vault は何も封じず、何も開かない。アプリケーションがマスターパスワードの
+	// 後ろにあるのは、まさに何かが書かれている最中にこれが起きないようにするためで
+	// あり、平文で書く代わりに大きな音を立てて失敗する。
 	service.Lock()
 	if _, err := service.SealBackup(plain); !errors.Is(err, secret.ErrLocked) {
 		t.Errorf("SealBackup while shut = %v, want ErrLocked", err)
@@ -652,12 +652,12 @@ func TestBackupsAreSealedWithTheMasterPasswordAndOpenedWithIt(t *testing.T) {
 	}
 }
 
-// Changing the master password re-seals everything the old one held.
+// マスターパスワードの変更は、古いパスワードが保持していたすべてを封じ直す。
 //
-// The vault, the sealed sync settings and every generational backup are sealed
-// with a key derived from it, so a change that only replaced the vault would
-// leave the rest openable by a password nobody uses any more — which is the
-// same as losing them.
+// vault も、封をされた同期設定も、すべての世代バックアップも、そこから導出された
+// 鍵で封じられている。したがって vault だけを置き換える変更は、残りを、もう誰も
+// 使わないパスワードで開ける状態のまま残す — それは失うのと同じ
+// ことだ。
 func TestChangingTheMasterPasswordReSealsTheVaultTheSettingsAndTheBackups(t *testing.T) {
 	service, home := newService(t)
 	if err := service.Initialise(passphrase); err != nil {
@@ -669,7 +669,7 @@ func TestChangingTheMasterPasswordReSealsTheVaultTheSettingsAndTheBackups(t *tes
 	if err := service.SetSyncSettings(secret.SyncSettings{Bucket: "b", AccessKeyID: "AKID"}); err != nil {
 		t.Fatal(err)
 	}
-	// A second write, so a generational backup of the vault exists to re-seal.
+	// 二度目の書き込み。これにより、封じ直すべき vault の世代バックアップが存在する。
 	if err := service.SetCredential(secret.KindPassword, "office-vm", "hunter3"); err != nil {
 		t.Fatal(err)
 	}
@@ -679,7 +679,7 @@ func TestChangingTheMasterPasswordReSealsTheVaultTheSettingsAndTheBackups(t *tes
 		t.Fatalf("ChangeMasterPassword = %v", err)
 	}
 
-	// The old one opens nothing, the new one opens everything.
+	// 古いものは何も開かず、新しいものはすべてを開く。
 	reopened := mustReopen(t, home)
 	if err := reopened.Unlock(passphrase); !errors.Is(err, secret.ErrWrongPassphrase) {
 		t.Errorf("the old password still opens the vault: %v", err)
@@ -699,12 +699,12 @@ func TestChangingTheMasterPasswordReSealsTheVaultTheSettingsAndTheBackups(t *tes
 		t.Errorf("the settings did not survive: %+v, %v", settings, err)
 	}
 
-	// And every backup opens with the new one.
+	// そしてすべてのバックアップが新しいもので開く。
 	backups := filepath.Join(home, ".ssh", "sshc", "backups")
 	found := 0
 	if err := filepath.Walk(backups, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil || info == nil || info.IsDir() {
-			return nil //nolint:nilerr // a missing directory fails the count below
+			return nil //nolint:nilerr // ディレクトリがなければ下のカウントで失敗する
 		}
 		found++
 		sealed, readErr := os.ReadFile(path)
@@ -731,18 +731,18 @@ func TestChangingTheMasterPasswordRefusesTheWrongCurrentOne(t *testing.T) {
 	if err := service.ChangeMasterPassword("not the master password", "a new master password"); !errors.Is(err, secret.ErrWrongPassphrase) {
 		t.Errorf("ChangeMasterPassword with the wrong current = %v, want ErrWrongPassphrase", err)
 	}
-	// And it still opens with the one it had.
+	// そして、それが持っていた鍵でいまも開く。
 	if err := service.Unlock(passphrase); err != nil {
 		t.Errorf("the vault was disturbed by a refused change: %v", err)
 	}
 }
 
-// Wrong guesses get slower.
+// 誤った推測は、だんだん遅くなる。
 //
-// The vault file can be copied and attacked offline, so this is not what stands
-// between an attacker and the contents — Argon2id is. What it stops is the
-// cheap case: a local process trying passwords against a running application as
-// fast as it can answer.
+// vault ファイルはコピーしてオフラインで攻撃できるので、これは攻撃者と中身の
+// あいだに立つものではない — それは Argon2id である。これが止めるのは安価な場合、
+// すなわち、動作中のアプリケーションに対して、答えられる限りの速さでパスワードを
+// 試すローカルのプロセスである。
 func TestWrongMasterPasswordsAreAnsweredMoreSlowly(t *testing.T) {
 	clock := time.Date(2026, 8, 6, 9, 0, 0, 0, time.UTC)
 	var waited []time.Duration
@@ -760,7 +760,7 @@ func TestWrongMasterPasswordsAreAnsweredMoreSlowly(t *testing.T) {
 	if len(waited) != 4 {
 		t.Fatalf("waits = %v, want one per refusal", waited)
 	}
-	// Each refusal waits longer than the one before, up to a ceiling.
+	// 各拒否は前回より長く待つ。上限まで。
 	for index := 1; index < len(waited); index++ {
 		if waited[index] < waited[index-1] {
 			t.Errorf("wait %d (%v) is shorter than wait %d (%v)", index, waited[index], index-1, waited[index-1])
@@ -770,7 +770,7 @@ func TestWrongMasterPasswordsAreAnsweredMoreSlowly(t *testing.T) {
 		t.Errorf("the wait grew past its ceiling: %v", waited[len(waited)-1])
 	}
 
-	// A correct one is answered at once, and clears what the wrong ones built.
+	// 正しいものは即座に答えられ、誤ったものが積み上げたものを消し去る。
 	waited = nil
 	if err := service.Unlock(passphrase); err != nil {
 		t.Fatalf("Unlock with the right password = %v", err)

@@ -22,8 +22,8 @@ afterEach(() => {
 });
 
 describe("keysApi", () => {
-  // The action kinds are owned by the server's session package. Spelling them
-  // differently here would mint tokens the server refuses.
+  // action の種類はサーバーの session パッケージが所有する。ここで
+  // 綴りを変えれば、サーバーが拒否するトークンを鋳造してしまう。
   it("asks for a confirmation using the committed action vocabulary", () => {
     expect(REVEAL_ACTION_KIND).toBe("private_key.reveal");
     expect(PURGE_ACTION_KIND).toBe("trash.purge");
@@ -52,7 +52,7 @@ describe("keysApi", () => {
     const [revealPath, revealInit] = fetcher.mock.calls[1] as [string, RequestInit];
     expect(revealPath).toBe("/api/v1/keys/key-one/reveal");
     expect(new Headers(revealInit.headers).get("X-SSHC-Action")).toBe(actionToken);
-    // The token is spent immediately and never kept.
+    // トークンは即座に使い切られ、二度と保持されない。
     expect(window.localStorage.getItem("action")).toBeNull();
   });
 
@@ -71,8 +71,8 @@ describe("keysApi", () => {
     expect(purgeInit.method).toBe("DELETE");
   });
 
-  // A refused restore is an answer, not a failure: the server returns the
-  // blockers with a 409 and the UI must show them rather than throw them away.
+  // 拒否された restore は失敗ではなく 1 つの答えだ: サーバーは 409 で
+  // ブロッカーを返し、UI はそれを捨てずに表示しなければならない。
   it("reads the blockers out of a refused restore", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
       entryId: "entry-1",
@@ -91,8 +91,8 @@ describe("keysApi", () => {
     await expect(keysApi.restore("entry-1")).rejects.toThrow();
   });
 
-  // Generated types describe the contract; they prove nothing about the bytes
-  // that actually arrived.
+  // 生成された型は契約を記述するだけで、実際に届いたバイト列に
+  // ついては何も証明しない。
   it("rejects an inventory payload that does not match the contract", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ items: "not-an-array" })));
     await expect(keysApi.inventory()).rejects.toThrow("invalid_response");

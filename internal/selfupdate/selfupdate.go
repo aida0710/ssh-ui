@@ -1,17 +1,17 @@
-// Package selfupdate looks at the project's GitHub releases and says whether
-// there is a newer one.
+// Package selfupdate は、プロジェクトの GitHub リリースを調べ、より新しいものが
+// あるかを伝える。
 //
-// It looks, and that is all it does. It used to fetch the release and replace
-// the binary it was running as, guarded by a signature over the checksum file
-// with the public key compiled in — and that guard was worth very little,
-// because the key had to live somewhere the release workflow could read it,
-// which is somewhere anybody who controls the repository can read it. The
-// defence and the attack had the same key.
+// 調べるだけで、それ以上は何もしない。以前はリリースを取得して自分が実行して
+// いるバイナリを置き換えており、その保護は、コンパイル時に埋め込んだ公開鍵による
+// チェックサムファイルへの署名だった — だがその保護はほとんど価値がなかった。
+// 鍵はリリースワークフローが読める場所に置く必要があり、それはリポジトリを
+// 支配できる者なら誰でも読める場所だからである。防御と攻撃が同じ鍵を持って
+// いた。
 //
-// What is left is the useful half without the dangerous one: this says a newer
-// version exists and where to read about it, and a person decides what to do.
-// It is the only thing in this application that contacts a host other than
-// itself, it is asked rather than scheduled, and it downloads nothing.
+// 残っているのは、危険な半分を除いた有用な半分だ。より新しいバージョンが存在する
+// ことと、それについてどこで読めるかを伝え、判断は人がする。このアプリケーション
+// のなかで自分自身以外のホストに接触する唯一の機能であり、定期実行ではなく求め
+// られたときだけ動き、何もダウンロードしない。
 package selfupdate
 
 import (
@@ -25,20 +25,20 @@ import (
 	"strings"
 )
 
-// ErrNoRelease reports that the project has published none yet.
+// ErrNoRelease は、プロジェクトがまだ何も公開していないことを報告する。
 var ErrNoRelease = errors.New("no release has been published")
 
-// Release is what the project published.
+// Release は、プロジェクトが公開したもの。
 type Release struct {
 	Version string
-	// PageURL is where a person reads what changed and decides what to do,
-	// which is the whole of what this offers.
+	// PageURL は、何が変わったかを人が読み、どうするかを決める場所。これが提供する
+	// もののすべてである。
 	PageURL string
 }
 
-// Checker asks GitHub what the latest release is.
+// Checker は、最新リリースが何かを GitHub に尋ねる。
 type Checker struct {
-	// API is the releases endpoint, injected so no test reaches GitHub.
+	// API はリリースのエンドポイント。テストが GitHub に到達しないよう注入する。
 	API  string
 	HTTP *http.Client
 }
@@ -56,7 +56,7 @@ func (c Checker) client() *http.Client {
 	return http.DefaultClient
 }
 
-// Latest returns the newest published release.
+// Latest は、公開されている最も新しいリリースを返す。
 func (c Checker) Latest(ctx context.Context) (Release, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.API, nil)
 	if err != nil {
@@ -85,13 +85,13 @@ func (c Checker) Latest(ctx context.Context) (Release, error) {
 	return Release{Version: decoded.TagName, PageURL: decoded.HTMLURL}, nil
 }
 
-// Newer reports whether candidate is a later version than current.
+// Newer は、candidate が current より後のバージョンかを報告する。
 //
-// Versions are compared field by field as numbers, so 0.10.0 is newer than
-// 0.9.0 — which a string comparison gets wrong, and getting it wrong here means
-// offering an update that goes backwards. Anything unparseable compares as
-// different rather than newer: a build that is not a release ("dev") should be
-// told there is a release, and never told it is behind by some amount.
+// バージョンはフィールドごとに数値として比較するので、0.10.0 は 0.9.0 より新しい
+// — 文字列比較ではこれを取り違え、ここで取り違えれば、後戻りする更新を提示する
+// ことになる。解析できないものは「より新しい」ではなく「異なる」として比較する。
+// リリースでないビルド（"dev"）には、リリースがあることは伝えるべきだが、どれだけ
+// 遅れているかを伝えてはならない。
 func Newer(current, candidate string) bool {
 	if current == candidate {
 		return false

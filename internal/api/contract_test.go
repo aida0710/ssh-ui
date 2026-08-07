@@ -81,9 +81,9 @@ func TestGeneratedKeyVaultModels(t *testing.T) {
 		t.Fatalf("unexpected reveal response: %#v", reveal)
 	}
 
-	// The request names the committed session vocabulary: a kind and a target.
-	// Evidence is never supplied by the caller; the server derives it from what
-	// the confirmation dialog was showing.
+	// リクエストは、コミット済みのセッション語彙 — kind と target — を指定する。
+	// evidence は呼び出し側からは決して渡されない。サーバーが、確認ダイアログに
+	// 表示されていた内容から導出する。
 	request := IssueActionRequest{Kind: "private_key.reveal", Target: item.Id}
 	action := IssueActionResponse{Token: "t", ExpiresAt: "2026-08-05T09:02:00Z"}
 	if request.Kind != "private_key.reveal" || action.ExpiresAt == "" {

@@ -1,18 +1,18 @@
-// Package remotesync carries a whole workspace to an object store and back.
+// Package remotesync は、ワークスペース全体をオブジェクトストアへ運び、また戻す。
 //
-// The package is named remotesync rather than sync because the standard
-// library already owns that name, and a file here that needs a mutex should
-// not have to alias one of the two.
+// このパッケージが sync ではなく remotesync という名前なのは、標準ライブラリが
+// すでにその名前を持っており、ここでミューテックスが必要なファイルが、二つのうち
+// どちらかに別名を付けなければならなくなるのを避けるためである。
 //
-// One object, one snapshot, one atomic PUT. A file per object would give
-// per-file conflict detection for free and would be wrong, because a
-// configuration is only meaningful as a set: ~/.ssh/config says
-// "Include connections/work/*.conf", metadata.json names groups that must have
-// directories, IdentityFile lines name key files. Uploading files
-// independently leaves a window in which the remote holds a state that never
-// existed on any machine — an Include reaching a file that is not there yet —
-// and a machine pulling in that window gets a configuration that is not merely
-// stale but incoherent.
+// オブジェクトひとつ、スナップショットひとつ、原子的な PUT ひとつ。オブジェクトを
+// ファイルごとに分ければファイル単位の衝突検出がただで手に入るが、それは誤りだ。
+// 設定は集合としてしか意味を持たないからである。~/.ssh/config は
+// "Include connections/work/*.conf" と言い、metadata.json はディレクトリを持たねば
+// ならないグループを名指しし、IdentityFile 行は鍵ファイルを名指しする。ファイルを
+// 独立にアップロードすれば、どのマシンにも存在しなかった状態 — まだ存在しない
+// ファイルに到達する Include — をリモートが保持する窓ができ、その窓の中で pull
+// したマシンは、単に古いだけでなく整合してもいない設定を受け取ることに
+// なる。
 package remotesync
 
 import (
@@ -28,75 +28,75 @@ import (
 	"strings"
 )
 
-// ManifestName is the first entry of every snapshot.
+// ManifestName は、すべてのスナップショットの最初のエントリ。
 const ManifestName = "manifest.json"
 
-// SchemaVersion is the version of the manifest document.
+// SchemaVersion は、マニフェスト文書のバージョン。
 const SchemaVersion = 1
 
-// MaxSnapshotBytes bounds what Read will decompress. A snapshot is a ~/.ssh;
-// anything approaching this is a decompression bomb rather than a workspace.
+// MaxSnapshotBytes は、Read が展開する量に上限を設ける。スナップショットは ~/.ssh
+// である。これに近づくものは、ワークスペースではなく展開爆弾だ。
 const MaxSnapshotBytes = 64 << 20
 
-// MaxEntries bounds how many files one snapshot may carry.
+// MaxEntries は、ひとつのスナップショットが運べるファイル数に上限を設ける。
 const MaxEntries = 4096
 
 var (
-	// ErrNotASnapshot reports bytes that are not a snapshot at all.
+	// ErrNotASnapshot は、そもそもスナップショットでないバイト列を報告する。
 	ErrNotASnapshot = errors.New("these bytes are not an sshc snapshot")
-	// ErrUnsupportedVersion reports a snapshot from a newer build.
+	// ErrUnsupportedVersion は、より新しいビルドが作ったスナップショットを報告する。
 	ErrUnsupportedVersion = errors.New("this snapshot was written by a newer version of sshc")
-	// ErrUnsafePath reports an entry whose path would escape the workspace. A
-	// snapshot is untrusted input and "../" in a tar is the oldest trick there
-	// is.
+	// ErrUnsafePath は、ワークスペースから抜け出すパスを持つエントリを報告する。
+	// スナップショットは信用できない入力であり、tar の中の "../" は最も古い手口で
+	// ある。
 	ErrUnsafePath = errors.New("a snapshot entry names a path outside the workspace")
-	// ErrUnsafeMode reports an entry whose permission bits are not ones this
-	// application writes. A snapshot must not be able to widen a private key.
+	// ErrUnsafeMode は、このアプリケーションが書かない権限ビットを持つエントリを報告
+	// する。スナップショットが秘密鍵の権限を広げられてはならない。
 	ErrUnsafeMode = errors.New("a snapshot entry has permissions this application does not write")
-	// ErrSnapshotTooLarge reports a snapshot beyond the ceiling.
+	// ErrSnapshotTooLarge は、上限を超えるスナップショットを報告する。
 	ErrSnapshotTooLarge = errors.New("the snapshot is larger than this application will read")
-	// ErrManifestMismatch reports a file whose digest does not match the
-	// manifest, or a file the manifest does not list.
+	// ErrManifestMismatch は、ダイジェストがマニフェストと一致しないファイル、または
+	// マニフェストに載っていないファイルを報告する。
 	ErrManifestMismatch = errors.New("the snapshot's files do not match its manifest")
 )
 
-// Entry describes one file in the snapshot.
+// Entry は、スナップショット内のファイルひとつを記述する。
 type Entry struct {
-	// Path is workspace-relative and forward-slashed, the vocabulary
-	// storage.Workspace already uses.
+	// Path はワークスペース相対でスラッシュ区切り。storage.Workspace がすでに使って
+	// いる語彙である。
 	Path string `json:"path"`
-	// SHA256 is the hex digest of the contents, so a pull can tell which files
-	// differ without unpacking every one of them twice.
+	// SHA256 は内容の 16 進ダイジェスト。これにより pull は、すべてのファイルを二度
+	// 展開せずに、どれが異なるかを判別できる。
 	SHA256 string `json:"sha256"`
-	// Mode travels because a private key with the wrong bits is a private key
-	// OpenSSH refuses. Only 0600 and 0700 are accepted.
+	// Mode を運ぶのは、ビットの誤った秘密鍵が、OpenSSH の拒む秘密鍵になるからで
+	// ある。受け付けるのは 0600 と 0700 だけ。
 	Mode string `json:"mode"`
-	// Secret marks a private key, so a pull applies it with SkipBackup set.
-	// That field exists in the storage layer for exactly this reason: the
-	// design refuses to leave a second copy of key material in
-	// ~/.ssh/sshc/backups/, and a pull that ignored it would defeat that
-	// decision from a new direction.
+	// Secret は秘密鍵であることを示す。これにより pull は、それを SkipBackup 付きで
+	// 適用する。そのフィールドがストレージ層に存在する理由はまさにこれだ。設計は
+	// 鍵素材の二つ目のコピーを ~/.ssh/sshc/backups/ に残すことを拒んでおり、これを
+	// 無視する pull は、その判断を新しい方向から台無しにすることに
+	// なる。
 	Secret bool `json:"secret,omitempty"`
 }
 
-// Manifest is the snapshot's index.
+// Manifest は、スナップショットの索引。
 type Manifest struct {
 	SchemaVersion int    `json:"schemaVersion"`
 	CreatedAt     string `json:"createdAt"`
-	// Origin identifies the installation that wrote this, so the interface can
-	// say "this came from a different machine". It is an opaque id and never a
-	// hostname: a hostname in an object anyone with the bucket can read is an
-	// unnecessary disclosure.
+	// Origin は、これを書いたインストールを識別する。インターフェースが「これは別の
+	// マシンから来た」と言えるようにするためだ。不透明な ID であって、決してホスト名
+	// ではない。バケットを読める者なら誰でも見られるオブジェクトの中のホスト名は、
+	// 不要な開示である。
 	Origin string  `json:"origin"`
 	Files  []Entry `json:"files"`
 }
 
-// Build packs the given files into a compressed archive.
+// Build は、与えられたファイルを圧縮アーカイブに詰める。
 //
-// contents is keyed by workspace-relative path. The caller decides what
-// belongs — this package refuses to guess, because "which files are part of
-// the configuration" is a question the Include graph answers and this package
-// cannot see it.
+// contents は、ワークスペース相対のパスをキーとする。何を含めるかは呼び出し側が
+// 決める。このパッケージは推測を拒む。「どのファイルが設定の一部なのか」は Include
+// グラフの答える問いであり、このパッケージからはそれが見えないからで
+// ある。
 func Build(manifest Manifest, contents map[string][]byte) ([]byte, error) {
 	manifest.SchemaVersion = SchemaVersion
 	if len(manifest.Files) > MaxEntries {
@@ -140,10 +140,10 @@ func Build(manifest Manifest, contents map[string][]byte) ([]byte, error) {
 	return compressed.Bytes(), nil
 }
 
-// Read unpacks an archive and returns its manifest and contents.
+// Read はアーカイブを展開し、そのマニフェストと内容を返す。
 //
-// It treats every byte as hostile: the archive arrives from a bucket, and
-// anyone who can write that bucket can choose what is in it.
+// すべてのバイトを敵対的なものとして扱う。アーカイブはバケットから届き、そのバケット
+// に書ける者なら誰でも、その中身を選べるからだ。
 func Read(archive []byte) (Manifest, map[string][]byte, error) {
 	zip, err := gzip.NewReader(bytes.NewReader(archive))
 	if err != nil {
@@ -166,8 +166,8 @@ func Read(archive []byte) (Manifest, map[string][]byte, error) {
 			return Manifest{}, nil, ErrNotASnapshot
 		}
 		if header.Typeflag != tar.TypeReg {
-			// A directory, a symlink or a device in this archive has no
-			// meaning here and is not something to interpret charitably.
+			// このアーカイブの中のディレクトリ、シンボリックリンク、デバイスは、ここでは
+			// 何の意味も持たず、好意的に解釈すべきものでもない。
 			return Manifest{}, nil, ErrUnsafePath
 		}
 		if len(contents) >= MaxEntries {
@@ -222,10 +222,10 @@ func Read(archive []byte) (Manifest, map[string][]byte, error) {
 	return manifest, contents, nil
 }
 
-// checkPath refuses anything that is not a plain relative path inside the
-// workspace. It is deliberately stricter than filepath.Clean: a path that
-// needs cleaning is a path somebody constructed, and this is not the place to
-// be charitable about it.
+// checkPath は、ワークスペース内の素朴な相対パスでないものをすべて拒否する。
+// filepath.Clean より意図的に厳しい。整形が必要なパスとは、誰かが組み立てたパスで
+// あり、ここはそれについて好意的になる場所では
+// ない。
 func checkPath(name string) error {
 	if name == "" || name == "." {
 		return ErrUnsafePath
@@ -244,9 +244,9 @@ func checkPath(name string) error {
 	return nil
 }
 
-// checkMode accepts only the two permission sets this application writes.
-// Anything else is refused rather than normalised, so a snapshot cannot widen
-// a private key to something OpenSSH would still read but others could too.
+// checkMode は、このアプリケーションが書く二つの権限セットだけを受け付ける。それ
+// 以外は正規化せずに拒否する。これにより、スナップショットが秘密鍵の権限を、
+// OpenSSH はまだ読むが他人も読める程度にまで広げることはできない。
 func checkMode(mode string) error {
 	if mode != "0600" && mode != "0700" {
 		return ErrUnsafeMode
@@ -267,9 +267,9 @@ func writeEntry(archive *tar.Writer, name string, body []byte, mode fs.FileMode)
 		Name:     name,
 		Mode:     int64(mode),
 		Size:     int64(len(body)),
-		// No modification time, no owner, no group. A snapshot that carried
-		// them would differ between machines for no reason and would disclose
-		// a little about the machine that wrote it.
+		// 更新時刻も、所有者も、グループも運ばない。それらを運ぶスナップショットは、
+		// 理由もなくマシンごとに異なることになり、それを書いたマシンについて少しばかり
+		// 開示してしまう。
 	}); err != nil {
 		return err
 	}

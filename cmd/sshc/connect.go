@@ -18,7 +18,7 @@ import (
 	"sshc/internal/platform"
 )
 
-// connectResponse is what the running application answers.
+// connectResponse は、起動中のアプリケーションが返す内容。
 type connectAnswer struct {
 	Alias        string   `json:"alias"`
 	AskpassToken string   `json:"askpassToken"`
@@ -26,12 +26,12 @@ type connectAnswer struct {
 	Warnings     []string `json:"warnings"`
 }
 
-// connectInvocation reports whether this process was started to connect.
+// connectInvocation は、このプロセスが接続のために起動されたかを報告する。
 //
-// A bare word that is not a flag and not the askpass subcommand is an alias.
-// That is the whole command: `sshc <alias>`. The five environment variables
-// it replaces were the hand-written form of what the Terminal button already
-// did for itself, and nothing about them was ever meant to be typed.
+// フラグでもなく askpass サブコマンドでもない裸の語は alias である。コマンドは
+// それで全部だ。`sshc <alias>`。これが置き換える五つの環境変数は、Terminal の
+// ボタンがすでに自前でやっていたことを手書きにした形にすぎず、そもそも人が打ち込む
+// ためのものではなかった。
 func connectInvocation(argv []string) (string, bool) {
 	if len(argv) != 2 {
 		return "", false
@@ -43,16 +43,16 @@ func connectInvocation(argv []string) (string, bool) {
 	return word, true
 }
 
-// OpenSubcommand opens the running application in a browser.
+// OpenSubcommand は、起動中のアプリケーションをブラウザで開く。
 //
-// A bootstrap token is spent on first use, so a background agent — whose
-// standard output goes nowhere on purpose, because that URL carries a live one
-// — has no way to hand one out. This asks for a fresh one when the user wants
-// to look at something. A host called "open" is a host this cannot connect to
-// by name; there is one word and this is it.
+// ブートストラップトークンは初回の使用で消費される。標準出力がどこにも届かないよう
+// 意図して作られたバックグラウンドエージェント — その URL は有効なトークンを運ぶ
+// からだ — には、これを配る手段がない。そこで、ユーザーが何かを見たいときには
+// 新しいものを要求する。"open" という名のホストは、この方法では名前で接続できない
+// ホストになる。語はひとつだけで、それがこれである。
 const OpenSubcommand = "open"
 
-// runOpen asks the running application for a way in and opens the browser.
+// runOpen は、起動中のアプリケーションに入口を求め、ブラウザを開く。
 func runOpen(ctx context.Context, stateDir string, client *http.Client, browser func(string) error, stderr io.Writer) int {
 	found, err := handoff.Read(stateDir)
 	if err != nil {
@@ -83,8 +83,8 @@ func runOpen(ctx context.Context, stateDir string, client *http.Client, browser 
 		fmt.Fprintln(stderr, "sshc: the answer carried no way in")
 		return 1
 	}
-	// The URL is handed to the browser and never printed. It carries a live
-	// bootstrap token, and a terminal keeps what it is shown.
+	// URL はブラウザに渡すだけで、決して表示しない。有効なブートストラップトークンを
+	// 運んでおり、端末は見せられたものを残すからだ。
 	if err := browser(answer.URL); err != nil {
 		fmt.Fprintf(stderr, "sshc: %v\n", err)
 		return 1
@@ -92,22 +92,22 @@ func runOpen(ctx context.Context, stateDir string, client *http.Client, browser 
 	return 0
 }
 
-// sshFinder resolves the ssh program. It is the same seam every other part of
-// this application uses, so there is one answer to "which ssh".
+// sshFinder は ssh プログラムを解決する。このアプリケーションの他のすべての部分が
+// 使うのと同じ継ぎ目なので、「どの ssh か」への答えはひとつしかない。
 type sshFinder interface{ SSH() (string, error) }
 
-// connectEnvironment is the environment ssh will run with.
+// connectEnvironment は、ssh を実行する環境である。
 //
-// The user's own environment is passed through, because this is the connection
-// they would have made themselves. The five variables that arm the askpass
-// helper are not passed through: they are removed and then set, so what OpenSSH
-// reads is what this decided.
+// ユーザー自身の環境はそのまま引き継ぐ。これはユーザーが自分で行ったであろう接続
+// だからである。askpass ヘルパーを武装させる五つの変数は引き継がない。いったん
+// 取り除いてから設定するので、OpenSSH が読むのは、このコードが決めた値になる。
 //
-// It matters more than it looks. syscall.Exec hands the array over as given and
-// getenv answers with the first match in it, so appending would lose to an
-// SSH_ASKPASS the user exported years ago — while still handing that program
-// the one-time token, which it can redeem for a stored password. An unarmed
-// connection removes them too, so a stale variable cannot arm one.
+// これは見た目以上に重要である。syscall.Exec は配列をそのまま渡し、getenv は
+// その中で最初に一致したものを返す。したがって追記方式では、ユーザーが何年も前に
+// エクスポートした SSH_ASKPASS に負ける — しかも負けながら、保存済みパスワードと
+// 引き換えられるワンタイムトークンをそのプログラムに渡してしまう。武装しない接続
+// でもこれらを取り除くのは、古い変数が接続を武装させてしまわないようにするため
+// である。
 func connectEnvironment(inherited []string, helper, url, token, alias string) []string {
 	decided := map[string]string{}
 	if helper != "" && token != "" {
@@ -140,13 +140,13 @@ func connectEnvironment(inherited []string, helper, url, token, alias string) []
 	return environment
 }
 
-// runConnect asks the running application for what this connection needs and
-// hands the terminal to ssh.
+// runConnect は、この接続に必要なものを起動中のアプリケーションに尋ね、端末を ssh に
+// 引き渡す。
 //
-// No application running is not an error. The user asked to connect to a host,
-// and `ssh <alias>` is what they would have typed: OpenSSH asks for the
-// password itself, which is a working connection. Saying so on stderr means the
-// difference is visible without being in the way.
+// アプリケーションが動いていないことはエラーではない。ユーザーはホストへ接続したいの
+// であり、`ssh <alias>` は本人が打ち込んだであろうコマンドだ。OpenSSH が自分で
+// パスワードを尋ねる以上、それは機能する接続である。stderr にその旨を書けば、邪魔に
+// ならずに違いが見える。
 func runConnect(ctx context.Context, alias string, stateDir string, client *http.Client, toolchain sshFinder, stderr io.Writer) int {
 	if err := platform.ValidateAlias(alias); err != nil {
 		fmt.Fprintf(stderr, "sshc: %q is not an alias this will put on a command line\n", alias)
@@ -174,24 +174,24 @@ func runConnect(ctx context.Context, alias string, stateDir string, client *http
 	}
 	environment := connectEnvironment(os.Environ(), helper, url, token, alias)
 
-	// Resolved the way every other OpenSSH program this application starts is
-	// resolved: from a fixed list of directories, to an absolute path. PATH is
-	// not consulted, because the token above would otherwise be handed to
-	// whatever is first on it.
+	// このアプリケーションが起動する他のすべての OpenSSH プログラムと同じやり方で
+	// 解決する。固定のディレクトリ一覧から絶対パスへ、である。PATH は参照しない。
+	// さもなければ、上のトークンが PATH の先頭にあるものへ渡されてしまうから
+	// である。
 	ssh, err := toolchain.SSH()
 	if err != nil || !filepath.IsAbs(ssh) {
 		fmt.Fprintf(stderr, "sshc: ssh was not found where it is expected: %v\n", err)
 		return 1
 	}
-	// The terminal belongs to ssh from here. Exec rather than a child process
-	// so there is no second thing between the user and the connection —
-	// nothing to forward signals through and no exit status to translate.
+	// ここから先、端末は ssh のものである。子プロセスではなく exec を使うのは、ユーザーと
+	// 接続のあいだに二つ目のものを挟まないためだ — シグナルを転送する相手も、翻訳すべき
+	// 終了ステータスもなくなる。
 	arguments := []string{"ssh"}
 	if armed {
-		// A wrong stored password offered three times counts towards a lockout
-		// on some servers, so an armed connection gets one attempt. Without a
-		// stored password this is left alone: the user is typing, and typing it
-		// wrong once is not a reason to give up.
+		// 誤った保存済みパスワードを三度差し出すと、サーバーによってはロックアウトに数えられる。
+		// そこで武装した接続には試行を一度だけ与える。保存済みパスワードがない場合は手を
+		// 触れない。打っているのはユーザーであり、一度打ち間違えたことは、あきらめる理由に
+		// ならない。
 		arguments = append(arguments, "-o", "NumberOfPasswordPrompts=1")
 	}
 	arguments = append(arguments, "--", alias)
@@ -202,7 +202,7 @@ func runConnect(ctx context.Context, alias string, stateDir string, client *http
 	return 0
 }
 
-// askApplication reads the handoff and asks for one connection's worth.
+// askApplication はハンドオフを読み、接続一回分を要求する。
 func askApplication(ctx context.Context, alias, stateDir string, client *http.Client) (connectAnswer, error) {
 	found, err := handoff.Read(stateDir)
 	if err != nil {
@@ -235,6 +235,6 @@ func askApplication(ctx context.Context, alias, stateDir string, client *http.Cl
 	return answer, nil
 }
 
-// connectTimeout bounds the one request this makes. It is asking a process on
-// this machine for a token, not doing anything over a network.
+// connectTimeout は、これが行う唯一のリクエストに上限を設ける。ネットワーク越しに何か
+// をするのではなく、このマシン上のプロセスにトークンを尋ねているだけだ。
 const connectTimeout = 5 * time.Second

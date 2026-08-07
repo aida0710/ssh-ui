@@ -1,17 +1,17 @@
-// Package sshintegration holds tests that need a real OpenSSH server.
+// Package sshintegration は、本物の OpenSSH サーバーを必要とするテストを収める。
 //
-// Everything here skips unless SSHC_TEST_SSH_ADDR names one. `make
-// integration` starts one in a container and sets it; CI does the same.
+// ここにあるものはすべて、SSHC_TEST_SSH_ADDR がサーバーを指していない限りスキップ
+// される。`make integration` はコンテナで起動して変数を設定し、CI も同じことをする。
 //
-// The point is the one thing no fake can establish: that OpenSSH accepts what
-// the askpass helper hands it and authenticates. Everything else in the
-// password feature is covered hermetically — the prompt rule, the token
-// semantics, the refusals — and all of that is a description of what should
-// happen. This is whether it does.
+// 要点は、どんな偽物にも確かめられない唯一のこと。すなわち、askpass ヘルパーが
+// 渡したものを OpenSSH が受け取り、認証が通るということである。パスワード機能の
+// それ以外 — プロンプトのルール、トークンの意味論、拒否の挙動 — は密閉された形で
+// 網羅されているが、それらはすべて「こうあるべき」の記述にすぎない。ここで見るの
+// は「実際にそうなるか」である。
 //
-// Terminal.app is the only production component substituted, and it is
-// substituted by exactly the command its AppleScript would have run. The
-// helper, the endpoint, the vault and the token are the shipped code.
+// 差し替える本番コンポーネントは Terminal.app だけであり、しかもその AppleScript
+// が実行したであろうコマンドそのもので差し替えている。ヘルパー、エンドポイント、
+// vault、トークンは、出荷されるコードそのものだ。
 package sshintegration_test
 
 import (
@@ -71,13 +71,13 @@ func helperPath(t *testing.T) string {
 	return path
 }
 
-// buildHome writes a workspace whose only host is the container, with the host
-// key already known.
+// buildHome は、唯一のホストがコンテナであり、そのホスト鍵がすでに既知である
+// ワークスペースを書き出す。
 //
-// Scanning the key rather than disabling the check is deliberate: the feature
-// refuses to answer the host key question, so a test that turned
-// StrictHostKeyChecking off would be testing a configuration this application
-// never produces.
+// 検査を無効にするのではなく鍵をスキャンしているのは意図的である。この機能は
+// ホスト鍵の問いに答えることを拒否するので、StrictHostKeyChecking を切るテストは、
+// このアプリケーションが決して作らない設定を試していることに
+// なってしまう。
 func buildHome(t *testing.T, destination target) string {
 	t.Helper()
 	home := t.TempDir()
@@ -95,13 +95,13 @@ func buildHome(t *testing.T, destination target) string {
 		"\tHostName " + destination.host,
 		"\tPort " + destination.port,
 		"\tUser " + destination.user,
-		// Absolute, because OpenSSH expands ~ from the passwd database rather
-		// than from HOME. Setting HOME is enough for a relative Include but
-		// not for this, which is how the first CI run of this suite failed:
-		// ssh never read the configuration at all and tried to resolve the
-		// alias as a hostname.
+		// 絶対パスにするのは、OpenSSH が ~ を HOME ではなく passwd データベースから
+		// 展開するからである。相対 Include なら HOME の設定だけで足りるが、これには
+		// 足りない。このスイートの初回 CI 実行が失敗したのがまさにそれだ。ssh は設定を
+		// まったく読まず、alias をホスト名として解決しようと
+		// した。
 		"\tUserKnownHostsFile " + filepath.Join(root, "known_hosts"),
-		// The point is the password path, so the key paths are closed off.
+		// 要点はパスワードの経路なので、鍵による経路は塞いである。
 		"\tPubkeyAuthentication no",
 		"\tPreferredAuthentications password",
 		"\tStrictHostKeyChecking yes",
@@ -120,18 +120,18 @@ var (
 	hostKeyKnown bool
 )
 
-// hostKeyOf scans the server's host key once for the whole package.
+// hostKeyOf は、パッケージ全体で一度だけサーバーのホスト鍵をスキャンする。
 //
-// It used to be scanned once per test. Four tests meant four scans on top of
-// the connections the tests themselves make, and in CI the third and fourth
-// came back empty while the first two had just passed: a container sshd limits
-// how many unauthenticated connections it will start at once, and a keyscan is
-// one of those. The key is the same key every time, so scanning it again was
-// never doing anything but spending that budget.
+// 以前はテストごとにスキャンしていた。テストが四つあれば、テスト自身が張る接続に
+// 加えて四回のスキャンになる。CI では最初の二つが通った直後に、三つ目と四つ目が
+// 空で返ってきた。コンテナの sshd は、同時に開始する未認証接続の数を制限して
+// おり、keyscan もそのひとつだからである。鍵は毎回同じ鍵なので、もう一度
+// スキャンすることは、その予算を使う以外に何ひとつしていなかったことに
+// なる。
 //
-// The retry is for the same reason rather than for flakiness in general: a
-// refusal here is a "not now", and a second's wait is enough for it to stop
-// being one. When every attempt is refused that is reported, not smoothed over.
+// リトライを入れているのも、一般的な不安定さ対策ではなく同じ理由からである。
+// ここでの拒否は「いまはだめ」という意味であり、1 秒待てばそれではなくなる。
+// すべての試行が拒否された場合は、それを覆い隠さずに報告する。
 func hostKeyOf(t *testing.T, destination target) []byte {
 	t.Helper()
 	hostKeyMutex.Lock()
@@ -170,14 +170,14 @@ func hostKeyOf(t *testing.T, destination target) []byte {
 	return hostKey
 }
 
-// countingListener counts the connections the server accepts.
+// countingListener は、サーバーが受け付けた接続を数える。
 //
-// It is the only way a test can tell "ssh refused the password this vault
-// holds" from "the helper never asked". Both end in Permission denied, and for
-// one CI run every negative test here passed while the helper was starting a
-// second copy of the application instead of answering: SSH_ASKPASS names a
-// program that OpenSSH execs with the prompt as its only argument, and the
-// binary was looking for a subcommand word that could never arrive.
+// これは、「この vault が持つパスワードを ssh が拒否した」のか「ヘルパーがそもそも
+// 尋ねなかった」のかをテストが見分ける唯一の手段である。どちらも Permission denied
+// で終わる。ある CI 実行では、ヘルパーが答える代わりにアプリケーションの二つ目の
+// コピーを起動していたにもかかわらず、ここの否定テストはすべて通ってしまった。
+// SSH_ASKPASS はプログラムを指定し、OpenSSH はプロンプトだけを引数にそれを exec
+// する。バイナリの方は、決して届くはずのないサブコマンドの語を探していた。
 type countingListener struct {
 	net.Listener
 	connections atomic.Int64
@@ -198,7 +198,7 @@ func requireTheHelperAsked(t *testing.T, listener *countingListener, before int6
 	}
 }
 
-// startServer runs the real HTTP server with the real /askpass endpoint.
+// startServer は、本物の /askpass エンドポイントを持つ本物の HTTP サーバーを動かす。
 func startServer(t *testing.T, home string) (*secret.Service, string, *countingListener) {
 	t.Helper()
 	workspace, err := storage.NewWorkspace(storage.OSFileSystem{}, home)
@@ -233,8 +233,8 @@ func startServer(t *testing.T, home string) (*secret.Service, string, *countingL
 	serveContext, stop := context.WithCancel(context.Background())
 	go func() { _ = server.Serve(serveContext) }()
 	t.Cleanup(stop)
-	// server.URL() carries the one-time bootstrap fragment; the askpass
-	// endpoint needs the origin only, and must never be handed a session token.
+	// server.URL() はワンタイムのブートストラップフラグメントを含む。askpass の
+	// エンドポイントに必要なのはオリジンだけで、セッショントークンを渡してはならない。
 	origin := server.URL()
 	if index := strings.Index(origin, "#"); index >= 0 {
 		origin = origin[:index]
@@ -242,10 +242,10 @@ func startServer(t *testing.T, home string) (*secret.Service, string, *countingL
 	return vault, strings.TrimSuffix(origin, "/") + httpserver.AskpassPath, listener
 }
 
-// answerable is the production rule, restated here because cmd/sshc is a
-// main package and cannot be imported. A test that used a laxer rule would
-// prove nothing about the shipped one, so this is the same predicate: the
-// prompt ends in OpenSSH's password suffix and mentions nothing else.
+// answerable は本番のルールである。cmd/sshc は main パッケージで import できない
+// ため、ここで書き直してある。より緩いルールを使うテストは、出荷されるものに
+// ついて何も証明しない。したがってこれは同じ述語だ。プロンプトが OpenSSH の
+// パスワードサフィックスで終わり、それ以外の何にも触れていないこと。
 func answerable(_ string, prompt string) bool {
 	trimmed := strings.ToLower(strings.TrimRight(prompt, " \t\r\n"))
 	for _, marker := range []string{"passphrase", "continue connecting", "fingerprint", "yes/no"} {
@@ -258,10 +258,10 @@ func answerable(_ string, prompt string) bool {
 
 func runSSH(t *testing.T, home, endpoint, token string, arguments ...string) (string, error) {
 	t.Helper()
-	// Exactly what TerminalPasswordScript tells the shell to run.
-	// -F is explicit for the same reason UserKnownHostsFile is: the default
-	// user configuration path comes from the passwd database, not from HOME,
-	// so a test that only set HOME would silently run with no configuration.
+	// TerminalPasswordScript がシェルに実行させるものそのもの。
+	// -F を明示するのは UserKnownHostsFile と同じ理由である。既定のユーザー設定の
+	// パスは HOME ではなく passwd データベースから来るので、HOME しか設定しない
+	// テストは、設定なしで黙って走ってしまう。
 	command := exec.Command("ssh", append([]string{
 		"-F", filepath.Join(home, ".ssh", "config"),
 		"-o", "NumberOfPasswordPrompts=1",
@@ -306,9 +306,9 @@ func TestTheHelperAuthenticatesAgainstARealServer(t *testing.T) {
 }
 
 func TestTheWrongStoredPasswordFailsOnceRatherThanRepeatedly(t *testing.T) {
-	// NumberOfPasswordPrompts=1 is in the shipped command because a wrong
-	// stored password offered three times counts towards a lockout on some
-	// servers. This is where that stops being a claim.
+	// 出荷されるコマンドに NumberOfPasswordPrompts=1 が入っているのは、誤った保存済み
+	// パスワードを三度差し出すと、サーバーによってはロックアウトに数えられるからだ。
+	// ここが、それが主張で終わらなくなる場所である。
 	destination := requireTarget(t)
 	home := buildHome(t, destination)
 	vault, endpoint, listener := startServer(t, home)
@@ -334,9 +334,9 @@ func TestTheWrongStoredPasswordFailsOnceRatherThanRepeatedly(t *testing.T) {
 }
 
 func TestASpentTokenDoesNotAuthenticate(t *testing.T) {
-	// A token is spent by the connection it was made for. If it were not, a
-	// token seen once in a process list would be usable for as long as its two
-	// minutes lasted.
+	// トークンは、それが作られた接続によって使い切られる。そうでなければ、プロセス
+	// 一覧で一度見えただけのトークンが、その 2 分間が尽きるまで使えてしまうことに
+	// なる。
 	destination := requireTarget(t)
 	home := buildHome(t, destination)
 	vault, endpoint, listener := startServer(t, home)
@@ -357,7 +357,7 @@ func TestASpentTokenDoesNotAuthenticate(t *testing.T) {
 	if err == nil {
 		t.Fatalf("the spent token authenticated a second connection:\n%s", output)
 	}
-	// The helper asked a second time and was told no, rather than not asking.
+	// ヘルパーは二度目も尋ねたうえで断られたのであって、尋ねなかったのではない。
 	requireTheHelperAsked(t, listener, asked, output)
 	requireAuthenticationWasAttempted(t, output)
 }
@@ -385,13 +385,13 @@ func TestALockedVaultCannotAnswer(t *testing.T) {
 	requireAuthenticationWasAttempted(t, output)
 }
 
-// requireAuthenticationWasAttempted stops a test passing for the wrong reason.
+// requireAuthenticationWasAttempted は、テストが誤った理由で通るのを防ぐ。
 //
-// Every negative case here asserts that ssh failed, and ssh fails for many
-// reasons. The first CI run of this suite had two of them passing while ssh was
-// not reaching the server at all — it could not resolve the alias, because it
-// had never read the configuration. A test that cannot tell "the password was
-// refused" from "there was no connection" is not testing the password.
+// ここの否定ケースはいずれも ssh が失敗したことを表明するが、ssh はさまざまな理由
+// で失敗する。このスイートの初回 CI 実行では、ssh がサーバーにまったく到達して
+// いないのに二つが通っていた — 設定を一度も読んでいなかったため、alias を解決
+// できなかったのである。「パスワードが拒否された」と「そもそも接続がなかった」を
+// 区別できないテストは、パスワードを試験していない。
 func requireAuthenticationWasAttempted(t *testing.T, output string) {
 	t.Helper()
 	for _, symptom := range []string{

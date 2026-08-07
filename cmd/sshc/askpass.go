@@ -12,56 +12,56 @@ import (
 	"time"
 )
 
-// The askpass helper.
+// askpass ヘルパー。
 //
-// OpenSSH takes a secret from a program instead of a terminal when SSH_ASKPASS
-// names one and SSH_ASKPASS_REQUIRE is `force`. That program is this binary,
-// and whatever it writes to standard output becomes the answer.
+// SSH_ASKPASS がプログラムを指定し、SSH_ASKPASS_REQUIRE が `force` のとき、
+// OpenSSH は端末ではなくそのプログラムから秘密を受け取る。そのプログラムがこの
+// バイナリであり、標準出力へ書いたものがそのまま回答になる。
 //
-// OpenSSH execs the named program directly with the prompt as its only
-// argument. There is no shell in between, so there is nowhere to put a
-// subcommand word, and the environment is what says this is an askpass
-// invocation. `sshc askpass <prompt>` does the same thing by hand.
+// OpenSSH は指定されたプログラムを、プロンプトだけを引数として直接 exec する。
+// 間にシェルは挟まらないため、サブコマンドの語を置く場所はどこにもなく、これが
+// askpass としての起動であることを示すのは環境変数である。`sshc askpass
+// <prompt>` は同じことを手作業で行う。
 //
-// It holds no secret and can decrypt nothing. The passwords live in an
-// encrypted file whose key exists only inside a running, unlocked sshc, so
-// this helper asks that process over the loopback interface, presenting a
-// one-time token the same process minted when the user asked to connect. Run
-// by hand it obtains nothing: there is no token, and a token is spent by the
-// connection it was made for.
+// このヘルパー自身は秘密を持たず、何も復号できない。パスワードは暗号化された
+// ファイルに置かれ、その鍵は起動中でロック解除済みの sshc の内部にしか存在しない。
+// そこでこのヘルパーはループバック経由でそのプロセスに問い合わせ、ユーザーが接続を
+// 求めたときに同じプロセスが発行したワンタイムトークンを提示する。手で実行しても
+// 何も得られない。トークンがなく、トークンはそれが作られた接続によって使い切られる
+// からである。
 //
-// internal/platform withholds SSH_ASKPASS from every child this application
-// starts, and that decision stands. Its reason is that a secret must not be
-// moved onto a program this application did not choose. Here the program is
-// this application, at an absolute path, armed for one alias, for one
-// connection the user asked for.
+// internal/platform はこのアプリケーションが起動するすべての子プロセスから
+// SSH_ASKPASS を取り除いており、その判断は変わらない。理由は、このアプリケーション
+// が選んだのではないプログラムへ秘密を渡してはならない、というものだ。ここでその
+// プログラムはこのアプリケーション自身であり、絶対パスで、ひとつの alias に対して、
+// ユーザーが求めたひとつの接続のためだけに武装されている。
 
 const (
-	// AliasVariable names the host the answer belongs to.
+	// AliasVariable は回答が属するホストの名前を保持する。
 	//
-	// The alias arrives in the environment and never by reading it out of the
-	// prompt: OpenSSH's prompt carries the *resolved* user and hostname, which
-	// is not what a password is filed under, and parsing it would tie this to
-	// a format string in someone else's source.
+	// alias は環境変数として渡され、プロンプトから読み取ることは決してしない。OpenSSH
+	// のプロンプトが運ぶのは *解決後の* ユーザー名とホスト名であり、パスワードが登録
+	// されている名前とは違ううえ、解析すれば他人のソースにある書式文字列にこちらが
+	// 縛られることになるからだ。
 	AliasVariable = "SSHC_ASKPASS_ALIAS"
-	// URLVariable is the loopback endpoint of the sshc that armed this.
+	// URLVariable は、これを武装した sshc のループバックエンドポイント。
 	URLVariable = "SSHC_ASKPASS_URL"
-	// TokenVariable is the one-time token for this connection.
+	// TokenVariable は、この接続のためのワンタイムトークン。
 	TokenVariable = "SSHC_ASKPASS_TOKEN"
 
-	// AskpassTokenHeader carries the token. A custom header forces a CORS
-	// preflight, which this server does not answer, so no web page can reach
-	// the endpoint however much it knows about it.
+	// AskpassTokenHeader はトークンを運ぶ。独自ヘッダーは CORS のプリフライトを強制し、
+	// このサーバーはそれに応答しないため、エンドポイントをどれだけ知っていてもウェブ
+	// ページから到達することはできない。
 	AskpassTokenHeader = "X-SSHC-Askpass"
 
-	// passwordPromptSuffix is what OpenSSH appends when it wants the remote
-	// account's password. Its format is "%.30s@%.128s's password: ".
+	// passwordPromptSuffix は、リモートアカウントのパスワードを求めるときに OpenSSH が
+	// 末尾に付ける文字列。書式は "%.30s@%.128s's password: " である。
 	passwordPromptSuffix = "'s password:"
 )
 
-// refusalMarkers disqualify a prompt outright. The rule below is an allowlist,
-// so these are belt and braces: a prompt that somehow both ends in the
-// password suffix and mentions one of these is still refused.
+// refusalMarkers はプロンプトを無条件に失格させる。下のルールは許可リスト方式なので、
+// これは二重の安全策である。万一パスワードのサフィックスで終わりつつこれらのいずれか
+// に触れているプロンプトがあっても、やはり拒否される。
 var refusalMarkers = []string{
 	"passphrase",
 	"continue connecting",
@@ -72,20 +72,20 @@ var refusalMarkers = []string{
 	"token",
 }
 
-// AnswerablePrompt reports whether this prompt asks for the remote account's
-// password, and nothing else.
+// AnswerablePrompt は、このプロンプトがリモートアカウントのパスワードを求めている
+// のか、そしてそれ以外の何物でもないのかを報告する。
 //
-// The default is refusal, and that is the point of the function. Forcing
-// askpass routes *every* interactive question through this program, including
-// the host key confirmation — "Are you sure you want to continue connecting
-// (yes/no/[fingerprint])?" — which is the only check a first connection
-// performs. A helper that answers that question has removed it. A helper that
-// answers a key passphrase prompt with an account password has handed the
-// account password to a question that did not ask for it.
+// 既定は拒否であり、それこそがこの関数の要点である。askpass を強制すると、対話的な
+// 問いが *すべて* このプログラムを通る。最初の接続が行う唯一の検査であるホスト鍵の
+// 確認 — "Are you sure you want to continue connecting
+// (yes/no/[fingerprint])?" — も含めてだ。その問いに答えるヘルパーは、検査を取り
+// 除いてしまっている。鍵のパスフレーズを求めるプロンプトにアカウントのパスワードで
+// 答えるヘルパーは、求めてもいない問いにアカウントのパスワードを渡してしまって
+// いる。
 //
-// The server applies this same rule before it returns anything, so the check
-// cannot be skipped by invoking the helper differently. It is here as well so
-// that an unanswerable prompt costs no round trip and spends no token.
+// サーバーも何かを返す前に同じルールを適用するので、ヘルパーの呼び方を変えてこの
+// 検査を飛ばすことはできない。ここにも置いてあるのは、答えられないプロンプトが往復の
+// コストもトークンの消費も生まないようにするためである。
 func AnswerablePrompt(prompt string) bool {
 	trimmed := strings.ToLower(strings.TrimRight(prompt, " \t\r\n"))
 	if trimmed == "" {
@@ -99,8 +99,8 @@ func AnswerablePrompt(prompt string) bool {
 	return strings.HasSuffix(trimmed, passwordPromptSuffix)
 }
 
-// Exit statuses. OpenSSH treats any non-zero status as "no answer", so the
-// distinction is for the person reading the Terminal window, not for ssh.
+// 終了ステータス。OpenSSH は非ゼロをすべて「回答なし」として扱うので、この区別は
+// ssh のためではなく、Terminal のウィンドウを読む人のためのものである。
 const (
 	askpassOK      = 0
 	askpassRefused = 1
@@ -116,11 +116,11 @@ type askpassResponse struct {
 	Password string `json:"password"`
 }
 
-// runAskpass is the whole of `sshc askpass <prompt>`.
+// runAskpass は `sshc askpass <prompt>` のすべてである。
 //
-// On success it writes the password to out and nothing else. On any refusal it
-// writes zero bytes to out, because a diagnostic on standard output would be
-// handed to OpenSSH as the password.
+// 成功時は out にパスワードだけを書き、それ以外は何も書かない。拒否時は out に 1
+// バイトも書かない。標準出力に出した診断メッセージは、OpenSSH にパスワードとして
+// 渡されてしまうからである。
 func runAskpass(
 	ctx context.Context,
 	arguments []string,
@@ -138,9 +138,9 @@ func runAskpass(
 	endpoint := lookup(URLVariable)
 	token := lookup(TokenVariable)
 	if alias == "" || endpoint == "" || token == "" {
-		// Without all three there is nothing to ask and no way to prove the
-		// question was authorised. Answering the wrong host would disclose a
-		// credential to it.
+		// 三つがそろわなければ問い合わせる相手もなく、その問いが認可されたものだと
+		// 示す手段もない。違うホストに答えれば、そのホストへ資格情報を漏らすことに
+		// なる。
 		return refuse(errOut, "sshc askpass was started without "+
 			AliasVariable+", "+URLVariable+" and "+TokenVariable)
 	}
@@ -166,8 +166,8 @@ func runAskpass(
 		return status
 	}
 
-	// OpenSSH strips one trailing newline, so a password that legitimately
-	// ends in whitespace survives.
+	// OpenSSH は末尾の改行をひとつだけ取り除くので、正当に空白で終わるパスワードも
+	// そのまま残る。
 	if _, err := io.WriteString(out, password+"\n"); err != nil {
 		return askpassRefused
 	}
@@ -206,8 +206,8 @@ func fetchPassword(
 	}
 
 	var decoded askpassResponse
-	// The body is bounded: a password is not megabytes, and this process is
-	// about to write whatever it reads onto a pipe OpenSSH is holding.
+	// 本文には上限を設ける。パスワードはメガバイト単位ではないし、このプロセスは読んだ
+	// ものをそのまま、OpenSSH が握っているパイプへ書き込もうとしている。
 	if err := json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&decoded); err != nil {
 		return "", askpassRefused
 	}
@@ -217,10 +217,10 @@ func fetchPassword(
 	return decoded.Password, askpassOK
 }
 
-// validateLoopbackEndpoint refuses to send a password anywhere but this
-// machine. The endpoint arrives in an environment variable, so it is input,
-// and an exported SSHC_ASKPASS_URL pointing at someone else's server would
-// otherwise turn this helper into an exfiltration tool.
+// validateLoopbackEndpoint は、このマシン以外へパスワードを送ることを拒否する。
+// エンドポイントは環境変数で渡される以上それは入力であり、他人のサーバーを指す
+// SSHC_ASKPASS_URL がエクスポートされていれば、このヘルパーは持ち出しの道具に
+// なってしまう。
 func validateLoopbackEndpoint(endpoint string) error {
 	parsed, err := url.Parse(endpoint)
 	if err != nil {

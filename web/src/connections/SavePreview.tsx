@@ -2,9 +2,9 @@ import type { ConflictReport, DiffLine, FileDiff, Notice, SavePreview } from "..
 import type { Problem } from "../api/client";
 import { useTranslate } from "../i18n/context";
 import type { MessageKey } from "../i18n/messages";
-// `Notice` in this file is the engine's — the code and location it reports on a
-// line of configuration. The band that shows a failure is imported under
-// another name rather than shadowing it.
+// このファイルの`Notice`はエンジンのものである——設定の一行に
+// 対してそれが報告するコードと位置。失敗を示す帯は、
+// それを覆い隠すのではなく別の名前でインポートされている。
 import { Notice as Band } from "../ui/surface";
 
 const noticeKeys: Record<string, MessageKey> = {
@@ -66,9 +66,9 @@ function FileDiffView({ diff }: { diff: FileDiff }) {
   );
 }
 
-// The refusals worth a sentence rather than a code. A code the server took the
-// trouble to distinguish is one the user can act on, and "rejected: x" sends
-// them looking for what x means.
+// コードではなく文に値する拒否。サーバーがわざわざ区別したコードは
+// ユーザーが対処できるものであり、"rejected: x"はユーザーに x が何を
+// 意味するかを調べさせてしまう。
 const refusalKeys: Record<string, MessageKey> = {
   directory_not_empty: "refusal.directory_not_empty",
   not_a_directory: "refusal.not_a_directory",

@@ -17,19 +17,19 @@ import (
 	"sshc/internal/secret"
 )
 
-// SyncHandlers serves the remote snapshot.
+// SyncHandlers はリモートのスナップショットを提供する。
 type SyncHandlers struct {
 	Service *remotesync.Service
-	// Secrets holds the object store settings, sealed with the master password
-	// and kept beside the vault rather than inside it — the vault travels, and
-	// the key to the bucket must not be in the bucket. A nil one means the
-	// settings are per-run, which is what this did before they were stored.
+	// Secrets はマスターパスワードで封印された object store の設定を
+	// 保持し、vault の中ではなく脇に置く——vault は持ち運ばれるものであり、
+	// bucket への鍵が bucket の中にあってはならないからだ。nil の場合、
+	// 設定は実行のたびのものになる。これは保存される前にしていたことである。
 	Secrets *secret.Service
-	// Reach asks whether settings work before they are stored. It is injected
-	// because storing settings is this handler's job and reaching a bucket is
-	// not, and because no test in this package may touch a network. A nil one
-	// means the real check: a forgotten wiring must not become a silent
-	// "everything is fine".
+	// Reach は設定が保存される前にそれが機能するかを尋ねる。これが
+	// 注入されているのは、設定を保存するのはこのハンドラの仕事だが
+	// bucket に到達することはそうではないからで、またこのパッケージの
+	// どのテストもネットワークに触れてはならないからだ。nil の場合は
+	// 実際のチェックを意味する。配線し忘れが黙って「問題なし」になってはならない。
 	Reach func(ctx context.Context, client *objectstore.Client, key string) error
 }
 
@@ -47,12 +47,12 @@ func registerSyncRoutes(engine *echo.Echo, handlers SyncHandlers) {
 	engine.POST("/api/v1/sync/pull", handlers.Pull)
 }
 
-// restore configures the client from the stored settings, so unlocking is all
-// it takes for the screen to be filled in and a push to work.
+// restore は保存された設定から client を構成する。解錠さえすれば
+// 画面が埋まり push が動くようになるということだ。
 //
-// A shut vault is not an error here: the status says so and the form says why
-// it is empty. Nothing is asked at startup, and this is the screen asking for
-// itself when it needs to.
+// ここでは施錠中の vault はエラーではない。status がそう伝え、form も
+// なぜ空なのかを伝える。起動時には何も尋ねない。これは画面が必要な
+// ときに自ら尋ねる、というだけのことである。
 func (h SyncHandlers) restore() {
 	if h.Secrets == nil || !h.Secrets.Unlocked() || h.Service.Configured() {
 		return
@@ -88,8 +88,8 @@ func (h SyncHandlers) status(c *echo.Context) error {
 		Path:       &path,
 		Synced:     synced,
 		Direction:  api.SyncDirection(h.Service.Direction()),
-		// Why the form is empty, when it is. Never the access key or the
-		// secret: those go one way, into the sealed file.
+		// form が空である理由を、空であるときに伝える。access key や
+		// secret は決して含まない。それらは封印されたファイルへ一方通行である。
 		Locked: h.Secrets != nil && !h.Secrets.Unlocked(),
 	}
 	if synced {
@@ -102,13 +102,13 @@ func (h SyncHandlers) status(c *echo.Context) error {
 
 func (h SyncHandlers) Status(c *echo.Context) error { return h.status(c) }
 
-// Configure points this machine at a bucket.
+// Configure はこのマシンをある bucket に向ける。
 //
-// The credentials are sealed with the master password and kept beside the vault
-// rather than inside it. The vault travels — Collect names sshc/secrets
-// outright — and a snapshot that carried the key to its own bucket would be a
-// bootstrapping convenience and a much larger blast radius: anybody who
-// obtained one snapshot could fetch every later one.
+// credentials はマスターパスワードで封印され、vault の中ではなく脇に
+// 置かれる。vault は持ち運ばれる——Collect は sshc/secrets をはっきり
+// 名指ししている——ので、自分自身の bucket への鍵を運ぶスナップショットは、
+// 便利なブートストラップである以上にはるかに大きな被害範囲になる。
+// 誰かが 1 つのスナップショットを手に入れれば、それ以降のすべてを取得できてしまうからだ。
 func (h SyncHandlers) Configure(c *echo.Context) error {
 	var request api.SyncSettingsRequest
 	if err := decodeJSON(c, &request); err != nil {
@@ -118,12 +118,12 @@ func (h SyncHandlers) Configure(c *echo.Context) error {
 	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
 		return problem(c, http.StatusBadRequest, "endpoint_must_be_https")
 	}
-	// The client replaces the whole path with /bucket/key, so a pasted
-	// ".../my-bucket" would be dropped without a word and the user would look
-	// for their objects somewhere this application never wrote. A bare slash is
-	// what a browser adds to a host and means nothing, so it is removed rather
-	// than refused — and removing it is also what stops the screen showing
-	// "https://host//bucket".
+	// client はパス全体を /bucket/key に置き換えるため、貼り付けられた
+	// ".../my-bucket" は何も言わずに捨てられてしまい、ユーザーはこの
+	// application が一度も書いたことのない場所にオブジェクトを探すことになる。
+	// 末尾のスラッシュ 1 つはブラウザがホストに付け足すだけで意味を
+	// 持たないため、拒否ではなく除去する——除去することで、画面が
+	// "https://host//bucket" と表示するのも防いでいる。
 	if strings.Trim(parsed.Path, "/") != "" || parsed.RawQuery != "" || parsed.Fragment != "" {
 		return problem(c, http.StatusBadRequest, "endpoint_must_have_no_path")
 	}
@@ -158,9 +158,9 @@ func (h SyncHandlers) Configure(c *echo.Context) error {
 	config := remotesync.Config{
 		Endpoint: endpoint, Bucket: request.Bucket, Path: path, Region: region, Direction: direction,
 	}
-	// Tried before it is stored. Settings that were never tried are settings
-	// whose typo surfaces on the first push, hours later and somewhere else,
-	// and this is the one screen where the user can still see what they typed.
+	// 保存する前に試す。一度も試されなかった設定は、typo が最初の
+	// push で何時間も後に別の場所で表面化する設定になってしまう。
+	// ここは、ユーザーが自分の打ったものをまだ見られる唯一の画面である。
 	client := &objectstore.Client{
 		Endpoint: config.Endpoint, Bucket: config.Bucket, Region: config.Region, Creds: credentials,
 	}
@@ -168,8 +168,8 @@ func (h SyncHandlers) Configure(c *echo.Context) error {
 		return syncProblem(c, err)
 	}
 
-	// Stored before it is used, so the answer never claims a configuration that
-	// would be gone on the next run.
+	// 使われる前に保存する。これにより、次の実行では消えているはずの
+	// 設定を使ったと応答が主張してしまうことはない。
 	if h.Secrets != nil {
 		if err := h.Secrets.SetSyncSettings(secret.SyncSettings{
 			Endpoint: endpoint, Bucket: request.Bucket, Path: path, Region: region,
@@ -186,17 +186,17 @@ func (h SyncHandlers) Configure(c *echo.Context) error {
 	return h.status(c)
 }
 
-// masterPassword refuses a password that is not this workspace's master one.
+// masterPassword は、このワークスペースのマスターパスワードでないパスワードを拒否する。
 //
-// The snapshot is sealed with the master password rather than a second one, and
-// the field that takes it can therefore be checked. Without this a typo sealed
-// an archive nobody could ever open, and said so on the next machine, months
-// later.
-// It reports whether the request may go on. When it may not it has already
-// written the refusal, and the error it hands back is what the caller returns —
-// nil, because writing the response is how this application refuses. Returning
-// only that error would let the caller carry on and do the thing it just
-// refused, over the top of its own answer.
+// スナップショットは第 2 のパスワードではなくマスターパスワードで
+// 封印されているため、それを受け取るフィールドはチェックできる。
+// これがなければ、typo は誰も二度と開けないアーカイブを封印して
+// しまい、それが分かるのは何ヶ月も後の別のマシンでのことになる。
+// masterPassword はリクエストが先へ進んでよいかを報告する。進めない
+// 場合はすでに拒否を書き込んでおり、返すエラーは呼び出し元がそのまま
+// 返すべきものである——nil である。レスポンスを書くことがこの
+// application の拒否の仕方だからだ。そのエラーだけを返せば、呼び出し
+// 元は今拒否したはずのことを、自分の答えの上から続けてしまいかねない。
 func (h SyncHandlers) masterPassword(c *echo.Context, passphrase string) (bool, error) {
 	if h.Secrets == nil {
 		return true, nil
@@ -204,9 +204,9 @@ func (h SyncHandlers) masterPassword(c *echo.Context, passphrase string) (bool, 
 	ok, err := h.Secrets.Verify(passphrase)
 	switch {
 	case errors.Is(err, secret.ErrNoVault):
-		// A machine that has never made a vault is a machine doing its first
-		// pull. What it typed is the key to the archive; nothing here can check
-		// it, and the archive itself will.
+		// vault を一度も作ったことのないマシンは、初めての pull を行う
+		// マシンである。打ち込まれたものはアーカイブへの鍵であり、ここでは
+		// それを確認できない——確認できるのはアーカイブ自身だけだ。
 		return true, nil
 	case err != nil:
 		return false, problem(c, http.StatusInternalServerError, "vault_unreadable")
@@ -231,11 +231,11 @@ func (h SyncHandlers) Push(c *echo.Context) error {
 	return h.status(c)
 }
 
-// Pull previews by default and applies only when asked.
+// Pull は既定でプレビューし、求められたときだけ適用する。
 //
-// The response carries paths and never contents: a pull response holding file
-// bytes would put a private key in a response body, and the per-file preview
-// the user approves is assembled from files this application can already read.
+// 応答が運ぶのはパスだけで、中身は決して運ばない。ファイルのバイト列を保持する pull
+// の応答は、response body に秘密鍵を置くことになる。ユーザーが承認する
+// ファイル単位のプレビューは、この application がすでに読めるファイルから組み立てられる。
 func (h SyncHandlers) Pull(c *echo.Context) error {
 	h.restore()
 	var request api.PullRequest
@@ -283,9 +283,9 @@ func (h SyncHandlers) Pull(c *echo.Context) error {
 	return c.JSON(http.StatusOK, response)
 }
 
-// safeObjectPath is as narrow as the bucket name, and for the same reason: the
-// path becomes segments in a URL this application signs, so anything that could
-// add a segment of its own or escape upwards is refused rather than escaped.
+// safeObjectPath は bucket 名と同じくらい狭く絞ってあり、理由も同じである。
+// パスはこの application が署名する URL のセグメントになるため、
+// 独自のセグメントを足したり上位へ抜け出したりし得るものは、エスケープではなく拒否する。
 func safeObjectPath(path string) bool {
 	if path == "" {
 		return true
@@ -301,9 +301,9 @@ func safeObjectPath(path string) bool {
 	return true
 }
 
-// safeBucketName is deliberately narrow. The name becomes a path segment in a
-// URL this application signs, so anything that could add a segment or a query
-// is refused rather than escaped.
+// safeBucketName はわざと狭く絞ってある。名前はこの application が
+// 署名する URL のパスセグメントになるため、セグメントやクエリを
+// 足し得るものは、エスケープではなく拒否する。
 func safeBucketName(name string) bool {
 	if name == "" || len(name) > 255 || strings.Contains(name, "/") || strings.Contains(name, "..") {
 		return false

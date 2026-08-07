@@ -9,8 +9,8 @@ import (
 	"testing"
 )
 
-// interruptedCommit runs a two-file commit whose second rename fails and
-// returns the workspace with a healthy filesystem restored.
+// interruptedCommit は、二つ目の rename が失敗する 2 ファイルのコミットを実行し、
+// 健全なファイルシステムを復元したワークスペースを返す。
 func interruptedCommit(t *testing.T) (*Manager, *Workspace, string, string) {
 	t.Helper()
 	workspace := newTestWorkspace(t)
@@ -27,9 +27,9 @@ func interruptedCommit(t *testing.T) (*Manager, *Workspace, string, string) {
 		},
 	}
 	manager := NewManager(workspace, fixedClock(), bytes.NewReader(bytes.Repeat([]byte{0x5a}, 4096)))
-	// Backups are ciphertext in the running application, so every rollback test
-	// below rolls back from ciphertext. Without this they would prove the undo
-	// works on a shape of backup the application no longer writes.
+	// 動作中のアプリケーションではバックアップは暗号文なので、以下の巻き戻しテストは
+	// すべて暗号文から巻き戻す。これがないと、アプリケーションがもう書かない形の
+	// バックアップで取り消しが動くことを示すだけになってしまう。
 	manager.Seal = sealForTest
 	manager.Unseal = unsealForTest
 	if _, err := manager.Commit(Request{
@@ -132,9 +132,9 @@ func TestRollbackRemovesFilesTheTransactionCreated(t *testing.T) {
 		},
 	}
 	manager := NewManager(workspace, fixedClock(), bytes.NewReader(bytes.Repeat([]byte{0x5a}, 4096)))
-	// Backups are ciphertext in the running application, so every rollback test
-	// below rolls back from ciphertext. Without this they would prove the undo
-	// works on a shape of backup the application no longer writes.
+	// 動作中のアプリケーションではバックアップは暗号文なので、以下の巻き戻しテストは
+	// すべて暗号文から巻き戻す。これがないと、アプリケーションがもう書かない形の
+	// バックアップで取り消しが動くことを示すだけになってしまう。
 	manager.Seal = sealForTest
 	manager.Unseal = unsealForTest
 	if _, err := manager.Commit(Request{

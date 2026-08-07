@@ -83,7 +83,7 @@ func TestResolveEditAndCommitPreservesEveryOtherByte(t *testing.T) {
 		}
 	}
 
-	// Change one argument through the structured model and keep everything else.
+	// 構造化モデルを通して引数をひとつ変え、それ以外はすべて保つ。
 	node := graph.Nodes[entry]
 	original := node.File.Render()
 	changed := false
@@ -138,7 +138,7 @@ func TestResolveEditAndCommitPreservesEveryOtherByte(t *testing.T) {
 		t.Fatalf("backup = %q, %v", backup, err)
 	}
 
-	// The engine's own state directory must never appear as configuration.
+	// エンジン自身の状態ディレクトリが設定として現れることは決してあってはならない。
 	regraph, err := resolver.Resolve(entry)
 	if err != nil {
 		t.Fatal(err)
@@ -171,7 +171,7 @@ func TestResolverReportsUnsupportedTokensInsteadOfGuessing(t *testing.T) {
 	}
 }
 
-// deterministicRandom keeps transaction identifiers reproducible in tests.
+// deterministicRandom は、テスト内でトランザクション識別子を再現可能に保つ。
 func deterministicRandom() *bytes.Reader {
 	return bytes.NewReader(bytes.Repeat([]byte{0x7f}, 4096))
 }

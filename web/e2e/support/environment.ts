@@ -4,13 +4,13 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
-// binaryPath is the artefact under test. `make e2e` builds it first; a missing
-// binary fails loudly rather than falling back to a dev server, because the
-// point of this suite is the shipped artefact.
+// binaryPath は試験対象の成果物である。`make e2e` が
+// 先にそれをビルドする。バイナリがなければ、dev サーバーへ
+// 静かに後退するのではなく大声で失敗する。このスイートの主眼は出荷される成果物だからだ。
 const binaryPath = resolve(process.cwd(), "..", "bin", "sshc");
 
-// The fixture home is written by this file and by nothing else. Every spec that
-// needs a different starting state writes it through `installation.write`.
+// フィクスチャの home を書くのはこのファイルだけであり、他の何ものでもない。異
+// なる初期状態を必要とする各 spec は `installation.write` を通じてそれを書く。
 const entryConfig = [
   "# Managed by hand since 2019. Do not reformat.",
   "",
@@ -33,8 +33,8 @@ const includedConfig = [
   "",
 ].join("\n");
 
-// A syntactically valid but entirely synthetic host key. Nothing in this suite
-// contacts the address it names.
+// 構文的には正しいが、まったくの合成物である host key。
+// このスイート内の何ものも、それが指すアドレスに接続しない。
 const knownHosts =
   "203.0.113.10 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGZpeHR1cmVrZXlmaXh0dXJla2V5Zml4dHVyZWtl fixture\n";
 
@@ -60,9 +60,9 @@ async function buildHome(): Promise<string> {
 
 function startBinary(home: string): Promise<{ child: ChildProcess; url: string }> {
   return new Promise((resolvePromise, rejectPromise) => {
-    // HOME is the throwaway directory and PATH is inherited only so the child
-    // can find the OpenSSH programs it may report on. No spec in this suite
-    // triggers a route that starts one.
+    // HOME は使い捨てのディレクトリであり、PATH が継承される
+    // のは子プロセスが報告対象になりうる OpenSSH のプログラムを
+    // 見つけるためだけだ。このスイートのどの spec も、それを起動するルートを引き起こさない。
     const child = spawn(binaryPath, ["-open=false"], {
       env: { HOME: home, PATH: process.env.PATH ?? "" },
       stdio: ["ignore", "pipe", "pipe"],
@@ -109,17 +109,17 @@ export const test = base.extend<{ installation: Installation }>({
   },
 });
 
-// masterPassword is what every spec opens the application with. The whole
-// application is behind it now, so unlocking is part of starting rather than
-// part of a test about secrets.
+// masterPassword は、すべての spec がアプリケーションを開く
+// ときに使うものだ。今やアプリケーション全体がその背後に
+// あるため、ロック解除は secret についての試験の一部ではなく起動の一部になっている。
 export const masterPassword = "an end to end master password";
 
-// openApplication navigates and gets past the front door.
+// openApplication はナビゲートし、フロントドアを通過する。
 //
-// The first run of a fresh installation asks for a master password to be
-// chosen; a later one asks for it back. Specs get the second screen only if
-// they restart the binary, so this handles the first and is written to cope
-// with either.
+// 新規インストールの最初の起動は masterPassword の選択を
+// 求め、以後の起動はそれの入力を求める。spec がバイナリを
+// 再起動しない限り 2 番目の画面には出会わないため、これは
+// 最初のケースを扱いつつ、どちらにも対応できるよう書かれている。
 export async function openApplication(page: Page, installation: { url: string }) {
   const response = await page.goto(installation.url);
   const confirmation = page.getByLabel("Confirm master password", { exact: true });
@@ -132,24 +132,24 @@ export async function openApplication(page: Page, installation: { url: string })
     await page.getByRole("button", { name: "Open" }).click();
   }
   await expect(sessionStatus(page)).toContainText("Local session active");
-  // The navigation's own response, for the spec that asserts the headers it
-  // carried rather than what the page did with them.
+  // ページがそれをどう扱ったかではなく、ナビゲーション自身の
+  // 応答が運んだヘッダーを検証する spec のための、その応答そのもの。
   return response;
 }
 
-// sessionStatus is the header's own status line.
+// sessionStatus はヘッダー自身のステータス行である。
 //
-// It is scoped to the banner rather than selected by role alone: panels carry
-// their own role="status" elements, so an unscoped query is ambiguous in the
-// assembled application even though it is unique in the shell's Vitest suite.
+// role だけで選ぶのではなく banner にスコープする。パネルは自分自身の
+// role="status"要素を持つため、スコープなしのクエリはシェル単体の Vitest
+// スイートでは一意でも、組み立てられたアプリケーションでは曖昧になる。
 export function sessionStatus(page: Page) {
   return page.getByRole("banner").getByRole("status");
 }
 
-// openSection navigates the primary navigation and waits for the session first,
-// so a spec never clicks into a panel the shell has not rendered yet.
-// The name is matched exactly: "Keys" is a prefix of "Remote Keys", so a
-// substring match is ambiguous in the assembled navigation.
+// openSection はプライマリナビゲーションを操作する前にまずセッションを待つた
+// め、spec がシェルのまだ描画していないパネルをクリックしてしまうことはない。
+// 名前は完全一致で照合する。"Keys" は "Remote Keys" の
+// 接頭辞であるため、部分一致では組み立てられたナビゲーションの中で曖昧になる。
 export async function openSection(page: Page, name: string): Promise<void> {
   await expect(sessionStatus(page)).toContainText("Local session active");
   await page
@@ -158,13 +158,13 @@ export async function openSection(page: Page, name: string): Promise<void> {
     .click();
 }
 
-// clickAndAwait presses a button and resolves on the API response it triggers,
-// returning that response's status.
+// clickAndAwait はボタンを押し、それが引き起こす API 応答で
+// 解決し、その応答の status を返す。
 //
-// Waiting on a heading instead would be a false green here: the Save preview
-// panel renders its heading unconditionally, so a spec that treated the heading
-// as "the save finished" would read the file before the write and pass or fail
-// on timing rather than on behaviour.
+// 代わりに見出しを待つのはここでは偽の成功になる。Save
+// preview パネルは無条件に見出しを描画するため、見出しを
+// 「保存が終わった」ことだと扱う spec は書き込みより前に
+// ファイルを読んでしまい、振る舞いではなくタイミングによって合否が決まってしまう。
 export async function clickAndAwait(
   page: Page,
   buttonName: string,

@@ -94,10 +94,10 @@ func TestDiffEffectiveReportsAddedChangedAndRemovedValues(t *testing.T) {
 	}
 }
 
-// TestDiffEffectiveIgnoresALineShiftButNotARealMove pins what counts as a
-// change of source. Inserting a line into a file pushes every value below it
-// down, and an unchanged value that merely moved is not something the user
-// edited; a value that moved to another file or another block is.
+// TestDiffEffectiveIgnoresALineShiftButNotARealMove は、Source の
+// 変化として数えるものを固定する。ファイルへの行挿入はその下の
+// すべての値を押し下げるが、単に移動しただけの不変の値は
+// ユーザーが編集したものではない。別のファイルや別のブロックへ移動した値はそうである。
 func TestDiffEffectiveIgnoresALineShiftButNotARealMove(t *testing.T) {
 	before := Effective{Alias: "nas", Entries: []EffectiveEntry{
 		{Keyword: "ServerAliveInterval", Values: []string{"30"}, Source: Source{Path: "config", Absolute: "/root/config", Line: 10, Condition: "Host *"}},
@@ -125,10 +125,10 @@ func TestDiffEffectiveIgnoresALineShiftButNotARealMove(t *testing.T) {
 	}
 }
 
-// The Effective tab of a host detail is where a user asks "what do I actually
-// get?". Two files claiming the alias is the one situation where the answer is
-// not what the block on screen says, so it is the situation the tab most needs
-// to mention. The connections tree flags it; this said nothing.
+// host 詳細の Effective タブは、ユーザーが「実際には何を得るのか?」と
+// 問う場所である。2 つのファイルが同じ alias を主張しているのは、
+// 画面上のブロックが言うことと答えが異なる唯一の状況であり、このタブが最も
+// 言及すべき状況だが、connections tree はそれを示すのに、これまでは何も言っていなかった。
 func TestComputeEffectiveReportsAnAliasClaimedByTwoFiles(t *testing.T) {
 	graph := newTestGraph(t, map[string]string{
 		"config":              "Include conf.d/*.conf\n\nHost nas\n\tUser aida\n",

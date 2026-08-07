@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	// TrashRetentionDays is the age at which the UI marks a trashed key old.
-	// Nothing is ever deleted automatically; this number is presentation only.
+	// TrashRetentionDays は、UI がごみ箱の鍵を「古い」と印付ける年齢。自動的に削除
+	// されるものは何もない。この数字は表示のためだけのものである。
 	TrashRetentionDays = 30
 
 	trashDirectoryName = "trash"
@@ -31,16 +31,16 @@ var (
 	ErrTrashNameConflict = errors.New("two files in one delete share a base name")
 )
 
-// Blocker codes are stable identifiers followed by ':' and the path involved.
+// Blocker のコードは安定した識別子で、そのあとに ':' と関係するパスが続く。
 const (
 	BlockerPathOccupied       = "restore_path_occupied"
 	BlockerFingerprintPresent = "restore_fingerprint_present"
 	BlockerEntryIncomplete    = "restore_entry_incomplete"
 )
 
-// trashEntryPattern is the only shape a trash identifier may take. It mirrors
-// the transaction identifier format, and it makes '..' and any other traversal
-// attempt impossible before a path is ever built.
+// trashEntryPattern は、ごみ箱の識別子が取りうる唯一の形。トランザクション識別子の
+// 形式を映したものであり、これによって '..' やその他のトラバーサルの試みは、パスが
+// 組み立てられる前に不可能になる。
 var trashEntryPattern = regexp.MustCompile(`^[0-9]{8}T[0-9]{6}\.[0-9]{3}-[0-9a-f]{8}$`)
 
 type manifestFile struct {
@@ -51,9 +51,9 @@ type manifestFile struct {
 	Permission   string `json:"permission"`
 }
 
-// trashManifest records what one soft delete moved. Paths are workspace
-// relative so the entry survives a change of home directory, and no field ever
-// holds file contents.
+// trashManifest は、ひとつのソフト削除が何を移動したかを記録する。パスはワーク
+// スペース相対なので、ホームディレクトリが変わってもエントリは生き残る。どの
+// フィールドもファイルの内容を保持しない。
 type trashManifest struct {
 	SchemaVersion int            `json:"schemaVersion"`
 	EntryID       string         `json:"entryId"`
@@ -61,7 +61,7 @@ type trashManifest struct {
 	Files         []manifestFile `json:"files"`
 }
 
-// TrashFile is one file inside a trash entry.
+// TrashFile は、ごみ箱エントリ内のファイルひとつ。
 type TrashFile struct {
 	OriginalRelativePath string
 	TrashRelativePath    string
@@ -70,7 +70,7 @@ type TrashFile struct {
 	Permission           string
 }
 
-// TrashEntry is one soft-deleted group of files.
+// TrashEntry は、ソフト削除されたファイルのグループひとつ。
 type TrashEntry struct {
 	ID         string
 	DeletedAt  time.Time
@@ -113,13 +113,13 @@ func (service *Service) newEntryID() (string, error) {
 	return service.now().UTC().Format("20060102T150405.000") + "-" + hex.EncodeToString(suffix), nil
 }
 
-// Trash soft-deletes a key by moving it, and the files that belong to the same
-// key pair, into ~/.ssh/sshc/trash/<entry>/ in one journalled transaction.
+// Trash は、鍵と、同じ鍵ペアに属するファイルを ~/.ssh/sshc/trash/<entry>/ へ、
+// ひとつのジャーナル付きトランザクションで移動させることでソフト削除する。
 //
-// The move is a rename inside the same filesystem, so the bytes are never
-// copied and the file keeps the permission bits it already had. The trash entry
-// is the recovery point for a key; the generational backup directory is
-// deliberately not used, because it would leave a second copy of the key.
+// 移動は同じファイルシステム内の rename なので、バイト列がコピーされることはなく、
+// ファイルはすでに持っていた権限ビットを保つ。ごみ箱のエントリが鍵の復旧地点で
+// ある。世代バックアップのディレクトリは意図的に使わない。それでは鍵の二つ目の
+// コピーが残ってしまうからだ。
 func (service *Service) Trash(keyID string) (TrashResult, error) {
 	inventory, err := service.Inventory()
 	if err != nil {
@@ -208,10 +208,10 @@ func (service *Service) Trash(keyID string) (TrashResult, error) {
 	}, nil
 }
 
-// skippedSiblings lists files that look related by name but were left in place
-// because their fingerprint could not be compared, which happens for a legacy
-// PEM key that is encrypted. Nothing is ever moved on the strength of a name;
-// this list exists only so the user is told what stayed behind.
+// skippedSiblings は、名前の上では関連して見えるが、フィンガープリントを比較できな
+// かったためその場に残されたファイルを列挙する。暗号化された旧来の PEM 鍵でそれが
+// 起きる。名前を根拠に何かが移動されることは決してない。この一覧は、何が残ったかを
+// ユーザーに伝えるためだけに存在する。
 func skippedSiblings(inventory *Inventory, item *Item, group []Item) []string {
 	if item.Kind != KindPrivateKey || item.Fingerprint != "" {
 		return nil
@@ -238,8 +238,8 @@ func skippedSiblings(inventory *Inventory, item *Item, group []Item) []string {
 	return skipped
 }
 
-// ListTrash returns every trash entry, newest first. It performs no write and
-// deletes nothing, however old an entry is.
+// ListTrash は、すべてのごみ箱エントリを新しいものから順に返す。書き込みは行わず、
+// エントリがどれだけ古くても何も削除しない。
 func (service *Service) ListTrash() ([]TrashEntry, error) {
 	directories, err := service.workspace.FileSystem().ReadDir(service.trashRoot())
 	if errors.Is(err, fs.ErrNotExist) {
@@ -260,9 +260,9 @@ func (service *Service) ListTrash() ([]TrashEntry, error) {
 		}
 		manifest, manifestErr := service.readManifest(directory.Name())
 		if manifestErr != nil {
-			// A directory without a readable manifest is left-over engine
-			// debris, for example from a delete that failed before it wrote
-			// anything. It is not presented as a recoverable key.
+			// 読める manifest を持たないディレクトリは、エンジンが残した残骸である。
+			// たとえば、何かを書く前に失敗した削除がこれにあたる。復旧可能な鍵として
+			// 提示されることはない。
 			continue
 		}
 		entries = append(entries, service.describeEntry(inventory, manifest))
@@ -314,11 +314,11 @@ func (service *Service) describeEntry(inventory *Inventory, manifest trashManife
 	return entry
 }
 
-// restoreBlockers reports every reason a restore would have to guess.
+// restoreBlockers は、復元が推測を強いられる理由をすべて報告する。
 //
-// The engine never renames a restored file, never overwrites an existing one
-// and never decides which of two identical keys a Host meant. When a blocker is
-// present it refuses and shows the reason.
+// エンジンは復元したファイルの名前を変えず、既存のファイルを上書きせず、同一の
+// 二つの鍵のうちどちらを Host が意図したかを決めることもしない。blocker があれば
+// 拒否し、その理由を示す。
 func (service *Service) restoreBlockers(inventory *Inventory, manifest trashManifest) []string {
 	fileSystem := service.workspace.FileSystem()
 	blockers := make([]string, 0)
@@ -347,10 +347,10 @@ func (service *Service) restoreBlockers(inventory *Inventory, manifest trashMani
 	return blockers
 }
 
-// Restore moves every file of a trash entry back to the path it came from and
-// removes the entry's manifest, in one journalled transaction. The empty entry
-// directory is left behind, because the transaction manager owns files, not
-// directories; ListTrash ignores a directory without a manifest.
+// Restore は、ごみ箱エントリのすべてのファイルを元のパスへ戻し、そのエントリの
+// manifest を取り除く。すべてひとつのジャーナル付きトランザクションで行う。空に
+// なったエントリのディレクトリは残る。マネージャが所有するのはファイルであって
+// ディレクトリではないからだ。ListTrash は manifest のないディレクトリを無視する。
 func (service *Service) Restore(entryID string) (RestoreResult, error) {
 	manifest, err := service.readManifest(entryID)
 	if err != nil {
@@ -404,9 +404,9 @@ func (service *Service) Restore(entryID string) (RestoreResult, error) {
 	return RestoreResult{EntryID: entryID, Restored: restored, TransactionID: result.ID}, nil
 }
 
-// Purge permanently deletes a trash entry. Nothing is backed up, so the result
-// cannot be undone; the HTTP layer requires a second confirmation and its own
-// action token before calling it.
+// Purge は、ごみ箱エントリを恒久的に削除する。何もバックアップされないので、結果は
+// 取り消せない。HTTP 層は、これを呼ぶ前に二度目の確認と自前のアクショントークンを
+// 要求する。
 func (service *Service) Purge(entryID string) (PurgeResult, error) {
 	manifest, err := service.readManifest(entryID)
 	if err != nil {

@@ -10,14 +10,14 @@ import (
 	"sshc/internal/storage"
 )
 
-// newTestWorkspace builds an isolated ~/.ssh under t.TempDir(). No test in this
-// package ever touches the developer's real home directory.
+// newTestWorkspace は t.TempDir() の下に隔離された ~/.ssh を組み立てる。この
+// パッケージのどのテストも、開発者の本物のホームディレクトリには触れない。
 //
-// The temporary directory is resolved with EvalSymlinks first because macOS
-// puts t.TempDir() under /var, which is a symbolic link to /private/var.
-// Workspace resolves its root the same way, so an unresolved home would make
-// Workspace.Home() and Workspace.Root() disagree and every '~' expansion would
-// look like a path outside the workspace.
+// 一時ディレクトリを先に EvalSymlinks で解決するのは、macOS が t.TempDir() を
+// /var の下に置き、それが /private/var へのシンボリックリンクだからである。
+// Workspace はルートを同じやり方で解決するので、ホームを未解決のままにすると
+// Workspace.Home() と Workspace.Root() が食い違い、すべての '~' 展開がワーク
+// スペースの外のパスに見えてしまう。
 func newTestWorkspace(t *testing.T) *storage.Workspace {
 	t.Helper()
 	home, err := filepath.EvalSymlinks(t.TempDir())
@@ -70,8 +70,8 @@ func TestScanClassifiesByContentNotByFileName(t *testing.T) {
 	workspace := newTestWorkspace(t)
 	privateKey, publicKey, fingerprint := newKeyPairFixture(t, "correct horse")
 
-	// Deliberately misleading names: the private key is called "notes.txt" and
-	// a plain text file is called "id_ed25519".
+	// 意図的に紛らわしい名前。秘密鍵は "notes.txt" と呼ばれ、ただのテキストファイルが
+	// "id_ed25519" と呼ばれている。
 	writeFixture(t, workspace, "notes.txt", privateKey, 0o600)
 	writeFixture(t, workspace, "notes.txt.pub", publicKey, 0o644)
 	writeFixture(t, workspace, "id_ed25519", []byte("this is not a key at all\n"), 0o600)
@@ -188,7 +188,7 @@ func TestGroupMatchesSiblingsByFingerprintOnly(t *testing.T) {
 
 	writeFixture(t, workspace, "work", privateKey, 0o600)
 	writeFixture(t, workspace, "work.pub", publicKey, 0o644)
-	// Same base name, different key: it must not be grouped with "work".
+	// 基底名は同じだが別の鍵。"work" と一緒にグループ化されてはならない。
 	writeFixture(t, workspace, "work-old.pub", strangerPublicKey, 0o644)
 
 	inventory, err := NewScanner(workspace).Scan()

@@ -14,26 +14,26 @@ import (
 	"sshc/internal/session"
 )
 
-// guardedRoute is one operation that starts a process, changes a file outside
-// the ordinary edit path, or hands out key material.
+// guardedRoute は、プロセスを起動する、通常の edit 経路の外で
+// ファイルを変更する、あるいは key material を渡す操作の 1 つである。
 //
-// Every one of them takes its confirmation in the X-SSHC-Action header: the
-// merged tree settled on one delivery spelling, so the plan's tokenInBody
-// variant has no route to describe.
+// そのどれもが X-SSHC-Action ヘッダーで確認を受け取る:
+// merge されたツリーは 1 つの配送方式に落ち着いたため、plan の
+// tokenInBody という variant は、記述すべき route を持たない。
 type guardedRoute struct {
 	Method string
-	// Path is the Echo path, so the router cross-check below can compare
-	// against it. Target resolves the concrete path and the token target
-	// together, because for a permanent delete they are the same value and it
-	// has to be a trash entry that exists.
+	// Path は Echo path であり、以下の router cross-check がそれと
+	// 比較できるようにする。Target は concrete path と token target を
+	// 併せて解決する。完全削除ではこの 2 つが同じ値であり、実在する
+	// trash entry でなければならないからである。
 	Path string
 	Kind string
-	// Target returns the value the route's confirmation is bound to. It is a
-	// function rather than a string so a row can mint a fresh subject per use;
-	// the permanent-delete row needs one, because its positive control spends
-	// the entry it was issued for.
+	// Target は、route の確認が紐づく値を返す。文字列ではなく
+	// 関数になっているのは、行ごとに使うたびに新しい subject を発行できる
+	// ようにするためである。permanent-delete の行にはそれが要る。
+	// その positive control が、発行された entry を消費してしまうからである。
 	Target func(t testing.TB) string
-	// Concrete builds the request path from a resolved target.
+	// Concrete は、解決済みの target から request path を組み立てる。
 	Concrete func(target string) string
 	Body     func(f *fixture, target string) map[string]any
 }
@@ -103,8 +103,8 @@ func guardedRoutes(f *fixture) []guardedRoute {
 	}
 }
 
-// sendGuarded issues one guarded request with the token in the header the
-// route expects, or with no header at all when presented is empty.
+// sendGuarded は、route が期待するヘッダーに token を載せて
+// 1 つの guarded request を発行する。presented が空ならヘッダー自体を付けない。
 func (f *fixture) sendGuarded(t testing.TB, route guardedRoute, target, presented string) *http.Response {
 	t.Helper()
 	var body []byte
@@ -120,8 +120,8 @@ func TestEveryGuardedRouteRefusesAMissingWrongOrExpiredToken(t *testing.T) {
 
 	for _, route := range routes {
 		t.Run(route.Method+" "+route.Path, func(t *testing.T) {
-			// Positive control first: a correct token must reach the operation,
-			// otherwise every refusal below proves nothing.
+			// まず positive control: 正しい token は operation に届かねば
+			// ならない。さもなければ以下の拒否は何も証明しない。
 			f.runner.reset()
 			controlTarget := route.Target(t)
 			valid := f.actionToken(t, route.Kind, controlTarget)
@@ -162,9 +162,9 @@ func TestEveryGuardedRouteRefusesAMissingWrongOrExpiredToken(t *testing.T) {
 
 			for _, refusal := range refusals {
 				t.Run(refusal.name, func(t *testing.T) {
-					// Each refusal gets its own subject, so a row whose control
-					// spent the one it was issued for still has a live subject
-					// to be refused against.
+					// 各拒否は自分専用の subject を得る。そのため、control が
+					// 発行された分を消費してしまった行でも、拒否する対象として
+					// 生きた subject が残っている。
 					target := route.Target(t)
 					presented := refusal.token(target)
 					f.runner.reset()
@@ -195,8 +195,8 @@ func TestEveryGuardedRouteRefusesAMissingWrongOrExpiredToken(t *testing.T) {
 		})
 	}
 
-	// The table must keep up with the router. Every route whose Echo path names
-	// one of the token-guarded operations has to appear above.
+	// この表は router に追随していなければならない。Echo path が
+	// token で守られた operation のいずれかを指す route は、すべて上に現れねばならない。
 	tabled := map[string]bool{}
 	for _, route := range routes {
 		tabled[route.Method+" "+route.Path] = true
@@ -208,8 +208,8 @@ func TestEveryGuardedRouteRefusesAMissingWrongOrExpiredToken(t *testing.T) {
 		}
 		t.Errorf("route %s is a confirmation-guarded operation with no row in guardedRoutes", key)
 	}
-	// And the other way: a row naming a route the router does not register
-	// would silently test nothing.
+	// 逆もまた然り: router が登録していない route を名指す行は、
+	// 何もテストせずに黙って通ってしまう。
 	registered := map[string]bool{}
 	for _, route := range f.apiRoutes() {
 		registered[route.Method+" "+route.Path] = true
@@ -221,16 +221,16 @@ func TestEveryGuardedRouteRefusesAMissingWrongOrExpiredToken(t *testing.T) {
 	}
 }
 
-// requiresConfirmation names the route families design §8.2 puts behind an
-// action token: anything that connects, launches Terminal, edits known_hosts,
-// registers a key on a remote host, reveals a private key or permanently
-// deletes one.
+// requiresConfirmation は、design §8.2 が action token の背後に
+// 置く route の系列を名指しする: 接続するもの、Terminal を起動する
+// もの、known_hosts を編集するもの、リモートホストに key を登録する
+// もの、private key を reveal するもの、あるいはそれを完全削除するもの。
 //
-// POST /api/v1/diagnostics/effective is deliberately absent. Design §8.3 makes
-// its confirmation conditional — evaluation runs a command only when the
-// configuration carries a Match exec — so a missing token is not a refusal
-// there, it is simply an unevaluated answer. That conditional gate has its own
-// test below, against a configuration that does carry one.
+// POST /api/v1/diagnostics/effective は意図的に含まれていない。
+// design §8.3 はその確認を条件付きにしている — 評価が
+// コマンドを実行するのは、設定が Match exec を持つときだけである —
+// そのためここでは token がないことは拒否ではなく、単に評価されていない答えにすぎない。
+// その条件付きゲートには、Match exec を持つ設定に対する専用テストが以下にある。
 func requiresConfirmation(path string) bool {
 	switch {
 	case path == "/api/v1/diagnostics/config", path == "/api/v1/diagnostics/effective":
@@ -252,18 +252,18 @@ func requiresConfirmation(path string) bool {
 	}
 }
 
-// TestEvaluationOfAnExecutableConfigurationNeedsAConfirmation covers the gate
-// the table above leaves out.
+// TestEvaluationOfAnExecutableConfigurationNeedsAConfirmation は、
+// 上の表が漏らしたゲートをカバーする。
 //
-// A Match exec is the one directive OpenSSH runs while merely reading a
-// configuration file, so `ssh -G` over such a file must not start until the
-// user has confirmed the exact command they were shown.
+// Match exec は、OpenSSH が設定ファイルを読むだけの際に実行する
+// 唯一のディレクティブであり、そのため `ssh -G` をそうしたファイルに
+// かけるのは、ユーザーが見せられた正確なコマンドを確認するまで始まってはならない。
 func TestEvaluationOfAnExecutableConfigurationNeedsAConfirmation(t *testing.T) {
 	f := newFixture(t)
 
-	// The evidence a diagnostics token carries is derived from the executable
-	// directives of the configuration as it stands, so the file is rewritten
-	// before any token is issued.
+	// diagnostics token が運ぶ evidence は、その時点の設定が持つ
+	// 実行可能なディレクティブから導かれるため、token を発行する前に
+	// ファイルは書き換えられている。
 	mustWrite(t, filepath.Join(f.root, "config"), []byte(""+
 		"Match exec \"true\"\n"+
 		"\tUser matched\n"+
@@ -286,8 +286,8 @@ func TestEvaluationOfAnExecutableConfigurationNeedsAConfirmation(t *testing.T) {
 		t.Fatal("an executable configuration was evaluated without a confirmation")
 	}
 
-	// A wrong token is refused outright rather than quietly downgraded to the
-	// unconfirmed answer.
+	// 誤った token は、未確認の答えへ黙って格下げされるのではなく、
+	// きっぱりと拒否される。
 	f.runner.reset()
 	refused := f.do(http.MethodPost, "/api/v1/diagnostics/effective", mustJSON(t, map[string]any{
 		"alias": "bastion",
@@ -301,8 +301,8 @@ func TestEvaluationOfAnExecutableConfigurationNeedsAConfirmation(t *testing.T) {
 		t.Fatalf("an invented token still ran %#v", commands)
 	}
 
-	// Positive control: with a confirmation the evaluation does run, so the two
-	// refusals above are the gate working rather than a route that never runs.
+	// 正のコントロール: 確認があれば評価は実際に走る。
+	// つまり上の 2 つの拒否は、一度も動かない route ではなくゲートが機能している証拠である。
 	f.runner.reset()
 	token := f.actionToken(t, session.ActionEvaluate, "bastion")
 	confirmed := f.do(http.MethodPost, "/api/v1/diagnostics/effective", mustJSON(t, map[string]any{
@@ -314,12 +314,12 @@ func TestEvaluationOfAnExecutableConfigurationNeedsAConfirmation(t *testing.T) {
 	}
 }
 
-// contentBearingRoutes are the only responses allowed to contain material a
-// user would recognise as the contents of a file. Each entry states why.
+// contentBearingRoutes は、ユーザーがファイルの中身だと認識する
+// ような material を含んでよい唯一のレスポンスである。各 entry は理由を述べる。
 //
-// This map is the assertion, not a convenience: a route that leaks without a
-// row here fails, and a row whose route stops leaking also fails, so the
-// allowlist cannot quietly widen into a blanket exemption.
+// この map は便宜ではなく assertion そのものである: ここに行が
+// ないまま漏らす route も失敗し、漏らさなくなった route を持つ行も
+// 失敗する。そのため allowlist は黙って包括的な免除へと広がることができない。
 var contentBearingRoutes = map[string]string{
 	"GET /api/v1/config/overview":  "the overview carries the parsed text of every managed file",
 	"GET /api/v1/config/file":      "the raw editor is the feature; it returns the file the user asked to edit",
@@ -329,8 +329,8 @@ var contentBearingRoutes = map[string]string{
 	"POST /api/v1/history/restore": "a restore reports the diff it wrote",
 }
 
-// keyMaterialRoutes are the only responses allowed to contain private key
-// bytes. Design §6.3 separates this from every other API on purpose.
+// keyMaterialRoutes は、private key のバイト列を含んでよい唯一のレスポンスである。
+// design §6.3 は、これを他のあらゆる API から意図的に切り離している。
 var keyMaterialRoutes = map[string]string{
 	"POST /api/v1/keys/:keyId/reveal": "the separated reveal API, behind a one-time action token",
 }
@@ -353,17 +353,17 @@ func TestNoResponseCarriesASecretItIsNotEntitledTo(t *testing.T) {
 		observed = append(observed, observation{key: method + " " + path, body: text})
 	}
 
-	// The reveal goes first. Phase one below drives POST /api/v1/keys/:keyId/trash
-	// on the fixture key, and a trashed key can no longer have a reveal
-	// confirmation minted for it, so the one response allowed to carry key
-	// material has to be collected while the key is still there.
+	// reveal を先に行う。以下の phase one は fixture key に対して
+	// POST /api/v1/keys/:keyId/trash を駆動するが、trash 済みの key には
+	// もう reveal の確認を発行できない。そのため key material を
+	// 運んでよい唯一のレスポンスは、key がまだ存在するうちに収集しなければならない。
 	keyID := f.keyID()
 	revealToken := f.actionToken(t, session.ActionRevealPrivateKey, keyID)
 	record(http.MethodPost, "/api/v1/keys/"+keyID+"/reveal", nil, withAction(revealToken))
 
-	// Phase one: touch every registered route, so a route added later is swept
-	// even if nobody wrote a meaningful request for it. A 400 answer is fine
-	// here; the assertion is about what leaks, not about what succeeds.
+	// Phase one: 登録済みの route をすべて触る。そうすれば、後から追加された route も、
+	// 誰も意味のあるリクエストを書いていなくても掃かれる。ここでは 400 の応答でよい。
+	// assertion は何が成功するかではなく、何が漏れるかについてのものだからである。
 	for _, route := range f.apiRoutes() {
 		if route.Path == "/api/v1/session/bootstrap" {
 			continue
@@ -371,15 +371,15 @@ func TestNoResponseCarriesASecretItIsNotEntitledTo(t *testing.T) {
 		record(route.Method, f.concretePath(route.Path), emptyBodyFor(route.Method))
 	}
 
-	// Phase one touched POST /api/v1/passwords/lock, which shuts the whole
-	// application: every read after it answers vault_locked. Opening it again
-	// is what lets phase two look at populated bodies rather than at problem
-	// documents — which is the difference between this sweep proving something
-	// and proving nothing.
+	// Phase one は POST /api/v1/passwords/lock に触れ、アプリケーション
+	// 全体を閉じてしまう: それ以降のすべての read は vault_locked を
+	// 返す。もう一度開くことで、phase two は problem document ではなく
+	// 中身の詰まった body を見られるようになる — これが、この sweep が
+	// 何かを証明することと何も証明しないことの違いである。
 	f.unlockAgain()
 
-	// Phase two: drive the read paths to a real 200, so the sweep looks at
-	// populated bodies rather than at problem documents.
+	// Phase two: read 経路を本物の 200 まで駆動し、sweep が
+	// problem document ではなく中身の詰まった body を見るようにする。
 	record(http.MethodGet, "/api/v1/config/overview", nil)
 	record(http.MethodGet, "/api/v1/config/file?path=config", nil)
 	record(http.MethodGet, "/api/v1/config/host?path=config&alias=bastion", nil)
@@ -394,7 +394,7 @@ func TestNoResponseCarriesASecretItIsNotEntitledTo(t *testing.T) {
 	for _, entry := range observed {
 		normalised := normaliseObservationKey(entry.key, keyID)
 
-		// Never, anywhere, under any circumstance.
+		// 決して、どこであっても、いかなる状況でも。
 		for name, secret := range map[string]string{
 			"a file outside ~/.ssh": f.canaries.Outside,
 			"the key passphrase":    f.canaries.Passphrase,
@@ -430,8 +430,8 @@ func TestNoResponseCarriesASecretItIsNotEntitledTo(t *testing.T) {
 	}
 }
 
-// normaliseObservationKey puts a concrete request path back into the Echo
-// parameter spelling the allowlists use.
+// normaliseObservationKey は、concrete な request path を
+// allowlist が使う Echo parameter の綴りへ戻す。
 func normaliseObservationKey(key, keyID string) string {
 	normalised := strings.Split(key, "?")[0]
 	if keyID != "" {
@@ -443,14 +443,14 @@ func normaliseObservationKey(key, keyID string) string {
 func TestNoLogLineCarriesASecret(t *testing.T) {
 	f := newFixture(t)
 
-	// The reveal goes first, for the same reason as in the response sweep: the
-	// route walk below trashes the fixture key.
+	// reveal を先に行うのは、response sweep と同じ理由による:
+	// 以下の route walk は fixture key を trash してしまうからである。
 	keyID := f.keyID()
 	revealToken := f.actionToken(t, session.ActionRevealPrivateKey, keyID)
 	readBody(t, f.do(http.MethodPost, "/api/v1/keys/"+keyID+"/reveal", nil, withAction(revealToken)))
 
-	// Exercise every route so the log has something in it, including refusals,
-	// which are the lines most likely to echo what was rejected.
+	// すべての route を動かし、ログに何かが残るようにする。拒否も
+	// 含めてであり、それは拒絶されたものを反響させる可能性が最も高い行だからである。
 	for _, route := range f.apiRoutes() {
 		readBody(t, f.do(route.Method, f.concretePath(route.Path), emptyBodyFor(route.Method)))
 		readBody(t, f.do(route.Method, f.concretePath(route.Path), emptyBodyFor(route.Method), func(request *http.Request) {
@@ -481,12 +481,12 @@ func TestNoLogLineCarriesASecret(t *testing.T) {
 	}
 }
 
-// TestTheLogScrapeWouldNoticeASecret is the leak sweep's own control.
+// TestTheLogScrapeWouldNoticeASecret は、leak sweep 自身の control である。
 //
-// TestNoLogLineCarriesASecret passes trivially against a server that logs
-// nothing, and this application logs very little. This proves the scrape reads
-// the same stream the server writes to, so a future handler that does log a
-// secret would be caught rather than silently missed.
+// TestNoLogLineCarriesASecret は、何もログしないサーバーに対しては
+// 自明に通ってしまい、このアプリケーションはログがごく少ない。
+// これは、scrape がサーバーの書き込み先と同じ stream を読んでいることを
+// 証明するもので、将来 secret をログしてしまう handler は黙って見逃されず捕まる。
 func TestTheLogScrapeWouldNoticeASecret(t *testing.T) {
 	f := newFixture(t)
 	if _, err := f.logs.Write([]byte("level=INFO msg=\"planted\" token=" + f.canaries.SessionID + "\n")); err != nil {
@@ -500,13 +500,13 @@ func TestTheLogScrapeWouldNoticeASecret(t *testing.T) {
 	}
 }
 
-// Nothing in the backup directory is readable without the master password.
+// backup directory の中身は、master password なしには何 1 つ読めない。
 //
-// The generational backups hold the previous contents of every file this
-// application replaces, which is why the writes whose previous contents could
-// be a private key used to keep no backup at all and could therefore never be
-// undone. This is what makes keeping them safe: the whole directory is
-// ciphertext, and restoring one comes back through the vault.
+// generational backup は、このアプリケーションが置き換える
+// すべてのファイルの、以前の中身を保持する。だからこそ、以前の
+// 中身が private key でありうる書き込みは、かつては一切 backup を
+// 残さず、そのため決して元に戻せなかった。これを安全にしているのは、
+// ディレクトリ全体が ciphertext であり、復元は vault を経て戻ってくることである。
 func TestNothingInTheBackupDirectoryIsReadable(t *testing.T) {
 	f := newFixture(t)
 
@@ -532,8 +532,8 @@ func TestNothingInTheBackupDirectoryIsReadable(t *testing.T) {
 		if readErr != nil {
 			return readErr
 		}
-		// The previous configuration is what this backup is of, so finding any
-		// recognisable part of it means the file was written in the clear.
+		// この backup が何のものかといえば以前の configuration であり、
+		// その識別可能な断片が見つかれば、ファイルが平文で書かれたことを意味する。
 		for _, secret := range []string{"Host bastion", "203.0.113.10", "IdentityFile"} {
 			if bytes.Contains(contents, []byte(secret)) {
 				t.Errorf("%s carries %q in the clear", path, secret)
@@ -548,7 +548,7 @@ func TestNothingInTheBackupDirectoryIsReadable(t *testing.T) {
 		t.Fatal("no backup was written, so this test proved nothing")
 	}
 
-	// And it can still be restored, which is the whole point of keeping it.
+	// そしてそれは今なお復元できる。それこそが保持している意味そのものである。
 	history := f.do(http.MethodGet, "/api/v1/history", nil)
 	defer func() { _ = history.Body.Close() }()
 	if history.StatusCode != http.StatusOK {

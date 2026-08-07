@@ -11,10 +11,10 @@ import (
 	"time"
 )
 
-// distinctReader is a deterministic random source whose reads never repeat.
-// A bytes.Repeat source hands back the same 32 bytes forever, so every issued
-// token would be identical and the per-token bookkeeping under test — single
-// use, the outstanding-token cap — would silently collapse to one record.
+// distinctReader は、読み出しが決して繰り返さない決定的な乱数源。
+// bytes.Repeat による乱数源は同じ 32 バイトをいつまでも返すので、発行される
+// トークンはすべて同一になり、テスト対象であるトークンごとの管理 — 単回使用、
+// 未使用トークンの上限 — が、黙ってレコードひとつ分に潰れてしまう。
 type distinctReader struct{ sequence uint64 }
 
 func (r *distinctReader) Read(destination []byte) (int, error) {
@@ -39,9 +39,9 @@ func newTestManager(t *testing.T) (*Manager, string) {
 	return manager, credentials.SessionID
 }
 
-// addSession registers a second authenticated session directly. Bootstrap is
-// deliberately single use, so this is the only way to prove that one session
-// cannot spend another session's confirmation.
+// addSession は、認証済みの二つ目のセッションを直接登録する。Bootstrap は意図的に
+// 単回使用なので、あるセッションが別のセッションの確認を使えないことを示すには
+// これしか方法がない。
 func addSession(t *testing.T, manager *Manager, sessionID string) {
 	t.Helper()
 	manager.mu.Lock()
@@ -87,7 +87,7 @@ func TestActionTokenIsSingleUseAndBoundToKindTargetAndEvidence(t *testing.T) {
 		if err := manager.ConsumeAction(sessionID, token, mismatch); !errors.Is(err, ErrInvalidAction) {
 			t.Errorf("ConsumeAction(%#v) = %v, want ErrInvalidAction", mismatch, err)
 		}
-		// A rejected presentation still burns the token.
+		// 提示が拒否されても、トークンは焼き捨てられる。
 		if err := manager.ConsumeAction(sessionID, token, request); !errors.Is(err, ErrInvalidAction) {
 			t.Errorf("a rejected token stayed usable: %v", err)
 		}
@@ -108,7 +108,7 @@ func TestActionTokenExpiresAndIsScopedToOneSession(t *testing.T) {
 	if err := manager.ConsumeAction(sessionID, token, request); !errors.Is(err, ErrActionExpired) {
 		t.Fatalf("expired token = %v, want ErrActionExpired", err)
 	}
-	// An expired token is gone, not quietly renewed.
+	// 期限切れのトークンは消えるのであって、こっそり延長されるのではない。
 	if err := manager.ConsumeAction(sessionID, token, request); !errors.Is(err, ErrInvalidAction) {
 		t.Fatalf("expired token was reissued: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestActionTokenCannotBeConsumedByAnotherSession(t *testing.T) {
 	if err := manager.ConsumeAction(otherSessionID, issued, request); !errors.Is(err, ErrInvalidAction) {
 		t.Fatalf("cross-session consume = %v, want ErrInvalidAction", err)
 	}
-	// The failed attempt must not have burned the owner's confirmation either.
+	// 失敗した試行が、持ち主の確認まで焼き捨ててしまってもならない。
 	if err := manager.ConsumeAction(sessionID, issued, request); err != nil {
 		t.Fatalf("the owning session lost its confirmation: %v", err)
 	}
@@ -174,8 +174,8 @@ func TestActionTokenCapRefusesInsteadOfEvictingAConfirmation(t *testing.T) {
 			t.Fatalf("IssueAction %d = %v", index, err)
 		}
 	}
-	// Flooding a full table must be refused rather than make room by discarding
-	// a confirmation the user has already given.
+	// 満杯の表に殺到した場合は、ユーザーがすでに与えた確認を捨てて場所を空けるのでは
+	// なく、拒否しなければならない。
 	for attempt := 0; attempt < 4; attempt++ {
 		if _, err := manager.IssueAction(sessionID, flood); !errors.Is(err, ErrTooManyActions) {
 			t.Fatalf("attempt %d past the cap = %v, want ErrTooManyActions", attempt, err)
@@ -184,7 +184,7 @@ func TestActionTokenCapRefusesInsteadOfEvictingAConfirmation(t *testing.T) {
 	if err := manager.ConsumeAction(sessionID, first, request); err != nil {
 		t.Fatalf("the oldest confirmation was evicted: %v", err)
 	}
-	// Burning one confirmation releases exactly one slot.
+	// 確認をひとつ焼き捨てると、ちょうどひとつ分の空きが解放される。
 	if _, err := manager.IssueAction(sessionID, flood); err != nil {
 		t.Fatalf("IssueAction after a consume = %v", err)
 	}

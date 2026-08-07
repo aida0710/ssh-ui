@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// newEligibilityService writes a workspace whose entry file declares the four
-// situations these rules are about, and a known_hosts that knows one of them.
+// newEligibilityService は、これらの規則が扱う 4 個の状況を宣言するエントリファイル
+// と、そのうち 1 個を知っている known_hosts を持つワークスペースを書き出す。
 func newEligibilityService(t *testing.T) *Service {
 	t.Helper()
 	service, workspace := newTestService(t)
@@ -45,9 +45,9 @@ func codesOf(notices []Notice) map[string]bool {
 }
 
 func TestAHostThatRefusesPasswordAuthenticationCannotStoreOne(t *testing.T) {
-	// PasswordAuthentication is a client-side setting, so with it off the
-	// client will never offer the password however good it is. Storing one
-	// would put a secret on disk that has no use at all.
+	// PasswordAuthentication はクライアント側の設定なので、これが off だと
+	// クライアントはどれほど良いパスワードでも決して提示しない。保存する
+	// ことは、まったく使い道のない秘密をディスクに置くことになる。
 	report, err := newEligibilityService(t).PasswordEligibility("nopassword")
 	if err != nil {
 		t.Fatal(err)
@@ -61,8 +61,8 @@ func TestAHostThatRefusesPasswordAuthenticationCannotStoreOne(t *testing.T) {
 }
 
 func TestAConfiguredKeyIsAWarningAndNotARefusal(t *testing.T) {
-	// The key may not be authorised on the far side, which is an ordinary
-	// situation, so this is said and the decision is left with the user.
+	// 鍵が向こう側で認可されていないかもしれないというのは普通の状況
+	// なので、これは言明されるだけで判断はユーザーに委ねられる。
 	report, err := newEligibilityService(t).PasswordEligibility("keyed")
 	if err != nil {
 		t.Fatal(err)
@@ -76,11 +76,11 @@ func TestAConfiguredKeyIsAWarningAndNotARefusal(t *testing.T) {
 }
 
 func TestAnUnknownHostKeyIsReportedBecauseTheHelperWillNotAnswerThatQuestion(t *testing.T) {
-	// Forcing askpass routes the host-key question to the helper too, and the
-	// helper refuses it. So a first connection to an unverified host stops at
-	// that prompt with the password unused, and saying so here is the
-	// difference between a feature that seems broken and one that explains
-	// itself.
+	// askpass を強制すると、ホスト鍵の問いも helper へ回されるが、
+	// helper はそれを拒否する。そのため未検証のホストへの最初の接続は
+	// そのプロンプトでパスワードが使われないまま止まる。それをここで
+	// 言明することが、壊れているように見える機能と自ら説明する機能との
+	// 違いになる。
 	report, err := newEligibilityService(t).PasswordEligibility("keyed")
 	if err != nil {
 		t.Fatal(err)
@@ -99,9 +99,9 @@ func TestAnUnknownHostKeyIsReportedBecauseTheHelperWillNotAnswerThatQuestion(t *
 }
 
 func TestANonDefaultPortIsLookedUpInTheFormKnownHostsUses(t *testing.T) {
-	// known_hosts writes a non-default port as [host]:port. Looking up the
-	// bare host would report every such host as unverified, and a warning that
-	// is always there is a warning nobody reads.
+	// known_hosts はデフォルト以外のポートを[host]:port として書く。素の
+	// ホストだけを調べると、そのようなホストすべてを未検証として報告して
+	// しまい、常に出ている warning は誰も読まない warning になる。
 	report, err := newEligibilityService(t).PasswordEligibility("oddport")
 	if err != nil {
 		t.Fatal(err)
@@ -128,8 +128,8 @@ func TestAPatternIsNotAHostAndCannotHoldAPassword(t *testing.T) {
 }
 
 func TestAnOrdinaryVerifiedHostHasNothingToSay(t *testing.T) {
-	// A warning on every host would be noise, and noise is how a real warning
-	// gets ignored.
+	// すべてのホストに出る warning は雑音であり、
+	// 雑音こそが本当の warning が無視される原因である。
 	report, err := newEligibilityService(t).PasswordEligibility("known")
 	if err != nil {
 		t.Fatal(err)

@@ -1,26 +1,26 @@
-// What a drag is carrying, and which drops are worth offering.
+// ドラッグが何を運んでいるか、そしてどのドロップを提示する価値があるか。
 //
-// Every rule here mirrors a refusal the server already makes. They exist so a
-// target that cannot work is not offered — not to enforce anything. Every drop
-// still goes through the API, and a refusal that arrives is still shown.
+// ここにあるすべての規則は、サーバーが既に行っている拒否を映している。これらが存在する
+// のは、うまくいかない target を提示しないためであり、何かを強制するためではない。
+// すべてのドロップは依然として API を通り、届いた拒否は依然として表示される。
 
 export type DragPayload =
   | { kind: "connection"; path: string; alias: string; group: string }
   | { kind: "group"; name: string };
 
-// A private type on dataTransfer, so a drag that began outside this page is not
-// mistaken for one of these. It is only ever read from `types`: a dragover
-// handler may not read the data itself, which is protected until the drop.
+// dataTransfer 上のプライベート型により、このページの外で始まった
+// ドラッグがこれらの一つと誤認されない。これは常に`types`からのみ
+// 読む。dragover ハンドラはデータ自体を読めない。ドロップまで保護されているからである。
 export const dragMimeType = "application/x-sshc-drag";
 
-// MaxGroupSegments in internal/application/grouppath.go. The limit comes from
-// the key scanner, not from anything here: it walks eight directories down from
-// ~/.ssh and "keys" spends one, so a key inside a seventh group segment would be
-// reported as depth_exceeded and vanish from the inventory.
+// internal/application/grouppath.go の MaxGroupSegments。この制限は
+// ここにある何かではなく鍵スキャナーに由来する。スキャナーは
+// ~/.ssh から八階層下まで辿り、"keys"がそのうち一つを使う。七つ目の
+// グループセグメント内の鍵は depth_exceeded として報告され、インベントリから消えてしまう。
 const maxGroupSegments = 6;
 
-// The empty string is the "no group" target: the entry file for a connection,
-// the top level for a group.
+// 空文字列は"no group" target である。接続にとってはエントリ
+// ファイルを、グループにとっては最上位を意味する。
 const noGroup = "";
 
 function segments(name: string): number {
@@ -37,12 +37,12 @@ function isSelfOrDescendant(name: string, candidate: string): boolean {
 }
 
 export function canDrop(payload: DragPayload, target: string, groups: string[]): boolean {
-  // A connection has one place it lives, so the only drop with nothing to do is
-  // the one onto where it already is.
+  // 接続が住む場所は一つだけであるため、何もしないドロップは
+  // 既にそこにある場所へのドロップだけである。
   if (payload.kind === "connection") {
     return payload.group !== target;
   }
-  // A group cannot be put inside itself, at any depth.
+  // グループはどんな深さであれ、自分自身の内側に置くことはできない。
   if (isSelfOrDescendant(payload.name, target)) return false;
   const moved = target === noGroup ? basename(payload.name) : `${target}/${basename(payload.name)}`;
   if (moved === payload.name) return false;

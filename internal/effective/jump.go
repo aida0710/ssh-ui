@@ -8,27 +8,27 @@ import (
 )
 
 const (
-	// DefaultJumpPort is the port OpenSSH uses for a hop without one.
+	// DefaultJumpPort は、ポート指定のないホップに OpenSSH が使うポート。
 	DefaultJumpPort = "22"
-	// MaxJumpDepth bounds how far nested ProxyJump values are followed.
+	// MaxJumpDepth は、入れ子になった ProxyJump をどこまでたどるかを制限する。
 	MaxJumpDepth = 8
-	// MaxRouteStages bounds how many hops one expanded route may contain.
+	// MaxRouteStages は、展開された経路ひとつが含みうるホップ数を制限する。
 	//
-	// MaxJumpDepth alone does not bound the walk: every hop of a
-	// comma-separated list may carry a list of its own, so the number of
-	// stages grows as a product of the list lengths rather than a sum. A route
-	// stopped by this ceiling reports ComplexityJumpDepth.
+	// MaxJumpDepth だけでは走査は制限されない。カンマ区切りリストの
+	// 各ホップが自身のリストを持ちうるので、段数は和ではなくリスト長の
+	// 積として増える。この上限で止められた経路は
+	// ComplexityJumpDepth を報告する。
 	MaxRouteStages = 256
-	// jumpDisabled is the literal that switches ProxyJump off.
+	// jumpDisabled は、ProxyJump を無効にするリテラル。
 	jumpDisabled = "none"
 )
 
-// ErrInvalidJump reports a ProxyJump value this engine refuses to interpret.
+// ErrInvalidJump は、このエンジンが解釈を拒む ProxyJump の値を報告する。
 var ErrInvalidJump = errors.New("ProxyJump value is not a valid destination list")
 
-// Hop is one destination of a ProxyJump list. UserExplicit and PortExplicit
-// record whether the value came from the list itself, because a value written
-// in the list wins over the hop's own configuration.
+// Hop は ProxyJump リストの行き先ひとつ。UserExplicit と PortExplicit は、その値が
+// リスト自体から来たのかを記録する。リストに書かれた値は、そのホップ自身の設定に
+// 勝つからである。
 type Hop struct {
 	Raw          string
 	User         string
@@ -38,14 +38,14 @@ type Hop struct {
 	PortExplicit bool
 }
 
-// Chain is a parsed ProxyJump value.
+// Chain は解析済みの ProxyJump の値。
 type Chain struct {
 	Raw      string
 	Disabled bool
 	Hops     []Hop
 }
 
-// ParseChain reads a single or comma-separated ProxyJump value.
+// ParseChain は、単一またはカンマ区切りの ProxyJump 値を読む。
 func ParseChain(raw string) (Chain, error) {
 	chain := Chain{Raw: raw}
 	trimmed := strings.TrimSpace(raw)
@@ -103,9 +103,9 @@ func ParseChain(raw string) (Chain, error) {
 	return chain, nil
 }
 
-// Stage is one hop of the route, flattened so the API and the UI do not need a
-// recursive type. Depth is 0 for the target's own ProxyJump list; a jump host
-// that carries its own ProxyJump contributes stages at the next depth.
+// Stage は経路のホップひとつ。API と UI が再帰型を必要としないよう平坦化してある。
+// Depth は、対象自身の ProxyJump リストについては 0。自身の ProxyJump を持つ踏み台
+// ホストは、次の深さに段を寄与する。
 type Stage struct {
 	Order    int
 	Depth    int
@@ -118,20 +118,20 @@ type Stage struct {
 	Complex  bool
 }
 
-// ExpandRoute expands the ProxyJump chain of alias and of every jump host in
-// it, so the whole route can be shown rather than only its first hop.
+// ExpandRoute は、alias とその中のすべての踏み台ホストの ProxyJump 連鎖を展開する。
+// これにより、最初のホップだけでなく経路の全体を表示できる。
 func ExpandRoute(graph *config.Graph, alias string) ([]Stage, []Complexity) {
 	walk := routeWalk{graph: graph, ancestors: map[string]bool{strings.ToLower(alias): true}}
 	return walk.expand(alias, 0)
 }
 
-// routeWalk carries the state of one ExpandRoute call.
+// routeWalk は、ExpandRoute 一回分の状態を運ぶ。
 //
-// ancestors holds exactly the aliases on the path from the starting alias down
-// to the hop being expanded, and is unwound as the walk returns. A cycle is a
-// hop that reappears on its own path, because only that can recurse forever; a
-// jump host reached again through a different branch is an ordinary shape and
-// is expanded there too.
+// ancestors は、開始 alias から、いま展開しているホップまでの経路上にある alias を
+// ちょうど保持し、走査が戻るときに巻き戻される。循環とは、自分自身の経路上に再び
+// 現れるホップのことだ。永久に再帰しうるのはそれだけだからである。別の枝を通って
+// 再び到達される踏み台ホストは普通の形であり、そこでも
+// 展開される。
 type routeWalk struct {
 	graph     *config.Graph
 	ancestors map[string]bool

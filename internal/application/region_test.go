@@ -8,8 +8,8 @@ import (
 	"sshc/internal/config"
 )
 
-// planAndApply is the whole of what a caller does, so the tests assert on the
-// rendered bytes rather than on a plan struct nobody reads.
+// planAndApply は、呼び出し側が行うことのすべてなので、テストは誰も読まない
+// plan struct ではなく、生成されたバイト列に対して assert する。ワイルドカードで
 func planAndApply(t *testing.T, source string, groups []string) (string, error) {
 	t.Helper()
 	file := config.Parse([]byte(source))
@@ -33,8 +33,8 @@ Include groups.sshc.conf
 `
 
 func TestPlanRegionEmitsOneIncludePerGroupChildFirst(t *testing.T) {
-	// One line per group, not one wildcard: '*' does not cross a separator, so
-	// connections/work/*.conf can never reach connections/work/eu/lon.conf.
+	// はなくグループごとに 1 行である。'*' は区切り文字を越えないので、
+	// connections/work/*.conf が connections/work/eu/lon.conf に届くことは決してない。
 	rendered, err := planAndApply(t, "", []string{"work/eu", "work", "home"})
 	if err != nil {
 		t.Fatalf("PlanRegion error = %v", err)
@@ -44,16 +44,16 @@ func TestPlanRegionEmitsOneIncludePerGroupChildFirst(t *testing.T) {
 	}
 }
 
-// An Include written below a Host line belongs to that block. OpenSSH parses
-// the included file either way — the debug output says "Reading configuration
-// data" for it — but applies its options only when the block matches. Checked
-// against OpenSSH 10.2p1: a top-level Include applies, the same line moved
-// under a Host line does not, and a blank line between them changes nothing.
+// Host 行の下に書かれた Include はそのブロックに属する。OpenSSH はいずれにせよ include
+// されたファイルを parse する——debug 出力はそれについて"Reading configuration data"
+// と言う——が、その option を適用するのはブロックが match するときだけである。
+// OpenSSH 10.2p1 で確認した。top-level の Include は適用され、同じ行を Host 行の下に
+// 移動すると適用されず、その間に空行を入れても何も変わらない。
 //
-// So there is exactly one position where the region declares anything: above
-// every Host and Match line in the entry file. Anywhere else the groups are
-// read when connecting to one unrelated host and at no other time, which is
-// indistinguishable from not being declared.
+// したがって、生成領域が何かを宣言する位置はちょうど 1 個しかない。
+// エントリファイル内のすべての Host および Match 行の上である。それ以外の
+// どこであっても、グループは無関係な 1 個のホストに接続するときにしか
+// 読まれず、それは宣言されていないことと見分けがつかない。
 func TestPlanRegionPutsTheRegionAboveEveryHostBlock(t *testing.T) {
 	source := "# a banner\n\nHost bastion\n\tUser ops\n\nHost *\n\tServerAliveInterval 30\n"
 	rendered, err := planAndApply(t, source, []string{"work"})
@@ -73,8 +73,8 @@ func TestPlanRegionPutsTheRegionAboveEveryHostBlock(t *testing.T) {
 	}
 }
 
-// The region goes above the comment attached to the first block, not between
-// the comment and the Host line it describes.
+// 生成領域は、最初のブロックに付随するコメントとそれが説明する Host 行
+// の間にではなく、そのコメントの上に置かれる。
 func TestPlanRegionDoesNotSeparateTheFirstBlockFromItsComment(t *testing.T) {
 	source := "# the bastion, reachable from the office only\nHost bastion\n\tUser ops\n"
 	rendered, err := planAndApply(t, source, []string{"work"})
@@ -95,17 +95,17 @@ func TestPlanRegionAppendsWhenTheFileDeclaresNoBlockAtAll(t *testing.T) {
 	if !strings.HasPrefix(rendered, source) {
 		t.Errorf("the region did not go at the end:\n%s", rendered)
 	}
-	// With no Host or Match line anywhere, the end of the file is still the
-	// global block, so appending is unconditional.
+	// Host も Match 行もどこにも無い場合でも、ファイルの末尾は依然として
+	// global block なので、追記は無条件である。
 	if !strings.HasSuffix(rendered, RegionEndMarker+"\n") {
 		t.Errorf("the region did not close at the end:\n%s", rendered)
 	}
 }
 
-// A region written where its Include lines are conditional has to be moved, not
-// replaced where it stands. This is the shape every workspace built by an
-// earlier version is in: the region was appended to the end of the entry file,
-// which put it inside the last Host block.
+// Include 行が条件付きになる場所に書かれた生成領域は、その場で置き
+// 換えるのではなく移動しなければならない。これは、以前のバージョン
+// で構築されたすべてのワークスペースが置かれている形である。生成領域はエントリファイル
+// の末尾に追記され、それによって最後の Host ブロックの内側に入ってしまっていた。
 func TestPlanRegionMovesARegionThatSitsInsideAHostBlock(t *testing.T) {
 	source := "Host bastion\n\tUser ops\n\n" + RegionStartMarker + "\n" +
 		"Include connections/work/*.conf\nInclude groups.sshc.conf\n" + RegionEndMarker + "\n"
@@ -137,9 +137,9 @@ func TestPlanRegionRefusesWhenAnExistingIncludeAlreadyReachesTheConnectionsTree(
 }
 
 func TestPlanRegionIgnoresAConditionalIncludeOfTheGroupsFile(t *testing.T) {
-	// An Include inside a Host block is read when connecting to that host and
-	// at no other time. Counting it as present left the generated settings file
-	// unreachable from everywhere else, which is what the previous planner did.
+	// Host ブロックの内側にある Include は、そのホストに接続するときにしか
+	// 読まれない。それを存在するものとして数えると、generated settings ファイルが
+	// 他のどこからも到達不能になってしまい、これは以前の planner が行っていたことである。
 	source := "Host bastion\n\tInclude groups.sshc.conf\n"
 	rendered, err := planAndApply(t, source, []string{"work"})
 	if err != nil {
@@ -166,8 +166,8 @@ func TestPlanRegionReplacesAnExistingRegionInPlace(t *testing.T) {
 	if strings.Count(second, RegionStartMarker) != 1 || strings.Count(second, RegionEndMarker) != 1 {
 		t.Errorf("the region was duplicated:\n%s", second)
 	}
-	// The region now leads the file, so what must not change is everything
-	// under it: a replacement rewrites the marked lines and nothing else.
+	// 生成領域は今やファイルの先頭に来るので、変わってはならないのは
+	// その下のすべてである。置き換えは mark された行だけを書き換え、他は何も変えない。
 	if !strings.HasSuffix(second, "Host bastion\n\tUser ops\nHost *\n\tUser me\n") {
 		t.Errorf("bytes outside the region changed:\n%s", second)
 	}
@@ -195,8 +195,8 @@ func TestPlanRegionPreservesCRLF(t *testing.T) {
 }
 
 func TestApplyRegionChangesNothingOutsideTheMarkers(t *testing.T) {
-	// Every shape the parser preserves rather than normalises: a banner, a
-	// key=value spelling, a run of spaces, an unbalanced quote kept verbatim.
+	// parser が正規化せずに保つあらゆる形——banner、key=value の綴り方、
+	// 連続する空白、そのまま保たれる unbalanced な引用符。
 	source := strings.Join([]string{
 		"# hand written, do not reformat",
 		"",

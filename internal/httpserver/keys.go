@@ -20,26 +20,26 @@ import (
 	"sshc/internal/storage"
 )
 
-// ActionHeader carries the one-time token that reveal and permanent delete
-// require in addition to the session cookie and the CSRF header.
+// ActionHeader は、reveal と permanent delete がセッション cookie と
+// CSRF ヘッダーに加えて必要とする一度限りのトークンを運ぶ。
 const ActionHeader = "X-SSHC-Action"
 
-// maxKeyRequestBody bounds a key vault request body.
+// maxKeyRequestBody は鍵 vault のリクエストボディを制限する。
 const maxKeyRequestBody = 64 << 10
 
 var errBodyTooLarge = errors.New("request body is larger than the supported maximum")
 
-// confirmationSubjects maps the session package's shared action vocabulary onto
-// this subsystem's own. The session package owns the wire values because every
-// subsystem that confirms an operation draws from the same table.
+// confirmationSubjects は、session パッケージが共有する action の語彙を
+// このサブシステム独自のものへ対応付ける。通信上の値を session パッケージが
+// 所有するのは、操作を確認するすべてのサブシステムが同じ表を参照するからである。
 var confirmationSubjects = map[string]keys.ConfirmationSubject{
 	session.ActionRevealPrivateKey: keys.ConfirmRevealKey,
 	session.ActionPurgeTrashEntry:  keys.ConfirmPurgeEntry,
 }
 
-// KeyService is the slice of the key vault the HTTP layer needs. Handler tests
-// substitute a stub, so no handler test touches a filesystem, an agent or a
-// child process.
+// KeyService は、HTTP 層が必要とする鍵 vault の一部分である。
+// ハンドラのテストはこれを stub に差し替えるので、ハンドラのテストが
+// filesystem や agent、子プロセスに触れることはない。
 type KeyService interface {
 	Inventory() (*keys.Inventory, error)
 	ConfirmationEvidence(subject keys.ConfirmationSubject, target string) (string, error)
@@ -60,14 +60,14 @@ type KeyService interface {
 
 type KeyHandlers struct {
 	Keys KeyService
-	// Config relocates a key. A relocation rewrites configuration files, so it
-	// is committed through the configuration service's transaction manager,
-	// which re-parses and re-resolves before anything lands — the key vault's
-	// own manager deliberately has no such validator.
+	// Config は鍵を relocate する。relocation は設定ファイルを書き換えるので、
+	// configuration サービスのトランザクションマネージャを通じてコミットされる。
+	// これは何かが反映される前に再パースと再解決を行う——鍵 vault 自身の
+	// マネージャには、意図的にそのような validator がない。
 	Config   *application.Service
 	Sessions *session.Manager
-	// Actions issues and spends confirmations. The endpoint that mints them is
-	// shared with every other subsystem, so it is registered once elsewhere.
+	// Actions は確認を発行し、消費する。それを発行するエンドポイントは
+	// 他のすべてのサブシステムと共有されるので、どこか別の場所で一度だけ登録される。
 	Actions ActionHandlers
 }
 
@@ -88,11 +88,11 @@ func registerKeyRoutes(engine *echo.Echo, handlers KeyHandlers) {
 	engine.DELETE("/api/v1/trash/:entryId", handlers.Purge)
 }
 
-// decodeBody reads a bounded request body and overwrites the raw bytes.
+// decodeBody は、上限付きのリクエストボディを読み取り、生のバイト列を上書きする。
 //
-// A passphrase decoded out of JSON becomes a Go string, which is immutable and
-// cannot be erased; only the raw buffer can be. That limit is stated here
-// rather than presented as a guarantee.
+// JSON からデコードされたパスフレーズは Go の string になる。これは
+// immutable で消去できない——消去できるのは生のバッファだけである。
+// この限界は保証として示すのではなく、ここに明記されている。
 func decodeBody(c *echo.Context, target any) error {
 	body := c.Request().Body
 	if body == nil {
@@ -128,12 +128,12 @@ func (h KeyHandlers) sessionID(c *echo.Context) string {
 	return value
 }
 
-// consumeAction spends the one-time token this operation requires.
+// consumeAction は、この操作が必要とする一度限りのトークンを消費する。
 //
-// The evidence is recomputed rather than taken from the request, so a
-// confirmation only authorises the state the dialog actually displayed. The
-// boolean reports whether the caller may continue; when it is false the
-// response has already been written.
+// evidence はリクエストから受け取るのではなく再計算される。そのため
+// 確認は、ダイアログが実際に表示した状態だけを認可する。
+// 真偽値は呼び出し側が続行してよいかを報告し、
+// false のときはすでにレスポンスが書き込まれている。
 func (h KeyHandlers) consumeAction(c *echo.Context, kind, target string) (bool, error) {
 	return h.Actions.consume(c, kind, target)
 }
@@ -255,11 +255,11 @@ func (h KeyHandlers) Reveal(c *echo.Context) error {
 	})
 }
 
-// PublicKey answers with the text of one public key or certificate.
+// PublicKey は、1 個の公開鍵または証明書のテキストで応答する。
 //
-// Unlike Reveal it spends no confirmation and writes no audit note: the service
-// refuses anything that is not a public key or a certificate, so this route
-// cannot return private key material and there is nothing to record.
+// Reveal と異なり、これは確認を消費せず、監査記録も書かない。
+// サービスは公開鍵または証明書以外のものをすべて拒否するので、
+// このルートが秘密鍵の材料を返すことはなく、記録すべきものも何もない。
 func (h KeyHandlers) PublicKey(c *echo.Context) error {
 	result, err := h.Keys.PublicKey(c.Param("keyId"))
 	if err != nil {
@@ -274,13 +274,13 @@ func (h KeyHandlers) PublicKey(c *echo.Context) error {
 	})
 }
 
-// Relocate answers with what the relocation moved and rewrote, or with what
-// blocked it.
+// Relocate は、relocation が移動し書き換えたものか、
+// それを阻んだものかで応答する。
 //
-// A blocked relocation is a 409 carrying the same body as a successful one, so
-// the screen can list the reasons in the place it would have listed the
-// changes. Nothing was written in that case: the blockers are computed before
-// the transaction is built.
+// 阻まれた relocation は、成功時と同じボディを運ぶ 409 である。
+// これにより、画面は変更点を列挙するはずだった場所に理由を列挙できる。
+// その場合は何も書き込まれていない。blockers は transaction を
+// 組み立てる前に計算される。
 func (h KeyHandlers) Relocate(c *echo.Context) error {
 	var body api.RelocateKeyRequest
 	if err := decodeBody(c, &body); err != nil {
@@ -332,11 +332,11 @@ func relocateKeyResponse(result application.KeyRelocateResult) api.RelocateKeyRe
 	return response
 }
 
-// Deregister takes one key back out of the agent.
+// Deregister は、1 個の鍵を agent から取り除く。
 //
-// No confirmation token: this destroys nothing, and the worst it can cost the
-// user is being asked for a passphrase again. The answer carries what the agent
-// holds afterwards, so the screen shows the result rather than assuming it.
+// 確認トークンは不要である。これは何も破壊せず、ユーザーに課す最悪の
+// コストはパスフレーズを再度尋ねられることだけである。応答は、その後
+// agent が保持しているものを運ぶので、画面は推測ではなく結果を示す。
 func (h KeyHandlers) Deregister(c *echo.Context) error {
 	keyID := c.Param("keyId")
 	if err := h.Keys.Deregister(c.Request().Context(), keyID); err != nil {
@@ -448,8 +448,8 @@ func (h KeyHandlers) Purge(c *echo.Context) error {
 	})
 }
 
-// keyProblem maps a use-case error to the status and stable code the design's
-// error classification calls for. The message never carries a secret.
+// keyProblem は、use case のエラーを、設計のエラー分類が求める
+// status と安定した code に対応付ける。メッセージが secret を運ぶことは決してない。
 func keyProblem(c *echo.Context, err error) error {
 	switch {
 	case errors.Is(err, keys.ErrUnknownKey), errors.Is(err, keys.ErrUnknownTrashEntry):
@@ -565,9 +565,9 @@ func keyItem(item keys.Item) api.KeyItem {
 	return converted
 }
 
-// certificateExpiry converts OpenSSH's unsigned validity bound. OpenSSH spells
-// "never expires" as 2^64-1, which does not fit a signed integer, so that case
-// is reported as a flag rather than wrapped into a negative number.
+// certificateExpiry は、OpenSSH の符号なしの validity bound を変換する。
+// OpenSSH は "never expires" を 2^64-1 と綴るが、これは符号付き整数に
+// 収まらない。そのためこのケースは負の数に折り返すのではなく、flag として報告される。
 func certificateExpiry(validBefore uint64) (int, bool) {
 	if validBefore > uint64(math.MaxInt64) {
 		return 0, true
@@ -604,7 +604,7 @@ func trashFiles(files []keys.TrashFile) []api.TrashFileSummary {
 	return converted
 }
 
-// nonNilStrings keeps every JSON array an array instead of null.
+// nonNilStrings は、すべての JSON 配列を null ではなく配列のまま保つ。
 func nonNilStrings(values []string) []string {
 	if values == nil {
 		return []string{}

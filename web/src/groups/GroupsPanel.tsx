@@ -26,26 +26,26 @@ function toProblem(error: unknown): Problem {
   return { code: "request_failed", message: "request rejected" };
 }
 
-// depthOf counts the directories in a group name. The name carries the
-// hierarchy, so nothing else has to be consulted to draw the tree, and a
-// parent field can never disagree with where the files actually are.
+// depthOf はグループ名の中のディレクトリの数を数える。名前が階層を
+// 運ぶため、ツリーを描くのに他の何かを参照する必要はなく、
+// 親フィールドがファイルの実際の位置と食い違うことは決してない。
 export function depthOf(name: string): number {
   return name.split("/").length;
 }
 
-// treeOrder puts a parent before its children, and siblings in their display
-// order, which is what a tree has to read like.
+// treeOrder は親をその子の前に置き、兄弟を display order で並べる。
+// ツリーとはそう読めるべきものである。
 //
-// It is deliberately not the order the Include lines take. OpenSSH keeps the
-// first value it reads, so on disk the deepest group must come first or a
-// parent's setting would beat its own child's. This panel used that order on
-// screen, which floated every child above its parent and put the parent last —
-// and the result reads as though nesting were not working at all.
+// これは意図的に Include 行の順序とは違う。OpenSSH は最初に読んだ
+// 値を保つため、ディスク上では最も深いグループが先に来なければ、親の
+// 設定が自分の子のものに勝ってしまう。このパネルは以前その
+// 順序を画面でも使っており、すべての子が親の上に浮かび親が
+// 最後に来ていた——結果はネストがまるで機能していないかのように読めていた。
 export function treeOrder(groups: GroupMetadata[]): GroupMetadata[] {
   const orderOf = new Map(groups.map((group) => [group.name, group.order ?? 0]));
-  // The key interleaves each ancestor's display order with its own segment, so
-  // two siblings are compared by order and then by name at the level where
-  // their paths actually diverge, not at their first character.
+  // key は各祖先の display order を自分自身のセグメントと交互に並べる。
+  // これにより二つの兄弟は、先頭の文字ではなく、パスが実際に分岐する
+  // 階層で order と名前によって比較される。
   const keyOf = (name: string): (number | string)[] => {
     const key: (number | string)[] = [];
     let prefix = "";
@@ -66,15 +66,15 @@ export function treeOrder(groups: GroupMetadata[]): GroupMetadata[] {
         ? first - second
         : String(first).localeCompare(String(second));
     }
-    // One name is a prefix of the other, so it is the ancestor and comes first.
+    // 一方の名前がもう一方の接頭辞であれば、それは祖先であり先に来る。
     return leftKey.length - rightKey.length;
   });
 }
 
-// A group name is a relative directory path, so the panel refuses locally what
-// the server refuses too. Doing it here as well is not duplication for its own
-// sake: it is what lets the panel say which character is wrong before a
-// round trip that would only say "invalid_request".
+// グループ名は相対的なディレクトリパスであるため、パネルはサーバーも
+// 拒否するものをローカルに拒否する。ここでも行うのは重複のための
+// 重複ではない。"invalid_request"としか言わない往復通信の前に、
+// パネルがどの文字が間違っているかを言えるようにするためである。
 const segmentPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 
 export function isValidGroupName(name: string): boolean {
@@ -87,9 +87,9 @@ export function isValidGroupName(name: string): boolean {
 }
 
 type GroupsPanelProps = {
-  // The inspector's contents, offered up to the shell — the same arrangement
-  // the connections screen uses. A panel rendered on its own in a test passes
-  // nothing and simply has no pane.
+  // インスペクターの中身を、シェルへ差し出す——接続画面が使うのと
+  // 同じ配置である。テストで単独でレンダリングされるパネルは何も渡さず、
+  // 単にペインを持たないだけである。
   onInspector?: (content: InspectorContent) => void;
 };
 
@@ -106,8 +106,8 @@ export function GroupsPanel({ onInspector }: GroupsPanelProps = {}) {
   const [removing, setRemoving] = useState<Record<string, string>>({});
   const [confirmingRemove, setConfirmingRemove] = useState<Record<string, boolean>>({});
   const [localError, setLocalError] = useState("");
-  // Which group the inspector is describing. Nothing is selected until a row
-  // is, so the pane is not offered on a screen you have only just opened.
+  // インスペクターがどのグループを記述しているか。行が選ばれるまで何も
+  // 選択されていないため、開いたばかりの画面ではペインは提示されない。
   const [selected, setSelected] = useState("");
 
   const reload = useCallback(async () => {
@@ -124,10 +124,10 @@ export function GroupsPanel({ onInspector }: GroupsPanelProps = {}) {
     void reload();
   }, [reload]);
 
-  // The pane follows the selected group. This sits above the early return
-  // because a hook has to: the draft and the projection are read defensively
-  // here rather than from the constants below, which only exist once there is
-  // something to show.
+  // ペインは選択されたグループに追従する。これが early return より上に
+  // あるのは hook がそうしなければならないからである。draft と
+  // 射影はここで防御的に読まれ、下の定数からではない。
+  // 定数は表示するものがあって初めて存在するからである。
   useEffect(() => {
     if (onInspector === undefined) return;
     const group = (metadata?.groups ?? []).find((candidate) => candidate.name === selected);
@@ -136,9 +136,9 @@ export function GroupsPanel({ onInspector }: GroupsPanelProps = {}) {
       return;
     }
     onInspector({
-      // A declaration with no directory, or a directory nothing declares, is
-      // worth the dot. An empty group is not — that is the state every group
-      // is in the moment after it is made.
+      // ディレクトリのない宣言、あるいは何も宣言しないディレクトリはドットに
+      // 値する。空のグループはそうではない——それは作られた直後の
+      // すべてのグループが置かれる状態である。
       attention: (overview?.notices ?? []).some(
         (notice) =>
           notice.detail === group.name &&
@@ -154,9 +154,9 @@ export function GroupsPanel({ onInspector }: GroupsPanelProps = {}) {
         />
       ),
     });
-    // updateGroup closes over the draft, which changes with metadata; the body
-    // is rebuilt with it rather than memoised, so the pane never edits a stale
-    // document.
+    // updateGroup は draft を閉じ込め、それはメタデータと共に変わる。
+    // 本体はメモ化されるのではなくそれと共に再構築されるため、ペインが
+    // 古びたドキュメントを編集することは決してない。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, metadata, overview, onInspector]);
 
@@ -164,39 +164,39 @@ export function GroupsPanel({ onInspector }: GroupsPanelProps = {}) {
     return <p role="status" className="text-sm text-ink-muted">{t("groups.loading")}</p>;
   }
 
-  // Hoisted function declarations do not inherit the narrowing above, so the
-  // loaded document is captured once as a non-null const the closures can use.
+  // ホイストされた関数宣言は上の絞り込みを引き継がないため、
+  // 読み込まれたドキュメントはクロージャが使える non-null な const として一度だけ捕捉する。
   const loaded: Metadata = metadata;
   const hosts = overview.hosts;
   const groups = treeOrder(loaded.groups ?? []);
 
-  // This panel has two kinds of control and used to show no difference between
-  // them. Colour, display order, a new group and a new setting are edits to a
-  // draft that only reaches the disk on Save; rename and remove write files the
-  // moment they are pressed. So a group could be added, coloured, given
-  // settings, and lost by navigating away — while the Remove button beside it
-  // had already been committing to disk all along.
+  // このパネルには二種類のコントロールがあり、以前はその違いを何も
+  // 示していなかった。Colour、display order、新しいグループ、新しい
+  // 設定は Save して初めてディスクに届く draft への編集であり、名前変更
+  // と削除は押した瞬間にファイルを書き込む。そのためグループは追加され、
+  // 色を付けられ、設定を与えられた末に、離れることで失われ得た
+  // ——その隣の Remove ボタンは、その間ずっとディスクへコミットし続けていたにもかかわらず。
   //
-  // The draft is compared against what the server last returned, which is the
-  // only honest source for "this is not written yet".
-  // `group_empty` is deliberately not among them.
+  // draft はサーバーが最後に返したものと比較される。それが「まだ
+  // 書き込まれていない」ことについての唯一の正直な由来である。
+  // `group_empty`は意図的にその中に含まれていない。
   //
-  // A declared group with nothing in it is not a fault, it is the state every
-  // group is in for the moment after it is made and again when its last
-  // connection moves out. OpenSSH is untroubled by an Include that matches no
-  // file. Reporting it in amber beside two genuine faults — a declaration with
-  // no directory, and a directory nothing declares — spent the colour that is
-  // supposed to mean something happened, on nothing happening. The emptiness
-  // was never hidden by dropping it either: each group's own row already reads
-  // "Members: none", so the notice was saying it a second time in amber.
+  // 何も入っていない宣言済みグループは不具合ではない。それは作られた
+  // 直後、そして最後の接続が出て行ったときに、すべてのグループが
+  // 置かれる状態である。OpenSSH は一致するファイルのない Include があっても
+  // 困らない。それを、ディレクトリのない宣言と何も宣言しないディレクトリ
+  // という二つの本物の不具合の隣にアンバーで報告することは、何かが
+  // 起きたことを意味するはずの colour を、何も起きていないことに
+  // 費やしてしまう。この空虚さは、落とすことでも隠されてはいなかった。各グループの行は既に
+  // "Members: none"と読めており、通知はそれをアンバーでもう一度言っていただけだった。
   const groupNotices = (overview.notices ?? []).filter((notice) =>
     ["group_not_declared", "group_directory_missing"].includes(notice.code),
   );
   const savedGroups = new Set((overview.metadata.groups ?? []).map((group) => group.name));
   const unsaved = JSON.stringify(loaded) !== JSON.stringify(overview.metadata);
 
-  // Membership is where the file sits, and the projection already read that
-  // from the path. Nothing here counts a metadata field.
+  // 所属はファイルが置かれている場所であり、射影は既にそれを
+  // パスから読み取っている。ここでメタデータフィールドを数えるものは何もない。
   function membersOf(name: string): string[] {
     return hosts.filter((host) => host.group === name).map((host) => host.identity.alias);
   }
@@ -216,8 +216,8 @@ export function GroupsPanel({ onInspector }: GroupsPanelProps = {}) {
     setLocalError("");
   }
 
-  // The group is the selected one. It used to be a third picker on a page
-  // that lists every group already.
+  // グループは選択されたものである。以前はこれが、既にすべてのグループを
+  // 列挙しているページ上の三つ目のピッカーだった。
   function addSetting() {
     if (selected === "" || settingKeyword === "") {
       setLocalError(t("groups.chooseGroupAndKeyword"));
@@ -250,10 +250,10 @@ export function GroupsPanel({ onInspector }: GroupsPanelProps = {}) {
     });
   }
 
-  // A group is a directory, so renaming it is N file moves plus the Include
-  // region plus every IdentityFile naming its keys — one transaction the client
-  // cannot assemble. It is a server operation, applied immediately, not an edit
-  // to the document this panel holds.
+  // グループはディレクトリであるため、名前変更は N 個のファイル移動に加え
+  // Include 領域、さらにその鍵を名指すすべての IdentityFile に及ぶ
+  // ——クライアントには組み立てられない一つのトランザクションである。これは
+  // サーバー操作であり即座に適用される。このパネルが保持するドキュメントへの編集ではない。
   async function renameGroup(from: string) {
     const target = (renaming[from] ?? "").trim();
     if (target === "" || target === from) {
@@ -265,8 +265,8 @@ export function GroupsPanel({ onInspector }: GroupsPanelProps = {}) {
       return;
     }
     if (groups.some((group) => group.name === target)) {
-      // Renaming onto an existing group would merge two sets of settings, and
-      // nothing here knows which should win. The server refuses it too.
+      // 既存のグループへ名前変更することは二組の設定をマージすることに
+      // なるが、ここには誰もどちらが勝つべきか知らない。サーバーもそれを拒否する。
       setLocalError(t("groups.renameCollides", { name: target }));
       return;
     }
@@ -325,9 +325,10 @@ export function GroupsPanel({ onInspector }: GroupsPanelProps = {}) {
       <p className="text-xs text-ink-faint">{t("groups.orderNote")}</p>
       {localError === "" ? null : <Notice tone="danger">{localError}</Notice>}
       {/*
-        What the declaration and the disk say about each other. A directory
-        under connections/ that no Include names is the one worth showing here
-        above all: it looks like a group, and nothing in it is ever read.
+        宣言とディスクが互いについて何を語るか。connections/下にあり、
+        どの Include も名指さないディレクトリは、何よりもここで示す
+        価値があるものである。グループのように見えるが、その中身は
+        一度も読まれない。
       */}
       <NoticeList notices={groupNotices} />
 
@@ -335,8 +336,8 @@ export function GroupsPanel({ onInspector }: GroupsPanelProps = {}) {
         {groups.map((group) => (
           <li
             key={group.name}
-            // Selecting a group is what fills the inspector, so the row says
-            // which one is open the way the connection tree does.
+            // グループを選択することがインスペクターを満たす。そのため行は、
+            // 接続ツリーと同じ方法でどれが開いているかを示す。
             onFocus={() => setSelected(group.name)}
             onClick={() => setSelected(group.name)}
             className={`rounded-lg border p-3 ${
@@ -345,16 +346,16 @@ export function GroupsPanel({ onInspector }: GroupsPanelProps = {}) {
             style={{ marginInlineStart: `${(depthOf(group.name) - 1) * 1.5}rem` }}
           >
             {/*
-              What the group *is* — its name, its colour, where its files are
-              and who is in it — is the header. Everything that changes it is
-              below a rule. The two used to be one undifferentiated stack of
-              six labelled boxes per group, which for four groups is a page of
-              controls with the facts buried in it.
+              グループが*何であるか*——その名前、色、ファイルがどこにあり
+              誰がいるか——がヘッダーである。それを変えるものはすべて
+              罫線の下にある。この二つは以前、グループ一つにつき六つの
+              ラベル付きの箱を無差別に積んだ一つのスタックであり、四つの
+              グループに対しては事実がコントロールに埋もれたページになっていた。
 
-              The heading is still the whole path, so it stays the group's one
-              name for a screen reader and for the rename button beside it. Only
-              the ancestor part is dimmed, which is what makes the tree readable
-              without inventing a second identifier.
+              見出しは依然として完全なパスであり、スクリーンリーダーと
+              その横の名前変更ボタンにとって、グループの唯一の名前であり
+              続ける。祖先の部分だけが薄く表示され、それが二つ目の
+              識別子を作ることなくツリーを読みやすくしている。
             */}
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <h3 className="flex items-baseline gap-2 text-sm font-medium">
@@ -369,10 +370,10 @@ export function GroupsPanel({ onInspector }: GroupsPanelProps = {}) {
                 <span>{group.name.slice(group.name.lastIndexOf("/") + 1)}</span>
               </h3>
               {/*
-                Outside the heading. Inside it the badge joined the heading's
-                accessible name with no separator — "labNot saved" — because
-                adjacent elements concatenate. The heading is the group's name
-                and nothing else.
+                見出しの外側に。内側に置くとバッジが見出しの
+                アクセシブルネームと区切りなしに結合してしまう——
+                "labNot saved"——隣接する要素は連結されるからである。
+                見出しはグループの名前であり、それ以外の何ものでもない。
               */}
               {savedGroups.has(group.name) ? null : (
                 <span className="rounded border border-notice-line px-1.5 py-0.5 text-[10px] font-normal text-notice-ink">
@@ -386,11 +387,12 @@ export function GroupsPanel({ onInspector }: GroupsPanelProps = {}) {
                 })}
               </p>
               {/*
-                Colour, display order and hiding are how the group looks to this
-                application and nothing else — they are in metadata.json, not in
-                any configuration file — so they are in the inspector, the same
-                place a connection's colour and tags went. What is left on the
-                row is what the group *is*.
+                Colour、display order、hiding は、このアプリケー
+                ションにとってグループがどう見えるかであり、それ以外
+                の何ものでもない——これらはどの設定ファイル
+                にもなく metadata.json にある——そのためインスペクターに
+                ある。接続の colour と tags が行った先と同じ場所
+                である。行に残るのは、グループが*何であるか*である。
               */}
             </div>
             <p className="mt-1 text-xs text-ink-muted">
@@ -398,8 +400,8 @@ export function GroupsPanel({ onInspector }: GroupsPanelProps = {}) {
               <span>{membersOf(group.name).length === 0 ? t("groups.noMembers") : membersOf(group.name).join(", ")}</span>
             </p>
             {/*
-              An empty settings list still rendered its <ul>, so every group
-              carried an empty row nobody had asked for.
+              空の設定一覧でも<ul>はレンダリングされていたため、
+              すべてのグループが誰も求めていない空の行を運んでいた。
             */}
             {(group.settings ?? []).length === 0 ? null : (
               <ul className="mt-2 flex flex-col gap-0.5 font-mono text-xs text-ink-muted">
@@ -410,20 +412,21 @@ export function GroupsPanel({ onInspector }: GroupsPanelProps = {}) {
             )}
 
             {/*
-              Only for the group you have selected. These three rewrite files,
-              and every group carrying its own copy of them meant a page whose
-              controls outnumbered its facts four to one — which is what made
-              this screen read as a wall.
+              選択したグループに対してのみ。これら三つはファイルを書き
+              換える操作であり、すべてのグループがそれぞれ自分自身の
+              コピーを持てば、コントロールが事実を四対一で上回るページに
+              なる——それがこの画面を壁のように読ませていた原因である。
             */}
             {selected !== group.name ? null : (
             <div className="mt-3 flex flex-wrap items-end gap-x-4 gap-y-3 border-t border-line pt-3">
               {/*
-                The visible captions are short and the group's name lives in the
-                accessible name instead. Spelled out on screen, four groups
-                repeated "Rename <name> to" and "Move the connections of <name>
-                into" eight times between them, which is most of what made this
-                panel a wall of words. The visible text is still a substring of
-                the accessible name, so the two never disagree.
+                目に見えるキャプションは短く、グループの名前は代わりに
+                アクセシブルネームに宿る。画面に全て書き出せば、四つの
+                グループが"Rename <name> to"と"Move the connections of
+                <name> into"を合わせて八回繰り返すことになり、それが
+                このパネルを言葉の壁にしていたことの大半である。目に
+                見えるテキストは依然としてアクセシブルネームの部分文字列で
+                あるため、両者が食い違うことは決してない。
               */}
               <label htmlFor={`group-rename-${group.name}`} className="flex flex-col gap-1">
                 <span className={fieldLabel}>{t("groups.renameShort")}</span>
@@ -446,16 +449,17 @@ export function GroupsPanel({ onInspector }: GroupsPanelProps = {}) {
                 </span>
               </label>
               {/*
-                The destination used to be a select sitting on its own between
-                the rename button and the remove button, labelled only "Move
-                connections to". Nothing on screen tied it to removal, so it
-                read as a third independent action that silently did nothing —
-                and a user asked, reasonably, what it was for.
+                以前、宛先は名前変更ボタンと削除ボタンの間に単独で
+                座るプルダウンであり、"Move connections to"とだけ
+                ラベルされていた。画面上の何もそれを削除に結び付けて
+                おらず、静かに何もしない三つ目の独立したアクションの
+                ように読め、ユーザーはもっともなことに、それが何のため
+                のものか尋ねた。
 
-                It now lives inside the removal, after a sentence that says what
-                removal actually does: the declaration goes, the connections
-                move, and no file is deleted. The question is asked at the
-                moment it is being answered.
+                今ではそれは削除の中、削除が実際に何をするかを
+                述べる一文の後に置かれている——宣言が消え、接続
+                が移動し、ファイルは削除されない。その問いは、それが答え
+                られる瞬間に問われる。
               */}
               {confirmingRemove[group.name] !== true ? (
                 <button
@@ -468,10 +472,10 @@ export function GroupsPanel({ onInspector }: GroupsPanelProps = {}) {
                 </button>
               ) : null}
               {/*
-                Nesting was discoverable only through a sentence about slashes
-                under a text box at the bottom of the page. This puts it where
-                the group is, and prefills the path so the user types the child
-                name and nothing else.
+                ネストは以前、ページ下部のテキストボックスの下にある
+                スラッシュについての一文を通してしか発見できなかった。
+                これはそれをグループがある場所に置き、ユーザーが子の
+                名前だけを入力すればよいようパスを事前に入力する。
               */}
               <button
                 type="button"
@@ -521,8 +525,9 @@ export function GroupsPanel({ onInspector }: GroupsPanelProps = {}) {
                   </label>
                 )}
                 {/*
-                  What is not lost matters as much as what is. Saying it here is
-                  the difference between a decision and a dare.
+                  失われないものは、失われるものと同じくらい重要
+                  である。ここでそれを述べることが、決断と無謀な
+                  賭けの違いになる。
                 */}
                 <p className={hintText}>{t("groups.removeKeepsFiles")}</p>
                 <div className="flex flex-wrap gap-2">
@@ -560,10 +565,10 @@ export function GroupsPanel({ onInspector }: GroupsPanelProps = {}) {
       </section>
 
       {/*
-        Scoped to the group you have selected, so the picker that used to sit
-        here — a third "Choose a group" on a page that already shows them all —
-        is gone. Asking which group, on a screen where one is already open, was
-        asking a question the screen had answered.
+        選択したグループに絞られているため、以前ここにあったピッカー
+        ——既にすべてを表示しているページ上の三つ目の"Choose a group"
+        ——はなくなった。既に一つが開いている画面でどのグループかを
+        尋ねることは、画面が既に答えていた問いを尋ねることだった。
       */}
       {selected === "" ? null : (
       <section className={sectionCard}>
@@ -595,8 +600,9 @@ export function GroupsPanel({ onInspector }: GroupsPanelProps = {}) {
       )}
 
       {/*
-        Which controls on this page write, and when, was not stated anywhere.
-        It is stated once, here, beside the button that does the writing.
+        このページ上のどのコントロールがいつ書き込むかは、どこにも述べ
+        られていなかった。それはここで一度だけ、書き込みを行う
+        ボタンの横で述べられる。
       */}
       <p className={unsaved ? "text-sm text-notice-ink" : hintText}>
         {unsaved ? t("groups.unsavedNote") : t("groups.savedNote")}

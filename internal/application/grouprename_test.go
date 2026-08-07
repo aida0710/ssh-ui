@@ -10,9 +10,9 @@ import (
 	"sshc/internal/storage"
 )
 
-// groupRenameFixture builds the situation a rename is really about: a group
-// with a nested group inside it, connections in both, a key in the group's key
-// directory and a configuration file that names that key.
+// groupRenameFixture は、名前変更が本当に問題にしている状況を
+// 構築する: 内部にネストしたグループを持つグループ、両方にある connections、
+// グループの鍵ディレクトリの中の鍵、そしてその鍵を名指しする設定ファイルである。
 func groupRenameFixture(t *testing.T) (*Service, *storage.Workspace) {
 	t.Helper()
 	service, workspace := newTestService(t)
@@ -34,7 +34,7 @@ func TestGroupRenameMovesEveryFileAndRewritesEveryLineThatNamedIt(t *testing.T) 
 		t.Fatalf("RenameGroup error = %v", err)
 	}
 
-	// Every file moved, the nested group with its parent…
+	// すべてのファイルが移動した。ネストしたグループはその親と共に…
 	for _, name := range []string{
 		"connections/client-a/web.conf",
 		"connections/client-a/eu/lon.conf",
@@ -45,7 +45,7 @@ func TestGroupRenameMovesEveryFileAndRewritesEveryLineThatNamedIt(t *testing.T) 
 			t.Errorf("%s is not there: %v", name, err)
 		}
 	}
-	// …the region declares the new names, child first…
+	// …region は新しい名前を、子を先に宣言し…
 	entry := readFile(t, workspace, "config")
 	if !strings.Contains(entry, "Include connections/client-a/eu/*.conf\nInclude connections/client-a/*.conf\n") {
 		t.Errorf("entry region = %q", entry)
@@ -53,7 +53,7 @@ func TestGroupRenameMovesEveryFileAndRewritesEveryLineThatNamedIt(t *testing.T) 
 	if strings.Contains(entry, "connections/work") {
 		t.Errorf("the old group is still declared: %q", entry)
 	}
-	// …and the IdentityFile followed the key it names.
+	// …そして IdentityFile はそれが名指しする鍵に追従した。
 	if got := readFile(t, workspace, "conf.d/30-keys.conf"); got != "Host web-1\n\tIdentityFile ~/.ssh/keys/client-a/id_work\n" {
 		t.Errorf("key reference = %q", got)
 	}
@@ -96,8 +96,8 @@ func TestGroupRenameCarriesTheMetadataIdentityAndPresentation(t *testing.T) {
 	if len(stored.Hosts) != 1 {
 		t.Fatalf("hosts = %#v", stored.Hosts)
 	}
-	// The identity changed with the path, so the entry is not an orphan the
-	// user has to re-associate by hand.
+	// identity はパスと共に変わったので、そのエントリはユーザーが
+	// 手作業で再関連付けしなければならない孤児にはならない。
 	if stored.Hosts[0].Identity.Path != "connections/client-a/web.conf" || stored.Hosts[0].Orphan {
 		t.Errorf("identity = %#v", stored.Hosts[0])
 	}
@@ -106,12 +106,12 @@ func TestGroupRenameCarriesTheMetadataIdentityAndPresentation(t *testing.T) {
 	}
 }
 
-// The directories a rename empties go with it, in the same transaction.
+// 名前変更が空にするディレクトリは、同じトランザクションで一緒に削除される。
 //
-// They used to stay behind and be reported, because removing a directory was a
-// filesystem effect with no recovery record. The journal has directory removal
-// now, so the operation can finish what it started: a rename that leaves the
-// old group's empty shell behind looks like it half worked.
+// かつてはそれらは置き去りにされ、報告されていた。ディレクトリの削除は復旧記録を
+// 持たないファイルシステム効果だったからだ。ジャーナルは今やディレクトリ削除を
+// 持つので、操作は始めたことを終えられる: 旧グループの空の抜け殻を残す
+// 名前変更は、半端にしか動かなかったように見えてしまう。
 func TestGroupRenameTakesTheDirectoriesItEmpties(t *testing.T) {
 	service, workspace := groupRenameFixture(t)
 
@@ -129,13 +129,13 @@ func TestGroupRenameTakesTheDirectoriesItEmpties(t *testing.T) {
 	}
 }
 
-// A directory holding something this operation did not touch is left alone.
+// この操作が触れなかった何かを保持するディレクトリはそのまま残される。
 //
-// The files in a group move with it, including ones this application did not
-// put there. A directory that is not a declared group does not: nothing
-// declares it, so nothing knows where it should end up. The group directory
-// above it therefore does not become empty, and removing it anyway would
-// destroy what the user left inside.
+// グループのファイルは、このアプリケーションが置いたのでない
+// ものも含めて、グループと共に移動する。宣言済みグループでない
+// ディレクトリは移動しない: 何もそれを宣言していないので、
+// どこへ行くべきか誰も知らないからだ。したがってその上のグループ
+// ディレクトリは空にならず、それでも削除すればユーザーが中に残したものを壊してしまう。
 func TestGroupRenameLeavesADirectoryThatStillHoldsSomething(t *testing.T) {
 	service, workspace := groupRenameFixture(t)
 	stray := filepath.Join(workspace.Root(), "connections", "work", "scratch")
@@ -153,7 +153,7 @@ func TestGroupRenameLeavesADirectoryThatStillHoldsSomething(t *testing.T) {
 	if _, err := os.Stat(stray); err != nil {
 		t.Errorf("the file the user left there is gone: %v", err)
 	}
-	// The nested group held nothing else, so it went.
+	// ネストしたグループは他に何も保持していなかったので、消えた。
 	if _, err := os.Stat(filepath.Join(workspace.Root(), "connections", "work", "eu")); !os.IsNotExist(err) {
 		t.Errorf("connections/work/eu is still there: %v", err)
 	}
@@ -174,9 +174,9 @@ func TestGroupRenameOntoAnExistingGroupIsRefused(t *testing.T) {
 
 func TestGroupRenameRefusesWhenAKeyReferenceCannotBeRewritten(t *testing.T) {
 	service, workspace := groupRenameFixture(t)
-	// A relative IdentityFile naming the same base name might be this key, and
-	// the engine cannot prove it is not. A rename that would half-apply is
-	// refused entirely, which is the same rule a key relocation applies.
+	// 同じベース名を名指しする相対 IdentityFile はこの鍵かもしれず、
+	// エンジンはそうでないと証明できない。半端にしか適用できない
+	// 名前変更は丸ごと拒否される。鍵の relocation が適用するのと同じ規則である。
 	if err := os.WriteFile(filepath.Join(workspace.Root(), "conf.d", "40-relative.conf"),
 		[]byte("Host other\n\tIdentityFile id_work\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -207,8 +207,8 @@ func TestGroupRenameLeavesEveryByteOutsideTheRegionAlone(t *testing.T) {
 		t.Fatalf("RenameGroup error = %v", err)
 	}
 
-	// The rename rewrites the region and nothing else, so a block the user
-	// added below it is still there, byte for byte.
+	// 名前変更は region だけを書き換えるので、ユーザーがその下に
+	// 追加したブロックは 1 バイトも変わらずそこにある。
 	if !strings.HasSuffix(readFile(t, workspace, "config"), external) {
 		t.Errorf("the hand-written block was disturbed:\n%s", readFile(t, workspace, "config"))
 	}
@@ -222,8 +222,8 @@ func TestDeleteGroupRelocatesItsConnectionsAndNeverDeletesAFile(t *testing.T) {
 		t.Fatalf("DeleteGroup error = %v", err)
 	}
 
-	// Both files arrived in the destination — a delete flattens, because "this
-	// group is gone" cannot preserve a hierarchy below it.
+	// 両方のファイルが destination に到着した — 削除は平坦化する。
+	// 「このグループは無くなる」はその下の階層を保てないからだ。
 	for _, name := range []string{"connections/archive/web.conf", "connections/archive/lon.conf"} {
 		if _, err := os.Lstat(filepath.Join(workspace.Root(), filepath.FromSlash(name))); err != nil {
 			t.Errorf("%s is not there: %v", name, err)
@@ -266,9 +266,9 @@ func TestGroupOperationsRefuseANameThatIsNotASafeDirectory(t *testing.T) {
 	}
 }
 
-// Deleting a group with no destination leaves its connections directly under
-// connections/, where no Include names them. The operation is deliberate; the
-// silence was not.
+// destination なしでグループを削除すると、その connections は
+// どの Include も名指ししない connections/ の直下に残る。
+// 操作自体は意図的だが、その沈黙は意図的ではなかった。
 func TestDeleteGroupWarnsThatItsConnectionsWillBeUnreached(t *testing.T) {
 	service, workspace := newTestService(t)
 	declareGroup(t, service, "work")
@@ -305,15 +305,15 @@ func TestDeleteGroupIntoAnotherGroupDoesNotWarn(t *testing.T) {
 	}
 }
 
-// A group holding a key could not be deleted without naming a destination: the
-// key was aimed at the workspace root, whose directory is ".", and the path
-// helper refuses that because it is the root itself. The refusal arrived as
-// "path is outside the ssh directory", which describes neither the cause nor
-// anything the user did.
+// 鍵を保持するグループは destination を名指ししなければ
+// 削除できなかった: 鍵はワークスペースのルートへ向けられ、
+// そのディレクトリは "." であり、path ヘルパーはそれがルート
+// 自体だという理由で拒否する。その拒否は "path is outside the
+// ssh directory" として届き、原因もユーザーの行為も何も説明していなかった。
 //
-// A key goes where a connection goes: directly under its own tree, keys/ for
-// one and connections/ for the other, so both stay somewhere the inventory and
-// the explorer still see them.
+// 鍵は connection と同じ場所へ行く: それぞれ自身のツリーの
+// 直下、鍵は keys/、connection は connections/ であり、両方とも
+// インベントリと explorer が引き続き見える場所にとどまる。
 func TestDeleteGroupHoldingAKeyNeedsNoDestination(t *testing.T) {
 	service, workspace := groupRenameFixture(t)
 

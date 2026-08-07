@@ -2,25 +2,25 @@ package application
 
 import "sshc/internal/config"
 
-// Visit is one directive line reached while reading the configuration the way
-// OpenSSH reads it.
+// Visit は、OpenSSH が読むのと同じ方法で設定を読む中で到達した
+// 1 本のディレクティブ行である。
 type Visit struct {
-	// Path is the absolute path of the file the line belongs to.
+	// Path は、その行が属するファイルの絶対 path である。
 	Path string
-	// Index is the 0-based line index inside that file.
+	// Index は、そのファイル内での 0-based の行 index である。
 	Index int
 	Line  config.Line
 	Block config.Block
-	// Condition is the rendered Host or Match header governing the line, or
-	// the empty string in the global block.
+	// Condition は、その行を支配する Host または Match ヘッダーを描き
+	// 出したものであり、global block では空文字列である。
 	Condition string
 }
 
-// WalkDirectives visits every directive in reading order: each file top to
-// bottom, descending into an Include exactly where the Include line appears and
-// in the lexical order the resolver recorded. A file already on the current
-// chain is skipped, so a cyclic Include terminates; the resolver has already
-// reported the cycle as a diagnostic. The walk stops when visit returns false.
+// WalkDirectives は、すべてのディレクティブを読み取り順に訪れる。各
+// ファイルを上から下まで、Include 行が現れるまさにその場所で、かつ
+// resolver が記録した字句順で Include へ降りていく。現在の chain 上に
+// 既にあるファイルはスキップされるので、循環する Include は終了する。resolver は既にその
+// cycle を diagnostic として報告している。walk は、visit が false を返すと停止する。
 func WalkDirectives(graph *config.Graph, visit func(Visit) bool) {
 	if graph == nil || graph.Root == "" {
 		return

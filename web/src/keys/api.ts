@@ -26,14 +26,14 @@ export type TrashKeyResponse = components["schemas"]["TrashKeyResponse"];
 export type RestoreTrashResponse = components["schemas"]["RestoreTrashResponse"];
 export type PurgeTrashResponse = components["schemas"]["PurgeTrashResponse"];
 
-// The action vocabulary belongs to the server's session package, which owns it
-// for every subsystem that confirms an operation. These are its wire values.
+// action の語彙はサーバーの session パッケージに属し、操作を確認する
+// すべてのサブシステムのためにそれを所有する。これらはその通信上の値だ。
 export const REVEAL_ACTION_KIND = "private_key.reveal";
 export const PURGE_ACTION_KIND = "trash.purge";
 
-// KeyLocationInput leaves out what it does not change. A name and a group are
-// separate destinations, so a relocation can change either or both, and an
-// empty group is a real answer: the root of ~/.ssh, where an ungrouped key is.
+// KeyLocationInput は変更しないものを省く。名前とグループは別々の
+// 行き先なので、relocation はどちらか一方または両方を変えられ、
+// 空のグループは実在の答えだ: グループなしの鍵がある ~/.ssh のルートを指す。
 export type KeyLocationInput = {
   newName?: string;
   group?: string;
@@ -62,10 +62,10 @@ export type PassphraseInput = {
   unencrypted: boolean;
 };
 
-// RegisterAgentInput is what ssh-add needs to load one key. lifetimeSeconds is
-// ssh-add's own -t: zero means the agent keeps the key until it exits.
-// storeInKeychain adds --apple-use-keychain, which is the only way a passphrase
-// outlives this request, and it is macOS that keeps it, not this application.
+// RegisterAgentInput は ssh-add が 1 つの鍵を読み込むのに必要な入力だ。lifetimeSeconds は
+// ssh-add 自身の -t で、0 はエージェントが終了するまで鍵を保持することを意味する。
+// storeInKeychain は --apple-use-keychain を追加する。パスフレーズがこのリクエスト
+// より長生きする唯一の方法であり、それを保持するのはこのアプリではなく macOS だ。
 export type RegisterAgentInput = {
   passphrase: string;
   lifetimeSeconds: number;
@@ -82,8 +82,8 @@ export type KeysApi = {
   publicKey(keyId: string): Promise<PublicKeyResponse>;
   relocate(keyId: string, change: KeyLocationInput): Promise<RelocateKeyResponse>;
   registerWithAgent(keyId: string, input: RegisterAgentInput): Promise<RegisterKeyResponse>;
-  // Taking a key back out of the agent. It destroys nothing and needs no
-  // confirmation; the cost of being wrong is one more passphrase prompt.
+  // エージェントから鍵を取り出す。何も破棄しないので確認は
+  // 不要で、間違っていた場合の代償はもう一度パスフレーズを求められることだけだ。
   deregisterFromAgent(keyId: string): Promise<AgentIdentitiesResponse>;
   trash(keyId: string): Promise<TrashKeyResponse>;
   listTrash(): Promise<TrashListResponse>;
@@ -91,8 +91,8 @@ export type KeysApi = {
   purge(entryId: string): Promise<PurgeTrashResponse>;
 };
 
-// The generated types describe the contract; these guards check the payload the
-// UI actually received, because a type assertion proves nothing at runtime.
+// 生成された型は契約を記述するだけであり、これらのガードは UI が
+// 実際に受け取ったペイロードを検査する。型アサーションは実行時には何も証明しない。
 function asRecord(value: unknown): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error("invalid_response");
@@ -262,10 +262,10 @@ function validateRestore(value: unknown): RestoreTrashResponse {
 
 const jsonHeaders = { "Content-Type": "application/json" } as const;
 
-// issueAction mints the one-time token the server requires for a reveal and for
-// a permanent delete. The caller names only the operation and its target: what
-// the token is bound to is derived by the server from the state it is about to
-// act on. The token is used immediately and is never stored.
+// issueAction は、開示と完全削除にサーバーが要求するワンタイムトークンを
+// 鋳造する。呼び出し側は操作とその対象を名指すだけで、トークンが
+// 何に紐付くかは、サーバーがこれから作用する状態から
+// 導出する。トークンは即座に使われ、二度と保存されない。
 async function issueAction(kind: string, target: string): Promise<string> {
   const response = await apiClient.mutate<IssueActionResponse>("/api/v1/actions", {
     method: "POST",
@@ -317,15 +317,15 @@ export const keysApi: KeysApi = {
       }),
     );
   },
-  // A public key is not a secret, so this is an ordinary read: no confirmation,
-  // no no-store, no audit note. The server refuses any entry that is not a
-  // public key or a certificate, which is what keeps that true.
+  // 公開鍵は秘密ではないので、これは確認も no-store も監査記録もない
+  // 普通の読み取りだ。サーバーは公開鍵でも証明書でもないエントリを
+  // すべて拒否し、それがこれを成り立たせている。
   async publicKey(keyId) {
     return validatePublicKey(await apiClient.read(`/api/v1/keys/${encodeURIComponent(keyId)}/public`));
   },
-  // A blocked relocation answers 409 with the reasons it refused, and nothing
-  // was written. Those reasons are the whole point of the refusal, so they are
-  // read out of the body rather than thrown away as a failed request.
+  // ブロックされた relocation は、拒否した理由とともに 409 で応答し、
+  // 何も書き込まれなかった。その理由こそが拒否の要点なので、失敗した
+  // リクエストとして捨てるのではなく、ボディから読み取る。
   async relocate(keyId, change) {
     const response = await apiClient.send(`/api/v1/keys/${encodeURIComponent(keyId)}/location`, {
       method: "POST",
@@ -337,10 +337,10 @@ export const keysApi: KeysApi = {
     }
     return validateRelocate(await response.json());
   },
-  // The passphrase travels in the request body and no further. The server hands
-  // it to ssh-add on standard input, so it reaches neither argv nor the child
-  // environment, and nothing here keeps a copy: the caller clears its own state
-  // and the reply carries what the agent now holds, not what unlocked it.
+  // パスフレーズはリクエストボディの中だけを移動し、それより先には進まない。サーバーはそれを
+  // ssh-add の標準入力に渡すので、argv にも子プロセスの
+  // 環境にも届かない。ここでは複製を一切保持せず、呼び出し側は自身の状態をクリアし、
+  // 応答は何がロックを解いたかではなく、いまエージェントが保持しているものを伝える。
   async registerWithAgent(keyId, input) {
     return validateRegister(
       await apiClient.mutate<unknown>(`/api/v1/keys/${encodeURIComponent(keyId)}/agent`, {
@@ -363,8 +363,8 @@ export const keysApi: KeysApi = {
     return validateTrashList(await apiClient.read("/api/v1/trash"));
   },
   async restore(entryId) {
-    // A refused restore answers 409 with the blockers that explain it. That is
-    // information the user needs, not a transport failure to be discarded.
+    // 拒否された restore は、それを説明するブロッカーとともに 409 で応答する。
+    // それはユーザーが必要とする情報であり、捨てるべき通信の失敗ではない。
     const response = await apiClient.send(`/api/v1/trash/${encodeURIComponent(entryId)}/restore`, {
       method: "POST",
     });

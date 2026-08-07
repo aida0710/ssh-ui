@@ -40,8 +40,8 @@ afterEach(() => {
 });
 
 describe("remoteKeysApi", () => {
-  // The action vocabulary is owned by the server's session package. Spelling it
-  // differently here would mint a token the server refuses.
+  // action の語彙はサーバーの session パッケージが所有する。ここで
+  // 綴りを変えれば、サーバーが拒否するトークンを鋳造してしまう。
   it("uses the committed action vocabulary", () => {
     expect(REMOTE_KEY_REGISTER_ACTION_KIND).toBe("remote_key.register");
   });
@@ -57,8 +57,8 @@ describe("remoteKeysApi", () => {
     });
     expect(described.remotePath).toBe("~/.ssh/authorized_keys");
 
-    // A plan contacts nothing and changes nothing, so it costs no token; it
-    // still carries the CSRF header every mutation on this API carries.
+    // plan は何にも接続せず何も変更しないのでトークンを消費しない。
+    // それでも、この API のすべての mutation が運ぶ CSRF ヘッダーは運ぶ。
     expect(fetcher).toHaveBeenCalledTimes(1);
     const [path, init] = fetcher.mock.calls[0] as [string, RequestInit];
     expect(path).toBe("/api/v1/remote-keys/plan");

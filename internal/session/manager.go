@@ -22,10 +22,10 @@ type Credentials struct {
 
 type Session struct {
 	csrfHash [sha256.Size]byte
-	// actions holds this session's outstanding confirmations, keyed by the
-	// digest of the token that was handed out, exactly as sessions themselves
-	// are keyed. The map is shared with every copy of the Session value, which
-	// is what lets the action helpers reach it without another lookup.
+	// actions は、このセッションの未使用の確認を保持する。キーは配られたトークンの
+	// ダイジェストで、セッション自身のキーの付け方とまったく同じである。このマップは
+	// Session 値のすべてのコピーで共有されており、それによってアクション用のヘルパー
+	// は、もう一度検索することなくここへ到達できる。
 	actions map[[sha256.Size]byte]actionRecord
 }
 
@@ -36,8 +36,8 @@ type Manager struct {
 	bootstrapUsed bool
 	sessions      map[[sha256.Size]byte]Session
 
-	// Now is the clock used for action token expiry. It is nil in production,
-	// where time.Now is used; tests set it once before the manager is shared.
+	// Now は、アクショントークンの失効に使う時計。本番では nil で time.Now が使われる。
+	// テストは、マネージャが共有される前に一度だけこれを設定する。
 	Now func() time.Time
 }
 
@@ -62,16 +62,16 @@ func NewManager(random io.Reader) (*Manager, string, error) {
 	}, bootstrap, nil
 }
 
-// Reissue mints a fresh bootstrap token, replacing the one this manager holds.
+// Reissue は新しいブートストラップトークンを発行し、マネージャが持つものを置き換える。
 //
-// A bootstrap is spent on first use, and until this existed only a new process
-// printed another — which is fine when the user starts the application and it
-// prints a URL, and useless when it runs as a background agent whose standard
-// output goes nowhere. The reissue is asked for by the command line, which had
-// to read a file only this user can read to ask at all.
+// ブートストラップは初回の使用で消費される。これができるまでは、新しいプロセスだけ
+// が次の一つを表示していた — ユーザーがアプリケーションを起動して URL が表示される
+// なら問題ないが、標準出力がどこにも届かないバックグラウンドエージェントとして動く
+// 場合は役に立たない。再発行を求めるのはコマンドラインであり、そもそも求めるには、
+// このユーザーしか読めないファイルを読む必要がある。
 //
-// Any session already established stays established. What this replaces is the
-// way in for a browser that has none.
+// すでに確立しているセッションは確立したままである。これが置き換えるのは、まだ
+// セッションを持たないブラウザのための入口だけだ。
 func (m *Manager) Reissue() (string, error) {
 	fresh, err := token(m.random)
 	if err != nil {
@@ -114,19 +114,19 @@ func (m *Manager) Bootstrap(presented string) (Credentials, error) {
 	return Credentials{SessionID: sessionID, CSRFToken: csrf}, nil
 }
 
-// RenewCSRF mints a fresh CSRF token for a session that already exists.
+// RenewCSRF は、すでに存在するセッションのために新しい CSRF トークンを発行する。
 //
-// A reload loses the token, because it lived in the page; the cookie survives,
-// so the session does. Without this the application was dead until the binary
-// was started again, since a bootstrap fragment is spent on first use and only
-// a new process prints another.
+// リロードするとトークンは失われる。ページの中にあったからだ。Cookie は残るので
+// セッションは残る。これがないと、ブートストラップのフラグメントは初回の使用で
+// 消費され、次の一つを表示するのは新しいプロセスだけなので、バイナリを起動し直す
+// までアプリケーションは死んだままだった。
 //
-// The token is minted rather than returned. This manager keeps a hash and never
-// the token, which is what stops a leak of its memory being a leak of every
-// session's token, and re-minting keeps that property. The old token stops
-// verifying, which is correct: there is one page per session, and a token still
-// working after another was issued for it would be a second key nobody is
-// holding on purpose.
+// トークンは返すのではなく発行し直す。このマネージャが保持するのはハッシュだけで
+// あってトークンではない。それが、メモリの漏洩を全セッションのトークンの漏洩に
+// しない性質であり、発行し直す方式はその性質を保つ。古いトークンは検証を通らなく
+// なるが、それが正しい。セッションにつきページはひとつであり、新しいトークンが
+// 発行されたあとも古いものが通るなら、それは誰も意図せず持っている二本目の鍵に
+// なってしまう。
 func (m *Manager) RenewCSRF(sessionID string) (string, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -145,12 +145,12 @@ func (m *Manager) RenewCSRF(sessionID string) (string, bool) {
 	return csrf, true
 }
 
-// Authenticate reports whether a session exists, and nothing else.
+// Authenticate は、セッションが存在するかどうかだけを報告する。
 //
-// It used to return the Session itself, whose actions map is the live one this
-// manager guards: every caller happened to discard it, so nothing raced, but a
-// caller who kept it would have been reading a map under another goroutine's
-// writes with no way to know.
+// 以前は Session そのものを返していた。その actions マップは、このマネージャが
+// 守っている実体そのものである。たまたま呼び出し側がすべて破棄していたので競合は
+// 起きなかったが、保持する呼び出し側がいれば、別の goroutine の書き込みの下で
+// マップを読むことになり、それを知る術もなかった。
 func (m *Manager) Authenticate(sessionID string) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

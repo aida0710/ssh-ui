@@ -8,15 +8,15 @@ import (
 )
 
 const (
-	// ActionTokenTTL is how long one confirmation stays usable. It is short
-	// because a confirmation is answered by a person who is looking at the
-	// dialog right now.
+	// ActionTokenTTL は、ひとつの確認が使える時間。これが短いのは、確認に答えるのが
+	// いままさにそのダイアログを目の前にしている人であり、時間をかけるものでは
+	// ないからである。
 	ActionTokenTTL = 2 * time.Minute
-	// MaxActionTokensPerSession bounds the memory one session can pin.
+	// MaxActionTokensPerSession は、ひとつのセッションが固定できるメモリを制限する。
 	MaxActionTokensPerSession = 32
 )
 
-// Action kinds. A token issued for one kind is useless for any other.
+// アクションの種別。ある種別に発行されたトークンは、他のどの種別にも使えない。
 const (
 	ActionEvaluate          = "diagnostics.evaluate"
 	ActionReachability      = "diagnostics.reachability"
@@ -50,16 +50,16 @@ var knownActionKinds = map[string]bool{
 	ActionPurgeTrashEntry:   true,
 }
 
-// KnownActionKind reports whether kind is an operation this application will
-// ever confirm.
+// KnownActionKind は、kind がこのアプリケーションのいずれかの確認対象となる操作か
+// を報告する。
 func KnownActionKind(kind string) bool { return knownActionKinds[kind] }
 
-// ActionRequest identifies exactly one confirmed operation.
+// ActionRequest は、確認済みの操作をちょうどひとつ特定する。
 //
-// Evidence is a digest of what the confirmation dialog displayed — usually the
-// executable directives, or the current contents of the file being edited — so
-// a change between the confirmation and the execution invalidates the token
-// instead of silently applying to something else.
+// Evidence は確認ダイアログが表示していた内容のダイジェスト — 通常は実行される
+// ディレクティブか、編集対象ファイルの現在の内容 — である。そのため確認と実行の
+// あいだに変化があれば、黙って別のものに適用されるのではなく、トークンが無効に
+// なる。
 type ActionRequest struct {
 	Kind     string
 	Target   string
@@ -81,12 +81,12 @@ func (m *Manager) clock() time.Time {
 	return time.Now()
 }
 
-// IssueAction stores one confirmation and returns its token. The token is
-// returned once and only its hash is kept, exactly like the session secrets.
+// IssueAction は確認をひとつ保存し、そのトークンを返す。トークンが返るのは一度
+// きりで、保持されるのはそのハッシュだけ。セッションの秘密とまったく同じである。
 //
-// A full table is refused rather than made room in: evicting an outstanding
-// record would let anyone who can ask for a token flush a confirmation the
-// user has already given, and replace it with one of their own choosing.
+// 表が満杯のときは場所を空けるのではなく拒否する。未使用のレコードを追い出せる
+// なら、トークンを要求できる者は誰でも、ユーザーがすでに与えた確認を流し去り、
+// 自分の選んだものに置き換えられてしまう。
 func (m *Manager) IssueAction(sessionID string, request ActionRequest) (string, error) {
 	if !KnownActionKind(request.Kind) || request.Target == "" {
 		return "", ErrInvalidAction
@@ -120,12 +120,12 @@ func (m *Manager) IssueAction(sessionID string, request ActionRequest) (string, 
 	return value, nil
 }
 
-// ConsumeAction verifies and burns one confirmation.
+// ConsumeAction は確認をひとつ検証し、焼き捨てる。
 //
-// The token is removed before it is checked, so a presentation that does not
-// match cannot be retried against a different operation. No error mentions the
-// token, and a token belonging to another session is simply not in this
-// session's table.
+// トークンは検査される前に取り除かれる。したがって、一致しない提示を別の操作に
+// 対して再試行することはできない。どのエラーもトークンには言及せず、また、他の
+// セッションに属するトークンは、単にこのセッションの表に存在しないというだけの
+// ことである。
 func (m *Manager) ConsumeAction(sessionID, presented string, request ActionRequest) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -135,9 +135,9 @@ func (m *Manager) ConsumeAction(sessionID, presented string, request ActionReque
 		return ErrUnknownSession
 	}
 
-	// The presented token is looked up before the expired records are swept,
-	// so a confirmation that ran out of time is reported as expired instead of
-	// being indistinguishable from one that was never issued.
+	// 提示されたトークンの照会は、期限切れレコードの掃除より前に行う。そのため、
+	// 時間切れになった確認は「期限切れ」として報告され、そもそも発行されなかった
+	// ものと区別がつかない、という事態にはならない。
 	presentedHash := sha256.Sum256([]byte(presented))
 	record, found := sessionValue.actions[presentedHash]
 	if !found {
@@ -151,10 +151,10 @@ func (m *Manager) ConsumeAction(sessionID, presented string, request ActionReque
 		return ErrActionExpired
 	}
 
-	// The secret itself is compared in constant time against the stored hash,
-	// the same shape Bootstrap and VerifyCSRF use, so the verification does not
-	// rest on how the map compares its keys. Kind, target and evidence must all
-	// match the operation now being asked for.
+	// 秘密そのものは、保存されたハッシュと定数時間で比較する。Bootstrap や
+	// VerifyCSRF が使うのと同じ形なので、検証はマップがキーをどう比較するかには
+	// 依存しない。kind、target、evidence のすべてが、いま求められている操作と一致
+	// しなければならない。
 	matched := subtle.ConstantTimeCompare(presentedHash[:], record.tokenHash[:]) &
 		subtle.ConstantTimeCompare([]byte(record.kind), []byte(request.Kind)) &
 		subtle.ConstantTimeCompare([]byte(record.target), []byte(request.Target)) &

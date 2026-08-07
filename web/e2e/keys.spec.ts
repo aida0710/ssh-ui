@@ -11,8 +11,8 @@ test("lists generated keys and reveals one only after an explicit confirmation",
   ).toBeVisible();
 
   await page.getByLabel("File name").fill("id_e2e");
-  // "Passphrase" also matches the "create without a passphrase" checkbox, so
-  // the textbox is named by role.
+  // "Passphrase" は "create without a passphrase" チェック
+  // ボックスにもマッチするため、テキストボックスは role で指定する。
   await page.getByRole("textbox", { name: "Passphrase" }).fill("end-to-end-passphrase");
   expect(await clickAndAwait(page, "Create key", "/api/v1/keys")).toBe(201);
 
@@ -21,17 +21,17 @@ test("lists generated keys and reveals one only after an explicit confirmation",
   await expect(row).toContainText("0600");
   expect(await installation.read("id_e2e.pub")).toContain("ssh-ed25519 ");
 
-  // Nothing on the inventory screen shows key material before anyone asked.
+  // インベントリ画面は、誰かが求める前には鍵の実体を何も表示しない。
   //
-  // This is the page-level half of the property. Whether a *response* carries
-  // key material it should not is asserted in Go, by
-  // TestNoResponseCarriesASecretItIsNotEntitledTo: a field that leaks over the
-  // API without being rendered is invisible from here, and pretending
-  // otherwise would make this spec a false comfort.
+  // これはこの性質のページレベル側の半分である。*レスポンス*
+  // が持つべきでない鍵の実体を運んでいないかは、Go の
+  // TestNoResponseCarriesASecretItIsNotEntitledTo で検証される。
+  // 描画されずに API 経由で漏れるフィールドはここからは見えず、
+  // そうでないふりをすればこの試験は偽の安心にすぎなくなる。
   await expect(page.locator("body")).not.toContainText("BEGIN OPENSSH PRIVATE KEY");
 
-  // The dialog opens without the key. Design §6.3 separates reveal from every
-  // other API precisely so that opening this dialog is not itself a disclosure.
+  // ダイアログは鍵を持たずに開く。設計書§6.3 が reveal を他の API から分離
+  // しているのは、まさにこのダイアログを開くこと自体が開示にならないためだ。
   await row.getByRole("button", { name: "Show private key" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
@@ -46,7 +46,7 @@ test("lists generated keys and reveals one only after an explicit confirmation",
   await dialog.getByRole("button", { name: "Close" }).click();
   await expect(page.locator("body")).not.toContainText("BEGIN OPENSSH PRIVATE KEY");
 
-  // Nothing about the key may outlive the dialog in the browser.
+  // 鍵に関するいかなるものも、ブラウザ内でダイアログより長生きしてはならない。
   expect(
     await page.evaluate(() => ({
       local: window.localStorage.length,
@@ -56,11 +56,11 @@ test("lists generated keys and reveals one only after an explicit confirmation",
   expect(await page.evaluate(() => document.cookie)).toBe("");
 });
 
-// The binary under test is started with HOME and PATH only, so it is handed no
-// SSH_AUTH_SOCK and can reach no agent. That is what makes this spec safe to
-// automate: it exercises the registration interface against the real server
-// without going anywhere near the developer's own agent or Keychain. Design
-// §6.3 owns the other half — a real registration is manual test M4.
+// 試験対象のバイナリは HOME と PATH だけで起動されるため、SSH_AUTH_SOCK
+// を渡されずどの agent にも到達できない。これがこの試験を自動化
+// しても安全にしている理由だ。開発者自身の agent や Keychain には一
+// 切近づかず、実サーバーに対して登録インターフェースを検証する。
+// 設計書§6.3 が残りの半分を担う——実際の登録は手動テスト M4 である。
 test("offers agent registration and refuses it honestly when no agent is reachable", async ({
   page,
   installation,
@@ -75,22 +75,22 @@ test("offers agent registration and refuses it honestly when no agent is reachab
   const row = page.getByRole("row", { name: /id_agent\b/ }).first();
   await expect(row).toBeVisible();
 
-  // The control exists and is reachable from the inventory — the gap this
-  // closes was an implemented endpoint with no way to reach it — but it is
-  // disabled, and the screen says what is missing rather than failing later.
+  // コントロールは存在し、インベントリから到達できる——
+  // これが埋めるのは、実装済みなのに到達手段のないエンド
+  // ポイントという穴だ——ただし無効化されており、後で失敗するのではなく画面が不足を告げる。
   const register = row.getByRole("button", { name: "Add to agent" });
   await expect(register).toBeVisible();
   await expect(register).toBeDisabled();
   await expect(page.getByText(/No agent is reachable from this process/)).toBeVisible();
 });
 
-// Renaming a key is only useful if the configuration follows it. This spec
-// generates a key, points a real Host at it, renames it through the UI and then
-// reads the file back: the assertion that matters is the byte on disk, not the
-// confirmation on screen.
+// 鍵のリネームは設定がそれに追従してこそ意味がある。この
+// 試験は鍵を生成し、実際の Host をそれに向け、UI 経由で
+// リネームしてからファイルを読み返す。重要な検証は画面上の
+// 確認ではなく、ディスク上のバイトだ。
 test("renames a key and carries every directive that named it", async ({ page, installation }) => {
-  // The Host is written before the page loads, because the bootstrap fragment
-  // is spent on the first navigation and a reload would leave no session.
+  // Host はページが読み込まれる前に書き込まれる。bootstrap
+  // フラグメントは最初のナビゲーションで消費され、リロードするとセッションが残らないからだ。
   await installation.write(
     "conf.d/20-rename.conf",
     "Host renamed\n\tIdentityFile ~/.ssh/id_rename\n\tCertificateFile %d/.ssh/id_rename.pub\n",
@@ -107,9 +107,9 @@ test("renames a key and carries every directive that named it", async ({ page, i
   await page.getByLabel("Name", { exact: true }).fill("id_renamed");
   expect(await clickAndAwait(page, "Rename or move the key", "/api/v1/keys/")).toBe(200);
 
-  // Both halves moved…
+  // 両方の半分が移動した……
   expect(await installation.read("id_renamed.pub")).toContain("ssh-ed25519 ");
-  // …and both directives followed, each keeping the spelling it was written in.
+  // ……そして両方のディレクティブが追従し、それぞれ書かれたときの綴りを保った。
   expect(await installation.read("conf.d/20-rename.conf")).toBe(
     "Host renamed\n\tIdentityFile ~/.ssh/id_renamed\n\tCertificateFile %d/.ssh/id_renamed.pub\n",
   );
@@ -138,8 +138,8 @@ test("refuses a rename whose destination is taken, and writes nothing", async ({
   expect(await clickAndAwait(page, "Rename or move the key", "/api/v1/keys/")).toBe(409);
 
   await expect(page.getByRole("alert")).toContainText("already exists");
-  // The decisive assertion: a refused rename is not a partial one. Both keys are
-  // exactly where they were, with the bytes they had.
+  // 決め手となる検証はこうだ。拒否されたリネームは部分的な
+  // ものではない。両方の鍵は元あった場所に、元あったバイトのまま残る。
   expect(await installation.read("id_first")).toBe(before);
   expect(await installation.read("id_second.pub")).toContain("ssh-ed25519 ");
 });

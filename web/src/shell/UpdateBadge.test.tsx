@@ -15,8 +15,8 @@ describe("UpdateBadge", () => {
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 
-  // A link, not a button. This application fetches nothing and replaces
-  // nothing: it says there is a newer version and a person decides.
+  // ボタンではなくリンクだ。このアプリケーションは何も取得せず
+  // 何も置き換えない: 新しいバージョンがあると伝え、決めるのは人だ。
   it("links to the release rather than offering to install it", async () => {
     render(
       <UpdateBadge
@@ -34,7 +34,7 @@ describe("UpdateBadge", () => {
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
-  // A machine with no network still shows its version.
+  // ネットワークのないマシンでも、自分のバージョンは表示し続ける。
   it("shows nothing at all when the check cannot run", async () => {
     const api = buildApi({ current: "0.1.0", available: false }, {
       updateStatus: vi.fn().mockRejectedValue(new Error("update_check_failed")),

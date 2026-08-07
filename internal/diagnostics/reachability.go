@@ -1,7 +1,7 @@
-// Package diagnostics runs the separately triggered checks of the design:
-// a configuration check, a direct TCP reachability check, and an SSH
-// authentication test. Each is an independent operation the user starts on
-// purpose; nothing here runs as a side effect of opening a screen.
+// Package diagnostics は、設計上、個別に起動される各種チェックを実行する。
+// 設定のチェック、直接 TCP による到達性のチェック、そして SSH 認証テストである。
+// いずれもユーザーが意図して開始する独立した操作であり、画面を開いた副作用として
+// 走るものはここに何もない。
 package diagnostics
 
 import (
@@ -13,16 +13,16 @@ import (
 	"time"
 )
 
-// ProxyJumpNotice accompanies every reachability result. The check dials the
-// destination itself, so a host that is only reachable through a jump host is
-// expected to fail here, and the UI must say so rather than imply the host is
-// down.
+// ProxyJumpNotice は、すべての到達性の結果に付随する。このチェックは接続先へ
+// 自分でダイヤルするので、踏み台ホスト経由でしか到達できないホストはここで失敗
+// するのが当然である。UI は、そのホストが落ちていると受け取られないよう、その旨を
+// 述べなければならない。
 const ProxyJumpNotice = "This check dialled the destination directly. ProxyJump, ProxyCommand and any jump-host firewall were not used."
 
-// DefaultReachabilityTimeout bounds one TCP dial.
+// DefaultReachabilityTimeout は、TCP ダイヤル一回に上限を設ける。
 const DefaultReachabilityTimeout = 5 * time.Second
 
-// Reachability outcomes.
+// 到達性の結果。
 const (
 	ReachabilityReached    = "reached"
 	ReachabilityRefused    = "refused"
@@ -31,13 +31,13 @@ const (
 	ReachabilityFailed     = "failed"
 )
 
-// Dialer opens a TCP connection. *net.Dialer satisfies it; tests substitute a
-// function so no automated test opens a remote socket.
+// Dialer は TCP 接続を開く。*net.Dialer がこれを満たす。テストは関数で差し替え、
+// 自動テストがリモートのソケットを開くことがないようにする。
 type Dialer interface {
 	DialContext(ctx context.Context, network, address string) (net.Conn, error)
 }
 
-// ReachabilityResult is one completed dial attempt.
+// ReachabilityResult は、完了したダイヤル試行ひとつ分。
 type ReachabilityResult struct {
 	Address string
 	Outcome string
@@ -46,13 +46,13 @@ type ReachabilityResult struct {
 	Notice  string
 }
 
-// Reachability dials a destination directly, ignoring ProxyJump on purpose.
+// Reachability は接続先へ直接ダイヤルし、意図的に ProxyJump を無視する。
 type Reachability struct {
 	Dialer  Dialer
 	Timeout time.Duration
 }
 
-// Check dials hostname:port once and classifies the outcome.
+// Check は hostname:port へ一度ダイヤルし、その結果を分類する。
 func (r Reachability) Check(ctx context.Context, hostname, port string) ReachabilityResult {
 	timeout := r.Timeout
 	if timeout <= 0 {

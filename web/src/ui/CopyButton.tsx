@@ -3,38 +3,38 @@ import { useTranslate } from "../i18n/context";
 import type { MessageKey } from "../i18n/messages";
 
 type CopyButtonProps = {
-  // The exact text that goes on the clipboard. What the user sees and what is
-  // copied come from the same value, so the two can never disagree.
+  // クリップボードに載る、そのままの文字列。ユーザーが見るものと
+  // コピーされるものは同じ値から来るので、両者が食い違うことは決してない。
   value: string;
-  // Names what is being copied. A screen with several copy buttons needs
-  // several distinct accessible names, and "Copy" alone gives none. It is a
-  // message key rather than text, because "Copy the command" and "コマンドを
-  // コピー" put the noun in different places and a concatenated label would
-  // read as broken Japanese.
+  // 何がコピーされるかを名指す。コピーボタンが複数ある画面には
+  // 複数の異なる accessible name が必要で、「Copy」だけでは何も与えない。
+  // これはテキストではなくメッセージキーだ。「Copy the command」と
+  // 「コマンドをコピー」とでは名詞の位置が異なり、連結されたラベルは
+  // 壊れた日本語として読めてしまうからだ。
   label: MessageKey;
   className?: string;
 };
 
 type CopyState = "idle" | "copied" | "failed";
 
-// CopyButton writes one value to the system clipboard.
+// CopyButton は 1 つの値をシステムクリップボードに書き込む。
 //
-// It reports a refused write instead of swallowing it. The Clipboard API needs
-// a secure context and a user gesture; 127.0.0.1 is a secure context and a
-// click is a gesture, so this normally succeeds, but a browser policy or an
-// extension can still refuse, and a button that always said "Copied" would be
-// lying about where the value ended up.
+// 拒否された書き込みは、握りつぶさずに報告する。Clipboard API には
+// secure context とユーザーのジェスチャーが必要だ。127.0.0.1 は
+// secure context であり、クリックはジェスチャーなので、これは通常
+// 成功する。だがブラウザのポリシーや拡張機能はそれでも拒否することがあり、
+// 常に「Copied」と言うボタンは、値がどこに行き着いたかについて嘘をつくことになる。
 //
-// Nothing here holds the value beyond the render that passed it in: the caller
-// owns it, and for the private key that caller drops it when its dialog closes.
+// ここでは値を、渡された描画の間より長く保持しない: それを所有するのは
+// 呼び出し側で、秘密鍵の場合は、そのダイアログが閉じたときに呼び出し側がそれを捨てる。
 export function CopyButton({ value, label, className }: CopyButtonProps) {
   const t = useTranslate();
   const [state, setState] = useState<CopyState>("idle");
 
-  // A new value has not been copied, whatever the last one did. Without this,
-  // the button would keep claiming success for text that is no longer on
-  // screen — the worst version of this control, since the user would believe
-  // the clipboard holds the thing they are looking at.
+  // 最後に何が起きたかにかかわらず、新しい値はまだコピーされていない。
+  // これがなければ、ボタンはもう画面上にないテキストについて成功を
+  // 主張し続けてしまう——このコントロールの最悪版だ。ユーザーが
+  // クリップボードには自分が見ているものが入っていると信じてしまうからだ。
   useEffect(() => {
     setState("idle");
   }, [value]);
@@ -58,8 +58,8 @@ export function CopyButton({ value, label, className }: CopyButtonProps) {
         {t("copy.button", { label: t(label) })}
       </button>
       {/*
-        aria-live rather than role="status": the shell owns the single status
-        region, and a second one would compete with it.
+        role="status" ではなく aria-live: シェルが唯一のステータス
+        領域を所有しており、2 つ目があるとそれと競合してしまう。
       */}
       <span aria-live="polite" className={state === "failed" ? "text-xs text-danger" : "text-xs text-ink-muted"}>
         {state === "copied" ? t("copy.done") : state === "failed" ? t("copy.refused") : ""}

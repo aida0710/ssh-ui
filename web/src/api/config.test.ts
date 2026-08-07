@@ -24,8 +24,8 @@ afterEach(() => {
 });
 
 describe("configApi", () => {
-  // Reads carry the token now, so every one of these needs a session: the
-  // cookie is not scoped to a port and the token is.
+  // 読み取りは今やトークンを運ぶため、これらはすべてセッションを必要とする。
+  // クッキーはポートにスコープされないが、トークンはされる。
   beforeEach(() => {
     apiClient.setCSRF("t".repeat(43));
   });

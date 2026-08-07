@@ -2,10 +2,10 @@ import type { ReactNode } from "react";
 import { Icon } from "./icons";
 import { useTranslate } from "../i18n/context";
 
-// What a section puts in the right-hand pane, and whether what is in there
-// needs attention. A section that supplies null gets no toggle at all: a pane
-// offered everywhere and empty in nine places out of ten teaches people not to
-// open it.
+// セクションが右側のペインに何を置くか、そしてそこにあるものが
+// 注意を必要とするかどうか。null を渡すセクションにはトグルすら付かない:
+// どこにでも提供されるのに 10 回のうち 9 回は空のペインは、人々にそれを
+// 開かないよう教え込んでしまう。
 export type InspectorContent = { attention: boolean; body: ReactNode } | null;
 
 export const inspectorId = "inspector";
@@ -21,10 +21,10 @@ export function InspectorToggle({
 }) {
   const t = useTranslate();
   const action = t(open ? "shell.inspectorHide" : "shell.inspectorShow");
-  // The name is written here rather than assembled from two sr-only spans.
-  // Adjacent spans concatenate without a separator — "Show detailsNeeds
-  // attention" — because the only thing between them is an aria-hidden icon and
-  // JSX strips the whitespace around it.
+  // 名前は 2 つの sr-only span から組み立てるのではなく、ここに直接書く。
+  // 隣接する span はセパレータなしで連結され——「Show detailsNeeds
+  // attention」——になる。両者の間にあるのは aria-hidden なアイコンだけで、
+  // JSX がその周りの空白を取り除いてしまうからだ。
   const name = attention ? `${action} ${t("shell.inspectorAttention")}` : action;
   return (
     <button
@@ -38,7 +38,7 @@ export function InspectorToggle({
       }`}
     >
       <Icon name="inspector" className="h-4 w-4" />
-      {/* The dot is for the eye; the sentence above is for everyone else. */}
+      {/* ドットは目のためのもので、上の文はそれ以外のすべての人のためのものだ。 */}
       {attention ? (
         <span
           aria-hidden="true"

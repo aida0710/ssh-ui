@@ -11,7 +11,7 @@ import {
   type Overview,
   type SavePreview,
 } from "../api/config";
-import { ConnectionTree, type Grouping, type HostSelection } from "./ConnectionTree";
+import { ConnectionTree, type HostSelection } from "./ConnectionTree";
 import type { DragPayload } from "./dragdrop";
 import { HostDetailPanel } from "./HostDetail";
 import { NoticeList } from "./SavePreview";
@@ -20,16 +20,15 @@ import { useTranslate } from "../i18n/context";
 import type { InspectorContent } from "../ui/Inspector";
 import { HostInspector, hostNeedsAttention } from "./HostInspector";
 import { control, fieldLabel, narrowControl } from "../ui/form";
-import { Button, Notice, Segmented } from "../ui/surface";
-import type { ReactNode } from "react";
+import { Button, Notice } from "../ui/surface";
 import { appendHostBlock, duplicateHostBlock, removeHostBlock } from "./blocks";
 
-// What the Groups screen reports, and this one does not.
+// Groups 画面が報告し、この画面は報告しないもの。
 //
-// `group_empty` is not in it because it is not reported anywhere as a notice
-// any more: a declared group holding nothing is the state every group is in
-// the moment after it is made, and the Groups screen says "Members: none" on
-// the row itself.
+// `group_empty` がここに無いのは、もはやどこでも notice として報告
+// されないからだ。宣言済みグループが何も持たない状態は、作られた直後
+// のすべてのグループがある状態そのものであり、Groups 画面はその行自体
+// に "Members: none" と表示している。
 const groupNoticeCodes = new Set([
   "group_not_declared",
   "group_directory_missing",
@@ -44,23 +43,20 @@ function toProblem(error: unknown): Problem {
 }
 
 type ConnectionsPageProps = {
-  // Opens a configuration file in the file view at a line. The tree needs it
-  // for pattern rules, which have no identity and so no host detail to open.
+  // configuration ファイルを file view で指定行から開く。ツリーはパター
+  // ンルールのためにこれを必要とする——identity が無く、開くべき host detail も無いからだ。
   onOpenFile: (path: string, line: number) => void;
-  // The right-hand pane's contents, offered up to the shell. Null while no
-  // connection is open: there is nothing to inspect until one is.
+  // 右側ペインの中身を、シェルへ差し出す。connection が開いていない間は
+  // null——何か開くまでは、調べるものが何も無いからだ。
   onInspector: (content: InspectorContent) => void;
-  // Controls this screen puts in the window's toolbar. Same arrangement as the
-  // inspector: the shell owns the chrome, the section says what goes in it.
-  onToolbar: (content: ReactNode) => void;
 };
 
-export function ConnectionsPage({ onOpenFile, onInspector, onToolbar }: ConnectionsPageProps) {
+export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProps) {
   const t = useTranslate();
   const [overview, setOverview] = useState<Overview | null>(null);
-  // Where a connection goes when it belongs to no group. The server reports the
-  // entry file rather than this page assuming it, and "config" is only the
-  // fallback for the moment before the first overview arrives.
+  // どのグループにも属さない connection が向かう先。このページが決め
+  // つけるのではなく、サーバーがエントリファイルを報告する。"config" は
+  // 最初の overview が届くまでの、あくまで暫定のフォールバックである。
   const entryPath = overview?.entry.path ?? "config";
   const [selection, setSelection] = useState<HostSelection | null>(null);
   const [detail, setDetail] = useState<HostDetail | null>(null);
@@ -71,9 +67,6 @@ export function ConnectionsPage({ onOpenFile, onInspector, onToolbar }: Connecti
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [localError, setLocalError] = useState("");
   const [moveTarget, setMoveTarget] = useState("");
-  // The tree's arrangement, held here rather than in the tree, because the
-  // control that changes it is in the window's toolbar.
-  const [grouping, setGrouping] = useState<Grouping>("groups");
 
   const reload = useCallback(async () => {
     try {
@@ -87,26 +80,12 @@ export function ConnectionsPage({ onOpenFile, onInspector, onToolbar }: Connecti
     void reload();
   }, [reload]);
 
-  useEffect(() => {
-    onToolbar(
-      <Segmented
-        label={t("tree.arrangeBy")}
-        value={grouping}
-        options={[
-          { value: "groups", label: t("tree.byGroups") },
-          { value: "files", label: t("tree.byFiles") },
-        ]}
-        onChange={setGrouping}
-      />,
-    );
-  }, [grouping, onToolbar, t]);
-
-  // The pane follows the open connection, and is empty until there is one — a
-  // toggle with nothing behind it is worse than no toggle.
+  // ペインは開いている connection に追従し、開くまでは空である——背後
+  // に何も無いトグルは、トグルが無いことより悪い。
   //
-  // The body is rebuilt on every overview as well as every detail, because
-  // onMetadata closes over the overview to preserve the other hosts' entries.
-  // A memoised body would keep editing a stale metadata document.
+  // body はすべての overview とすべての detail のたびに再構築される。
+  // onMetadata が他のホストのエントリを保つために overview をクロージャ
+  // に取り込んでいるためだ。memo 化した body では古い metadata 文書を編集し続けてしまう。
   useEffect(() => {
     if (detail === null || overview === null) {
       onInspector(null);
@@ -119,12 +98,12 @@ export function ConnectionsPage({ onOpenFile, onInspector, onToolbar }: Connecti
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detail, overview, onInspector]);
 
-  // The dependencies are the two values and not the selection object, because
-  // a save reselects the host it has just written. An equal object with a new
-  // identity re-ran this effect, which fetched a detail submit was already
-  // fetching and, when its answer arrived, discarded the preview the save had
-  // just produced. The diff of what was written was on screen for as long as
-  // one request took and then vanished.
+  // 依存配列にしているのは selection オブジェクトではなく二つの値その
+  // ものである。保存すると、たった今書き込んだホストを再選択するからだ。
+  // 中身が等しくても identity が新しいオブジェクトはこの effect を再実
+  // 行させてしまい、submit が既に取得中の detail を再度取得し、その答え
+  // が届いた時点で、保存が直後に作ったプレビューを破棄してしまっていた。
+  // 書き込んだ内容の diff は、リクエスト一回分の時間だけ画面に出て、その後消えていた。
   const selectedPath = selection === null ? "" : selection.path;
   const selectedAlias = selection === null ? "" : selection.alias;
   useEffect(() => {
@@ -146,8 +125,8 @@ export function ConnectionsPage({ onOpenFile, onInspector, onToolbar }: Connecti
     };
   }, [selectedPath, selectedAlias]);
 
-  // reselect is false when the edit removed the host that is open, so the page
-  // does not immediately ask the server for a block it just deleted.
+  // 編集で開いているホストが削除された場合、reselect は false になる
+  // ——消したばかりのブロックをサーバーへすぐに問い合わせずに済ませるためだ。
   async function submit(request: EditRequest, reselect = true) {
     try {
       const result = await configApi.save(request);
@@ -165,15 +144,15 @@ export function ConnectionsPage({ onOpenFile, onInspector, onToolbar }: Connecti
     }
   }
 
-  // The guard stays: an entry without a concrete alias has no identity, and the
-  // host endpoint answers invalid_request for one. The tree never routes such a
-  // block here, it routes it to the file view, but a selection without an alias
-  // must never reach the server even if some future caller builds one.
+  // この防護は残す——具体的な alias を持たないエントリには identity が
+  // 無く、host エンドポイントはそれに invalid_request を返す。ツリーは
+  // そのようなブロックをここへは決してルーティングせず、ファイルビューへ送る。
+  // alias の無い selection は将来の呼び出し元が作っても、サーバーへ届いてはならない。
   function onSelect(host: HostEntry) {
     if (host.identity.alias === "") return;
-    // Choosing a different connection discards the last save's diff, because it
-    // describes bytes in a block that is no longer open. A save reselects
-    // through submit rather than here, and keeps its diff on screen.
+    // 別の connection を選ぶと、直前の保存の diff は破棄される——それは
+    // もう開いていないブロックのバイトを記述しているからだ。保存はここで
+    // はなく submit を通じて再選択を行い、その diff は画面に残しておく。
     setPreview(null);
     setSelection({ path: host.identity.path, alias: host.identity.alias });
   }
@@ -205,14 +184,14 @@ export function ConnectionsPage({ onOpenFile, onInspector, onToolbar }: Connecti
     });
   }
 
-  // Moving a connection into a group is a file move, so the request names the
-  // group and the server derives the destination path from it. Sending a path
-  // as well would let the two disagree, which the server refuses outright.
+  // connection をグループへ移動するのはファイル移動であるため、リクエ
+  // ストはグループ名を渡し、サーバーがそこから移動先パスを導く。パスも
+  // 併せて送ってしまうと両者が食い違い得るため、サーバーはそれを即座に拒否する。
   //
-  // An empty group means "out of every group", which is not a move into a
-  // directory but a move back to the entry file. That form needs the entry
-  // file's bytes, so the destination is held to its own precondition the way a
-  // file-to-file move is.
+  // 空のグループは「どのグループの外にも」を意味し、これはディレクト
+  // リへの移動ではなくエントリファイルへ戻す移動である。この形には
+  // エントリファイルのバイトが要るため、移動先はファイル間移動と同じ
+  // ように、自分自身の事前条件で守られる。
   async function onMoveToGroup(group: string) {
     if (detail === null) return;
     const path = detail.form.entry.file.path ?? "";
@@ -238,14 +217,14 @@ export function ConnectionsPage({ onOpenFile, onInspector, onToolbar }: Connecti
     }
   }
 
-  // A drop is one of the moves this page already performs, chosen by what was
-  // dragged. Nothing new reaches the server: a connection is a move, and a
-  // group changing parent is a rename to a new path.
+  // ドロップは、このページが既に行っている移動のどれか一つを、ドラッ
+  // グされたものに応じて選ぶだけである。サーバーに新しいものは何も届
+  // かない——connection は移動であり、親が変わるグループは新しいパスへのリネームである。
   //
-  // A dragged connection is not necessarily the selected one, so its file's
-  // bytes are read here rather than taken from the open detail, and submit is
-  // told not to reselect: the user dropped something, they did not ask to open
-  // it.
+  // ドラッグされた connection は選択中のものとは限らないため、そのファ
+  // イルのバイトは開いている detail から取るのではなくここで読む。そし
+  // て submit には再選択しないよう伝える——ユーザーは何かをドロップし
+  // ただけで、それを開くよう求めたわけではないからだ。
   async function onTreeDrop(payload: DragPayload, target: string) {
     try {
       if (payload.kind === "group") {
@@ -282,8 +261,8 @@ export function ConnectionsPage({ onOpenFile, onInspector, onToolbar }: Connecti
     }
   }
 
-  // The comment is written into the configuration file, so it goes through the
-  // same base-and-precondition path as every other edit to that file.
+  // このコメントは configuration ファイルに書き込まれるため、そのファイ
+  // ルへの他のあらゆる編集と同じ base と事前条件の経路を通る。
   function onComment(comment: string) {
     if (detail === null || selection === null) return;
     void submit({
@@ -346,9 +325,9 @@ export function ConnectionsPage({ onOpenFile, onInspector, onToolbar }: Connecti
     }
   }
 
-  // The move carries both loaded bases so the server can hold each file to its
-  // own precondition. Reselection is done here rather than by submit, because
-  // the host lives at a new path once the move commits.
+  // この移動は読み込み済みの base を両方運び、サーバーが各ファイルをそ
+  // れぞれの事前条件で守れるようにする。再選択は submit ではなくここで
+  // 行う——移動がコミットされた時点で、ホストは新しいパスに存在するからだ。
   async function moveHost() {
     if (detail === null || selection === null || moveTarget === "") return;
     try {
@@ -399,13 +378,13 @@ export function ConnectionsPage({ onOpenFile, onInspector, onToolbar }: Connecti
   }
 
   return (
-    // Two panes that reach the window's edges, not two columns floating in a
-    // padded box: the list has its own surface, its own border and its own
-    // scrolling, the way a source list does.
+    // ウィンドウの端まで届く二つのペインであり、padding の付いた箱に浮
+    // かぶ二つの column ではない——source list と同じように、リストは
+    // 自前の面、自前の border、自前のスクロールを持つ。
     //
-    // minmax(0,…) on the detail so it can narrow when the inspector opens. A
-    // bare 1fr is minmax(auto,1fr) and would keep its content's width, pushing
-    // the buttons out under the pane.
+    // detail に付けた minmax(0,…) は、inspector が開いたときに狭められる
+    // ようにするためだ。素の 1fr は minmax(auto,1fr) であり、コンテンツの
+    // 幅を保ち続けてしまい、ボタンをペインの下へ押し出してしまう。
     <div className="grid h-full grid-cols-[18rem_minmax(0,1fr)] grid-rows-[minmax(0,1fr)]">
       <div className="flex min-h-0 flex-col border-r border-line bg-tree">
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -415,13 +394,12 @@ export function ConnectionsPage({ onOpenFile, onInspector, onToolbar }: Connecti
             onSelect={onSelect}
             onOpenPatternRule={onOpenFile}
             onDrop={(payload, target) => void onTreeDrop(payload, target)}
-            grouping={grouping}
           />
         </div>
         {/*
-          Making a connection is the one thing you do *to* the list rather than
-          to something in it, so it sits at the list's foot — where a source
-          list keeps its "+" — instead of above the list and pushing it down.
+          connection を作ることは、リストの中の何かにではなくリスト自体に
+          対して行う唯一の操作であり、だからこそ source list が "+" を置くの
+          と同じ足元に置く——リストの上に置いて下へ押し出すのではなく。
         */}
         <div className="flex shrink-0 flex-col gap-2 border-t border-line p-3">
           <label htmlFor="new-alias" className={fieldLabel}>{t("conn.newAlias")}</label>
@@ -449,11 +427,11 @@ export function ConnectionsPage({ onOpenFile, onInspector, onToolbar }: Connecti
       </div>
       <div className="flex min-h-0 flex-col gap-4 overflow-y-auto p-6">
         {/*
-          The group-scoped notices are the Groups screen's, and the README says
-          so: they describe what a declaration and the disk say about each
-          other, which is not something this screen can act on. They were
-          arriving here because this list was handed every notice the overview
-          carried.
+          グループ単位の notice は Groups 画面のものであり、README にもそう
+          書いてある——それらは宣言とディスクが互いについて何を語っているか
+          を記述するもので、この画面が対処できることではない。ここに届いて
+          いたのは、overview が運ぶすべての notice をこのリストへ渡していた
+          からにすぎない。
         */}
         <NoticeList notices={overview.notices.filter((notice) => !groupNoticeCodes.has(notice.code))} />
         <OrphanPanel
@@ -484,8 +462,8 @@ export function ConnectionsPage({ onOpenFile, onInspector, onToolbar }: Connecti
               </select>
               <Button onClick={() => void moveHost()}>{t("conn.move")}</Button>
               {/*
-                Both states are the danger button: the confirmation is a
-                different word, not a different kind of act.
+                どちらの状態も danger button である——確認とは別の単語であって、
+                別の種類の行為ではない。
               */}
               {confirmingDelete ? (
                 <Button kind="danger" onClick={() => void deleteHost()}>{t("conn.confirmDelete")}</Button>

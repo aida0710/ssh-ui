@@ -12,8 +12,8 @@ import (
 	"sshc/internal/objectstore"
 )
 
-// Every test here runs against httptest. Nothing in this package reaches
-// Cloudflare, or any other network.
+// ここのテストはすべて httptest に対して走る。このパッケージのものが Cloudflare
+// や、その他のどのネットワークにも到達することはない。
 func newClient(t *testing.T, handler http.HandlerFunc) (objectstore.Client, *httptest.Server) {
 	t.Helper()
 	server := httptest.NewTLSServer(handler)
@@ -29,9 +29,9 @@ func newClient(t *testing.T, handler http.HandlerFunc) (objectstore.Client, *htt
 }
 
 func TestPutSendsTheConditionItWasGiven(t *testing.T) {
-	// The compare-and-swap is the whole reason this client exists. If the
-	// condition never reached the wire, "auto" sync could clobber another
-	// machine and nothing would say so.
+	// compare-and-swap こそが、このクライアントが存在する理由のすべてである。条件が
+	// 回線に届いていなければ、「auto」同期は他のマシンを踏み潰しうるのに、それを
+	// 告げるものは何もない。
 	var ifMatch, ifNoneMatch, method, path string
 	client, _ := newClient(t, func(w http.ResponseWriter, r *http.Request) {
 		method, path = r.Method, r.URL.Path
@@ -71,8 +71,8 @@ func TestPutRefusesBothConditionsAtOnceWithoutSendingAnything(t *testing.T) {
 }
 
 func TestAFailedConditionIsItsOwnError(t *testing.T) {
-	// "Somebody else got there first" is an answer, not a failure, and the
-	// caller has to be able to tell it from one.
+	// 「誰かが先に到達した」は失敗ではなく答えであり、呼び出し側はそれを失敗と
+	// 見分けられなければならない。
 	for _, status := range []int{http.StatusPreconditionFailed, http.StatusConflict} {
 		client, _ := newClient(t, func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(status)
@@ -140,7 +140,7 @@ func TestEveryRequestIsSignedAndCarriesNoCredentialInTheURL(t *testing.T) {
 }
 
 func TestAPlaintextEndpointIsRefused(t *testing.T) {
-	// The body is encrypted before it gets here, but the credentials are not.
+	// 本文はここへ届く前に暗号化されているが、資格情報はそうではない。
 	client := objectstore.Client{
 		Endpoint: "http://example.com",
 		Bucket:   "sshc",
@@ -167,8 +167,8 @@ func TestAnOversizedObjectIsRefusedBeforeItIsSent(t *testing.T) {
 }
 
 func TestAnyOtherRejectionCarriesNoResponseBody(t *testing.T) {
-	// An S3 error document names the bucket and the request id. Neither
-	// belongs in a message this application shows.
+	// S3 のエラードキュメントはバケット名とリクエスト ID を名指しする。どちらも
+	// このアプリケーションが表示するメッセージに入れてよいものではない。
 	client, _ := newClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 		_, _ = w.Write([]byte("<Error><BucketName>private-bucket</BucketName></Error>"))

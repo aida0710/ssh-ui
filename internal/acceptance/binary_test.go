@@ -14,13 +14,13 @@ import (
 	"time"
 )
 
-// TestBuiltBinaryServesTheEmbeddedUIAndStopsOnSIGTERM builds and runs the real
-// artefact.
+// TestBuiltBinaryServesTheEmbeddedUIAndStopsOnSIGTERM は本物の
+// artefact をビルドして実行する。
 //
-// This is the one place in the repository that executes a program this project
-// produced. It uses the local Go toolchain, which is already required to run
-// the test at all, and points HOME at a temporary directory, so the real ~/.ssh
-// is never read. Nothing here contacts a network.
+// このリポジトリの中で、このプロジェクトが生成した
+// プログラムを実行する唯一の場所である。テストの実行自体に
+// すでに必要なローカルの Go ツールチェインを使い、HOME を一時ディレクトリに向けるため、
+// 本物の ~/.ssh は決して読まれない。ここはネットワークには一切触れない。
 func TestBuiltBinaryServesTheEmbeddedUIAndStopsOnSIGTERM(t *testing.T) {
 	repository := filepath.Join("..", "..")
 	binary := filepath.Join(t.TempDir(), "sshc")
@@ -51,10 +51,10 @@ func TestBuiltBinaryServesTheEmbeddedUIAndStopsOnSIGTERM(t *testing.T) {
 	if err := process.Start(); err != nil {
 		t.Fatal(err)
 	}
-	// One goroutine reaps the process, and exactly one reader takes its result.
-	// Cleanup must never wait on a channel the body already drained, so it
-	// checks whether the body reaped the process and otherwise kills it with a
-	// deadline of its own.
+	// goroutine が 1 つプロセスを回収し、結果を受け取る読み手も 1 つだけである。
+	// Cleanup は、body がすでに読み干したチャネルを
+	// 待ってはならない。そこで body がプロセスを回収済みか
+	// を確認し、そうでなければ自前のデッドラインで kill する。
 	exit := make(chan error, 1)
 	go func() { exit <- process.Wait() }()
 	reaped := false
@@ -112,8 +112,8 @@ func TestBuiltBinaryServesTheEmbeddedUIAndStopsOnSIGTERM(t *testing.T) {
 		t.Fatal("the binary served something other than the UI it embedded")
 	}
 
-	// The listener is loopback only. A connection to the same port on a
-	// routable address of this machine must not be accepted.
+	// listener はループバックのみである。このマシンの
+	// 経路可能なアドレス上の同じポートへの接続は受け付けてはならない。
 	assertBoundToLoopbackOnly(t, host)
 
 	bootstrap, err := http.NewRequestWithContext(context.Background(), http.MethodPost, base+"/api/v1/session/bootstrap", nil)
@@ -151,8 +151,8 @@ func TestBuiltBinaryServesTheEmbeddedUIAndStopsOnSIGTERM(t *testing.T) {
 		t.Fatalf("the binary did not exit within 10s of SIGTERM; stderr:\n%s", stderr.String())
 	}
 
-	// The port must be free once the process is gone. A listener that outlived
-	// its process would keep the port bound and leak an open API.
+	// プロセスが終了すればポートは解放されていなければならない。
+	// プロセスより長生きした listener はポートを保持し続け、開いた API を漏洩させる。
 	assertPortIsFree(t, host)
 
 	if combined := stderr.String(); strings.Contains(combined, fragment) {
@@ -163,12 +163,12 @@ func TestBuiltBinaryServesTheEmbeddedUIAndStopsOnSIGTERM(t *testing.T) {
 	}
 }
 
-// assertBoundToLoopbackOnly checks that nothing but 127.0.0.1 answers on the
-// port the binary chose.
+// assertBoundToLoopbackOnly は、バイナリが選んだ
+// ポートで 127.0.0.1 以外は応答しないことを確認する。
 //
-// A routable address of this machine is only probed when one exists; on a
-// machine with no non-loopback IPv4 address there is nothing to prove and the
-// check is skipped silently rather than reported as a pass.
+// このマシンの経路可能なアドレスは、存在する場合にのみ
+// 調べる。ループバック以外の IPv4 アドレスを持たない
+// マシンでは証明すべきものがなく、検査は成功と報告せず黙ってスキップされる。
 func assertBoundToLoopbackOnly(t testing.TB, hostPort string) {
 	t.Helper()
 	_, port, err := net.SplitHostPort(hostPort)
@@ -201,9 +201,9 @@ func assertPortIsFree(t testing.TB, hostPort string) {
 	}
 }
 
-// TestNoTestOnlyPackageReachesTheShippedBinary keeps the hardening suite out of
-// the artefact. internal/acceptance is test-only by construction, but a future
-// helper moved into a non-test file would change that silently.
+// TestNoTestOnlyPackageReachesTheShippedBinary は、hardening
+// suite を artefact の外に保つ。internal/acceptance は構造上
+// test-only だが、将来ヘルパーが非テストファイルへ移されれば、それは黙って崩れる。
 func TestNoTestOnlyPackageReachesTheShippedBinary(t *testing.T) {
 	list := exec.Command("go", "list", "-deps", "./cmd/sshc")
 	list.Dir = filepath.Join("..", "..")

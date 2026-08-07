@@ -35,10 +35,10 @@ func TestProjectAttributesTheFirstValueOfEachKeyword(t *testing.T) {
 		t.Errorf("hostname source = %#v", hostName)
 	}
 
-	// The Include is on line 1 and the Host block below it, so OpenSSH reads
-	// the whole of conf.d/10-defaults.conf before it reaches Port 2222. First
-	// value wins, so 9999 is the winner — file order is not load order, and
-	// this assertion used to say the opposite.
+	// Include が 1 行目にあり、Host ブロックはその下にあるので、OpenSSH は Port 2222 に
+	// たどり着く前に conf.d/10-defaults.conf の全体を読む。最初の値が勝つので 9999 が
+	// 勝者である — ファイル順は読み込み順ではなく、この表明は以前これと逆のことを
+	// 言っていた。
 	port, _ := projection.Value("port")
 	if port.Value != "9999" || port.Path != "/Users/tester/.ssh/conf.d/10-defaults.conf" {
 		t.Errorf("OpenSSH keeps the first value it read: %#v", port)

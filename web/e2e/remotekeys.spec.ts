@@ -1,13 +1,13 @@
 import { clickAndAwait, expect, openSection, test, openApplication } from "./support/environment";
 
-// A syntactically valid, entirely synthetic public key. Nothing in this spec
-// sends it anywhere: only the plan endpoint is exercised, and design §6.6 makes
-// that endpoint describe the change without contacting the remote host.
+// 構文的には正しいが、まったくの合成物である公開鍵。この試験ではそれをどこ
+// にも送らない。検証するのは plan エンドポイントだけであり、設計書§6.6 はそのエ
+// ンドポイントがリモートホストに接続せずに変更内容を説明することを求める。
 const publicKey =
   "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGZpeHR1cmVrZXlmaXh0dXJla2V5Zml4dHVyZWtl fixture@sshc";
 
-// "Register the key" is never clicked here. It opens an SSH connection, which
-// no automated test in this repository may do; that half is manual test M2.
+// "Register the key" はここでは決してクリックしない。それは SSH 接続を開くが、この
+// リポジトリのどの自動テストもそれを行ってはならず、その半分は手動テスト M2 である。
 test("shows the alias, effective user, fingerprint and the exact line before registering", async ({
   page,
   installation,
@@ -16,7 +16,7 @@ test("shows the alias, effective user, fingerprint and the exact line before reg
   await openSection(page, "Remote Keys");
   await expect(page.getByRole("heading", { name: "Remote Keys" })).toBeVisible();
 
-  // Nothing has been sent yet, and the panel says so.
+  // まだ何も送信されておらず、パネルはそう告げる。
   await expect(page.getByText("Nothing is sent to the remote host until you confirm it.")).toBeVisible();
 
   await page.getByLabel("Host alias").fill("bastion");
@@ -27,23 +27,23 @@ test("shows the alias, effective user, fingerprint and the exact line before reg
 
   const plan = page.getByRole("region", { name: "Confirm remote registration" });
   await expect(plan).toBeVisible();
-  // Design §6.6 requires the confirmation to name the alias, the effective
-  // user, the fingerprint and the change it would make.
+  // 設計書§6.6 は、確認に alias、実効ユーザー、fingerprint、
+  // 加えられる変更を明示することを求める。
   await expect(plan).toContainText("bastion");
   await expect(plan).toContainText("ops");
   await expect(plan).toContainText("203.0.113.10:2222");
   await expect(plan).toContainText("SHA256:");
 
-  // The exact line to append is shown, and it is the key that was supplied.
+  // 追記される正確な行が表示され、それは指定された鍵そのものだ。
   await expect(plan.locator('pre[aria-label="Public key line to append"]')).toContainText(
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGZpeHR1cmVrZXlmaXh0dXJla2V5Zml4dHVyZWtl",
   );
-  // And so is the fixed routine the remote host would run.
+  // リモートホストが実行する固定のルーチンも同様に表示される。
   await expect(plan.locator('pre[aria-label="Remote command"]')).toContainText(
     "authorized_keys",
   );
 
-  // Describing a registration changes nothing on this machine.
+  // 登録内容を説明するだけでは、このマシン上の何も変わらない。
   expect(await installation.read("config")).toContain("Host bastion");
 });
 

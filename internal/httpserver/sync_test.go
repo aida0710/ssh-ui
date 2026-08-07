@@ -44,9 +44,9 @@ func syncEngine(t *testing.T) (*echo.Echo, *remotesync.Service) {
 
 const syncTestPassphrase = "a master password for sync"
 
-// reachable stands in for the bucket. The question "does this bucket answer" is
-// remotesync's, and it is tested there against a real HTTP server; here it must
-// never be asked of a network.
+// reachable は bucket の代わりを務める。「この bucket は応答するか」
+// という問いは remotesync のものであり、そちらでは実物の HTTP
+// サーバーに対してテストされる。ここではネットワークに問うてはならない。
 func reachable(context.Context, *objectstore.Client, string) error { return nil }
 
 func syncEngineWithVault(t *testing.T) (*echo.Echo, *remotesync.Service, *secret.Service) {
@@ -99,8 +99,8 @@ func TestTheDirectionIsReportedAndDefaultsToBoth(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &status); err != nil {
 		t.Fatal(err)
 	}
-	// A machine that has never been configured is not in a one-way mode: it is
-	// in no mode at all, and the safe reading of that is the ordinary one.
+	// 一度も設定されたことのないマシンは、一方向モードにあるのではなく
+	// どのモードにもない。その安全な解釈は、普通のモードとみなすことである。
 	if status.Direction != "both" {
 		t.Errorf("direction = %q, want both", status.Direction)
 	}
@@ -137,10 +137,10 @@ func TestSettingsWithoutADirectionMeanBoth(t *testing.T) {
 	if recorder := send(t, engine, http.MethodPut, "/api/v1/sync/settings", settings(""), nil); recorder.Code != http.StatusOK {
 		t.Fatalf("PUT = %d", recorder.Code)
 	}
-	// Omitting the field is not "leave it as it was". The settings form sends
-	// the whole configuration, so a missing direction is a request for the
-	// default, and a one-way setting that outlived the form that set it would
-	// be a setting nobody can see.
+	// フィールドを省略することは「今までどおりにする」ではない。設定
+	// form は設定全体を送るため、direction が欠けていることは既定値の
+	// 要求を意味する。それを設定した form より長生きした一方向設定は、
+	// 誰にも見えない設定になってしまう。
 	if got := service.Direction(); got != remotesync.DirectionBoth {
 		t.Errorf("direction = %q after settings with no direction, want both", got)
 	}
@@ -156,8 +156,8 @@ func TestAnUnknownDirectionIsRefusedRatherThanIgnored(t *testing.T) {
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("PUT with an unknown direction = %d, want 400: %s", recorder.Code, recorder.Body.String())
 	}
-	// And it changed nothing: a refused request that had already applied half
-	// of itself would be worse than one that applied all of it.
+	// そして何も変わらなかった。すでに半分だけ適用してしまった拒否済み
+	// リクエストは、全部適用してしまうより始末が悪い。
 	if got := service.Direction(); got != remotesync.DirectionPull {
 		t.Errorf("direction = %q after a refused request, want the previous pull", got)
 	}
@@ -179,16 +179,16 @@ func TestARefusedDirectionIsAConflictAndNotAGatewayFailure(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	// The code has to name the setting, because "sync_failed" would send the
-	// user looking at their bucket for a refusal this machine made.
+	// code は設定を名指ししなければならない。"sync_failed" では、
+	// このマシンが行った拒否なのに、ユーザーは自分の bucket を疑ってしまう。
 	if body.Code != "sync_push_refused" {
 		t.Errorf("code = %q, want sync_push_refused", body.Code)
 	}
 }
 
-// The settings are stored, so a second run has them. What must never travel
-// back out is the access key: the status is what the screen reads, and it says
-// where the bucket is and whether the vault is shut, and nothing else.
+// 設定は保存されるため、2 回目の実行でもそれが残っている。決して
+// 外へ漏れてはならないのは access key である。status は画面が読む
+// ものであり、bucket の場所と vault が施錠中かどうかだけを伝える。
 func TestSyncStatusNeverCarriesTheAccessKey(t *testing.T) {
 	engine, service, secrets := syncEngineWithVault(t)
 	_ = service
@@ -213,8 +213,8 @@ func TestSyncStatusNeverCarriesTheAccessKey(t *testing.T) {
 	}
 }
 
-// Nothing is asked at startup, so the screen has to be able to say why its form
-// is empty rather than showing an empty form that looks configured-and-broken.
+// 起動時には何も尋ねないため、画面は「設定済みなのに壊れている」
+// ように見える空の form を出す代わりに、なぜ空なのかを言えなければならない。
 func TestSyncStatusSaysWhenTheVaultIsShut(t *testing.T) {
 	engine, _, secrets := syncEngineWithVault(t)
 	if err := secrets.Initialise(syncTestPassphrase); err != nil {
@@ -241,12 +241,12 @@ func TestConfiguringRefusesAShutVault(t *testing.T) {
 	}
 }
 
-// The endpoint is stored as it will be used, not as it was typed.
+// endpoint は打ち込まれたとおりではなく、使われる形で保存される。
 //
-// A trailing slash produced "https://host//bucket" wherever the screen showed
-// where the snapshot goes. The request never carried it — the client replaces
-// the whole path — so this is about the value the user is shown and asked to
-// recognise as their bucket.
+// 末尾のスラッシュは、スナップショットの行き先を画面が示すところ
+// どこでも "https://host//bucket" を生んでいた。リクエスト自体には
+// それは含まれない——client がパス全体を置き換えるからだ——ので、
+// これはユーザーに見せて自分の bucket と認識させる値についての話である。
 func TestATrailingSlashOnTheEndpointIsRemoved(t *testing.T) {
 	engine, service, secrets := syncEngineWithVault(t)
 	if err := secrets.Initialise(syncTestPassphrase); err != nil {
@@ -262,10 +262,10 @@ func TestATrailingSlashOnTheEndpointIsRemoved(t *testing.T) {
 	}
 }
 
-// An endpoint with a path is refused rather than silently truncated. The client
-// replaces the path with /bucket/key, so a pasted "…/my-bucket" would be
-// dropped without a word and the user would be looking for their objects in a
-// place this application never wrote to.
+// パス付きの endpoint は黙って切り詰めるのではなく拒否する。client
+// はパスを /bucket/key に置き換えるため、貼り付けられた
+// "…/my-bucket" は何も言わずに捨てられ、ユーザーはこの application が
+// 一度も書いたことのない場所にオブジェクトを探すことになる。
 func TestAnEndpointWithAPathIsRefused(t *testing.T) {
 	engine, _, secrets := syncEngineWithVault(t)
 	if err := secrets.Initialise(syncTestPassphrase); err != nil {
@@ -281,12 +281,12 @@ func TestAnEndpointWithAPathIsRefused(t *testing.T) {
 	}
 }
 
-// Settings are tried before they are kept.
+// 設定は保持される前に試される。
 //
-// A bucket that will not answer is a bucket the user has mistyped, and storing
-// the mistake means the failure surfaces on the first push instead of on the
-// screen where it can be corrected. Nothing is stored and nothing is
-// configured: a half-applied refusal would be worse than none.
+// 応答しない bucket は、ユーザーが打ち間違えた bucket である。その
+// 間違いを保存してしまうと、直せるはずのこの画面ではなく最初の
+// push で失敗が表面化することになる。何も保存されず何も設定
+// されない。中途半端に適用された拒否は、何もしないより始末が悪い。
 func TestSettingsThatCannotReachTheBucketAreNotStored(t *testing.T) {
 	home := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(home, ".ssh"), 0o700); err != nil {
@@ -324,12 +324,12 @@ func TestSettingsThatCannotReachTheBucketAreNotStored(t *testing.T) {
 	}
 }
 
-// The snapshot is sealed with the master password, not a second one.
+// スナップショットは第 2 のパスワードではなくマスターパスワードで封印される。
 //
-// Two passwords meant two things to remember, and the second one was typed into
-// a field that could not check it: a typo produced an archive nobody could ever
-// open, and said so on the next machine, months later. This is the check that
-// was missing.
+// 2 つのパスワードは覚えるべきものが 2 つあることを意味し、2 つ目は
+// それをチェックできないフィールドに打ち込まれていた。typo は誰も
+// 二度と開けないアーカイブを作り、それが分かるのは何ヶ月も後の別の
+// マシンでのことだった。これが欠けていたチェックである。
 func TestPushRefusesAPasswordThatIsNotTheMasterOne(t *testing.T) {
 	engine, _, secrets := syncEngineWithVault(t)
 	if err := secrets.Initialise(syncTestPassphrase); err != nil {
@@ -346,18 +346,18 @@ func TestPushRefusesAPasswordThatIsNotTheMasterOne(t *testing.T) {
 	if !strings.Contains(recorder.Body.String(), "wrong_master_password") {
 		t.Errorf("code = %s", recorder.Body.String())
 	}
-	// And it stopped there. A handler that writes a refusal and then does the
-	// thing anyway leaves both answers in the body, and the first status is all
-	// the recorder reports — so the refusal is checked by what did not happen
-	// after it.
+	// そしてそこで止まった。拒否を書き込んでからそれでも実行してしまう
+	// ハンドラは、body に両方の答えを残してしまう。recorder が報告する
+	// のは最初の status だけなので、この拒否は、その後に起きなかった
+	// ことによって確かめられている。
 	if strings.Contains(recorder.Body.String(), "sync_failed") {
 		t.Errorf("the push ran after being refused: %s", recorder.Body.String())
 	}
 }
 
-// A machine that has never made a vault is a machine doing its first pull. The
-// password it types is the key to the archive, nothing here can check it, and
-// the archive itself will.
+// vault を一度も作ったことのないマシンは、初めての pull を行う
+// マシンである。打ち込まれるパスワードはアーカイブへの鍵であり、
+// ここでは確認できない——確認できるのはアーカイブ自身だけだ。
 func TestPullOnAMachineWithNoVaultIsNotRefusedForTheWrongReason(t *testing.T) {
 	engine, _ := syncEngine(t)
 	if code := sendSync(t, engine, http.MethodPut, "/api/v1/sync/settings", settings("")).Code; code != http.StatusOK {
@@ -370,8 +370,8 @@ func TestPullOnAMachineWithNoVaultIsNotRefusedForTheWrongReason(t *testing.T) {
 	}
 }
 
-// The path is stored and reported back, and it is as narrow as the bucket name:
-// both become segments in a URL this application signs.
+// path は保存され、応答にも返される。そして bucket 名と同じくらい
+// 狭く絞られている。どちらもこの application が署名する URL のセグメントになるからだ。
 func TestTheObjectPathIsStoredAndRefusedWhenItCouldEscape(t *testing.T) {
 	engine, service, secrets := syncEngineWithVault(t)
 	if err := secrets.Initialise(syncTestPassphrase); err != nil {
@@ -397,7 +397,7 @@ func TestTheObjectPathIsStoredAndRefusedWhenItCouldEscape(t *testing.T) {
 			t.Errorf("configure with path %q = %d, want 400", unsafe, code)
 		}
 	}
-	// And the refusals changed nothing.
+	// そして拒否によって何も変わらなかった。
 	if _, _, path := service.Target(); path != "laptops" {
 		t.Errorf("path = %q after refusals, want laptops", path)
 	}

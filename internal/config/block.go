@@ -2,18 +2,18 @@ package config
 
 import "strings"
 
-// BlockKind identifies which conditional construct owns a range of lines.
+// BlockKind は、どの条件構文が行の範囲を所有しているかを識別する。
 type BlockKind uint8
 
 const (
-	// BlockGlobal holds the lines before the first Host or Match line. It
-	// always exists, even when it is empty.
+	// BlockGlobal は、最初の Host 行または Match 行より前の行を保持する。空であっても
+	// 常に存在する。
 	BlockGlobal BlockKind = iota
 	BlockHost
 	BlockMatch
 )
 
-// Pattern is one argument of a Host line.
+// Pattern は Host 行の引数ひとつ。
 type Pattern struct {
 	Raw      string
 	Value    string
@@ -21,14 +21,14 @@ type Pattern struct {
 	Wildcard bool
 }
 
-// Criterion is one attribute of a Match line.
+// Criterion は Match 行の属性ひとつ。
 type Criterion struct {
 	Keyword  string
 	Argument string
 	Negated  bool
 }
 
-// Block is a half-open line range [Start, End) governed by one header line.
+// Block は、ヘッダー行ひとつが支配する半開区間 [Start, End) の行範囲。
 type Block struct {
 	Kind     BlockKind
 	Header   int
@@ -38,8 +38,8 @@ type Block struct {
 	Criteria []Criterion
 }
 
-// matchCriteriaWithArgument lists the Match attributes that consume the next
-// token as their argument. all, canonical and final take no argument.
+// matchCriteriaWithArgument は、次のトークンを引数として消費する Match 属性を
+// 列挙する。all、canonical、final は引数を取らない。
 var matchCriteriaWithArgument = map[string]bool{
 	"exec":         true,
 	"host":         true,
@@ -50,8 +50,8 @@ var matchCriteriaWithArgument = map[string]bool{
 	"user":         true,
 }
 
-// Blocks returns every block in file order. The first entry is always the
-// global block.
+// Blocks は、ファイル順にすべてのブロックを返す。最初の要素は常にグローバル
+// ブロックである。
 func (f *File) Blocks() []Block {
 	blocks := []Block{{Kind: BlockGlobal, Header: -1, Start: 0}}
 	for index, line := range f.Lines {
@@ -81,8 +81,8 @@ func (f *File) Blocks() []Block {
 	return blocks
 }
 
-// BlockAt returns the block that governs the given line index. A Host or Match
-// header line belongs to the block it opens.
+// BlockAt は、与えられた行インデックスを支配するブロックを返す。Host や Match の
+// ヘッダー行は、それが開くブロックに属する。
 func (f *File) BlockAt(line int) Block {
 	blocks := f.Blocks()
 	found := blocks[0]
@@ -94,8 +94,8 @@ func (f *File) BlockAt(line int) Block {
 	return found
 }
 
-// Condition returns the header text of a block for display, without indent or
-// line ending. The global block has no condition.
+// Condition は、表示用にブロックのヘッダーテキストを返す。インデントと行末は
+// 含まない。グローバルブロックには条件がない。
 func (f *File) Condition(block Block) string {
 	if block.Header < 0 || block.Header >= len(f.Lines) {
 		return ""
@@ -126,8 +126,8 @@ func parseCriteria(values []string) []Criterion {
 			criterion.Negated = true
 			keyword = keyword[1:]
 		}
-		// OpenSSH's strdelim splits a Match attribute from its argument on
-		// whitespace or a single '=', so both spellings must be accepted.
+		// OpenSSH の strdelim は Match 属性とその引数を空白か単一の '=' で分割するので、
+		// どちらの書き方も受け付けなければならない。
 		name, argument, hasEquals := strings.Cut(keyword, "=")
 		criterion.Keyword = strings.ToLower(name)
 		if hasEquals {
@@ -144,20 +144,20 @@ func parseCriteria(values []string) []Criterion {
 	return criteria
 }
 
-// CommentRun reports the range of comment lines attached to the block whose
-// header is at the given index, as a half-open interval [start, header).
+// CommentRun は、与えられたインデックスにヘッダーを持つブロックに付随するコメント
+// 行の範囲を、半開区間 [start, header) として報告する。
 //
-// The attached comment is the run of contiguous LineComment lines immediately
-// above the header. The run stops at a blank line, a directive, an
-// unstructured line or the start of the file.
+// 付随するコメントとは、ヘッダーのすぐ上にある連続した LineComment 行の並びで
+// ある。その並びは、空行、ディレクティブ、非構造化行、あるいはファイルの先頭で
+// 止まる。
 //
-// A blank line separates deliberately. Without that rule a file's own banner —
-// the "# Managed by hand since 2019" that sits at the top above an empty line —
-// would be adopted by whichever Host block happens to come first, and editing
-// that block's comment would rewrite the file's banner. Requiring adjacency is
-// what makes the attachment a property of the text rather than a guess.
+// 空行は意図的に区切りとして働く。このルールがないと、ファイル自身のバナー —
+// 空行の上、先頭に置かれた "# Managed by hand since 2019" のような行 — が、
+// たまたま最初に来た Host ブロックに取り込まれてしまい、そのブロックのコメントを
+// 編集するとファイルのバナーが書き換わってしまう。隣接を要求することが、この
+// 付随関係を推測ではなくテキストの性質にしている。
 //
-// The returned range is empty (start == header) when no comment is attached.
+// コメントが付随していない場合、返る範囲は空になる（start == header）。
 func (f *File) CommentRun(header int) (start int) {
 	if header < 0 || header > len(f.Lines) {
 		return header
@@ -169,13 +169,13 @@ func (f *File) CommentRun(header int) (start int) {
 	return start
 }
 
-// CommentText returns the attached comment as text, with the leading '#' and a
-// single following space removed from each line.
+// CommentText は、付随するコメントをテキストとして返す。各行から先頭の '#' と、
+// その直後の空白ひとつを取り除く。
 //
-// The marker is stripped so the editor shows what the user wrote rather than
-// the syntax carrying it, and re-added on the way back by RenderComment. A
-// comment line that is only "#" becomes an empty line in the text, which is how
-// a deliberate blank line inside a comment block survives the round trip.
+// マーカーを取り除くのは、エディタに、それを運ぶ構文ではなくユーザーが書いた
+// ものを見せるためである。戻すときには RenderComment が付け直す。"#" だけの
+// コメント行はテキスト上では空行になる。これにより、コメントブロック内の意図的な
+// 空行が往復を生き延びる。
 func (f *File) CommentText(header int) string {
 	start := f.CommentRun(header)
 	if start == header {
@@ -191,12 +191,12 @@ func (f *File) CommentText(header int) string {
 	return strings.Join(lines, "\n")
 }
 
-// RenderComment turns comment text back into configuration lines.
+// RenderComment は、コメントテキストを設定行に戻す。
 //
-// Every line is prefixed with "# ", including an empty one, which is written as
-// "#" alone rather than "# " so no trailing whitespace is introduced. Text that
-// already begins with '#' is not double-marked: a user who types "## section"
-// means that, and re-marking it would grow a marker on every save.
+// すべての行に "# " を前置する。空行も含むが、末尾に空白を持ち込まないよう、
+// 空行だけは "# " ではなく "#" と書く。すでに '#' で始まるテキストに二重の
+// マーカーは付けない。"## section" と打ったユーザーはそう書きたいのであり、
+// 付け直せば保存のたびにマーカーが増えていってしまう。
 func RenderComment(text, indent, ending string) []Line {
 	if text == "" {
 		return nil

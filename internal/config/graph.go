@@ -8,8 +8,8 @@ import (
 	"strings"
 )
 
-// Severity ranks a diagnostic for display. The engine never converts a
-// diagnostic into a silent repair.
+// Severity は、表示のために診断を順位付けする。エンジンが診断を黙った修復に
+// 変えることは決してない。
 type Severity uint8
 
 const (
@@ -18,7 +18,7 @@ const (
 	SeverityError
 )
 
-// Diagnostic codes are stable identifiers the UI maps to its own copy.
+// 診断コードは、UI が自前の文言に対応付ける安定した識別子。
 const (
 	DiagnosticIncludeNoMatch       = "include_no_match"
 	DiagnosticIncludeUnreadable    = "include_unreadable"
@@ -32,12 +32,12 @@ const (
 	DiagnosticUnstructuredLine     = "unstructured_line"
 )
 
-// ErrPathNotAbsolute is returned when a graph walk is asked to start from a
-// path that is not absolute.
+// ErrPathNotAbsolute は、絶対パスでないパスからグラフの走査を始めるよう求められた
+// ときに返る。
 var ErrPathNotAbsolute = errors.New("configuration path must be absolute")
 
-// Diagnostic describes something the user should decide about. Line is
-// 1-based, or 0 when the diagnostic is about a whole file.
+// Diagnostic は、ユーザーが判断すべき事柄を記述する。Line は 1 始まりで、ファイル
+// 全体に関する診断のときは 0 になる。
 type Diagnostic struct {
 	Severity Severity
 	Code     string
@@ -46,7 +46,7 @@ type Diagnostic struct {
 	Detail   string
 }
 
-// Edge is one Include argument and the files it resolved to.
+// Edge は、Include の引数ひとつと、それが解決した先のファイル群。
 type Edge struct {
 	FromPath  string
 	Line      int
@@ -56,7 +56,7 @@ type Edge struct {
 	Condition string
 }
 
-// Node is one configuration file in the graph.
+// Node は、グラフ内の設定ファイルひとつ。
 type Node struct {
 	Path     string
 	Editable bool
@@ -66,7 +66,7 @@ type Node struct {
 	Loads    int
 }
 
-// Graph is the Include structure reachable from a single entry file.
+// Graph は、ひとつのエントリファイルから到達できる Include 構造。
 type Graph struct {
 	Root        string
 	Order       []string
@@ -74,10 +74,10 @@ type Graph struct {
 	Diagnostics []Diagnostic
 }
 
-// Resolve reads the entry file and every file it includes. Resolve returns an
-// error only when the request itself is invalid; unreadable files, cycles and
-// unsupported patterns are reported as diagnostics so the UI can show the real
-// structure instead of failing.
+// Resolve は、エントリファイルとそれが include するすべてのファイルを読む。
+// Resolve がエラーを返すのは、リクエスト自体が不正なときだけである。読めない
+// ファイル、循環、非対応のパターンは診断として報告されるので、UI は失敗する
+// 代わりに実際の構造を表示できる。
 func (r Resolver) Resolve(rootPath string) (*Graph, error) {
 	if !path.IsAbs(rootPath) {
 		return nil, ErrPathNotAbsolute

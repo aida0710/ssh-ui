@@ -112,16 +112,16 @@ func TestProjectHostFormKeepsEveryDirectiveIncludingUnknownOnes(t *testing.T) {
 	}
 }
 
-// The Raw editor writes this text back, and a delete is that write with the
-// block removed. Showing the generated region as part of a connection therefore
-// hands the group declarations to whichever edit happens to that connection
-// next: rewriting one loses them, deleting one takes them with it.
-// OpenSSH keeps the first value it reads, across the whole Include graph and
-// not merely within one file. Two files claiming one alias is the case that
-// rule exists for, and the case a reader cannot see by looking at either file:
-// the loser looks perfectly correct where it sits. Keying the check on the
-// file, as it was, only ever caught two blocks a reader could already see side
-// by side.
+// Raw editor はこのテキストを書き戻し、delete はブロックを取り除いた
+// 上でのその書き込みである。したがって、生成領域を connection
+// の一部として示してしまうと、その connection に次に起きる編集が何であれ、
+// グループ宣言をその編集に委ねてしまう。書き換えれば失われ、削除すれば一緒に持ち去られる。
+// OpenSSH は、1 個のファイルの中だけでなく Include graph 全体を通じて
+// 最初に読んだ値を保持する。2 個のファイルが 1 個の alias を主張するのは、
+// まさにこの規則が存在する理由となるケースであり、どちらのファイルを
+// 見ても読者には見えないケースである。敗者は自分が置かれている場所
+// では完全に正しく見える。以前のようにチェックの key をファイルに
+// していたのでは、読者が既に並べて見比べられる 2 個のブロックしか捉えられなかった。
 func TestProjectHostsFlagsAnAliasDeclaredInAnotherFile(t *testing.T) {
 	graph := newTestGraph(t, map[string]string{
 		"config":              "Include conf.d/*.conf\n\nHost nas\n\tUser aida\n",
@@ -138,8 +138,8 @@ func TestProjectHostsFlagsAnAliasDeclaredInAnotherFile(t *testing.T) {
 	if len(claiming) != 2 {
 		t.Fatalf("hosts claiming nas = %d, want 2", len(claiming))
 	}
-	// The Include is read where the line sits, so the included file wins and
-	// the entry file's own block is the one that loses.
+	// Include はその行が置かれている場所で読まれるので、include された
+	// ファイルが勝ち、エントリファイル自身のブロックの方が負ける。
 	if claiming[0].Duplicate {
 		t.Errorf("the first block read must not be flagged: %#v", claiming[0])
 	}
@@ -254,9 +254,9 @@ func TestNewDiagnosticViewKeepsExternalPathsVisible(t *testing.T) {
 }
 
 func TestHostEntryGroupComesFromTheDirectoryNotFromMetadata(t *testing.T) {
-	// The directory is the membership. A metadata entry that disagrees has
-	// nothing to disagree with any more: version 2 dropped the field, and a
-	// host projected from connections/work reports "work" whatever else says.
+	// ディレクトリが membership である。それに反する metadata entry は、
+	// もはや反する相手を持たない。version 2 でそのフィールドは廃止され、
+	// connections/work から射影されたホストは、他の何が言おうと"work"を報告する。
 	graph := newTestGraph(t, map[string]string{
 		"config":                    "Include connections/work/*.conf\nInclude connections/*.conf\n",
 		"connections/work/web.conf": "Host web-1\n\tHostName 203.0.113.10\n",
@@ -271,8 +271,8 @@ func TestHostEntryGroupComesFromTheDirectoryNotFromMetadata(t *testing.T) {
 	if got := byAlias["web-1"].Group; got != "work" {
 		t.Errorf("web-1 group = %q, want work", got)
 	}
-	// A file directly under connections/ is in no group: nothing declares it
-	// and nothing reads it, so claiming a group for it would be a fiction.
+	// connections/の直下にあるファイルはどのグループにも属さない。何もそれを
+	// 宣言せず何もそれを読まないので、それにグループを主張することは作り話になってしまう。
 	if got := byAlias["loose"].Group; got != "" {
 		t.Errorf("loose group = %q, want none", got)
 	}

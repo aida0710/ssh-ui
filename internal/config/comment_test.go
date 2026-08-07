@@ -22,8 +22,8 @@ func TestCommentRunStopsAtABlankLineSoAFileBannerIsNotAdopted(t *testing.T) {
 		t.Fatalf("header = %d, want 4", header)
 	}
 
-	// The banner is above a blank line, so it belongs to the file and not to
-	// the first Host block. Editing this block's comment must not touch it.
+	// バナーは空行の上にあるので、最初の Host ブロックではなくファイルに属する。
+	// このブロックのコメントを編集しても、そこに触れてはならない。
 	if got := file.CommentRun(header); got != 2 {
 		t.Fatalf("CommentRun = %d, want 2", got)
 	}
@@ -68,8 +68,8 @@ func TestRenderCommentRoundTripsWhatCommentTextProduced(t *testing.T) {
 }
 
 func TestRenderCommentDoesNotGrowAMarkerOnTextThatAlreadyHasOne(t *testing.T) {
-	// A user who types "## section" means that. Re-marking on every save would
-	// add a '#' each time the block was edited.
+	// "## section" と打ったユーザーはそう書きたいのである。保存のたびに付け直すと、
+	// ブロックを編集するごとに '#' がひとつずつ増えていく。
 	lines := RenderComment("## section", "", "\n")
 	if len(lines) != 1 || lines[0].Text != "## section\n" {
 		t.Fatalf("lines = %#v", lines)

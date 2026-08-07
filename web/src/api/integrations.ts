@@ -20,16 +20,16 @@ export type PasswordVaultStatus = components["schemas"]["PasswordVaultStatus"];
 export type PasswordEligibility = components["schemas"]["PasswordEligibility"];
 export type Credential = components["schemas"]["Credential"];
 export type CredentialList = components["schemas"]["CredentialList"];
-// The two namespaces, as a type rather than a string, so a call site cannot
-// invent a third or transpose the two.
+// 二つの名前空間は string ではなく型として表現される。呼び出し側が
+// 三つ目を作ったり、二つを入れ替えたりできないようにするためである。
 export type CredentialKind = "password" | "key_passphrase";
 export type SyncStatus = components["schemas"]["SyncStatus"];
 export type SyncSettingsRequest = components["schemas"]["SyncSettingsRequest"];
 export type SyncDirection = components["schemas"]["SyncDirection"];
 export type PullResponse = components["schemas"]["PullResponse"];
 
-// The action vocabulary belongs to the server's session package, which owns it
-// for every subsystem that confirms an operation. These are its wire values.
+// アクション語彙はサーバーのセッションパッケージに属し、操作を確認する
+// すべてのサブシステムに対してそれを所有する。これらはその通信上の値である。
 export const EVALUATE_ACTION_KIND = "diagnostics.evaluate";
 export const REACHABILITY_ACTION_KIND = "diagnostics.reachability";
 export const AUTHENTICATION_ACTION_KIND = "diagnostics.authentication";
@@ -38,9 +38,9 @@ export const KNOWN_HOSTS_DELETE_ACTION_KIND = "known_hosts.delete";
 export const KNOWN_HOSTS_SCAN_ACTION_KIND = "known_hosts.scan";
 export const KNOWN_HOSTS_ADD_ACTION_KIND = "known_hosts.add";
 
-// KnownHostAddition is the part of a scan candidate that identifies the key
-// being written. The fingerprint is not sent as part of it: the server derives
-// the fingerprint from the key itself and compares it with what the user typed.
+// KnownHostAddition はスキャン候補のうち、書き込まれる鍵を
+// 特定する部分である。フィンガープリントはその一部として送られない。
+// サーバーが鍵自体からフィンガープリントを導出し、ユーザーが入力したものと比較する。
 export type KnownHostAddition = Pick<KnownHostCandidate, "host" | "port" | "keyType" | "key">;
 
 export type IntegrationsApi = {
@@ -58,9 +58,9 @@ export type IntegrationsApi = {
     expectedFingerprint: string,
     acknowledged: boolean,
   ): Promise<KnownHostsChangeResponse>;
-  // The vault. No method here ever returns a password: the status carries the
-  // hosts that have one, and the value only ever travels from the browser to
-  // the server, or from the server to the askpass helper.
+  // vault。ここにあるどのメソッドもパスワードを返すことは決してない。
+  // ステータスはパスワードを持つホストを運ぶだけであり、値が移動するのは
+  // ブラウザからサーバーへ、またはサーバーから askpass ヘルパーへの経路だけである。
   passwordVault(): Promise<PasswordVaultStatus>;
   initialiseVault(passphrase: string): Promise<PasswordVaultStatus>;
   unlockVault(passphrase: string): Promise<PasswordVaultStatus>;
@@ -70,11 +70,11 @@ export type IntegrationsApi = {
   loginItem(): Promise<LoginItem>;
   setLoginItem(enabled: boolean): Promise<LoginItem>;
   passwordEligibility(alias: string): Promise<PasswordEligibility>;
-  // Credentials are named secrets. A host references an account password and a
-  // key references a passphrase, and the two namespaces never mix: picking the
-  // wrong one would send a key's passphrase to a remote host as a login
-  // password, so the kind is part of every call rather than a field to get
-  // right.
+  // Credential は名前を持つ秘密である。ホストはアカウントパスワードを参照し、
+  // 鍵はパスフレーズを参照する。この二つの名前空間は決して
+  // 混ざらない。誤った方を選べば、鍵のパスフレーズをリモートホストへの
+  // ログインパスワードとして送ってしまう。だから kind はうまく指定すべき
+  // フィールドではなく、すべての呼び出しの一部である。
   credentials(): Promise<CredentialList>;
   storeCredential(kind: CredentialKind, name: string, secret: string): Promise<CredentialList>;
   deleteCredential(kind: CredentialKind, name: string): Promise<CredentialList>;
@@ -82,16 +82,16 @@ export type IntegrationsApi = {
   unassignCredential(kind: CredentialKind, subject: string): Promise<CredentialList>;
   storePassword(alias: string, password: string): Promise<PasswordVaultStatus>;
   forgetPassword(alias: string): Promise<PasswordVaultStatus>;
-  // The remote snapshot. No method returns a credential or a file's contents:
-  // the status carries the endpoint and the bucket, and a pull carries paths.
+  // リモートスナップショット。どのメソッドも資格情報やファイルの中身を返さない。
+  // ステータスはエンドポイントとバケットを運び、pull はパスを運ぶ。
   syncStatus(): Promise<SyncStatus>;
   configureSync(settings: SyncSettingsRequest): Promise<SyncStatus>;
   pushSnapshot(passphrase: string): Promise<SyncStatus>;
   pullSnapshot(passphrase: string, apply: boolean): Promise<PullResponse>;
 };
 
-// The generated types describe the contract; these guards check the payload the
-// UI actually received, because a type assertion proves nothing at runtime.
+// 生成された型は契約を記述するに過ぎない。これらの防護は
+// UI が実際に受け取ったペイロードを検査する。型アサーションは実行時には何も証明しない。
 function validateUpdate(value: unknown): UpdateStatus {
   const record = asRecord(value);
   if (typeof record.current !== "string" || typeof record.available !== "boolean") {
@@ -290,10 +290,10 @@ function validateScan(value: unknown): KnownHostsScanResponse {
 
 const jsonHeaders = { "Content-Type": "application/json" } as const;
 
-// issueAction asks the server to mint a confirmation. The request names only
-// the operation and its target: the evidence the token is bound to is derived
-// on the server, so this client cannot bind a token to a state the user was
-// never shown.
+// issueAction はサーバーに確認の発行を求める。リクエストが
+// 名指すのは操作と target だけであり、トークンが紐付く evidence は
+// サーバー側で導出される。したがってこのクライアントは、ユーザーに一度も
+// 見せていない状態にトークンを紐付けることができない。
 async function issueAction(kind: string, target: string): Promise<string> {
   const response = await apiClient.mutate<IssueActionResponse>("/api/v1/actions", {
     method: "POST",
@@ -317,8 +317,8 @@ function validateVaultStatus(value: unknown): PasswordVaultStatus {
   return record as unknown as PasswordVaultStatus;
 }
 
-// The kind is a path segment, so it is built here from a closed set rather than
-// interpolated from whatever a caller passed.
+// kind はパスセグメントであるため、呼び出し側が渡した任意の値を
+// 埋め込むのではなく、閉じた集合からここで組み立てる。
 function credentialPath(kind: CredentialKind, name: string): string {
   return `/api/v1/credentials/${kind}/${encodeURIComponent(name)}`;
 }
@@ -350,8 +350,8 @@ function validateSyncStatus(value: unknown): SyncStatus {
   asString(record.endpoint);
   asString(record.bucket);
   asBoolean(record.synced);
-  // The direction decides which buttons this panel offers, so a value outside
-  // the three is refused rather than shown as an unknown mode.
+  // direction はこのパネルがどのボタンを提示するかを決める。三つの
+  // 値以外は、未知のモードとして表示するのではなく拒否する。
   const direction = asString(record.direction);
   if (direction !== "both" && direction !== "push" && direction !== "pull") {
     throw new Error(`unexpected sync direction: ${direction}`);
@@ -378,8 +378,8 @@ export const integrationsApi: IntegrationsApi = {
     return validateConfigCheck(await postJSON<unknown>("/api/v1/diagnostics/config", {}));
   },
   async effective(alias, confirm) {
-    // A confirmation is spent only when evaluating would run a command; a safe
-    // configuration is read without one.
+    // 確認が消費されるのは、evaluate がコマンドを実行する場合
+    // だけであり、安全な設定は確認なしで読める。
     const token = confirm ? await issueAction(EVALUATE_ACTION_KIND, alias) : undefined;
     return validateEffective(await postJSON<unknown>("/api/v1/diagnostics/effective", { alias }, token));
   },
@@ -519,9 +519,9 @@ export const integrationsApi: IntegrationsApi = {
     const token = await issueAction(KNOWN_HOSTS_SCAN_ACTION_KIND, host);
     return validateScan(await postJSON<unknown>("/api/v1/known-hosts/scan", { host, port }, token));
   },
-  // A scanned key becomes trusted only here, and only with the proof or the
-  // acknowledgement the user gave. The confirmation is bound to the host, which
-  // is what the server spends the token against.
+  // スキャンされた鍵が信頼されるのはここだけであり、ユーザーが与えた
+  // 証明または承認があってのことである。確認はホストに
+  // 紐付けられ、サーバーはそれに対してトークンを消費する。
   async addKnownHost(candidate, expectedFingerprint, acknowledged) {
     const token = await issueAction(KNOWN_HOSTS_ADD_ACTION_KIND, candidate.host);
     return validateChange(

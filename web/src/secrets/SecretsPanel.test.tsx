@@ -38,13 +38,13 @@ describe("SecretsPanel", () => {
 
     const passwords = await screen.findByRole("region", { name: "Account passwords" });
     expect(within(passwords).getByText("office-vm")).toBeInTheDocument();
-    // The point of naming a secret: one entry, two machines.
+    // シークレットに名前を付ける狙い: 1 エントリ、2 台のマシン。
     expect(within(passwords).getByText(/web-1, web-2/)).toBeInTheDocument();
 
     const phrases = screen.getByRole("region", { name: "Key passphrases" });
     expect(within(phrases).getByText("build-key")).toBeInTheDocument();
-    // And the two lists never hold each other's entries, which is the whole
-    // reason they are two lists.
+    // そして 2 つのリストは互いのエントリを決して保持しない。それが
+    // 2 つのリストである理由のすべてだ。
     expect(within(passwords).queryByText("build-key")).not.toBeInTheDocument();
     expect(within(phrases).queryByText("office-vm")).not.toBeInTheDocument();
   });
@@ -79,8 +79,8 @@ describe("SecretsPanel", () => {
     );
   });
 
-  // Removing a name two machines still point at would break both of them,
-  // later, somewhere else. The server refuses; the screen says what refused it.
+  // 2 台のマシンがまだ指している名前を削除すれば、後でどこか別の
+  // 場所で両方が壊れる。サーバーは拒否し、画面は何が拒否したかを伝える。
   it("says what still uses a credential the server refused to delete", async () => {
     const user = userEvent.setup();
     const api = buildApi({
@@ -94,8 +94,8 @@ describe("SecretsPanel", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/still uses/i);
   });
 
-  // Nothing is asked at startup. A shut vault says so here and offers to open,
-  // rather than showing an empty list that reads as "your secrets are gone".
+  // 起動時には何も尋ねられない。閉じた vault はここでそう言い、開くことを
+  // 申し出る。「シークレットが消えた」と読める空リストを見せるのではなく。
   it("offers to unlock rather than showing an empty list", async () => {
     const api = buildApi({
       passwordVault: vi.fn().mockResolvedValue({ exists: true, unlocked: false, aliases: [] }),
@@ -108,9 +108,9 @@ describe("SecretsPanel", () => {
     expect(api.credentials).not.toHaveBeenCalled();
   });
 
-  // Changing it re-seals everything the old one held, so the screen says what
-  // followed and what did not: a bucket that was not reached still holds a
-  // snapshot only the old password opens, and that is not a detail.
+  // それを変えると、古いパスワードが保持していたすべてが再封印される。
+  // だから画面は何が追随し何が追随しなかったかを伝える。届かなかったバケットは
+  // 古いパスワードでしか開けないスナップショットを持ち続け、それは些細ではない。
   it("changes the master password and says whether the bucket followed", async () => {
     const user = userEvent.setup();
     const api = buildApi();
@@ -119,7 +119,7 @@ describe("SecretsPanel", () => {
 
     await user.type(screen.getByLabelText("Current master password"), "the old one is long");
     await user.type(screen.getByLabelText("New master password"), "the new one is long");
-    // One field is not enough for a password nobody can recover.
+    // 片方のフィールドだけでは、誰も復元できないパスワードには足りない。
     expect(screen.getByRole("button", { name: "Change the master password" })).toBeDisabled();
 
     await user.type(screen.getByLabelText("Confirm new master password"), "the new one is long");
@@ -151,7 +151,7 @@ describe("SecretsPanel", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(/still opens with the old password/i);
   });
 
-  // A password nobody can recover is one worth reading back before pressing.
+  // 誰も復元できないパスワードは、押す前に読み返す価値のあるものだ。
   it("shows what is being typed when asked", async () => {
     const user = userEvent.setup();
     render(<SecretsPanel api={buildApi()} />);
@@ -162,8 +162,8 @@ describe("SecretsPanel", () => {
     expect(screen.getByLabelText("New master password")).toHaveAttribute("type", "text");
   });
 
-  // Off unless asked for. A background process holding the key to every stored
-  // secret is not something to arrange on somebody's behalf.
+  // 求められない限りオフ。保存済みのあらゆるシークレットへの鍵を握る
+  // バックグラウンドプロセスは、誰かの代わりに勝手に設定してよいものではない。
   it("offers to start at login, off, and turns it on when asked", async () => {
     const user = userEvent.setup();
     const api = buildApi();
@@ -177,8 +177,8 @@ describe("SecretsPanel", () => {
     await waitFor(() => expect(api.setLoginItem).toHaveBeenCalledWith(true));
   });
 
-  // A build that cannot resolve its own path has nothing to register, and a
-  // switch that does nothing is worse than no switch.
+  // 自分のパスを解決できないビルドには登録するものが何もなく、
+  // 何もしないスイッチは、スイッチがないより悪い。
   it("shows no switch where it is not supported", async () => {
     const api = buildApi({
       loginItem: vi.fn().mockResolvedValue({ enabled: false, supported: false }),

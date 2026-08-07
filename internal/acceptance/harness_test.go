@@ -1,12 +1,12 @@
-// Package acceptance holds the cross-cutting hardening suite. It contains no
-// production code: every file is a test file, so nothing here is compiled into
-// the shipped binary.
+// Package acceptance は、横断的な hardening suite を保持する。
+// production code は含まない: すべてのファイルがテストファイルであり、
+// ここにあるものは出荷されるバイナリには一切コンパイルされない。
 //
-// Every test in this package builds an isolated home directory with
-// t.TempDir(), starts the production server through app.Build against it, and
-// replaces the process, terminal and agent seams with recorders that never
-// start a program. No test here reads the real home directory, the real
-// Keychain, a real agent, Terminal or a remote host.
+// このパッケージの全テストは、t.TempDir() で隔離された
+// ホームディレクトリを構築し、それに対して app.Build 経由で
+// production server を起動し、プロセス、terminal、agent の継ぎ目を、プログラムを一切
+// 起動しない recorder に置き換える。ここにあるテストは、本物のホームディレクトリ、
+// 本物の Keychain、本物の agent、Terminal、リモートホストのいずれも読まない。
 package acceptance_test
 
 import (
@@ -35,15 +35,15 @@ import (
 	"sshc/internal/platform"
 )
 
-// canaryPassphrase protects the fixture private key. It must never appear in
-// any response body or log line, including the reveal response.
+// canaryPassphrase は fixture の private key を保護する。
+// reveal の応答を含め、どの response body にもログ行にも決して現れてはならない。
 const canaryPassphrase = "canary-passphrase-b0e0a1"
 
-// canaryOutsideContents lives in a file outside ~/.ssh. No route may ever
-// return it, so it is the needle for both the leak sweep and path traversal.
+// canaryOutsideContents は ~/.ssh の外のファイルに存在する。
+// どの route もそれを返してはならず、leak sweep と path traversal 双方の針である。
 const canaryOutsideContents = "canary-outside-workspace-4f21c7\n"
 
-// fixtureCanaries names the strings a test looks for in responses and logs.
+// fixtureCanaries は、テストがレスポンスとログの中に探す文字列を名指しする。
 type fixtureCanaries struct {
 	Outside        string
 	Passphrase     string
@@ -60,8 +60,8 @@ type recordedCommand struct {
 	Env       []string
 }
 
-// recordingRunner captures every command the application would run and starts
-// none of them. reply, when set, supplies the output a specific test needs.
+// recordingRunner は、アプリケーションが実行するはずのコマンドをすべて
+// 記録し、1 つも起動しない。reply を設定すると、特定のテストが必要とする出力を返す。
 type recordingRunner struct {
 	mutex    sync.Mutex
 	commands []recordedCommand
@@ -102,8 +102,8 @@ func (r *recordingRunner) answer(reply func(platform.Command) (platform.Output, 
 	r.reply = reply
 }
 
-// fixedToolchain returns absolute paths that are never executed, because the
-// runner beside it starts no process.
+// fixedToolchain は決して実行されない絶対パスを返す。
+// なぜなら、それに添えられたランナーが一切プロセスを起動しないからである。
 type fixedToolchain struct{}
 
 func (fixedToolchain) SSH() (string, error)     { return "/usr/bin/ssh", nil }
@@ -135,8 +135,8 @@ func (t *recordingTerminal) reset() {
 	t.aliases = nil
 }
 
-// fakeAgent stands in for ssh-agent and the login Keychain. No test in this
-// repository talks to either.
+// fakeAgent は ssh-agent とログイン Keychain の代わりを務める。
+// このリポジトリのどのテストも、どちらとも話さない。
 type fakeAgent struct{}
 
 func (fakeAgent) Available(context.Context) bool { return false }
@@ -148,14 +148,14 @@ func (fakeAgent) Add(context.Context, platform.AgentAddRequest) error {
 }
 func (fakeAgent) Remove(context.Context, string) error { return platform.ErrAgentUnavailable }
 
-// silentBrowser replaces the macOS `open` adapter. Opening a real browser from
-// a test would hand a live bootstrap token to whatever is running on the desk.
+// silentBrowser は macOS の `open` アダプタを置き換える。テストから本物のブラウザを開けば、
+// デスクで動いている何かに生きた bootstrap token を渡すことになる。
 type silentBrowser struct{}
 
 func (silentBrowser) Open(context.Context, string) error { return nil }
 
-// testClock is read from the server's goroutines and advanced from the test's,
-// so the instant is held in an atomic rather than in a plain field.
+// testClock はサーバー側の goroutine から読まれ、テスト側から
+// 進められるため、時刻は素の field ではなく atomic に保持する。
 type testClock struct{ nanoseconds atomic.Int64 }
 
 func newTestClock() *testClock {
@@ -168,7 +168,7 @@ func (c *testClock) now() time.Time { return time.Unix(0, c.nanoseconds.Load()).
 
 func (c *testClock) advance(step time.Duration) { c.nanoseconds.Add(int64(step)) }
 
-// syncBuffer collects log output from the server's goroutines.
+// syncBuffer は、サーバーの goroutine からのログ出力を集める。
 type syncBuffer struct {
 	mutex  sync.Mutex
 	buffer bytes.Buffer
@@ -193,8 +193,8 @@ type fixture struct {
 	baseURL string
 	host    string
 	client  *http.Client
-	// anonymous carries no cookie jar, so a request made through it reaches the
-	// server without a session.
+	// anonymous は cookie jar を持たないため、これを通したリクエストは
+	// session なしでサーバーに届く。
 	anonymous    *http.Client
 	server       *httpserver.Server
 	runner       *recordingRunner
@@ -207,8 +207,8 @@ type fixture struct {
 	trashCounter atomic.Int64
 }
 
-// newFixture writes an isolated ~/.ssh, starts the production server against
-// it, and exchanges the bootstrap token for a session.
+// newFixture は隔離された ~/.ssh を書き出し、それに対して
+// production server を起動し、bootstrap token を session と引き換える。
 func newFixture(t testing.TB) *fixture {
 	t.Helper()
 	home := t.TempDir()
@@ -272,20 +272,20 @@ func newFixture(t testing.TB) *fixture {
 		},
 	}
 	f.bootstrapSession(bootstrap)
-	// Every route is behind the master password now, so setting one is part of
-	// starting the application rather than part of a test about passwords.
+	// 今やすべての route が master password の背後にあるため、それを設定することは
+	// パスワードに関するテストの一部ではなく、アプリケーション起動の一部である。
 	f.unlockApplication()
 	return f
 }
 
-// fixtureMasterPassword is what the harness sets on first run. It is a fixture
-// value and appears in no log line, no response and no file in the clear —
-// which is itself asserted by the leak sweep.
+// fixtureMasterPassword は harness が初回起動時に設定する値である。
+// これは fixture の値であり、ログ行にもレスポンスにも、平文のどのファイルにも現れない —
+// そのこと自体が leak sweep によって検証される。
 const fixtureMasterPassword = "a fixture master password"
 
-// unlockAgain opens the vault a sweep has shut. Every route is behind the
-// master password, so a test that touches POST /api/v1/passwords/lock has
-// locked itself out of everything after it.
+// unlockAgain は、sweep が閉じた vault を開き直す。すべての route が
+// master password の背後にあるため、POST /api/v1/passwords/lock に
+// 触れたテストは、それ以降のすべてから自分自身を締め出したことになる。
 func (f *fixture) unlockAgain() {
 	f.t.Helper()
 	body := []byte(`{"passphrase":"` + fixtureMasterPassword + `"}`)
@@ -307,8 +307,8 @@ func (f *fixture) unlockApplication() {
 	}
 }
 
-// writeFixtureTree lays out a realistic but entirely synthetic ~/.ssh, plus one
-// file outside it that no route may ever reach.
+// writeFixtureTree は、現実的だが完全に合成された ~/.ssh に加え、
+// どの route も決して届いてはならないその外の 1 ファイルを配置する。
 func writeFixtureTree(t testing.TB, home, root string) {
 	t.Helper()
 	mustMkdir(t, root, 0o700)
@@ -367,9 +367,9 @@ func mustWrite(t testing.TB, path string, contents []byte, permission os.FileMod
 	}
 }
 
-// fixturePrivateKeySecondLine returns a long base64 line from inside the
-// encrypted private key. It is the needle that proves key material stayed in
-// the one response that is allowed to carry it.
+// fixturePrivateKeySecondLine は、暗号化された private key の
+// 内部にある長い base64 行を返す。これは、key material が
+// それを運ぶことを許された唯一のレスポンスにとどまったことを証明する針である。
 func fixturePrivateKeySecondLine(t testing.TB, root string) string {
 	t.Helper()
 	contents, err := os.ReadFile(filepath.Join(root, "id_ed25519"))
@@ -410,18 +410,18 @@ func (f *fixture) bootstrapSession(bootstrap string) {
 	}
 }
 
-// do issues one request with correct Host, Origin and Fetch Metadata headers.
-// Adjust is applied last, so a test can make exactly one of them wrong.
+// do は、正しい Host、Origin、Fetch Metadata ヘッダーを付けて 1 つのリクエストを発行する。
+// Adjust は最後に適用されるため、テストはそのうちちょうど 1 つだけを誤らせられる。
 func (f *fixture) do(method, path string, body []byte, adjust ...func(*http.Request)) *http.Response {
 	f.t.Helper()
 	return f.doAs(f.t, f.client, method, path, body, adjust...)
 }
 
-// doAs is do with the reporter named explicitly.
+// doAs は、reporter を明示的に指定した do である。
 //
-// A fuzz target needs this: newFixture is given the *testing.F, but calling
-// Helper or Fatal on an F from inside the fuzz function panics, so each
-// execution has to report through the *testing.T it was handed instead.
+// fuzz target にはこれが要る: newFixture には *testing.F が
+// 渡されるが、fuzz function の内側で F に対し Helper や Fatal を
+// 呼ぶと panic するため、各実行は代わりに渡された *testing.T を通して報告するほかない。
 func (f *fixture) doAs(t testing.TB, client *http.Client, method, path string, body []byte, adjust ...func(*http.Request)) *http.Response {
 	t.Helper()
 	var reader io.Reader
@@ -434,9 +434,9 @@ func (f *fixture) doAs(t testing.TB, client *http.Client, method, path string, b
 	}
 	request.Host = f.host
 	request.Header.Set("Sec-Fetch-Site", "same-origin")
-	// The token accompanies a read as much as a write, because the cookie is
-	// not scoped to a port and the token is: another server on 127.0.0.1
-	// receives the cookie and never the token.
+	// token は write だけでなく read にも伴う。なぜなら cookie は
+	// ポートに scope されないが token はされるからである: 127.0.0.1 上の
+	// 別のサーバーは cookie を受け取っても token は決して受け取らない。
 	request.Header.Set(httpserver.CSRFHeader, f.canaries.CSRF)
 	if method != http.MethodGet && method != http.MethodHead {
 		request.Header.Set("Origin", f.baseURL)
@@ -447,11 +447,11 @@ func (f *fixture) doAs(t testing.TB, client *http.Client, method, path string, b
 	}
 	response, err := client.Do(request)
 	if err == nil && path == "/api/v1/session/renew" && response.StatusCode == http.StatusOK {
-		// Renewing rotates the token, and the harness has to follow it exactly
-		// as the frontend does. The route sweeps call every route including
-		// this one, so without this every request after it in the same test
-		// carries a token the session no longer knows — which was invisible
-		// while reads did not need one.
+		// Renewing は token を rotate させ、harness は frontend と
+		// 全く同じようにそれを追わねばならない。route sweep はこれを含む
+		// 全 route を呼ぶため、これがなければ同じテスト内でこの後の
+		// すべてのリクエストが、session がもはや知らない token を運ぶ
+		// ことになる — read が token を必要としない間は見えなかった問題である。
 		body, readErr := io.ReadAll(response.Body)
 		_ = response.Body.Close()
 		if readErr == nil {
@@ -470,19 +470,19 @@ func (f *fixture) doAs(t testing.TB, client *http.Client, method, path string, b
 	return response
 }
 
-// doAnonymous issues the same request as do but through a client with no
-// cookie jar, so the session cookie is genuinely absent.
+// doAnonymous は do と同じリクエストを発行するが、cookie jar を
+// 持たない client を通すため、session cookie は正真正銘存在しない。
 //
-// Deleting the Cookie header from inside an adjust function does not work:
-// http.Client attaches the jar's cookies after the caller has finished building
-// the request, so the header would reappear and a test meaning to prove the
-// session requirement would silently be sending one.
+// adjust function の内側で Cookie ヘッダーを削除しても効かない:
+// http.Client は、呼び出し元がリクエストの構築を終えた後で jar の
+// cookie を付け足すため、ヘッダーは再び現れてしまい、session 要件を
+// 証明するつもりのテストが、黙って cookie を送ってしまうことになる。
 func (f *fixture) doAnonymous(method, path string, body []byte, adjust ...func(*http.Request)) *http.Response {
 	f.t.Helper()
 	return f.doAs(f.t, f.anonymous, method, path, body, adjust...)
 }
 
-// readBody drains and closes a response, returning its body as text.
+// readBody はレスポンスを読み干して閉じ、その body をテキストとして返す。
 func readBody(t testing.TB, response *http.Response) string {
 	t.Helper()
 	defer response.Body.Close()
@@ -493,8 +493,8 @@ func readBody(t testing.TB, response *http.Response) string {
 	return string(body)
 }
 
-// apiRoutes returns every registered route under /api/, with the static
-// catch-all removed.
+// apiRoutes は /api/ 配下の登録済み route をすべて返す。
+// ただし static の catch-all は除く。
 func (f *fixture) apiRoutes() []httpserver.Route {
 	var routes []httpserver.Route
 	for _, route := range f.server.Routes() {
@@ -508,8 +508,8 @@ func (f *fixture) apiRoutes() []httpserver.Route {
 	return routes
 }
 
-// concretePath substitutes a usable value for each Echo path parameter, so a
-// route such as /api/v1/keys/:keyId can be requested by the generic sweeps.
+// concretePath は各 Echo path parameter に使える値を代入するため、
+// /api/v1/keys/:keyId のような route も汎用の sweep からリクエストできる。
 func (f *fixture) concretePath(path string) string {
 	segments := strings.Split(path, "/")
 	for index, segment := range segments {
@@ -526,8 +526,8 @@ func (f *fixture) concretePath(path string) string {
 	return strings.Join(segments, "/")
 }
 
-// keyID reads the inventory once and returns the identifier of the fixture
-// private key.
+// keyID はインベントリを一度読み、fixture の private key の
+// identifier を返す。
 func (f *fixture) keyID() string {
 	f.t.Helper()
 	if f.cachedKey != "" {
@@ -558,11 +558,11 @@ func (f *fixture) keyID() string {
 	return ""
 }
 
-// knownHostsPath returns the path the server itself reports for known_hosts.
+// knownHostsPath は、サーバー自身が known_hosts として報告するパスを返す。
 //
-// It is not filepath.Join(f.root, "known_hosts"): a token for a known_hosts
-// change is bound to the workspace's own spelling of that path, and on macOS
-// t.TempDir() hands back a /var symlink whose resolved form is /private/var.
+// これは filepath.Join(f.root, "known_hosts") ではない: known_hosts
+// 変更に対する token は、ワークスペース自身が綴るそのパスに紐づいており、
+// macOS では t.TempDir() が返すのは /var の symlink で、解決形は /private/var である。
 func (f *fixture) knownHostsPath() string {
 	f.t.Helper()
 	body := readBody(f.t, f.do(http.MethodGet, "/api/v1/known-hosts", nil))
@@ -575,13 +575,13 @@ func (f *fixture) knownHostsPath() string {
 	return payload.Path
 }
 
-// newTrashEntry generates a throwaway key and trashes it, returning the trash
-// entry identifier.
+// newTrashEntry は使い捨ての key を生成して trash に入れ、
+// trash entry の identifier を返す。
 //
-// A confirmation for a permanent delete is bound to evidence derived from the
-// entry, so no token can be minted for an entry that does not exist. Each
-// caller gets its own entry, which keeps the refusal cases independent of the
-// positive control that spends one.
+// 完全削除の確認は entry から導かれる evidence に
+// 紐づくため、存在しない entry には token を発行できない。
+// 呼び出し元はそれぞれ自分の entry を得るので、拒否のケースは
+// 1 つを消費する positive control から独立していられる。
 func (f *fixture) newTrashEntry(t testing.TB) string {
 	t.Helper()
 	name := "acceptance-" + strconv.Itoa(int(f.trashCounter.Add(1)))
@@ -625,14 +625,14 @@ func (f *fixture) read(relative string) []byte {
 	return contents
 }
 
-// actionToken asks the running server for one confirmation token, exactly as
-// the frontend does, and fails the test when none is issued.
+// actionToken は、frontend と全く同じように、実行中のサーバーへ
+// 1 つの confirmation token を要求し、発行されなければテストを失敗させる。
 //
-// The merged tree settled on a single POST /api/v1/actions endpoint that takes
-// {kind, target} and answers 201, and on one delivery spelling for every
-// guarded route: the X-SSHC-Action header. The plan was drafted while two
-// endpoint spellings and a body-carried token were still in play; neither
-// survived into the tree.
+// merge されたツリーは、{kind, target} を受けて 201 を返す
+// 単一の POST /api/v1/actions endpoint と、すべての guarded route に
+// 共通の 1 つの配送方式 — X-SSHC-Action ヘッダー — に落ち着いた。
+// plan が起草された時点では 2 通りの endpoint 綴りと body で運ぶ
+// token がまだ検討されていたが、どちらもツリーには生き残らなかった。
 func (f *fixture) actionToken(t testing.TB, kind, target string) string {
 	t.Helper()
 	token := f.tryActionToken(kind, target)
@@ -642,8 +642,8 @@ func (f *fixture) actionToken(t testing.TB, kind, target string) string {
 	return token
 }
 
-// tryActionToken issues a token when the target is acceptable and returns an
-// empty string otherwise, so a hostile target does not abort the test.
+// tryActionToken は target が許容できるとき token を発行し、
+// そうでなければ空文字列を返すため、敵対的な target でもテストを中断させない。
 func (f *fixture) tryActionToken(kind, target string) string {
 	response := f.do(http.MethodPost, "/api/v1/actions", mustJSON(f.t, map[string]any{
 		"kind": kind, "target": target,
@@ -662,7 +662,7 @@ func (f *fixture) tryActionToken(kind, target string) string {
 	return payload.Token
 }
 
-// withAction delivers a confirmation the way every guarded route expects it.
+// withAction は、すべての guarded route が期待する形で確認を届ける。
 func withAction(token string) func(*http.Request) {
 	return func(request *http.Request) {
 		if token != "" {

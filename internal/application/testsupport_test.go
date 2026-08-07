@@ -12,8 +12,8 @@ import (
 const testRoot = "/home/tester/.ssh"
 const testHome = "/home/tester"
 
-// fakeLoader serves configuration files from memory so projection tests never
-// touch a disk. Keys are absolute, slash-separated paths.
+// fakeLoader は、射影テストが決してディスクに触れないように、
+// メモリから設定ファイルを提供する。key は絶対のスラッシュ区切り path である。
 type fakeLoader struct{ files map[string]string }
 
 func (loader fakeLoader) ReadFile(name string) ([]byte, error) {
@@ -39,8 +39,8 @@ func (loader fakeLoader) Glob(pattern string) ([]string, error) {
 	return matches, nil
 }
 
-// newTestGraph resolves an in-memory configuration tree. Keys are relative to
-// testRoot.
+// newTestGraph は、メモリ内の設定 tree を解決する。key は testRoot
+// からの相対である。
 func newTestGraph(t *testing.T, files map[string]string) *config.Graph {
 	t.Helper()
 	absolute := make(map[string]string, len(files))

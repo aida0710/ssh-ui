@@ -1,8 +1,8 @@
 name: Release
 
-# A tag is the whole trigger. Nothing here runs on a push to a branch: a
-# release is a deliberate act, and the version the binary reports is the tag it
-# was built from.
+# トリガーはタグだけである。ここにあるものはブランチへの push では走らない。
+# リリースは意図的な行為であり、バイナリが報告するバージョンは、それがビルド
+# された元のタグそのものだからだ。
 on:
   push:
     tags: ["v*"]
@@ -27,27 +27,27 @@ jobs:
       - name: Install web dependencies
         run: npm ci --prefix web
 
-      # The same gate as every other push. A tag that cannot pass it is a tag
-      # nobody should be able to install.
+      # 他のあらゆる push と同じゲートである。これを通れないタグは、誰にも
+      # インストールできてはならないタグだ。
       - name: Verify
         run: make test
 
       - name: Build
         run: make build VERSION=${{ github.ref_name }}
 
-      # The checksum is for somebody verifying a download they made by hand.
-      # It is published beside the thing it describes, so it catches a
-      # truncated transfer and says nothing about whether this release is
-      # honest — the README says which, rather than implying otherwise.
+      # チェックサムは、手でダウンロードしたものを検証する人のためにある。
+      # それが記述する対象の隣に公開されるので、転送の途中切断は捕まえられるが、
+      # このリリースが正直かどうかについては何も言わない — README がどちらで
+      # あるかを述べており、そうでないかのようにほのめかしてはいない。
       - name: Package
         run: |
           mkdir -p dist
           cp bin/sshc "dist/sshc-darwin-arm64"
           cd dist && shasum -a 256 sshc-darwin-arm64 > checksums.txt
 
-      # The private half never leaves this step. An installation that cannot
-      # verify the signature refuses the update rather than taking it, so a
-      # release published without this one is a release nobody installs.
+      # 秘密鍵側がこのステップの外へ出ることは決してない。署名を検証できない
+      # インストールは、更新を受け取るのではなく拒否する。したがって、これなしで
+      # 公開されたリリースは、誰もインストールしないリリースになる。
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}

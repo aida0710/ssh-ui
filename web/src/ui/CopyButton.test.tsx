@@ -16,9 +16,9 @@ describe("CopyButton", () => {
 
   it("says the write was refused rather than claiming it succeeded", async () => {
     const user = userEvent.setup();
-    // A browser policy or an extension can refuse the write. A button that
-    // reported success anyway would send the user to paste something that is
-    // not there.
+    // ブラウザのポリシーや拡張機能が書き込みを拒否することがある。それでも
+    // 成功したと報告するボタンは、そこにないものを貼り付けさせようと
+    // ユーザーを送り出してしまう。
     vi.spyOn(navigator.clipboard, "writeText").mockRejectedValue(new Error("denied"));
     render(<CopyButton value="ssh -- bastion" label="copy.command" />);
 
@@ -35,8 +35,8 @@ describe("CopyButton", () => {
     await user.click(screen.getByRole("button", { name: "Copy command" }));
     expect(screen.getByText("Copied.")).toBeInTheDocument();
 
-    // The clipboard still holds "first". Saying "Copied." next to "second"
-    // would tell the user the thing on screen is the thing they can paste.
+    // クリップボードはまだ "first" を保持している。"second" の隣で
+    // "Copied." と言えば、画面上のものが貼り付けられるものだとユーザーに伝えてしまう。
     rerender(<CopyButton value="second" label="copy.command" />);
 
     expect(screen.queryByText("Copied.")).not.toBeInTheDocument();

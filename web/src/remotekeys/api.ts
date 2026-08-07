@@ -6,8 +6,8 @@ export type RemoteKeyRegisterResponse = components["schemas"]["RemoteKeyRegister
 export type ExecutableDirective = components["schemas"]["ExecutableDirective"];
 export type IssueActionResponse = components["schemas"]["IssueActionResponse"];
 
-// The action vocabulary belongs to the server's session package, which owns it
-// for every subsystem that confirms an operation. This is its wire value.
+// action の語彙はサーバーの session パッケージに属し、操作を確認する
+// すべてのサブシステムのためにそれを所有する。これはその通信上の値だ。
 export const REMOTE_KEY_REGISTER_ACTION_KIND = "remote_key.register";
 
 export type RemoteKeyInput = {
@@ -23,8 +23,8 @@ export type RemoteKeysApi = {
   register(input: RemoteKeyRegisterInput): Promise<RemoteKeyRegisterResponse>;
 };
 
-// The generated types describe the contract; these guards check the payload the
-// UI actually received, because a type assertion proves nothing at runtime.
+// 生成された型は契約を記述するだけであり、これらのガードは UI が
+// 実際に受け取ったペイロードを検査する。型アサーションは実行時には何も証明しない。
 function asRecord(value: unknown): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error("invalid_response");
@@ -88,10 +88,10 @@ function validateRegistration(value: unknown): RemoteKeyRegisterResponse {
 
 const jsonHeaders = { "Content-Type": "application/json" } as const;
 
-// issueAction mints the one-time token the registration requires. The request
-// names only the operation and its target: the evidence the token is bound to
-// is derived on the server, at issue and again at consume time, so this client
-// cannot bind a token to a state the user was never shown.
+// issueAction は登録に必要なワンタイムトークンを鋳造する。リクエストが
+// 名指すのは操作とその対象だけであり、トークンが紐付く evidence は
+// サーバー側で発行時と消費時の両方で導出されるので、このクライアントが
+// ユーザーに一度も見せていない状態にトークンを結び付けることはできない。
 async function issueAction(kind: string, target: string): Promise<string> {
   const response = await apiClient.mutate<IssueActionResponse>("/api/v1/actions", {
     method: "POST",
@@ -102,9 +102,9 @@ async function issueAction(kind: string, target: string): Promise<string> {
 }
 
 export const remoteKeysApi: RemoteKeysApi = {
-  // A plan reads the configuration and contacts nothing, so it spends no
-  // confirmation. It exists so the user sees the change before it is possible
-  // to ask for it.
+  // plan は設定を読むだけで何にも接続しないので、確認を消費しない。
+  // これが存在するのは、実行を求められるようになる前に、ユーザーが
+  // 変更内容を見られるようにするためだ。
   async plan(input) {
     return validatePlan(
       await apiClient.mutate<unknown>("/api/v1/remote-keys/plan", {

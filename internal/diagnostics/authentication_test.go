@@ -111,10 +111,10 @@ func TestAuthenticationTestBuildsASafeCommandAndReadsTheMarker(t *testing.T) {
 	}
 }
 
-// TestAuthenticationTestHandsOpenSSHTheEnvironmentItWasGiven guards the child
-// environment. An exported SSH_ASKPASS would let ssh ask an external program
-// for a passphrase, which would defeat BatchMode and make this bounded,
-// non-interactive test wait on a dialog.
+// TestAuthenticationTestHandsOpenSSHTheEnvironmentItWasGiven は子プロセスの環境を
+// 守る。SSH_ASKPASS がエクスポートされていると、ssh は外部プログラムにパスフレーズ
+// を尋ねられるようになり、BatchMode を打ち破って、上限付きで非対話的なこのテストを
+// ダイアログ待ちにしてしまう。
 func TestAuthenticationTestHandsOpenSSHTheEnvironmentItWasGiven(t *testing.T) {
 	runner := &scriptedRunner{output: platform.Output{Stopped: true, Stderr: []byte(diagnostics.AuthenticatedMarker + "host\n")}}
 	authentication := diagnostics.Authentication{

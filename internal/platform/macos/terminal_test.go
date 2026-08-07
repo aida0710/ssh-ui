@@ -50,11 +50,11 @@ func TestTerminalDeliversTheAliasAsAnArgumentNotAsScriptText(t *testing.T) {
 	}
 }
 
-// TestTerminalRefusesAnAliasThatCouldEscapeItsQuoting covers the payloads that
-// would matter if the alias were ever concatenated into the script: AppleScript
-// string termination, a `do shell script` call, and POSIX shell metacharacters.
-// Each must be refused outright rather than escaped, because escaping is a
-// guarantee this application does not want to have to make.
+// TestTerminalRefusesAnAliasThatCouldEscapeItsQuoting は、alias がスクリプトに
+// 連結されていたら問題になったであろうペイロードを網羅する。AppleScript の文字列
+// 終端、`do shell script` の呼び出し、そして POSIX シェルのメタ文字である。
+// いずれもエスケープではなく無条件に拒否しなければならない。エスケープは、この
+// アプリケーションが背負いたくない保証だからだ。
 func TestTerminalRefusesAnAliasThatCouldEscapeItsQuoting(t *testing.T) {
 	runner := &terminalRunner{}
 	terminal := macos.NewTerminal(runner)
@@ -96,8 +96,8 @@ func TestTerminalReportsAFailedLaunch(t *testing.T) {
 }
 
 func TestLaunchWithPasswordPassesEveryValueAsAnArgument(t *testing.T) {
-	// The script is a constant. If a value ever reaches it by concatenation,
-	// an alias or a token becomes an AppleScript expression.
+	// スクリプトは定数である。値が連結によってそこへ届くようになれば、alias や
+	// トークンが AppleScript の式になってしまう。
 	runner := &terminalRunner{}
 	terminal := macos.Terminal{Runner: runner, Program: "/usr/bin/osascript"}
 
@@ -111,9 +111,9 @@ func TestLaunchWithPasswordPassesEveryValueAsAnArgument(t *testing.T) {
 		t.Fatalf("commands = %d", len(runner.commands))
 	}
 	command := runner.commands[0]
-	// The endpoint and the token are not here any more. The window runs this
-	// application's own command line, which asks for a token when it needs one,
-	// so no live token is ever written into the Terminal's scrollback.
+	// エンドポイントもトークンも、もうここにはない。ウィンドウはこのアプリケーション
+	// 自身のコマンドラインを実行し、そのコマンドが必要になったときにトークンを求める。
+	// したがって、有効なトークンが Terminal のスクロールバックに書かれることはない。
 	want := []string{"-", "bastion", "/Applications/sshc"}
 	if !slices.Equal(command.Arguments, want) {
 		t.Errorf("arguments = %#v, want %#v", command.Arguments, want)
@@ -128,12 +128,12 @@ func TestLaunchWithPasswordPassesEveryValueAsAnArgument(t *testing.T) {
 	}
 }
 
-// The window carries nothing a shell history should not keep.
+// ウィンドウは、シェルの履歴が保持すべきでないものを何も運ばない。
 //
-// It used to carry the one-time token itself, in a command line the shell wrote
-// to its history and Terminal kept in scrollback. What it runs now is this
-// binary and an alias; the token is asked for by that process and never
-// printed.
+// 以前はワンタイムトークンそのものを運んでおり、それはシェルが履歴に書き、
+// Terminal がスクロールバックに残すコマンドラインの中にあった。いま実行するのは
+// このバイナリと alias である。トークンはそのプロセスが要求するもので、表示される
+// ことはない。
 func TestTerminalPasswordScriptCarriesNoCredential(t *testing.T) {
 	for _, absent := range []string{
 		"SSH_ASKPASS=",
@@ -145,7 +145,7 @@ func TestTerminalPasswordScriptCarriesNoCredential(t *testing.T) {
 			t.Errorf("the script still carries %q into the window", absent)
 		}
 	}
-	// Every value must be quoted for the shell Terminal runs.
+	// すべての値は、Terminal の実行するシェル向けに引用されていなければならない。
 	if strings.Count(macos.TerminalPasswordScript, "quoted form of") != 2 {
 		t.Errorf("not every value is quoted: %q", macos.TerminalPasswordScript)
 	}

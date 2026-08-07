@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// The whole command is the alias. Everything else is a flag, the askpass
-// subcommand, or the application itself.
+// コマンドの全体が alias である。それ以外はフラグか、askpass サブコマンドか、
+// アプリケーション自身のいずれかだ。
 func TestWhatCountsAsAConnectInvocation(t *testing.T) {
 	for _, test := range []struct {
 		argv  []string
@@ -15,16 +15,16 @@ func TestWhatCountsAsAConnectInvocation(t *testing.T) {
 	}{
 		{[]string{"sshc", "tv-recoding"}, "tv-recoding", true},
 		{[]string{"sshc", "mdx-aida-serv-1"}, "mdx-aida-serv-1", true},
-		// The application, not a connection.
+		// 接続ではなく、アプリケーション。
 		{[]string{"sshc"}, "", false},
 		{[]string{"sshc", "-open=false"}, "", false},
 		{[]string{"sshc", "--open=false"}, "", false},
-		// The one word that is a command rather than a host.
+		// ホストではなくコマンドである唯一の語。
 		{[]string{"sshc", "open"}, "", false},
-		// The helper OpenSSH runs, which takes the prompt as its argument.
+		// OpenSSH が実行するヘルパー。プロンプトを引数に取る。
 		{[]string{"sshc", "askpass"}, "", false},
 		{[]string{"sshc", "askpass", "password:"}, "", false},
-		// Two words is not an alias; it is a command this does not have.
+		// 二語は alias ではない。このコマンドには存在しないものだ。
 		{[]string{"sshc", "connect", "bastion"}, "", false},
 	} {
 		alias, ok := connectInvocation(test.argv)
@@ -34,13 +34,13 @@ func TestWhatCountsAsAConnectInvocation(t *testing.T) {
 	}
 }
 
-// The variables this sets must be the ones OpenSSH reads.
+// ここで設定する変数は、OpenSSH が読むものと一致していなければならない。
 //
-// syscall.Exec passes the array as given, and getenv answers with the first
-// match in it. Appending to the inherited environment therefore loses to an
-// SSH_ASKPASS the user exported years ago in a shell profile — and loses while
-// still handing that program the one-time token, which it can redeem for a
-// stored password. The bar for that attack is one exported variable.
+// syscall.Exec は配列をそのまま渡し、getenv はその中で最初に一致したものを返す。
+// したがって継承した環境に追記する方式では、ユーザーが何年も前にシェルのプロファイル
+// でエクスポートした SSH_ASKPASS に負ける — しかも負けながら、保存済みパスワードと
+// 引き換えられるワンタイムトークンをそのプログラムに渡してしまう。この攻撃の敷居は、
+// エクスポートされた変数ひとつである。
 func TestConnectEnvironmentReplacesWhatItSetsRatherThanAppending(t *testing.T) {
 	inherited := []string{
 		"HOME=/Users/tester",
@@ -75,8 +75,8 @@ func TestConnectEnvironmentReplacesWhatItSetsRatherThanAppending(t *testing.T) {
 			t.Errorf("%s = %q, want %q", name, counted[name][0], want)
 		}
 	}
-	// Everything else the user had is still theirs: this is the environment
-	// they would have had typing ssh themselves, with our five decided by us.
+	// それ以外にユーザーが持っていたものはすべてそのまま本人のものだ。これは自分で ssh を
+	// 打ったときに得たであろう環境に、こちらが決めた五つを加えたものである。
 	if len(counted["HOME"]) != 1 || counted["HOME"][0] != "/Users/tester" {
 		t.Errorf("HOME = %v", counted["HOME"])
 	}
@@ -85,8 +85,8 @@ func TestConnectEnvironmentReplacesWhatItSetsRatherThanAppending(t *testing.T) {
 	}
 }
 
-// Without a token nothing is armed, and a stale variable from the user's
-// environment must not arm it either.
+// トークンがなければ何も武装されない。ユーザーの環境に残った古い変数もまた、それを
+// 武装させてはならない。
 func TestConnectEnvironmentDropsStaleArmingWhenNothingIsStored(t *testing.T) {
 	built := connectEnvironment([]string{"SSH_ASKPASS=/tmp/not-ours", "SSHC_ASKPASS_TOKEN=stale"}, "", "", "", "")
 	for _, entry := range built {

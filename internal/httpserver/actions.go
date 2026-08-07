@@ -11,31 +11,31 @@ import (
 	"sshc/internal/session"
 )
 
-// actionKind binds one confirmable operation to the subsystem that owns it.
+// actionKind は、確認可能な操作 1 個をそれを所有するサブシステムに結び付ける。
 //
-// evidence derives a digest of exactly what the confirmation dialog displayed;
-// fail turns a derivation error into that subsystem's problem response, so a
-// missing key still answers 404 and an unreadable configuration still answers
-// 500 through the endpoint they share.
+// evidence は確認ダイアログが実際に表示した内容そのもののダイジェストを導出する。
+// fail は導出エラーをそのサブシステムの problem レスポンスへ変換するので、
+// 鍵が見つからない場合は 404 を、
+// 設定が読めない場合は 500 を、両者が共有するエンドポイントを通じて返す。
 type actionKind struct {
 	evidence func(target string) (string, error)
 	fail     func(c *echo.Context, err error) error
 }
 
-// actionRegistry maps the session package's shared action vocabulary onto the
-// evidence source that owns each kind.
+// actionRegistry は、session パッケージが共有する action の語彙を、
+// 各 kind を所有する evidence source へ対応付ける。
 //
-// A kind that is absent is never confirmable: a subsystem that was not wired
-// into this process cannot have tokens minted for it, which is why a key-vault
-// only server still refuses to issue a terminal.launch confirmation.
+// 存在しない kind は決して確認可能にならない。このプロセスに組み込まれていない
+// サブシステムには、そのためのトークンを発行できない。鍵 vault だけを持つ
+// サーバーが terminal.launch の確認発行を拒否し続けるのはこのためである。
 type actionRegistry map[string]actionKind
 
-// ActionHandlers issues and spends the one-time confirmations that every
-// externally visible operation requires.
+// ActionHandlers は、外部から見えるすべての操作が必要とする
+// 一度限りの確認を発行し、消費する。
 //
-// There is one endpoint on the wire, but the evidence behind each kind belongs
-// to the subsystem that will perform the operation. Each contributes a
-// resolver rather than this file reaching into every service.
+// 通信路上のエンドポイントは 1 個だが、各 kind の背後にある evidence は
+// その操作を実行するサブシステムに属する。このファイルがすべてのサービスに
+// 手を伸ばすのではなく、各サブシステムが resolver を提供する。
 type ActionHandlers struct {
 	Sessions *session.Manager
 	Kinds    actionRegistry
@@ -50,11 +50,11 @@ func (h ActionHandlers) sessionID(c *echo.Context) string {
 	return value
 }
 
-// IssueAction mints the confirmation one operation requires.
+// IssueAction は、1 個の操作が必要とする確認を発行する。
 //
-// The caller names only the operation and its target. What the token is bound
-// to is derived here from the current state, because a caller able to supply
-// its own evidence could bind a token to something the user never saw.
+// 呼び出し側が指定するのは操作とその対象だけである。トークンが何に結び付くか
+// はここで現在の状態から導出される。呼び出し側が自前の evidence を渡せてしまう
+// と、ユーザーが見ていないものにトークンを結び付けられてしまうからだ。
 func (h ActionHandlers) IssueAction(c *echo.Context) error {
 	var body api.IssueActionRequest
 	if err := decodeBody(c, &body); err != nil {
@@ -91,12 +91,12 @@ func (h ActionHandlers) IssueAction(c *echo.Context) error {
 	})
 }
 
-// consume spends the one-time token this operation requires.
+// consume は、この操作が必要とする一度限りのトークンを消費する。
 //
-// The evidence is recomputed here rather than taken from the request, so a
-// confirmation only authorises the state the dialog actually displayed. The
-// boolean reports whether the caller may continue; when it is false the
-// response has already been written.
+// evidence はリクエストから受け取るのではなく、ここで再計算される。そのため
+// 確認は、ダイアログが実際に表示した状態だけを認可する。真偽値は呼び出し側が
+// 続行してよいかを報告し、
+// false のときはすでにレスポンスが書き込まれている。
 func (h ActionHandlers) consume(c *echo.Context, kind, target string) (bool, error) {
 	if h.Sessions == nil {
 		return false, problem(c, http.StatusForbidden, "action_token_required")
@@ -133,7 +133,7 @@ func (h ActionHandlers) consume(c *echo.Context, kind, target string) (bool, err
 	}
 }
 
-// addKeyActions registers the key vault's two confirmable operations.
+// addKeyActions は、鍵 vault の確認可能な 2 個の操作を登録する。
 func addKeyActions(registry actionRegistry, service KeyService) {
 	for wireKind, subject := range confirmationSubjects {
 		registry[wireKind] = actionKind{

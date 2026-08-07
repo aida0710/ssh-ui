@@ -1,7 +1,7 @@
-// OpenSSH's argv_split treats a leading double quote as the start of a quoted
-// token that runs to the next double quote and supports no backslash escapes.
-// The editor mirrors that rule exactly so what the user types is what the
-// engine will write.
+// OpenSSH の argv_split は先頭の二重引用符を、次の二重引用符まで
+// 続く引用トークンの開始として扱い、バックスラッシュエスケープには対応しない。
+// エディタはその規則を正確に反映する。ユーザーが入力したものが
+// そのままエンジンが書き込むものになるようにするためである。
 export function parseValues(text: string): string[] {
   const values: string[] = [];
   let index = 0;

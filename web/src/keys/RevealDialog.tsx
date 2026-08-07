@@ -12,13 +12,13 @@ type RevealDialogProps = {
 
 type DialogState = "confirm" | "loading" | "shown" | "error";
 
-// RevealDialog holds private key material in one component state value and in
-// nothing else. It writes to no storage, no global object, no logger and no
-// analytics sink, and it drops its reference when the dialog closes, so showing
-// the key again costs a fresh confirmation.
+// RevealDialog は秘密鍵の実体を 1 つのコンポーネント状態値にのみ保持し、
+// それ以外のどこにも保持しない。ストレージにもグローバルオブジェクトにも
+// ロガーにも分析シンクにも書き込まず、ダイアログが閉じると参照を捨てるので、
+// 鍵を再表示するには新たな確認が必要になる。
 //
-// It deliberately does not claim to protect the key from a browser extension or
-// from a clipboard history tool, because it cannot.
+// ブラウザ拡張やクリップボード履歴ツールから鍵を守るとは、意図的に
+// うたっていない。守れないからだ。
 export function RevealDialog({ keyId, relativePath, api, onClose }: RevealDialogProps) {
   const t = useTranslate();
   const [state, setState] = useState<DialogState>("confirm");
@@ -65,8 +65,8 @@ export function RevealDialog({ keyId, relativePath, api, onClose }: RevealDialog
         </>
       )}
       {state === "loading" && (
-        // aria-live rather than role="status": the shell owns the single status
-        // region, and a second one would compete with it.
+        // role="status" ではなく aria-live: シェルが唯一のステータス
+        // 領域を所有しており、2 つ目があるとそれと競合してしまう。
         <p aria-live="polite" className="mt-2 text-sm text-ink-muted">
           {t("reveal.requesting")}
         </p>
@@ -77,11 +77,11 @@ export function RevealDialog({ keyId, relativePath, api, onClose }: RevealDialog
             {material}
           </pre>
           {/*
-            Copying is offered because design §6.3 asks for it and because the
-            alternative is a manual selection that lands on the clipboard just
-            the same. The warning above already says this application cannot
-            protect the key once it is there; a button does not make that
-            truer or less true.
+            コピーを提供するのは design §6.3 がそれを求めているのと、代わりに
+            手動選択をしても結局同じようにクリップボードに載ってしまうからだ。
+            上の警告は既に、いったんそこに置かれた鍵をこのアプリケーションが
+            守れないと述べている。ボタンがあってもそれが
+            より真実になったりより真実でなくなったりはしない。
           */}
           <div className="mt-2">
             <CopyButton value={material} label="copy.privateKey" />

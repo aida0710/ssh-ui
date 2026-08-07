@@ -11,11 +11,11 @@ import (
 	"sshc/internal/session"
 )
 
-// maxAcceptableResponseBytes bounds what any single response may be. Nothing in
-// this application has a legitimate reason to return more.
+// maxAcceptableResponseBytes は、単一のレスポンスが取りうる上限を定める。
+// このアプリケーションには、それ以上を返す正当な理由が何もない。
 const maxAcceptableResponseBytes = 4 << 20
 
-// bodyOfSize builds a syntactically valid JSON object of roughly size bytes.
+// bodyOfSize は、おおよそ size バイトの構文的に正しい JSON object を組み立てる。
 func bodyOfSize(size int) []byte {
 	if size < 16 {
 		size = 16
@@ -66,9 +66,9 @@ func TestNoAPIRouteReadsAnUnboundedBody(t *testing.T) {
 		})
 	}
 
-	// Positive control: the server is still healthy, and an ordinary body is
-	// still accepted, so the refusals above are the limit doing its job rather
-	// than a server that stopped answering.
+	// 正のコントロール: サーバーは依然として健全であり、普通の body は
+	// 依然として受け入れられる。したがって上の拒否は、応答しなくなった
+	// サーバーではなく、limit がその仕事をしている証拠である。
 	health := f.do(http.MethodGet, "/api/v1/health", nil)
 	healthStatus := health.StatusCode
 	readBody(t, health)
@@ -92,9 +92,9 @@ func TestNoAPIRouteReadsAnUnboundedBody(t *testing.T) {
 	}
 }
 
-// fabricatedHostname is placed only in the part of a synthetic `ssh -G`
-// transcript that would be lost to truncation. A response that shows it has
-// treated a truncated transcript as a complete answer.
+// fabricatedHostname は、合成した `ssh -G` transcript のうち
+// truncation で失われるはずの部分にだけ置かれる。それを示すレスポンスは、
+// 切り詰められた transcript を完全な答えとして扱ったことになる。
 const fabricatedHostname = "truncated-transcript-must-not-be-parsed.invalid"
 
 func TestTruncatedCommandOutputIsRefusedRatherThanParsed(t *testing.T) {
@@ -117,9 +117,9 @@ func TestTruncatedCommandOutputIsRefusedRatherThanParsed(t *testing.T) {
 	status := response.StatusCode
 	body := readBody(t, response)
 
-	// Positive control. Without it this test would pass just as happily if the
-	// confirmation had been refused before ssh was ever reached, which is the
-	// failure mode that makes a security test worthless.
+	// 正のコントロール。これがなければ、このテストは ssh に到達する前に
+	// 確認が拒否されていても平然と通ってしまう。それは
+	// セキュリティテストを無価値にする失敗モードである。
 	if commands := f.runner.recorded(); len(commands) == 0 {
 		t.Fatalf("ssh -G was never reached (status %d, body %s); the truncation rule was not exercised", status, body)
 	}
@@ -151,8 +151,8 @@ func TestReportedCommandOutputStaysWithinItsPublishedCeiling(t *testing.T) {
 	status := response.StatusCode
 	body := readBody(t, response)
 
-	// Positive control, for the same reason as above: the ceiling can only be
-	// under test if the authentication check actually ran.
+	// 正のコントロール。理由は上と同じである: 上限を検査できるのは、
+	// authentication check が実際に走った場合に限られる。
 	if commands := f.runner.recorded(); len(commands) == 0 {
 		t.Fatalf("ssh was never reached (status %d, body %s); the ceiling was not exercised", status, body)
 	}

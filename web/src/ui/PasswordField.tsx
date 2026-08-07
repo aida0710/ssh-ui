@@ -10,18 +10,18 @@ type PasswordFieldProps = {
   autoFocus?: boolean;
 };
 
-// A password field that can be read back.
+// 読み返せるパスワードフィールド。
 //
-// Every password this application asks for is one the user cannot recover if
-// they mistype it — the master password most of all — and a field that never
-// shows what is in it makes a typo something you find out about later, from a
-// refusal that does not say which character was wrong. The toggle is per field,
-// so revealing one does not reveal the one beside it.
+// このアプリケーションが求めるすべてのパスワードは、打ち間違えたら
+// ユーザーが復元できないものだ——マスターパスワードは特にそうだ——そして
+// 中身を決して見せないフィールドは、誤字をどの文字が間違っていたかを
+// 言わない拒否から後で知ることになるものにしてしまう。トグルは
+// フィールドごとなので、1 つを開示しても隣のものは開示されない。
 //
-// The button sits outside the label on purpose. A label wraps its control to
-// associate the two, and every other word inside it becomes part of that
-// control's accessible name: with the toggle in there, the field announced
-// itself as "Master password Show" and nothing looking for it by name found it.
+// ボタンは意図的に label の外に置く。label は自分のコントロールを
+// 包んで両者を関連付け、その中の他のすべての語がそのコントロールの
+// accessible name の一部になる: トグルをその中に置くと、フィールドは
+// 自身を「Master password Show」と読み上げ、名前で探す何ものもそれを見つけられなかった。
 export function PasswordField({ label, value, onChange, hint, autoFocus }: PasswordFieldProps): ReactNode {
   const t = useTranslate();
   const [shown, setShown] = useState(false);
@@ -39,8 +39,8 @@ export function PasswordField({ label, value, onChange, hint, autoFocus }: Passw
         </Field>
       </div>
       {/*
-        Named after the field it reveals, so a screen with three of them has
-        three distinguishable buttons rather than three called "Show".
+        それが開示するフィールドにちなんで名付けているので、3 つある画面には
+        3 つとも「Show」と呼ばれるのではなく、見分けられる 3 つのボタンがある。
       */}
       <button
         type="button"

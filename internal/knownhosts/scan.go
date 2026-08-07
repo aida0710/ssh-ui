@@ -9,14 +9,14 @@ import (
 	"sshc/internal/platform"
 )
 
-// UnverifiedNotice accompanies every scan result.
+// UnverifiedNotice は、すべてのスキャン結果に付随する。
 const UnverifiedNotice = "ssh-keyscan proves only that something answered at this address. It does not prove the host's identity. Compare the fingerprint with one you obtained another way before trusting it."
 
-// DefaultScanTimeout bounds one ssh-keyscan run.
+// DefaultScanTimeout は、ssh-keyscan の実行一回に上限を設ける。
 const DefaultScanTimeout = 15 * time.Second
 
-// Candidate is one key ssh-keyscan reported. Verified is always false here;
-// only the user can decide that a key is genuine.
+// Candidate は ssh-keyscan が報告した鍵ひとつ。ここでは Verified は常に false で
+// ある。鍵が本物だと判断できるのはユーザーだけだ。
 type Candidate struct {
 	Host        string
 	Port        int
@@ -26,20 +26,20 @@ type Candidate struct {
 	Verified    bool
 }
 
-// Scanner fetches host key candidates.
+// Scanner はホスト鍵の候補を取得する。
 type Scanner struct {
 	Runner    platform.OutputRunner
 	Toolchain platform.Toolchain
 	Timeout   time.Duration
-	// Environment is the child's complete environment, normally
-	// platform.MinimalEnvironment. A nil value inherits this process's.
+	// Environment は子プロセスの完全な環境。通常は platform.MinimalEnvironment で
+	// あり、nil ならこのプロセスの環境を継承する。
 	Environment []string
 }
 
-// Scan asks ssh-keyscan for the keys of one host.
+// Scan は、あるホストの鍵を ssh-keyscan に尋ねる。
 //
-// The result is never marked Verified: reaching an address proves only that
-// something answered there, so the decision to trust a key stays with the user.
+// 結果に Verified が付くことはない。アドレスに到達できたことが証明するのは、そこで
+// 何かが応答したという事実だけであり、鍵を信頼する判断はユーザーのもとに残る。
 func (s Scanner) Scan(ctx context.Context, host string, port int) ([]Candidate, error) {
 	if err := platform.ValidateHostname(host); err != nil {
 		return nil, err

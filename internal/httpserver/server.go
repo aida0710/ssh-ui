@@ -27,19 +27,19 @@ import (
 )
 
 type Options struct {
-	// CLISecret is what `sshc <alias>` must present. It is minted per run and
-	// written to the state directory, so a handoff left behind by a process
-	// that was killed carries a secret nothing accepts.
+	// CLISecret は `sshc <alias>` が提示すべきものである。実行のたびに
+	// 発行して state directory に書き込むため、kill されたプロセスが
+	// 残した handoff は、誰にも受け付けられない secret を運ぶことになる。
 	CLISecret string
-	// ConnectWarnings names the directives OpenSSH will run for a host, so the
-	// command line can say them before the connection rather than during it.
+	// ConnectWarnings は OpenSSH がそのホストに対して実行するディレクティブを
+	// 名指しする。これにより command line は接続中ではなく接続前にそれらを言える。
 	ConnectWarnings func(alias string) []string
-	// LoginItem turns "start at login" on and off. A nil one reports the
-	// setting unsupported, which is what a platform without launchd is.
+	// LoginItem は「ログイン時に起動」の on/off を切り替える。nil の場合、
+	// launchd のないプラットフォームがそうであるように、非対応と報告する。
 	LoginItem LoginItemController
-	// Updates looks at the project's releases. A nil one reports the version
-	// and offers nothing, which is what a build with no release to compare
-	// itself against should do.
+	// Updates はプロジェクトのリリースを調べる。nil の場合、バージョンを
+	// 報告するのみで何も提示しない。比較すべきリリースを持たないビルドが
+	// すべきことはこれである。
 	Updates     *selfupdate.Checker
 	Listener    net.Listener
 	Sessions    *session.Manager
@@ -51,18 +51,18 @@ type Options struct {
 	Diagnostics *diagnostics.Service
 	KnownHosts  *knownhosts.Service
 	RemoteKeys  *remotekey.Service
-	// Passwords is the stored-password vault. A nil service leaves every
-	// password route and the askpass endpoint unregistered, which is what the
-	// tests that do not wire it rely on.
+	// Passwords は保存されたパスワードの vault である。nil の service は
+	// すべてのパスワード用ルートと askpass エンドポイントを未登録のままに
+	// する。これは、それを配線しないテストが当てにしていることである。
 	Passwords *secret.Service
-	// AskpassHelper is the absolute path of this binary, which is the program
-	// OpenSSH runs to obtain a password. Only cmd/sshc can know it.
+	// AskpassHelper はこのバイナリの絶対パスであり、OpenSSH がパスワードを
+	// 得るために実行する program である。これを知り得るのは cmd/sshc だけだ。
 	AskpassHelper string
-	// Answerable is the prompt rule, injected so the server and the helper
-	// cannot drift into two different rules.
+	// Answerable はプロンプトの規則であり、server とヘルパーが 2 つの
+	// 異なる規則へずれないよう注入されている。
 	Answerable func(alias, prompt string) bool
-	// Sync carries the workspace to an object store. A nil service leaves
-	// every sync route unregistered.
+	// Sync はワークスペースを object store へ運ぶ。nil の service は
+	// すべての sync ルートを未登録のままにする。
 	Sync *remotesync.Service
 }
 
@@ -73,23 +73,23 @@ type Server struct {
 	http     *http.Server
 	url      string
 	engine   *echo.Echo
-	// cliSecret is what `sshc <alias>` must present. It is held so the caller
-	// that knows where the handoff belongs can read it back rather than
-	// carrying it alongside.
+	// cliSecret は `sshc <alias>` が提示すべきものである。これを保持する
+	// のは、handoff の置き場所を知る呼び出し元が、別途持ち歩くのではなく
+	// 読み戻せるようにするためだ。
 	cliSecret string
 }
 
-// Route is one route this server registered.
+// Route はこの server が登録したルートの 1 つである。
 type Route struct {
 	Method string
 	Path   string
 }
 
-// Routes reports every registered route in registration order.
+// Routes は登録済みの全ルートを登録順に報告する。
 //
-// The hardening suite enumerates this instead of keeping its own list, so a
-// route added by a later change inherits the transport, cache, session and leak
-// assertions without anyone remembering to add it anywhere.
+// hardening suite は自前のリストを持つ代わりにこれを列挙する。これにより
+// 後の変更で追加されたルートも、誰も追加を覚えていなくてもトランスポート、
+// cache、session、漏洩に関するアサーションを自動的に引き継ぐ。
 func (s *Server) Routes() []Route {
 	registered := s.engine.Router().Routes()
 	routes := make([]Route, 0, len(registered))
@@ -117,9 +117,9 @@ func New(options Options) (*Server, error) {
 		ExpectedHost:   host,
 		ExpectedOrigin: "http://" + host,
 		Sessions:       options.Sessions,
-		// The application is behind the master password, not each screen in
-		// turn. A server built without a vault has no way to be unlocked and is
-		// therefore shut, which is the safe direction for a missing wiring.
+		// application はマスターパスワードの向こう側にあるのであって、各画面
+		// が個別にそうなのではない。vault なしで組み立てられた server は
+		// したがって施錠されたままであり、これは配線し忘れにとって安全な方向である。
 		Unlocked: func() bool { return options.Passwords != nil && options.Passwords.Unlocked() },
 	}).Middleware)
 
@@ -131,9 +131,9 @@ func New(options Options) (*Server, error) {
 		registerConfigRoutes(e, ConfigHandlers{Service: options.Config, Keys: options.Keys})
 	}
 
-	// Every subsystem that confirms an operation contributes its evidence
-	// resolver to one registry, so the single POST /api/v1/actions endpoint can
-	// mint a token for any of them without reaching into their services.
+	// 操作を確認するすべてのサブシステムは、自分の evidence resolver を
+	// 1 つの registry に提供する。これにより、単一の POST /api/v1/actions
+	// エンドポイントが、各 service に踏み込まずにそのどれにでもトークンを発行できる。
 	registry := actionRegistry{}
 	if options.Keys != nil {
 		addKeyActions(registry, options.Keys)
@@ -169,18 +169,18 @@ func New(options Options) (*Server, error) {
 		})
 	}
 	if options.Passwords != nil {
-		// The eligibility check reads the configuration graph and known_hosts,
-		// so it comes from the configuration service rather than from the
-		// vault, which knows nothing about either. Without a configuration
-		// service nothing is checked, which is what the vault did before this
-		// existed and what the tests that wire only a vault rely on.
+		// eligibility チェックは設定グラフと known_hosts を読むため、
+		// vault からではなく configuration service から来る。vault は
+		// そのどちらについても何も知らない。configuration service がなければ
+		// 何もチェックされず、これはこの仕組みができる前に vault がしていた
+		// ことであり、vault だけを配線するテストが当てにしていることでもある。
 		var eligibility func(string) (application.PasswordEligibility, error)
 		if options.Config != nil {
 			eligibility = options.Config.PasswordEligibility
 		}
-		// The bucket's live snapshot is sealed with the master password too, so
-		// changing it pushes again. A machine with no bucket has nothing to
-		// update and the answer says so.
+		// bucket の最新スナップショットもマスターパスワードで封印されている
+		// ため、変更すると再び push する。bucket のないマシンには更新すべき
+		// ものがなく、応答はそう伝える。
 		var reseal func(context.Context, string) error
 		if options.Sync != nil {
 			reseal = options.Sync.Push
@@ -192,9 +192,9 @@ func New(options Options) (*Server, error) {
 			ResealSnapshot: reseal,
 		})
 	}
-	// `sshc <alias>` asks here for what one connection needs. The secret is
-	// what the caller must have read out of the state directory; without one
-	// this route refuses everything.
+	// `sshc <alias>` は、1 つの接続に必要なものをここに求める。secret は
+	// 呼び出し元が state directory から読み出しているはずのものであり、
+	// それがなければこのルートはすべてを拒否する。
 	registerUpdateRoutes(e, &UpdateHandlers{Current: options.Version, Checker: options.Updates})
 	registerLoginItemRoutes(e, LoginItemHandlers{
 		Controller: options.LoginItem,
@@ -292,8 +292,8 @@ func acceptsHTML(header string) bool {
 	return false
 }
 
-// CLISecret is what `sshc <alias>` must present, so the caller that knows
-// where to write the handoff can read it back without holding it separately.
+// CLISecret は `sshc <alias>` が提示すべきものであり、handoff の
+// 書き込み先を知る呼び出し元が、別途保持せずに読み戻せるようにする。
 func (s *Server) CLISecret() string { return s.cliSecret }
 
 func (s *Server) URL() string {

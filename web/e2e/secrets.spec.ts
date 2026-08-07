@@ -1,8 +1,8 @@
 import { expect, openSection, test, openApplication } from "./support/environment";
 
-// The arrangement the whole feature exists for, driven through the built binary
-// against a throwaway HOME: one secret under a name, two hosts pointing at it,
-// and a file on disk that names neither.
+// この機能全体が存在する理由となる構成を、使い捨ての HOME に対して
+// ビルド済みバイナリで動かす。1 つの名前の下にある 1 つの secret、それを
+// 指す 2 つのホスト、そしてどちらの名前も含まないディスク上のファイル。
 test("gives one named secret to two hosts and writes neither name into the file", async ({
   page,
   installation,
@@ -17,11 +17,11 @@ test("gives one named secret to two hosts and writes neither name into the file"
   await passwords.getByRole("button", { name: "Store account password" }).click();
 
   await expect(passwords.getByRole("button", { name: "Delete office-vm" })).toBeVisible();
-  // The list says the name and what uses it, never the value.
+  // 一覧が示すのは名前とそれを使うものであり、値は決して示さない。
   await expect(page.locator("body")).not.toContainText("hunter2");
 
-  // Two hosts, one name. Each picks it from its own screen, which is the only
-  // place a host's password is chosen.
+  // 2 つのホスト、1 つの名前。それぞれが自分自身の画面から
+  // それを選び、そこがホストのパスワードを選ぶ唯一の場所だ。
   for (const alias of ["bastion", "nas"]) {
     await openSection(page, "Connections");
     await page.getByRole("navigation", { name: "Connections" }).getByRole("button", { name: alias }).click();
@@ -36,17 +36,17 @@ test("gives one named secret to two hosts and writes neither name into the file"
   await openSection(page, "Secrets");
   await expect(page.getByRole("region", { name: "Account passwords" })).toContainText("bastion, nas");
 
-  // And the sealed file carries none of it: not the secret, not the name, not
-  // the hosts that point at it.
+  // そして封印されたファイルはそのどれも含まない。secret も、
+  // 名前も、それを指すホストも含まない。
   const sealed = await installation.read("sshc/secrets");
   for (const absent of ["hunter2", "office-vm", "bastion", "nas"]) {
     expect(sealed).not.toContain(absent);
   }
 });
 
-// A key passphrase in this picker would be sent to a remote host as a login
-// password on the next connection. The two namespaces are two namespaces so
-// that no screen has to be careful about it.
+// このピッカーに鍵のパスフレーズが入っていれば、次の接続でログインパス
+// ワードとしてリモートホストへ送られてしまう。2 つの名前空間が 2 つに分かれ
+// ているのは、どの画面もそれについて気を配らずに済むようにするためだ。
 test("never offers a key passphrase where a host password is chosen", async ({ page, installation }) => {
   await openApplication(page, installation);
   await openSection(page, "Secrets");
@@ -62,8 +62,8 @@ test("never offers a key passphrase where a host password is chosen", async ({ p
   await page.getByRole("tab", { name: "Diagnostics" }).click();
 
   const panel = page.getByRole("region", { name: "Stored password" });
-  // There is no account password at all, so the picker is not there to offer
-  // the wrong kind from.
+  // アカウントパスワードはそもそも存在しないため、ピッカーは
+  // 誤った種類のものを提供する場として存在しない。
   await expect(panel.getByLabel("Use a stored password")).toHaveCount(0);
   await expect(panel.getByLabel("Password for bastion")).toBeVisible();
 });

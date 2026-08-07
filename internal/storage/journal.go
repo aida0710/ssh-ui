@@ -15,7 +15,7 @@ var (
 	ErrCannotComplete     = errors.New("staged contents are missing or altered")
 )
 
-// PendingEntry is one file inside an interrupted transaction.
+// PendingEntry は、中断されたトランザクションに含まれるファイルひとつ。
 type PendingEntry struct {
 	Path      string
 	Target    string
@@ -25,8 +25,8 @@ type PendingEntry struct {
 	HasStaged bool
 }
 
-// Pending is an interrupted transaction found at startup. A partial state is
-// reported as it is; it is never presented as a healthy result.
+// Pending は、起動時に見つかった中断済みトランザクション。部分的な状態はそのまま
+// 報告される。健全な結果として提示されることは決してない。
 type Pending struct {
 	ID          string
 	Operation   string
@@ -46,7 +46,7 @@ func (m *Manager) historyDirectory() string {
 	return filepath.Join(m.workspace.StateDir(), historyDirectoryName)
 }
 
-// Pending lists interrupted transactions, oldest first.
+// Pending は、中断されたトランザクションを古いものから順に列挙する。
 func (m *Manager) Pending() ([]Pending, error) {
 	records, err := m.readRecords(m.journalDirectory())
 	if err != nil {
@@ -89,9 +89,9 @@ func (m *Manager) Pending() ([]Pending, error) {
 	return pending, nil
 }
 
-// Complete finishes an interrupted transaction. Only a replacement has staged
-// contents to verify; a move and a removal carry their whole intent in the
-// journal entry.
+// Complete は、中断されたトランザクションを完了させる。検証すべきステージ済みの
+// 内容を持つのは置き換えだけである。移動と削除は、その意図の全体をジャーナルの
+// エントリに持っている。
 func (m *Manager) Complete(identifier string) error {
 	record, journalPath, err := m.loadPending(identifier)
 	if err != nil {
@@ -111,11 +111,11 @@ func (m *Manager) Complete(identifier string) error {
 	return m.finish(record, journalPath, statusCompleted)
 }
 
-// Rollback restores every file the interrupted transaction had already changed
-// and discards the staged contents. A transaction that already removed a file,
-// or that already replaced one while deliberately keeping no backup, cannot be
-// rolled back; Rollback refuses rather than reporting a recovery it did not
-// perform.
+// Rollback は、中断されたトランザクションがすでに変更したすべてのファイルを復元
+// し、ステージ済みの内容を捨てる。すでにファイルを削除した、あるいは意図して
+// バックアップを残さずに置き換えたトランザクションは、巻き戻せない。Rollback は、
+// 実際には行っていない復旧を報告するのではなく、
+// 拒否する。
 func (m *Manager) Rollback(identifier string) error {
 	record, journalPath, err := m.loadPending(identifier)
 	if err != nil {
@@ -123,9 +123,9 @@ func (m *Manager) Rollback(identifier string) error {
 	}
 	for index := 0; index < record.Committed; index++ {
 		entry := record.Entries[index]
-		// A removal that kept a backup is as reversible as a replacement: the
-		// bytes are in the generational directory and the mode is in the
-		// entry. Only one that deliberately kept none cannot be undone.
+		// バックアップを残した削除は、置き換えと同じくらい可逆である。バイト列は
+		// 世代ディレクトリにあり、モードはエントリにある。巻き戻せないのは、意図して
+		// 何も残さなかったものだけである。
 		if entry.action() == actionRemove && entry.NoBackup {
 			return ErrIrreversibleRemoval
 		}
@@ -150,11 +150,11 @@ func (m *Manager) Rollback(identifier string) error {
 			continue
 		}
 		if entry.action() == actionMakeDir {
-			// A directory that was already there is not this transaction's to
-			// remove. Only one it created is undone, and only if it is still
-			// empty — something may have been written into it since, and
-			// taking that with the rollback would delete what nobody asked to
-			// touch.
+			// もとからあったディレクトリは、このトランザクションが取り除いてよいもの
+			// ではない。取り消すのはこれが作ったものだけであり、しかもまだ空である
+			// 場合に限る — その後に何かが書き込まれているかもしれず、それを巻き戻しと
+			// 一緒に持っていけば、誰も触れてくれと頼んでいないものを削除することに
+			// なる。
 			if entry.HadPrevious {
 				continue
 			}
@@ -177,8 +177,8 @@ func (m *Manager) Rollback(identifier string) error {
 			continue
 		}
 		if entry.action() == actionRemoveDir {
-			// It was empty when it was removed, so recreating it empty
-			// restores exactly what was lost.
+			// 取り除かれた時点で空だったので、空のまま作り直せば失われたものが
+			// そのまま復元される。
 			if err := m.workspace.EnsureDirectory(entry.Path); err != nil {
 				return err
 			}
@@ -246,8 +246,8 @@ func (m *Manager) loadPending(identifier string) (*journalRecord, string, error)
 	return &record, journalPath, nil
 }
 
-// readRecords loads every journal document in a directory, oldest first.
-// Identifiers start with a UTC timestamp, so lexical order is chronological.
+// readRecords は、ディレクトリ内のすべてのジャーナル文書を古い順に読み込む。
+// 識別子は UTC のタイムスタンプで始まるので、辞書順は時系列順である。
 func (m *Manager) readRecords(directory string) ([]journalRecord, error) {
 	entries, err := m.workspace.FileSystem().ReadDir(directory)
 	if errors.Is(err, fs.ErrNotExist) {

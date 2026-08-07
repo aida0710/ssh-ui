@@ -1,8 +1,8 @@
 package application
 
-// Notice explains something the UI must show instead of inventing an answer.
-// Diagnostics come from the configuration engine and describe file structure;
-// notices come from this package and describe why a projection is incomplete.
+// Notice は、UI が答えをでっち上げるのではなく示さなければならない何かを説明する。
+// Diagnostics は設定 engine から来てファイル構造を説明し、
+// 通知はこの package から来てなぜ射影が不完全なのかを説明する。
 type Notice struct {
 	Code   string `json:"code"`
 	Path   string `json:"path,omitempty"`
@@ -10,10 +10,10 @@ type Notice struct {
 	Detail string `json:"detail,omitempty"`
 }
 
-// Notice codes are stable identifiers the UI maps to its own copy.
+// Notice code は、UI が自前のコピーへ対応付ける安定した識別子である。
 const (
-	// NoticeComplexExternalRule marks a host whose value cannot be projected
-	// into a simple inheritance model. The UI shows the real source instead.
+	// NoticeComplexExternalRule は、値を単純な継承モデルへ射影できない
+	// ホストに印を付ける。UI は代わりに実際の source を示す。
 	NoticeComplexExternalRule = "complex_external_rule"
 	NoticeDuplicateAlias      = "duplicate_alias"
 	NoticeWildcardShadow      = "wildcard_shadow"
@@ -27,12 +27,12 @@ const (
 	NoticeGroupCycle          = "group_cycle"
 	NoticeGroupMemberMissing  = "group_member_missing"
 	NoticeExplainedValuesOnly = "explained_values_only"
-	// NoticeDestinationNotIncluded marks a destination file that no Include
-	// reaches, so a block moved into it would stop being read by OpenSSH.
+	// NoticeDestinationNotIncluded は、どの Include も届かない destination
+	// ファイルに印を付ける。そこに移動したブロックは OpenSSH に読まれなくなる。
 	NoticeDestinationNotIncluded = "destination_not_included"
 )
 
-// appendNotice adds a notice unless the identical notice is already present.
+// appendNotice は、同一の通知が既に存在しない限り、通知を追加する。
 func appendNotice(notices []Notice, notice Notice) []Notice {
 	for _, existing := range notices {
 		if existing == notice {

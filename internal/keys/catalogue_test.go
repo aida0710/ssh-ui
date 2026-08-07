@@ -9,8 +9,8 @@ import (
 	"sshc/internal/platform"
 )
 
-// fakeRunner records what would have been run and returns a canned output. No
-// test in this package starts a real child process.
+// fakeRunner は、実行されたはずの内容を記録し、用意された出力を返す。この
+// パッケージのどのテストも、本物の子プロセスを起動しない。
 type fakeRunner struct {
 	commands []platform.Command
 	output   platform.Output
@@ -22,8 +22,8 @@ func (fake *fakeRunner) RunOutput(_ context.Context, command platform.Command) (
 	return fake.output, fake.err
 }
 
-// fakeToolchain answers with fixed absolute paths, so no test depends on which
-// OpenSSH programs the developer's machine happens to have.
+// fakeToolchain は固定の絶対パスで答えるので、どのテストも、開発者のマシンに
+// たまたま入っている OpenSSH のプログラムに依存しない。
 type fakeToolchain struct {
 	err error
 }

@@ -24,11 +24,11 @@ import (
 
 var version = "dev"
 
-// urlPrinter satisfies platform.BrowserLauncher by writing the URL instead of
-// opening it. It exists for automation — the end-to-end suite and the packaging
-// smoke test — which must not hand a live bootstrap token to the user's own
-// browser. The token is no more exposed than it already is in the argv of
-// `open`, and the flag has to be asked for.
+// urlPrinter は URL を開く代わりに書き出すことで platform.BrowserLauncher を満たす。
+// これは自動化のためにある — エンドツーエンドのスイートとパッケージングのスモーク
+// テストで、ユーザー自身のブラウザに有効なブートストラップトークンを渡してはならない
+// からだ。トークンの露出は `open` の argv にすでにある以上のものではなく、しかもこの
+// フラグは明示的に指定しなければならない。
 type urlPrinter struct{ out io.Writer }
 
 func (p urlPrinter) Open(_ context.Context, target string) error {
@@ -36,25 +36,25 @@ func (p urlPrinter) Open(_ context.Context, target string) error {
 	return err
 }
 
-// AskpassSubcommand is the argv word that turns this binary into the program
-// OpenSSH asks for a password. It is a subcommand rather than a second binary
-// so that there is nothing extra to install, sign, notarise or keep in step
-// with the application that armed it.
+// AskpassSubcommand は、このバイナリを「OpenSSH がパスワードを尋ねる相手のプログラム」
+// に変える argv の語。二つ目のバイナリではなくサブコマンドにしてあるのは、インストール・
+// 署名・公証、そして武装元のアプリケーションとの歩調合わせを、余計にひとつ増やさない
+// ためである。
 const AskpassSubcommand = "askpass"
 
-// askpassInvocation reports whether this process was started to answer an
-// OpenSSH prompt, and returns the arguments the helper should read.
+// askpassInvocation は、このプロセスが OpenSSH のプロンプトに答えるために起動された
+// かを報告し、ヘルパーが読むべき引数を返す。
 //
-// The subcommand word is the way to run it by hand. It is not the way OpenSSH
-// runs it: SSH_ASKPASS names a program, and OpenSSH execs that program with the
-// prompt as its only argument — there is no shell, so there is nowhere for a
-// subcommand word to go. Without this the shipped feature started a second copy
-// of the whole application, browser and all, and ssh got a password that was
-// never sent. The integration suite against a real sshd is what found it.
+// サブコマンドの語は手で実行するための手段である。OpenSSH の実行方法ではない。
+// SSH_ASKPASS はプログラムを指定し、OpenSSH はプロンプトだけを引数としてそのプログラム
+// を exec する — シェルがないので、サブコマンドの語が入る場所はどこにもない。これが
+// なかったために、出荷された機能はアプリケーション全体の二つ目のコピーをブラウザごと
+// 起動し、ssh には決して送られてこないパスワードが渡された。見つけたのは、実物の sshd
+// に対する統合テストスイートである。
 //
-// The token is the marker because it exists for exactly one connection and
-// nothing but this application ever sets it. The endpoint is required with it so
-// that a stale variable alone cannot silently turn the application into a helper.
+// 目印にトークンを使うのは、それがちょうどひとつの接続のために存在し、この
+// アプリケーション以外に設定するものがないからだ。エンドポイントも併せて必須なのは、
+// 古い変数ひとつでアプリケーションが黙ってヘルパーに変わらないようにするためである。
 func askpassInvocation(argv []string, lookup func(string) string) ([]string, bool) {
 	if len(argv) > 1 && argv[1] == AskpassSubcommand {
 		return argv[2:], true
@@ -66,8 +66,8 @@ func askpassInvocation(argv []string, lookup func(string) string) ([]string, boo
 }
 
 func main() {
-	// The branch is before flag.Parse because the prompt OpenSSH passes is an
-	// arbitrary string and would otherwise be read as a flag.
+	// この分岐が flag.Parse より前にあるのは、OpenSSH が渡すプロンプトが任意の文字列で
+	// あり、そうしなければフラグとして読まれてしまうからである。
 	if arguments, ok := askpassInvocation(os.Args, os.Getenv); ok {
 		os.Exit(runAskpass(
 			context.Background(),
@@ -95,9 +95,9 @@ func main() {
 		))
 	}
 
-	// `sshc <alias>` connects. It is checked after the askpass branch and
-	// before flag parsing, because an alias is a bare word and flag.Parse would
-	// stop at it and then the application would start instead of connecting.
+	// `sshc <alias>` は接続する。askpass の分岐のあと、フラグ解析の前で判定する。alias は
+	// 裸の語であり、flag.Parse はそこで止まってしまうため、接続する代わりにアプリケーション
+	// が起動してしまうからだ。
 	if alias, ok := connectInvocation(os.Args); ok {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -124,10 +124,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	// The askpass helper is this binary. Resolving it once, here, is the only
-	// place that can: nothing inside the application knows where it was
-	// installed. A path that cannot be resolved leaves every terminal launch
-	// on the plain path rather than arming a helper that may not be there.
+	// askpass ヘルパーはこのバイナリである。ここで一度だけ解決するのが唯一それの可能な
+	// 場所だ。アプリケーションの内側には、それがどこにインストールされたかを知るものが
+	// ない。解決できないパスの場合は、そこにないかもしれないヘルパーを武装させるのでは
+	// なく、すべての端末起動を素の経路のままにしておく。
 	helperPath, err := os.Executable()
 	if err != nil {
 		logger.Warn("resolve this binary; stored passwords will not be offered", "error", err)
@@ -140,9 +140,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	// One process runner and one toolchain are shared by every subsystem that
-	// starts an OpenSSH program, so there is a single place where the argv, the
-	// child environment and the output bound are decided.
+	// OpenSSH のプログラムを起動するすべてのサブシステムが、ひとつのプロセスランナーと
+	// ひとつのツールチェーンを共有する。これにより argv、子プロセスの環境、出力の上限を
+	// 決める場所はひとつだけになる。
 	runner := macos.NewOutputRunner()
 	toolchain := macos.NewToolchain()
 
@@ -154,12 +154,12 @@ func main() {
 	dependencies := app.Dependencies{
 		Random:  rand.Reader,
 		Browser: browser,
-		// Off unless the user turns it on, from the interface. Nothing here
-		// registers anything; this only makes the switch reachable.
+		// ユーザーがインターフェースから有効にしない限りオフ。ここでは何も登録しない。
+		// スイッチに手が届くようにするだけである。
 		LoginItem: macos.LoginItem{Runner: runner, Home: home},
-		// The one place this application contacts a host other than itself,
-		// and only when somebody asks. It fetches nothing and replaces
-		// nothing: it reports whether a newer version is published.
+		// このアプリケーションが自分自身以外のホストに接触する唯一の場所であり、
+		// 誰かが求めたときにだけ行う。何も取得せず、何も置き換えない。
+		// 新しいバージョンが公開されているかを報告するだけである。
 		Updates: &selfupdate.Checker{
 			API:  "https://api.github.com/repos/aida0710/sshc/releases/latest",
 			HTTP: &http.Client{Timeout: 30 * time.Second},
@@ -173,9 +173,9 @@ func main() {
 		KeyAgent:  macos.NewKeyAgent(runner, toolchain, os.LookupEnv),
 		Terminal:  macos.NewTerminal(runner),
 		Lookup:    os.LookupEnv,
-		// The helper and the server apply the same rule, from the same
-		// function, so the two can never drift into two different answers to
-		// "is this prompt one we will answer".
+		// ヘルパーとサーバーは同じ関数から同じルールを適用する。そのため「このプロンプト
+		// には答えるのか」という問いに対して、両者の答えが食い違っていくことは
+		// あり得ない。
 		AskpassHelper: helperPath,
 		Answerable:    AnswerablePrompt,
 	}

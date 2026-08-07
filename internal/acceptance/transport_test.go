@@ -14,19 +14,19 @@ import (
 	"sshc/internal/session"
 )
 
-// expectedContentSecurityPolicy is asserted by exact match on purpose. Widening
-// the policy must be a deliberate edit here as well as in the server, so a
-// stray 'unsafe-inline' cannot arrive unnoticed.
+// expectedContentSecurityPolicy は、意図的に完全一致で検証する。
+// policy を緩めるにはサーバー側だけでなくここでも意図的な編集が
+// 要るようにし、迷い込んだ 'unsafe-inline' が気づかれず紛れ込めないようにする。
 const expectedContentSecurityPolicy = "default-src 'self'; base-uri 'none'; object-src 'none'; " +
 	"frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; " +
 	"img-src 'self' data:; connect-src 'self'; require-trusted-types-for 'script'"
 
-// transportProblemCodes are the only refusals this suite accepts as proof that
-// the transport check under test did the refusing.
+// transportProblemCodes は、検査対象の transport check が拒否した
+// 証拠としてこの suite が受け入れる唯一の拒否である。
 //
-// Asserting a bare 403 would not do: several routes answer 403 because a
-// confirmation token is missing, which would make a hostile case pass while the
-// header check it names had been deleted.
+// 素の 403 を主張するだけでは不十分である: いくつかの route は
+// confirmation token が欠けているために 403 を返すため、それでは
+// 名指す header check が削除されていても敵対的なケースが通ってしまう。
 var transportProblemCodes = []string{"invalid_host", "cross_site_request"}
 
 func hasTransportProblemCode(body string) bool {
@@ -43,10 +43,10 @@ func TestEveryAPIRouteRefusesTheWrongHostOriginAndFetchSite(t *testing.T) {
 	for _, route := range f.apiRoutes() {
 		path := f.concretePath(route.Path)
 		t.Run(route.Method+" "+route.Path, func(t *testing.T) {
-			// Positive control: the correct request must not be refused by a
-			// transport rule, otherwise the hostile cases below prove nothing.
-			// It may well be refused for another reason — a missing action
-			// token, an unknown identifier — and that is fine here.
+			// 正のコントロール: 正しいリクエストは transport rule によって
+			// 拒否されてはならない。さもなければ以下の敵対的なケースは何も証明しない。
+			// 別の理由 — action token の欠落、未知の identifier — で
+			// 拒否されるのは十分ありうるし、ここではそれで構わない。
 			baseline := f.do(route.Method, path, emptyBodyFor(route.Method))
 			baselineBody := readBody(t, baseline)
 			if hasTransportProblemCode(baselineBody) {
@@ -265,7 +265,7 @@ func TestRouteTableMatchesTheOpenAPIContract(t *testing.T) {
 	}
 }
 
-// echoPath converts an OpenAPI path template into Echo's parameter spelling.
+// echoPath は OpenAPI の path template を Echo の parameter 綴りに変換する。
 func echoPath(path string) string {
 	replaced := strings.ReplaceAll(path, "{", ":")
 	return strings.ReplaceAll(replaced, "}", "")

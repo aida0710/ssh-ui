@@ -42,8 +42,8 @@ const proxyCommand = {
   overridable: false,
 };
 
-// The inventory the picker reads. It is stubbed in every render so no test in
-// this file reaches the real client, which would try to fetch.
+// ピッカーが読むインベントリ。あらゆる描画でスタブ化しており、
+// このファイルのどのテストも fetch を試みる本物のクライアントに届かない。
 function buildKeys(overrides: Partial<Pick<KeysApi, "inventory" | "publicKey">> = {}) {
   return {
     inventory: vi.fn().mockResolvedValue({
@@ -133,7 +133,7 @@ describe("RemoteKeyPanel", () => {
     expect(within(confirmation).getByText(/Append one line to ~\/\.ssh\/authorized_keys/)).toBeInTheDocument();
     expect(within(confirmation).getByLabelText("Public key line to append")).toHaveTextContent(publicKey);
     expect(within(confirmation).getByLabelText("Remote command")).toHaveTextContent("umask 077");
-    // Nothing on the remote host has been touched to produce this description.
+    // この記述を作るために、リモートホスト上の何にも触れていない。
     expect(api.register).not.toHaveBeenCalled();
   });
 
@@ -239,8 +239,8 @@ describe("RemoteKeyPanel", () => {
   });
 
   it("surfaces the refusal code from the register endpoint and stores nothing", async () => {
-    // React's test environment installs one flag of its own on the window; any
-    // other new global would have come from the panel.
+    // React のテスト環境は window に自前のフラグを 1 つだけ設置する。
+    // それ以外の新しいグローバルがあれば、それはパネル由来のはずだ。
     const frameworkGlobals = ["IS_REACT_ACT_ENVIRONMENT"];
     const globalsBefore = Object.keys(window);
     const api = buildApi({
@@ -276,16 +276,16 @@ describe("RemoteKeyPanel", () => {
     const keys = buildKeys();
     render(<RemoteKeyPanel api={api} keys={keys} />);
 
-    // Only public keys are offered. A private key in the same directory must
-    // never be a candidate for something that gets sent to a remote host.
+    // 提供されるのは公開鍵だけだ。同じディレクトリにある秘密鍵が
+    // リモートホストに送られるものの候補になってはならない。
     const picker = await screen.findByLabelText("Public key from ~/.ssh");
     expect(within(picker).getByRole("option", { name: /id_ed25519\.pub/ })).toBeInTheDocument();
     expect(within(picker).queryByRole("option", { name: /id_ed25519 —/ })).not.toBeInTheDocument();
 
     await user.selectOptions(picker, "key-pub");
 
-    // One choice fills both fields, so the path and the line cannot describe
-    // different keys — which typing them separately allowed.
+    // 1 つの選択が両方のフィールドを埋めるので、パスと行が別の鍵を
+    // 記述することはあり得ない——別々に入力させると、それが起き得た。
     await waitFor(() => expect(screen.getByLabelText("Public key file")).toHaveValue("id_ed25519.pub"));
     expect(screen.getByLabelText("Public key line")).toHaveValue(publicKey);
     expect(keys.publicKey).toHaveBeenCalledWith("key-pub");
@@ -313,8 +313,8 @@ describe("RemoteKeyPanel", () => {
 
     await waitFor(() => expect(keys.inventory).toHaveBeenCalled());
     expect(screen.getByLabelText("Public key file")).toBeEnabled();
-    // A failed inventory read is not an error the user has to act on: typing
-    // the key in was the only way before the picker existed.
+    // インベントリの読み取り失敗は、ユーザーが対処すべきエラーではない:
+    // ピッカーが存在する前は、鍵を打ち込むことが唯一の方法だった。
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     await fillForm();
     expect(screen.getByLabelText("Public key line")).toHaveValue(publicKey);

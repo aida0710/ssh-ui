@@ -40,8 +40,8 @@ const detail = {
 };
 
 beforeEach(() => {
-  // The module factory builds these with vi.fn(), which restoreMocks leaves
-  // alone, so their call records have to be cleared per test by hand.
+  // モジュールの factory はこれらを vi.fn()で作っており、restoreMocks は
+  // それに手を触れないため、呼び出し記録はテストごとに手動でクリアする必要がある。
   vi.clearAllMocks();
   vi.mocked(configApi.overview).mockResolvedValue(overview as never);
   vi.mocked(configApi.host).mockResolvedValue(detail as never);
@@ -54,7 +54,7 @@ describe("ConnectionsPage", () => {
       transactionId: "t1", written: ["config"], preview: { operation: "config.host_fields", diffs: [] },
     } as never);
 
-    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} onToolbar={() => undefined} />);
+    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} />);
 
     await user.click(await screen.findByRole("button", { name: /bastion/ }));
     const input = await screen.findByLabelText("Port");
@@ -73,12 +73,12 @@ describe("ConnectionsPage", () => {
   });
 
   it("keeps the diff of what was written on screen after the save reloads the host", async () => {
-    // The save reselects the host it wrote. That used to hand the selection
-    // effect a new object with the same two values, so the effect fetched the
-    // detail a second time and, on the answer, cleared the preview: the diff
-    // was visible for exactly as long as one request took. The end-to-end suite
-    // saw it because it happened to look inside that window, and failed in CI
-    // when it did not.
+    // save は自分が書いたホストを再選択する。以前はこれが選択
+    // effect に、同じ二つの値を持つ新しいオブジェクトを渡していたため、
+    // effect が詳細を二度目に取得し、その答えが返るとプレビューを
+    // 消していた。差分が見えていたのはちょうど一回のリクエストに
+    // かかった時間だけだった。エンドツーエンドスイートはたまたまその
+    // 窓の中を覗いていたため見えていたが、そうでなければ CI で失敗していた。
     const user = userEvent.setup();
     vi.mocked(configApi.save).mockResolvedValue({
       transactionId: "t1",
@@ -95,7 +95,7 @@ describe("ConnectionsPage", () => {
       },
     } as never);
 
-    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} onToolbar={() => undefined} />);
+    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} />);
 
     await user.click(await screen.findByRole("button", { name: /bastion/ }));
     const input = await screen.findByLabelText("Port");
@@ -103,8 +103,8 @@ describe("ConnectionsPage", () => {
     await user.type(input, "2299");
     await user.click(screen.getByRole("button", { name: "Save changes" }));
 
-    // Twice in the whole flow: once for the selection, once for the reload the
-    // save performs itself. A third is the duplicate that discarded the diff.
+    // 流れ全体で二回。一回は選択のため、もう一回は save 自身が
+    // 行うリロードのため。三回目は差分を消してしまう重複である。
     await waitFor(() => expect(configApi.host).toHaveBeenCalledTimes(2));
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -135,7 +135,7 @@ describe("ConnectionsPage", () => {
       },
     } as never);
 
-    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} onToolbar={() => undefined} />);
+    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} />);
 
     await user.click(await screen.findByRole("button", { name: /bastion/ }));
     const input = await screen.findByLabelText("Port");
@@ -146,7 +146,7 @@ describe("ConnectionsPage", () => {
 
     await user.click(screen.getByRole("button", { name: /nas/ }));
 
-    // The diff describes bytes in a block that is no longer open.
+    // 差分が記述するのは、もはや開いていないブロックのバイトである。
     await waitFor(() =>
       expect(screen.getByRole("region", { name: "Save preview" }))
         .toHaveTextContent("Change a value to see exactly what would be written."));
@@ -167,7 +167,7 @@ describe("ConnectionsPage", () => {
       ],
     } as never);
 
-    render(<ConnectionsPage onOpenFile={onOpenFile} onInspector={() => undefined} onToolbar={() => undefined} />);
+    render(<ConnectionsPage onOpenFile={onOpenFile} onInspector={() => undefined} />);
 
     await user.click(await screen.findByRole("button", { name: /pattern rule/i }));
 
@@ -189,7 +189,7 @@ describe("ConnectionsPage", () => {
       },
     }));
 
-    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} onToolbar={() => undefined} />);
+    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} />);
 
     await user.click(await screen.findByRole("button", { name: /bastion/ }));
     const input = await screen.findByLabelText("Port");
@@ -212,7 +212,7 @@ describe("ConnectionsPage", () => {
       contents: "Host bastion\n\tPort 22\n", digest: "digest", editable: true, exists: true,
     } as never);
 
-    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} onToolbar={() => undefined} />);
+    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} />);
 
     await user.type(await screen.findByLabelText("New connection alias"), "build01");
     await user.click(screen.getByRole("button", { name: "Create connection" }));
@@ -244,7 +244,7 @@ describe("ConnectionsPage", () => {
       preview: { operation: "config.move", diffs: [] },
     } as never);
 
-    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} onToolbar={() => undefined} />);
+    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} />);
 
     await user.click(await screen.findByRole("button", { name: /bastion/ }));
     await user.selectOptions(await screen.findByLabelText("Move to file"), "conf.d/10-home.conf");
@@ -266,7 +266,7 @@ describe("ConnectionsPage", () => {
       transactionId: "t1", written: ["config"], preview: { operation: "config.file_raw", diffs: [] },
     } as never);
 
-    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} onToolbar={() => undefined} />);
+    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} />);
 
     await user.click(await screen.findByRole("button", { name: /bastion/ }));
     await user.click(await screen.findByRole("button", { name: "Delete connection" }));
@@ -298,7 +298,7 @@ describe("taking a connection out of every group", () => {
       transactionId: "tx", written: [], preview: { operation: "config.move", diffs: [] },
     } as never);
 
-    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} onToolbar={() => undefined} />);
+    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} />);
     await user.click(await screen.findByRole("button", { name: /bastion/ }));
     await user.selectOptions(await screen.findByLabelText("Primary group"), "");
     await user.click(screen.getByRole("button", { name: "Move to this group" }));
@@ -317,8 +317,8 @@ describe("taking a connection out of every group", () => {
 });
 
 describe("dropping in the tree", () => {
-  // jsdom has no drag implementation, so the transfer is a stub carrying the
-  // two things the tree touches.
+  // jsdom にはドラッグ実装がないため、transfer は tree が触れる二つの
+  // ものを運ぶスタブである。
   function transfer(payload: DragPayload) {
     const store = new Map<string, string>([[dragMimeType, JSON.stringify(payload)]]);
     return {
@@ -358,7 +358,7 @@ describe("dropping in the tree", () => {
   });
 
   it("moves a connection into a group", async () => {
-    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} onToolbar={() => undefined} />);
+    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} />);
     const row = await screen.findByRole("button", { name: /nas/ });
 
     drag(row, screen.getByRole("heading", { name: "work" }), {
@@ -373,7 +373,7 @@ describe("dropping in the tree", () => {
   });
 
   it("moves a connection out of every group by sending it to the entry file", async () => {
-    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} onToolbar={() => undefined} />);
+    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} />);
     const row = await screen.findByRole("button", { name: /nas/ });
 
     drag(row, screen.getByRole("heading", { name: "Ungrouped" }), {
@@ -391,7 +391,7 @@ describe("dropping in the tree", () => {
     vi.mocked(configApi.renameGroup).mockResolvedValue({
       transactionId: "tx", written: [], preview: { operation: "config.group_rename", diffs: [] },
     } as never);
-    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} onToolbar={() => undefined} />);
+    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} />);
     const source = await screen.findByRole("heading", { name: "work" });
 
     drag(source, screen.getByRole("heading", { name: "home" }), { kind: "group", name: "work" });
@@ -403,9 +403,9 @@ describe("dropping in the tree", () => {
     vi.mocked(configApi.renameGroup).mockResolvedValue({
       transactionId: "tx", written: [], preview: { operation: "config.group_rename", diffs: [] },
     } as never);
-    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} onToolbar={() => undefined} />);
-    // The heading shows the group's own segment now that the tree nests; the
-    // region around it carries the full name, and so does the drag payload.
+    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} />);
+    // tree が今やネストするため、見出しが示すのはグループ自身のセグメントで
+    // ある。周囲の領域が完全な名前を運び、ドラッグペイロードも同様である。
     const source = within(await screen.findByRole("region", { name: "home/eu" }))
       .getByRole("heading", { name: "eu" });
 

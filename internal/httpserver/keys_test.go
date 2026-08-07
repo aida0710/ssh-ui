@@ -19,10 +19,10 @@ import (
 	"sshc/internal/session"
 )
 
-// stubKeyService answers without touching a filesystem, an agent or a process.
+// stubKeyService は、filesystem にも agent にもプロセスにも触れずに応答する。
 //
-// evidence is mutable so a test can simulate the key changing on disk between
-// the moment the user confirmed and the moment the request arrives.
+// evidence は mutable である。これにより、ユーザーが確認した瞬間と
+// リクエストが届く瞬間の間にディスク上で鍵が変化する様子をテストで再現できる。
 type stubKeyService struct {
 	inventory     *keys.Inventory
 	reveal        keys.RevealResult
@@ -72,9 +72,9 @@ func (stub *stubKeyService) Reveal(keyID string) (keys.RevealResult, error) {
 	return stub.reveal, nil
 }
 
-// PublicKey answers for the public half only. The stub refuses the private
-// key's identifier the way the real service does, so a handler test that let a
-// private key through this route would fail here rather than pass quietly.
+// PublicKey は公開の半分だけに応答する。この stub は、本物のサービスと
+// 同じ方法で秘密鍵の identifier を拒否する。したがって、秘密鍵をこの
+// ルートに通してしまうハンドラのテストは、黙って通るのではなくここで失敗する。
 func (stub *stubKeyService) PublicKey(keyID string) (keys.PublicKeyResult, error) {
 	if keyID != "key-two" {
 		return keys.PublicKeyResult{}, keys.ErrUnknownKey
@@ -134,9 +134,9 @@ func newKeyServer(t *testing.T, service KeyService) (*echo.Echo, *session.Manage
 	}
 	engine := echo.New()
 	engine.Use((Security{ExpectedHost: keyTestHost, ExpectedOrigin: "http://" + keyTestHost, Sessions: manager, Unlocked: alwaysUnlocked}).Middleware)
-	// The confirmation endpoint is shared with every other subsystem, so this
-	// harness assembles it exactly as New does: a registry holding only the key
-	// vault's kinds, which is why a diagnostics kind is still unknown here.
+	// 確認のエンドポイントは他のすべてのサブシステムと共有されるので、この
+	// harness は New と全く同じ方法でそれを組み立てる: 鍵 vault の kind だけを
+	// 保持する registry である。だからこそ diagnostics の kind はここでは未知のままである。
 	registry := actionRegistry{}
 	addKeyActions(registry, service)
 	actions := ActionHandlers{Sessions: manager, Kinds: registry}
@@ -151,8 +151,8 @@ func sendKeyRequest(t *testing.T, engine *echo.Echo, credentials session.Credent
 	request.Host = keyTestHost
 	request.Header.Set(echo.HeaderContentType, "application/json")
 	request.AddCookie(&http.Cookie{Name: SessionCookie, Value: credentials.SessionID})
-	// Fetch Metadata and the CSRF token accompany every API request, a read as
-	// much as a write: the cookie is not scoped to a port and the token is.
+	// Fetch Metadata と CSRF トークンは、書き込みと同じく読み取りでも、すべての API
+	// リクエストに伴う。cookie はポートで区切られないが、トークンは区切られるからだ。
 	request.Header.Set("Sec-Fetch-Site", "same-origin")
 	request.Header.Set(CSRFHeader, credentials.CSRFToken)
 	if method != http.MethodGet && method != http.MethodHead {
@@ -166,8 +166,8 @@ func sendKeyRequest(t *testing.T, engine *echo.Echo, credentials session.Credent
 	return response
 }
 
-// issueToken asks the server for a confirmation exactly as the UI does, so the
-// evidence the token carries is the evidence the server derived.
+// issueToken は、UI と全く同じ方法でサーバーに確認を求める。
+// したがって、トークンが運ぶ evidence はサーバーが導出した evidence である。
 func issueToken(t *testing.T, engine *echo.Echo, credentials session.Credentials, kind, target string) string {
 	t.Helper()
 	body, err := json.Marshal(api.IssueActionRequest{Kind: kind, Target: target})
@@ -241,9 +241,9 @@ func TestRevealRequiresAFreshActionTokenForThatExactKey(t *testing.T) {
 	}
 }
 
-// The token is bound to a digest of what the confirmation dialog displayed. If
-// the key changed between the confirmation and the click, the user confirmed a
-// different key and the reveal must be refused.
+// トークンは、確認ダイアログが表示した内容のダイジェストに結び付く。
+// 確認からクリックまでの間に鍵が変化していれば、ユーザーは別の鍵を
+// 確認したことになり、reveal は拒否されなければならない。
 func TestRevealIsRefusedWhenTheKeyChangedAfterTheConfirmation(t *testing.T) {
 	service := newRevealService()
 	engine, _, credentials := newKeyServer(t, service)
@@ -264,8 +264,8 @@ func TestRevealIsRefusedWhenTheConfirmationHasExpired(t *testing.T) {
 	service := newRevealService()
 	engine, manager, credentials := newKeyServer(t, service)
 
-	// The session manager's clock is the only thing moved forward; nothing
-	// sleeps, so the test stays fast and deterministic.
+	// 進められるのは session manager の時計だけであり、何も sleep しない。
+	// そのためテストは高速かつ決定的なままである。
 	moment := time.Now()
 	manager.Now = func() time.Time { return moment }
 	token := issueToken(t, engine, credentials, session.ActionRevealPrivateKey, "key-one")
@@ -287,8 +287,8 @@ func TestRevealIsRefusedWhenTheConfirmationHasExpired(t *testing.T) {
 	}
 }
 
-// A reveal response must be readable exactly once, by this tab, and must never
-// be written to a shared log or an error body.
+// reveal のレスポンスは、この tab によってちょうど 1 回だけ読めなければ
+// ならず、共有のログやエラーボディに書き込まれてはならない。
 func TestRevealResponseIsUncacheableAndNeverEchoedInAnError(t *testing.T) {
 	service := newRevealService()
 	engine, _, credentials := newKeyServer(t, service)
@@ -303,8 +303,8 @@ func TestRevealResponseIsUncacheableAndNeverEchoedInAnError(t *testing.T) {
 		t.Fatalf("Cache-Control = %q", header.Get("Cache-Control"))
 	}
 
-	// An unknown key must not reach the reveal path at all, and its rejection
-	// must carry no key material.
+	// 未知の鍵は reveal の経路に一切到達してはならず、その拒否は
+	// 鍵の材料を一切運んではならない。
 	missing := issueToken(t, engine, credentials, session.ActionRevealPrivateKey, "key-missing")
 	rejected := sendKeyRequest(t, engine, credentials, http.MethodPost, "/api/v1/keys/key-missing/reveal", nil, missing)
 	if rejected.Code != http.StatusNotFound {
@@ -315,10 +315,10 @@ func TestRevealResponseIsUncacheableAndNeverEchoedInAnError(t *testing.T) {
 	}
 }
 
-// The security middleware marks every /api/ response no-store, so a test that
-// goes through it cannot tell whether the reveal handler does its own part. The
-// private key body is the one response where that must not depend on a header
-// set somewhere else, so it is checked with the middleware absent.
+// security middleware はすべての /api/ レスポンスに no-store を付ける。
+// そのため middleware を通したテストでは、reveal ハンドラ自身が自分の役割を
+// 果たしているかを判別できない。秘密鍵のボディは、どこか別の場所で設定された
+// ヘッダーに依存してはならない唯一のレスポンスなので、middleware なしで検査する。
 func TestRevealHandlerSetsNoStoreWithoutRelyingOnTheMiddleware(t *testing.T) {
 	service := newRevealService()
 	manager, bootstrap, err := session.NewManager(bytes.NewReader(bytes.Repeat([]byte{0x62}, 4096)))
@@ -384,7 +384,7 @@ func TestPermanentDeleteNeedsItsOwnActionToken(t *testing.T) {
 		t.Fatalf("the service purged without a valid token")
 	}
 
-	// A confirmation for a different entry must not authorise this one.
+	// 別の entry に対する確認は、この entry を認可してはならない。
 	otherToken := issueToken(t, engine, credentials, session.ActionPurgeTrashEntry, "20260805T100000.000-ffffffff")
 	if got := sendKeyRequest(t, engine, credentials, http.MethodDelete, "/api/v1/trash/"+trashEntryID, nil, otherToken).Code; got != http.StatusForbidden {
 		t.Fatalf("purge with another entry's token = %d, want 403", got)
@@ -401,8 +401,8 @@ func TestPermanentDeleteNeedsItsOwnActionToken(t *testing.T) {
 		t.Fatalf("purgeCalls = %d, want 1", service.purgeCalls)
 	}
 
-	// The trash entry survives a rejected purge: nothing was consumed by the
-	// refusals above, so a second valid confirmation is still required.
+	// ごみ箱の entry は、拒否された purge を生き延びる。上記の拒否によって
+	// 何も消費されていないので、2 回目の有効な確認が改めて必要である。
 	if got := sendKeyRequest(t, engine, credentials, http.MethodDelete, "/api/v1/trash/"+trashEntryID, nil, purgeToken).Code; got != http.StatusForbidden {
 		t.Fatalf("replayed purge token = %d, want 403", got)
 	}
@@ -514,10 +514,10 @@ func TestInventoryAndTrashListingsMatchTheGeneratedContract(t *testing.T) {
 	}
 }
 
-// The public key route is the counterweight to reveal: it is the one key
-// endpoint that discloses nothing, so it is also the one with no confirmation.
-// These tests pin both halves of that — it works without a token, and it
-// refuses anything that is not a public key.
+// public key のルートは reveal の対極にある: 何も開示しない唯一の鍵の
+// エンドポイントであり、だからこそ確認も不要な唯一のエンドポイントでもある。
+// これらのテストはその両面を固定する——トークンなしで動作すること、そして
+// 公開鍵でないものはすべて拒否することの両方である。
 func TestPublicKeyIsServedWithoutAConfirmation(t *testing.T) {
 	service := newRevealService()
 	engine, _, credentials := newKeyServer(t, service)
@@ -536,8 +536,8 @@ func TestPublicKeyIsServedWithoutAConfirmation(t *testing.T) {
 	if body.RelativePath != "id_work.pub" || body.Fingerprint != "SHA256:abcdef" {
 		t.Fatalf("body = %#v", body)
 	}
-	// Nothing about this route is an audit event, so it must not have spent a
-	// reveal either.
+	// このルートには監査イベントに当たるものが何もないので、
+	// reveal を消費してもいないはずである。
 	if service.revealCalls != 0 {
 		t.Fatalf("the public key route reached the reveal path")
 	}
@@ -546,8 +546,8 @@ func TestPublicKeyIsServedWithoutAConfirmation(t *testing.T) {
 func TestPublicKeyRefusesAnEntryThatIsNotAPublicKey(t *testing.T) {
 	engine, _, credentials := newKeyServer(t, newRevealService())
 
-	// key-one is the private key in this fixture. Asking for its text through
-	// the unconfirmed route must not work, whatever the caller intended.
+	// key-one はこのフィクスチャにおける秘密鍵である。未確認のルートを通じて
+	// そのテキストを求めても、呼び出し側の意図がどうであれ機能してはならない。
 	response := sendKeyRequest(t, engine, credentials, http.MethodGet, "/api/v1/keys/key-one/public", nil, "")
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("public key for a private key = %d, want 404: %s", response.Code, response.Body.String())
@@ -557,9 +557,9 @@ func TestPublicKeyRefusesAnEntryThatIsNotAPublicKey(t *testing.T) {
 	}
 }
 
-// The agent could be given a key and never asked to give it back, so a purged
-// key stayed loaded and usable. Removal needs no confirmation token: it
-// destroys nothing.
+// agent に鍵を渡したまま返却を求めないことがあり得るので、purge された
+// 鍵が読み込まれたまま使用可能であり続けることがあった。削除には確認
+// トークンは不要である。これは何も破壊しないからだ。
 func TestDeregisterRemovesTheKeyFromTheAgentWithoutAToken(t *testing.T) {
 	service := newRevealService()
 	engine, _, credentials := newKeyServer(t, service)

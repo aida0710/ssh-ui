@@ -13,8 +13,8 @@ import (
 	"sshc/internal/platform/macos"
 )
 
-// recordingRunner captures the command it was asked to run and replays a
-// canned result. No test in this package starts a real process through it.
+// recordingRunner は、実行を求められたコマンドを記録し、あらかじめ用意した結果を
+// 返す。このパッケージのどのテストも、これを通して本物のプロセスを起動しない。
 type recordingRunner struct {
 	commands []platform.Command
 	output   platform.Output
@@ -91,10 +91,10 @@ func TestEvaluateBuildsArgvWithoutAShellAndParsesOutput(t *testing.T) {
 	}
 }
 
-// TestEvaluateHandsOpenSSHTheEnvironmentItWasGiven guards the child
-// environment. With SSH_ASKPASS exported, ssh asks an external program for a
-// passphrase instead of reading the standard input this application supplies,
-// which would move a prompt out of this process's control.
+// TestEvaluateHandsOpenSSHTheEnvironmentItWasGiven は子プロセスの環境を守る。
+// SSH_ASKPASS がエクスポートされていると、ssh はこのアプリケーションが供給する
+// 標準入力を読む代わりに外部プログラムへパスフレーズを尋ね、プロンプトがこの
+// プロセスの管理下から出てしまう。
 func TestEvaluateHandsOpenSSHTheEnvironmentItWasGiven(t *testing.T) {
 	runner := &recordingRunner{output: platform.Output{Stdout: []byte(sampleOutput)}}
 	evaluator := effective.Evaluator{
@@ -169,10 +169,10 @@ func TestEvaluateRejectsUnsafeAliasesAndReportsOpenSSHFailures(t *testing.T) {
 	}
 }
 
-// TestEvaluateParsesInstalledOpenSSHOutput is the first half of the `ssh -G`
-// differential coverage the config-engine plan deferred to this subsystem. It
-// uses the real ssh with a fixture that contains no executable directive, in a
-// temporary directory, and skips when OpenSSH is not installed.
+// TestEvaluateParsesInstalledOpenSSHOutput は、設定エンジンの計画がこのサブ
+// システムに先送りした `ssh -G` 差分カバレッジの前半である。実行を伴うディレク
+// ティブを含まないフィクスチャを一時ディレクトリに置いて本物の ssh を使い、
+// OpenSSH が入っていなければスキップする。
 func TestEvaluateParsesInstalledOpenSSHOutput(t *testing.T) {
 	toolchain := macos.NewToolchain()
 	if _, err := toolchain.SSH(); err != nil {

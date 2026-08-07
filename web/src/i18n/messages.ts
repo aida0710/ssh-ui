@@ -1,17 +1,17 @@
-// The message catalogue.
+// メッセージカタログ。
 //
-// `en` is the source of truth: its keys define MessageKey, and `ja` is typed as
-// a complete record of them, so a translation that is missing or misspelled is
-// a compile error rather than a key rendered on screen. Adding a message means
-// adding it to both, which is the point.
+// `en` が正であり、そのキーが MessageKey を定義する。`ja` は
+// それらの完全な記録として型付けされるので、欠落や誤記のある
+// 訳は画面に表示されるキーではなくコンパイルエラーになる。
+// メッセージを追加するとは両方に追加することであり、それが狙いだ。
 //
-// The English text is the wording that was already in the components, kept
-// byte-for-byte. A translation is a translation; it is not an opportunity to
-// quietly reword the original.
+// 英語のテキストは、既にコンポーネントにあった文言をバイト単位で
+// そのまま保持したものだ。翻訳は翻訳であって、原文をひっそり
+// 書き換える機会ではない。
 //
-// {placeholders} are substituted by the provider. Japanese word order differs
-// from English, so a message that would need concatenation in one language is
-// written as one string with placeholders in both.
+// {placeholders} はプロバイダが置き換える。日本語と英語では語順が
+// 異なるため、一方の言語では連結が必要になるメッセージも、
+// 両方でプレースホルダ入りの 1 本の文字列として書く。
 export const en = {
   "shell.title": "sshc",
   "shell.starting": "Starting secure local session…",
@@ -26,8 +26,8 @@ export const en = {
   "shell.inspectorShow": "Show details",
   "shell.inspectorHide": "Hide details",
   "shell.inspectorAttention": "Needs attention",
-  // This sentence was written into HostDetail in English and never reached the
-  // catalogue, so it stayed English in Japanese.
+  // この文は HostDetail に英語のまま直書きされ、カタログに
+  // 一度も届かなかった。だから日本語版でも英語のままだった。
   "host.duplicateKeyword": "A previous line in this block uses the same keyword. OpenSSH keeps the first one.",
 
   "inspector.appOnly": "This application only",

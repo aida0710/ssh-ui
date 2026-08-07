@@ -15,9 +15,9 @@ import { Field, control } from "../ui/form";
 
 type RemoteKeyPanelProps = {
   api?: RemoteKeysApi;
-  // The key inventory, so a key can be picked instead of typed. Reading it
-  // starts nothing and contacts nothing; only the plan and the registration
-  // touch the remote host.
+  // 鍵を打ち込む代わりに選べるようにする鍵インベントリ。これを読んでも
+  // 何も始まらず何にも接続しない。リモートホストに触れるのは
+  // plan と registration だけだ。
   keys?: Pick<KeysApi, "inventory" | "publicKey">;
 };
 
@@ -26,23 +26,23 @@ const outcomeLabels: Record<string, MessageKey> = {
   already_present: "rk.alreadyPresent",
 };
 
-// valuesFromLabels says where the account details in the confirmation came
-// from, because "deploy" means something different if this application read it
-// than if ssh itself reported it.
+// valuesFromLabels は、確認画面のアカウント詳細がどこから来たかを述べる。
+// このアプリケーションがそれを読んだ場合と ssh 自身が報告した場合とでは
+// 「deploy」の意味が異なるからだ。
 const valuesFromLabels: Record<string, MessageKey> = {
   engine: "rk.valuesFromEngine",
   "ssh -G": "rk.valuesFromSshG",
 };
 
-// RemoteKeyPanel registers a public key in a remote account's authorized_keys.
+// RemoteKeyPanel はリモートアカウントの authorized_keys に公開鍵を登録する。
 //
-// Registration changes state on another machine, so it is an independent,
-// confirmed operation: the panel first asks the server what the change would
-// be, shows the alias, the effective user, the fingerprint and the exact line
-// it would append, and only then offers to run it. Editing any input withdraws
-// the plan, so the confirmation can never describe something other than what
-// would be sent. A remote this application will not automate gets instructions
-// instead of a button.
+// 登録は別のマシンの状態を変えるので、独立した確認済み操作となる:
+// パネルはまずサーバーに変更内容を尋ね、alias・実効ユーザー・
+// フィンガープリント・追記される正確な行を示し、その後で初めて
+// 実行を申し出る。どの入力を編集しても plan は取り下げられるので、
+// 確認画面が実際に送られるもの以外を記述することは決してない。
+// このアプリケーションが自動化しないリモートには、ボタンの代わりに
+// 手順が示される。
 export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKeyPanelProps) {
   const t = useTranslate();
   const [alias, setAlias] = useState("");
@@ -57,9 +57,9 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
   const [candidates, setCandidates] = useState<KeyItem[]>([]);
   const [chosen, setChosen] = useState("");
 
-  // A failed inventory read leaves the picker empty and the two fields below
-  // usable. Typing a key in by hand was the only way before this existed, and
-  // it stays the fallback rather than becoming an error.
+  // インベントリの読み取りに失敗すると、ピッカーは空のまま、下の
+  // 2 つのフィールドは使える状態で残る。これが存在する前は手で鍵を
+  // 打ち込むのが唯一の方法だった。それはエラーではなくフォールバックのままだ。
   useEffect(() => {
     let active = true;
     void keys
@@ -73,8 +73,8 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
     };
   }, [keys]);
 
-  // withdraw drops everything the previous plan justified. It runs on every
-  // edit, so a confirmation is never left standing for values that changed.
+  // withdraw は、それまでの plan が正当化していたすべてを捨てる。
+  // 編集のたびに実行されるので、確認画面が変わった値のまま残ることはない。
   function withdraw() {
     setPlan(null);
     setAcknowledged(false);
@@ -89,9 +89,9 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
     };
   }
 
-  // Picking fills both fields from one place, so the file path and the key line
-  // cannot describe different keys — which is exactly what typing them
-  // separately allowed. It withdraws any standing plan, like every other edit.
+  // 選択すると 1 か所から両方のフィールドが埋まるので、ファイルパスと
+  // 鍵の行が別の鍵を記述することはあり得ない——別々に入力させると
+  // まさにそれが起きた。他の編集と同様、既存の plan も取り下げる。
   async function choose(keyId: string) {
     withdraw();
     setChosen(keyId);
@@ -126,8 +126,8 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
     try {
       setResult(await api.register({ alias, keyPath, publicKey, acknowledgeExecutable: acknowledged }));
     } catch (failure) {
-      // An unsupported remote is an answer, not a transport failure: the
-      // registration stops being offered and the manual steps take its place.
+      // サポートされていないリモートは、通信の失敗ではなく 1 つの答えだ:
+      // 登録は提供されなくなり、手動の手順がその代わりを務める。
       if (failureCode(failure) === "unsupported_remote") setUnsupported(true);
       setError(describeFailure(failure, t, "rk.registerFailed"));
     } finally {
@@ -153,9 +153,9 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
       ) : null}
 
       {/*
-        Three single-line settings are rows. The key line is not: it is a
-        wrapped blob of base64, and a caption beside a box that tall reads as a
-        caption for the gap under it.
+        1 行設定が 3 つあるのは行としてで、鍵の行は違う: それは base64 の
+        折り返されたかたまりであり、そこまで背の高いボックスの隣にキャプションを
+        置くと、その下の隙間に対するキャプションのように読めてしまう。
       */}
       <Card>
         <Row label={t("rk.pickFromSsh")}>
@@ -196,9 +196,9 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
       </Field>
 
       {/*
-        Registering is what this screen is for, so it is the one thing wearing
-        the accent. It used to wear an amber border, which is the colour this
-        application reserves for a notice rather than for an action.
+        登録することがこの画面の目的なので、アクセントをまとうのはそれ 1 つだ。
+        かつては amber のボーダーをまとっていたが、それはこのアプリケーションが
+        アクションではなく notice のために取っておく色だ。
       */}
       <div className="flex gap-2">
         <Button onClick={() => void describe()}>{t("rk.showWhatWouldHappen")}</Button>
@@ -214,9 +214,9 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
           <h3 id="remote-key-plan-heading" className="font-medium">{t("rk.confirmHeading")}</h3>
 
           {/*
-            A description list, not rows: none of this is editable, and `Row`
-            wraps its contents in a label because everything it holds is. The
-            card and its hairlines are the same, so the two read alike.
+            行ではなく description list だ: これはどれも編集不可能であり、`Row` は
+            中身をラベルで包む。保持するものすべてがラベルだからだ。
+            カードとそのヘアラインは同じなので、両者は同じように読める。
           */}
           <Card>
             <dl className="text-sm">
@@ -318,8 +318,8 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
   );
 }
 
-// describeFailure quotes the code the server refused with, so the user can look
-// it up rather than guess from a paraphrase.
+// describeFailure は、サーバーが拒否に使ったコードをそのまま引用する。
+// ユーザーが言い換えから推測するのではなく調べられるようにするためだ。
 function describeFailure(failure: unknown, t: Translate, fallback: MessageKey): string {
   const code = failureCode(failure);
   return code === "" ? t(fallback) : t("rk.withCode", { message: t(fallback), code });

@@ -4,19 +4,19 @@ import { Button, Card } from "../ui/surface";
 import { useTranslate } from "../i18n/context";
 import { NoticeList } from "./SavePreview";
 
-// Whether the pane has something in it worth opening for.
+// ペインに開く価値のある中身があるかどうか。
 //
-// This is what the toggle's amber dot is driven by. Without it, moving the
-// notices into a pane that is shut by default would mean a connection with
-// `duplicate_alias` looked exactly like one without — which would make the
-// pane a regression rather than an improvement.
+// トグルのアンバードットを駆動しているのはこれである。これがなければ、
+// 既定で閉じているペインへ通知を移すことは、`duplicate_alias`を
+// 持つ接続が持たないものとまったく同じに見えることを意味し、
+// それではペインが改善ではなく後退になってしまう。
 export function hostNeedsAttention(detail: HostDetail): boolean {
   return (detail.form.notices ?? []).length > 0 || (detail.effective.notices ?? []).length > 0;
 }
 
-// A value is inherited when the line that set it is in another file. The
-// Effective tab still lists every value and its source; this is the short
-// answer to "where did this come from", which is the question the pane is for.
+// 値が継承されているのは、それを設定した行が別のファイルにあるときで
+// ある。Effective タブは依然としてすべての値とその由来を列挙する。
+// これは「これはどこから来たのか」という短い答えであり、ペインはその問いのためにある。
 function inherited(detail: HostDetail) {
   const own = detail.form.entry.file.path ?? detail.form.entry.file.absolute;
   return detail.effective.entries.filter((entry) => (entry.source.path ?? entry.source.absolute) !== own);
@@ -36,11 +36,11 @@ export function HostInspector({
   return (
     <div className="flex flex-col gap-5">
       {/*
-        Grouped in a card, but stacked inside it rather than label-left /
-        value-right. This pane is 17rem wide and these captions are sentences —
-        "Display order — lower sorts earlier; 0 leaves this host where the file
-        puts it" beside a control would leave the control a few characters
-        wide. Xcode's inspector stacks for the same reason.
+        カードにまとめてはいるが、その中では label-left/value-right では
+        なく縦に積む。このペインは幅 17rem で、これらのキャプションは文である
+        ——"Display order — lower sorts earlier; 0 leaves this host where
+        the file puts it"をコントロールの横に置けば、コントロールは数文字幅しか
+        残らない。Xcode のインスペクターも同じ理由で縦に積む。
       */}
       <section className="flex flex-col gap-3">
         <h3 className={fieldLabel}>{t("inspector.appOnly")}</h3>
@@ -56,14 +56,14 @@ export function HostInspector({
           <Field label={t("host.colour")}>
             <input
               type="color"
-              // A colour input has no empty state, so "no colour" is the absence
-              // of the value in metadata and this control shows a neutral swatch
-              // for it. Clearing is a separate, explicit act: otherwise "no
-              // colour" is indistinguishable from "the colour that happens to
-              // be grey".
+              // colour 入力欄には空の状態がないため、「colour がない」とは
+              // メタデータ内に値が存在しないことであり、このコントロールはそれに
+              // 対して中立の見本を示す。クリア操作は分離した明示的な行為で
+              // ある。そうでなければ「colour がない」ことと「たまたまグレーで
+              // ある colour」が区別できなくなる。
               value={
                 detail.metadata.colour === undefined || detail.metadata.colour === ""
-                  ? "#8e8e93" /* palette-exempt: the native control's own neutral */
+                  ? "#8e8e93" /* palette-exempt: ネイティブコントロール自身の中立色 */
                   : detail.metadata.colour
               }
               onChange={(event) => onMetadata({ ...detail.metadata, colour: event.target.value })}

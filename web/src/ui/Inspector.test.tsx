@@ -18,17 +18,17 @@ describe("InspectorToggle", () => {
     expect(screen.getByRole("button", { name: "Hide details" })).toHaveAttribute("aria-expanded", "true");
   });
 
-  // Notices live inside a pane that is shut by default, so a host with a
-  // problem would look exactly like one without. The dot is what makes the
-  // pane worth opening, and it has to reach a screen reader too.
+  // notice は既定で閉じているペインの中に住んでいるので、問題を抱えた
+  // ホストは問題のないホストとまったく同じに見えてしまう。ドットこそが
+  // ペインを開く価値のあるものにし、それはスクリーンリーダーにも届かなければならない。
   it("says so when what is inside needs attention", () => {
     render(<InspectorToggle open={false} attention onToggle={vi.fn()} />);
 
     expect(screen.getByRole("button", { name: "Show details Needs attention" })).toBeInTheDocument();
   });
 
-  // An exact match on the whole accessible name, which is what makes this the
-  // opposite of the test above rather than a weaker version of it.
+  // accessible name 全体への完全一致であり、それがこのテストを上の
+  // テストの弱い版ではなく正反対のものにしている。
   it("does not say so otherwise", () => {
     render(<InspectorToggle open={false} attention={false} onToggle={vi.fn()} />);
 

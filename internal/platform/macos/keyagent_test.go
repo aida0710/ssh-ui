@@ -12,8 +12,8 @@ import (
 	"sshc/internal/platform/macos"
 )
 
-// recordingRunner captures the command that would have run. No test in this
-// package starts a real ssh-add or touches a real agent or Keychain.
+// recordingRunner は、実行されたはずのコマンドを記録する。このパッケージのどの
+// テストも、本物の ssh-add を起動せず、本物のエージェントやキーチェーンに触れない。
 type recordingRunner struct {
 	commands []platform.Command
 	outputs  []platform.Output
@@ -33,8 +33,8 @@ func (recorder *recordingRunner) RunOutput(_ context.Context, command platform.C
 	return output, nil
 }
 
-// installedToolchain resolves ssh-add through an injected Stat, so no test here
-// depends on which OpenSSH programs this machine happens to have.
+// installedToolchain は、注入された Stat を通して ssh-add を解決する。これにより
+// ここのどのテストも、このマシンにたまたま入っている OpenSSH に依存しない。
 func installedToolchain() macos.Toolchain {
 	programs := fstest.MapFS{"usr/bin/ssh-add": &fstest.MapFile{Mode: 0o755}}
 	return macos.Toolchain{
@@ -45,10 +45,10 @@ func installedToolchain() macos.Toolchain {
 	}
 }
 
-// agentLookup deliberately offers the askpass variables that would redirect
-// ssh-add to an external program of the user's choosing instead of letting it
-// read the standard input this application supplies. Every test in this file
-// runs against that hostile environment.
+// agentLookup は、ssh-add を、このアプリケーションが供給する標準入力を読ませる
+// 代わりにユーザーの選んだ外部プログラムへ向け直してしまう askpass 系の変数を、
+// 意図的に差し出す。このファイルのすべてのテストは、その敵対的な環境に対して
+// 走る。
 func agentLookup(name string) (string, bool) {
 	switch name {
 	case "SSH_AUTH_SOCK":
@@ -68,8 +68,8 @@ func agentLookup(name string) (string, bool) {
 	}
 }
 
-// assertScrubbedEnvironment is the point of the whole adapter: a child must
-// receive a replaced environment that cannot redirect it to an askpass program.
+// assertScrubbedEnvironment は、このアダプタ全体の要点である。子プロセスは、
+// askpass プログラムへ向け直されえない、置き換えられた環境を受け取らねばならない。
 func assertScrubbedEnvironment(t *testing.T, command platform.Command) {
 	t.Helper()
 	if command.Env == nil {

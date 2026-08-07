@@ -3,11 +3,12 @@ import type { HostEntry, Overview } from "../api/config";
 import { useTranslate } from "../i18n/context";
 import { control } from "../ui/form";
 import { canDrop, dragMimeType, type DragPayload } from "./dragdrop";
+import { Segmented } from "../ui/surface";
 
 export type HostSelection = { path: string; alias: string };
 
-// One decorated connection: the projection's entry plus the presentation the
-// metadata document carries for it.
+// 装飾済みの一つの connection。射影のエントリに、metadata ドキュメント
+// が運ぶ表示情報を足したものである。
 type Decorated = {
   host: HostEntry;
   group: string;
@@ -17,9 +18,9 @@ type Decorated = {
   order: number;
 };
 
-// One group in the tree. name is the full declared name, which every callback
-// and every drop target uses; label is its last segment, which is all the
-// heading shows, because the rest is the route the reader already walked.
+// ツリー内の一つのグループ。name は宣言された完全な名前で、すべての
+// コールバックとすべてのドロップターゲットがこれを使う。label はその最後の
+// セグメントで、見出しに出すのはこれだけだ——残りは読み手が既に辿った経路だからである。
 type GroupNode = {
   name: string;
   label: string;
@@ -32,23 +33,17 @@ type ConnectionTreeProps = {
   overview: Overview;
   selected: HostSelection | null;
   onSelect: (host: HostEntry) => void;
-  // A block whose Host line carries no concrete alias has no identity, so the
-  // host endpoint cannot address it. The tree hands it to the file view by
-  // path and line instead; the callback is required so such a row can never be
-  // rendered as a control with nothing behind it.
+  // Host 行に具体的な alias を持たないブロックには identity が無いため、
+  // host エンドポイントはそれを指し示せない。ツリーは代わりにパスと行で
+  // それをファイルビューへ渡す。コールバックを必須にしているのは、その
+  // ような行が背後に何も持たないコントロールとして描画されることを、決して許さないためだ。
   onOpenPatternRule: (path: string, line: number) => void;
-  // Where a dragged connection or group was dropped. The target is a group
-  // name, or the empty string for the "no group" heading.
+  // ドラッグした connection やグループがドロップされた先。ターゲットは
+  // グループ名か、"no group" 見出しを表す空文字列のいずれかである。
   onDrop: (payload: DragPayload, target: string) => void;
-  // Whether the tree is arranged by group or by file.
-  //
-  // The state is the page's rather than this component's, because the control
-  // that changes it lives in the window's toolbar — the tree is one pane of a
-  // screen now, not a rail that owns its own header.
-  grouping: Grouping;
 };
 
-export type Grouping = "groups" | "files";
+type Grouping = "groups" | "files";
 
 function hostLabel(host: HostEntry): string {
   return host.identity.alias === "" ? `Host ${host.patterns.join(" ")}` : host.identity.alias;
@@ -68,20 +63,23 @@ export function ConnectionTree({
   onSelect,
   onOpenPatternRule,
   onDrop,
-  grouping,
 }: ConnectionTreeProps) {
   const t = useTranslate();
+  // ツリーの並び順を表す、このコンポーネント自身の state である。これを
+  // 変えるコントロールがウィンドウのツールバーにあった間は page 側の state
+  // だったが、コントロールがフィルタの上に戻ってきたので、state もそれに伴って移ってきた。
+  const [grouping, setGrouping] = useState<Grouping>("groups");
   const [query, setQuery] = useState("");
-  // What is being dragged, held here rather than read back from the event. A
-  // dragover handler may read dataTransfer.types but not getData — the data is
-  // protected until the drop — so a target cannot inspect the drag in order to
-  // decide whether to accept it, and deciding from state is how that is done.
-  // The private type on dataTransfer is then only good for telling one of these
-  // drags from one that began outside the page.
+  // 何がドラッグされているかを、イベントから読み戻すのではなくここで
+  // 保持する。dragover ハンドラは dataTransfer.types は読めても getData
+  // は読めない——データはドロップされるまで保護されている——ので、
+  // ターゲットはドラッグを覗いて受け入れるか判断することができず、
+  // state から判断するのがその実現方法になる。dataTransfer 上のプライ
+  // ベートな型は、これらのドラッグをページ外で始まったものと区別するためだけに使う。
   const [dragging, setDragging] = useState<DragPayload | null>(null);
-  // Collapse is momentary and is not written down. Persisting it would put an
-  // interface state into metadata.json beside the settings that describe the
-  // configuration; a tree that opens fully on reload is the cheaper wrong.
+  // 折りたたみは一時的なもので、書き残さない。永続化すると、configuration
+  // を記述する設定の隣に interface の state を metadata.json へ持ち込む
+  // ことになる。再読み込みで全展開されるツリーの方が、まだ安く済む誤りである。
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
 
   const groupNames = useMemo(
@@ -95,9 +93,9 @@ export function ConnectionTree({
     setDragging(payload);
   }
 
-  // A drop target exists only while grouping by group. A file is not a place a
-  // connection can be put: the move API takes a group or a path, not a file the
-  // user happened to point at.
+  // ドロップターゲットが存在するのは group で並べている間だけだ。file は
+  // connection を置ける場所ではない——move API が受け取るのはグループ
+  // かパスであって、ユーザーがたまたま指したファイルではないからだ。
   function accepts(target: string): boolean {
     return grouping === "groups" && dragging !== null && canDrop(dragging, target, groupNames);
   }
@@ -119,10 +117,10 @@ export function ConnectionTree({
     return index;
   }, [overview.metadata.hosts]);
 
-  // Sorting is by order and then by the position the configuration gives, which
-  // Array.prototype.sort preserves for equal keys. Zero means "leave it where
-  // the file puts it", so an untouched workspace reads in file order and
-  // pinning one host does not renumber everything around it.
+  // 並び順はまず order、次に configuration が与える位置による。等しい
+  // キーは Array.prototype.sort がそのまま保つ。ゼロは「ファイルが置いた
+  // 場所のままにする」という意味であり、手を加えていないワークスペース
+  // はファイル順に読め、一つのホストを固定しても周囲の番号が振り直されることはない。
   const decorated = useMemo(
     () =>
       overview.hosts
@@ -130,8 +128,8 @@ export function ConnectionTree({
           const entry = metadataByAlias.get(`${host.identity.path}\u0000${host.identity.alias}`);
           return {
             host,
-            // Membership is the directory the file sits in, which the server
-            // already read from the path. Metadata has no say in it.
+            // 所属はファイルが置かれているディレクトリで決まり、それはサーバーが
+            // パスから既に読み取っている。metadata に発言権は無い。
             group: host.group ?? "",
             tags: entry?.tags ?? [],
             favourite: entry?.favourite ?? false,
@@ -153,10 +151,10 @@ export function ConnectionTree({
     [overview.files, visible],
   );
 
-  // A group name is its own hierarchy — work/eu is inside work — so the tree is
-  // built from the declared names rather than listed beside them. Drawn flat, a
-  // group made only to hold other groups read as an empty sibling of its own
-  // children, which is what it is not.
+  // グループ名はそれ自体が階層である——work/eu は work の中にある——の
+  // で、ツリーは宣言された名前を横に並べるのではなく、それらから組み立
+  // てる。フラットに描画すると、他のグループを保持するためだけに作った
+  // グループが、自分の子の空の兄弟のように見えてしまうが、実際はそうではない。
   const groupTree = useMemo(() => {
     const declared = [...(overview.metadata.groups ?? [])].sort(
       (left, right) => (left.order ?? 0) - (right.order ?? 0),
@@ -175,10 +173,10 @@ export function ConnectionTree({
     for (const group of declared) {
       const node = nodes.get(group.name);
       if (node === undefined) continue;
-      // The nearest declared ancestor is the parent. A group whose ancestors
-      // are all undeclared is a root: a directory no Include line names is not
-      // a group, and inventing one here would draw a heading for something that
-      // does not exist.
+      // 最も近い宣言済みの祖先が親になる。祖先がすべて未宣言のグループは
+      // root である——どの Include 行も名指ししないディレクトリはグループ
+      // ではなく、ここで一つでっち上げてしまうと、存在しないものに対して
+      // 見出しを描くことになる。
       let parent: GroupNode | undefined;
       let candidate = group.name;
       while (parent === undefined) {
@@ -195,8 +193,8 @@ export function ConnectionTree({
 
   const ungroupedItems = useMemo(() => visible.filter((item) => item.group === ""), [visible]);
 
-  // The row list, lifted out of the render so the recursive group renderer and
-  // the by-file view draw one thing rather than two copies of it.
+  // 行のリストは render から切り出してある。再帰的なグループレンダラー
+  // と by-file ビューが、二つのコピーではなく同じ一つのものを描くためだ。
   function renderItems(items: Decorated[]) {
     return (
             <ul>
@@ -206,9 +204,9 @@ export function ConnectionTree({
                   selected.path === item.host.identity.path &&
                   selected.alias === item.host.identity.alias;
                 const descriptionId = `host-${item.host.file.absolute}-${item.host.line}-description`;
-                // A pattern rule is addressable only by file and line, and only
-                // when its file lives inside the root: a file outside it has no
-                // relative path, so no view of this application can open it.
+                // パターンルールはファイルと行によってのみ指し示せる。しかもそれは
+                // そのファイルが root の内側にある場合に限られる——外側のファイルには
+                // 相対パスが無く、このアプリケーションのどのビューも開くことができない。
                 const rulePath = item.host.identity.alias === "" ? item.host.file.path : undefined;
                 return (
                   <li key={`${item.host.file.absolute}:${item.host.line}`}>
@@ -237,10 +235,10 @@ export function ConnectionTree({
                       <button
                         type="button"
                         onClick={() => onSelect(item.host)}
-                        // Only a block with a concrete alias is draggable: the
-                        // move API addresses a block by alias, and a pattern
-                        // rule has none. Those rows are rendered by the branch
-                        // above and are left alone.
+                        // 具体的な alias を持つブロックだけがドラッグ可能である。move API は
+                        // alias によってブロックを指し示すが、パターンルールには alias が無
+                        // い。そのような行は上の分岐でレンダリングされ、ここでは何もしない
+                        // ままにしてある。
                         draggable={grouping === "groups"}
                         onDragStart={(event) => {
                           if (grouping !== "groups") return;
@@ -258,12 +256,12 @@ export function ConnectionTree({
                       >
                         <span className="flex items-center gap-1">
                           {/*
-                            The colour, the star and the duplicate marker were
-                            written into the description below and nowhere else,
-                            so a sighted user could set a favourite and then not
-                            find it. aria-hidden here because that description
-                            still carries them for a screen reader, and hearing
-                            each one twice is worse than not seeing it once.
+                            色、星、重複マーカーは下の description にのみ書き込まれていて
+                            他には無い。なので晴眼のユーザーがお気に入りを設定した後、
+                            それを見つけられなくなることがあり得た。ここで aria-hidden
+                            にしているのは、その description がスクリーンリーダー向けに
+                            依然としてそれらを伝えており、二重に読み上げる方が
+                            一度も見えないより悪いからだ。
                           */}
                           {item.colour === "" ? null : (
                             <span
@@ -312,12 +310,12 @@ export function ConnectionTree({
     );
   }
 
-  // The drop behaviour every group block and the ungrouped bucket share.
+  // すべてのグループブロックと ungrouped バケットが共有する、ドロップの挙動。
   //
-  // The whole block takes the drop, not only the heading. Sections nest now, so
-  // the innermost one to accept stops the event: otherwise a drop into a child
-  // would also be a drop into its parent, and which one won would be an
-  // accident of bubbling order.
+  // ドロップを受けるのは見出しだけでなくブロック全体である。セクションは
+  // 今では入れ子になっているため、受理する最も内側のものがイベントを止
+  // める——そうしないと子へのドロップが親へのドロップにもなってしまい、
+  // どちらが勝つかはバブリングの順序という偶然に左右されてしまう。
   function dropHandlers(target: string) {
     return {
       onDragOver: (event: DragEvent) => {
@@ -342,13 +340,13 @@ export function ConnectionTree({
     }`;
   }
 
-  // One group, and everything under it.
+  // 一つのグループと、その配下にあるすべて。
   //
-  // A hidden group with nothing of its own draws no heading and no section: its
-  // children take its place, one level shallower. The flag is ignored while it
-  // holds connections, because metadata.json is a file a user may edit by hand
-  // and a heading that vanished with connections under it is the failure this
-  // guards against.
+  // 自身に何も持たない非表示グループは見出しもセクションも描かない——
+  // その子が一段浅い位置に代わりに現れる。connections を保持している間
+  // はこのフラグを無視する。metadata.json はユーザーが手で編集し得るファ
+  // イルであり、connections を抱えたまま見出しが消えてしまうのは、まさ
+  // にこの防護が防ごうとしている失敗だからだ。
   function renderGroup(node: GroupNode): ReactNode {
     if (node.hidden && node.items.length === 0) {
       return <Fragment key={node.name}>{node.children.map((child) => renderGroup(child))}</Fragment>;
@@ -376,8 +374,8 @@ export function ConnectionTree({
             </button>
           )}
           {/*
-            The heading is the drag handle. A whole block that could be picked
-            up would make picking up a connection inside it ambiguous.
+            見出しはドラッグハンドルである。ブロック全体をつかめるように
+            すると、その中の connection をつかむ操作が曖昧になってしまう。
           */}
           <h2
             draggable={grouping === "groups"}
@@ -407,10 +405,36 @@ export function ConnectionTree({
   }
 
   return (
-    // No chrome of its own. The pane around it draws the background and the
-    // border now, and the control that switches groups for files is in the
-    // window's toolbar.
+    // それ自体は chrome を持たない——背景と border を描くのは、それを
+    // 囲むペインの役目である。
+    //
+    // 並び替えコントロールはフィルタの上、ペインの先頭に置く。これと
+    // フィルタは同じ種類のことをしている——どの connection を画面に出し、
+    // どの順にするかを決める点で。ウィンドウのツールバーにあった頃は、
+    // セクションを切り替えるたびにシェルがクリアする chrome だったため、
+    // このリストではなくウィンドウに属するものとして読め、他のどこかに
+    // 目を向けた瞬間に消えてしまっていた。
+    //
+    // 目に見えるキャプションは無い——"Groups" と "Files" がそれ自体で
+    // 用途を語っており、残りはグループに付けた `aria-label` がスクリーンリーダーへ伝える。
+    //
+    // pill を二語ぶんの幅に保っているのは、それを包む flex row である。
+    // この column は子要素を引き伸ばすため、15rem にわたって描かれた
+    // segmented control は、片端に二つのボタン、もう片端に空の余白が伸び
+    // るバーになってしまう——ヘッダーの select 群が自前の幅を与えられる
+    // 前に、同じように伸びてしまっていたのと同様だ。
     <nav aria-label={t("tree.navLabel")} className="flex h-full flex-col gap-3">
+      <div className="flex">
+        <Segmented
+          label={t("tree.arrangeBy")}
+          value={grouping}
+          options={[
+            { value: "groups", label: t("tree.byGroups") },
+            { value: "files", label: t("tree.byFiles") },
+          ]}
+          onChange={setGrouping}
+        />
+      </div>
       <label className="text-xs text-ink-muted" htmlFor="connection-filter">
         {t("tree.filter")}
       </label>
@@ -430,12 +454,12 @@ export function ConnectionTree({
       ) : null}
 
       {/*
-        A declared group is shown whether or not it holds anything. Hiding an
-        empty one meant a group made in the Groups panel was absent here until
-        something was put in it, and — since a connection can be dragged between
-        groups — that emptying a group removed the only thing it could be
-        dragged back onto. A file is different: it is not a place a connection
-        can be put, so an empty one is only noise.
+        宣言済みのグループは、何も持っていなくても表示される。空のグルー
+        プを隠すと、Groups パネルで作ったグループは何かが入るまでここに
+        現れないことになり——connection はグループ間をドラッグできるの
+        で——あるグループを空にしてしまうと、ドラッグして戻せる唯一の
+        場所を失うことになる。file はこれと違う。connection を置ける
+        場所ではないので、空の file はただのノイズでしかない。
       */}      {grouping === "files" ? (
         fileSections.map((section) =>
           section.items.length === 0 ? null : (
@@ -451,9 +475,9 @@ export function ConnectionTree({
         <>
           {groupTree.map((node) => renderGroup(node))}
           {/*
-            The ungrouped bucket is not a declared group and has no children, so
-            it is drawn here rather than by the recursion. It is still a drop
-            target: dropping on it moves a connection back into the entry file.
+            ungrouped バケットは宣言済みグループではなく子も持たないため、
+            再帰ではなくここで描画する。それでもドロップターゲットでは
+            あり、そこへのドロップは connection をエントリファイルへ戻す。
           */}
           <section aria-label={t("tree.ungrouped")} {...dropHandlers("")} className={blockClass("")}>
             <h2 className="rounded px-1 text-xs font-semibold uppercase tracking-wide text-ink-faint">

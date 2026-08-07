@@ -14,34 +14,34 @@ import (
 	"sshc/internal/session"
 )
 
-// ConnectPath is where the command line asks what it needs to connect.
+// ConnectPath は、コマンドラインが接続に必要なものを尋ねる場所である。
 //
-// It is deliberately not under /api/. That surface is for the browser and is
-// guarded by a session cookie, a CSRF header and Fetch Metadata; a shell is
-// none of those and has none of them. This route authenticates by the secret
-// the running application left in its state directory instead, which is the
-// same reasoning that puts the askpass endpoint outside /api/ as well.
+// これは意図的に /api/ の下に置かれていない。その面はブラウザ向けであり、
+// セッション cookie と CSRF ヘッダーと Fetch Metadata で守られている。
+// シェルはそのいずれでもなく、そのいずれも持たない。このルートは代わりに、
+// 実行中のアプリケーションが state ディレクトリに残した secret で認証する。
+// askpass エンドポイントも /api/ の外に置かれているのと同じ理由による。
 const ConnectPath = "/cli/connect"
 
-// maxConnectBody bounds the request. An alias is a word.
+// maxConnectBody はリクエストを制限する。alias は 1 語である。
 const maxConnectBody = 4 << 10
 
-// ConnectHandlers answer `sshc <alias>`.
+// ConnectHandlers は `sshc <alias>` に応答する。
 type ConnectHandlers struct {
-	// Secret is what the caller must present. An empty one refuses every
-	// request: a server that could not write its handoff must not accept one.
+	// Secret は呼び出し側が提示すべきものである。空であればすべての
+	// リクエストを拒否する。handoff を書けなかったサーバーは受け付けてはならない。
 	Secret string
-	// Passwords mints the one-time askpass token. A nil one means no stored
-	// password is ever offered, which is a working connection with a prompt.
+	// Passwords は一度限りの askpass トークンを発行する。nil であれば
+	// 保存されたパスワードは一切提供されず、それはプロンプトが出る正常な接続である。
 	Passwords *secret.Service
-	// AskpassURL is where the helper redeems that token.
+	// AskpassURL は、ヘルパーがそのトークンを引き換える場所である。
 	AskpassURL string
-	// Warnings reports the directives OpenSSH will run for this host, so they
-	// are said before the connection rather than discovered during it.
+	// Warnings は、OpenSSH がこの host に対して実行するディレクティブを報告する。
+	// 接続の最中に気付くのではなく、事前に伝えられる。
 	Warnings func(alias string) []string
-	// Sessions mints the way into the browser, and BaseURL is where that way
-	// leads. Both nil means this application cannot be opened from the command
-	// line, which is the state of a build with no session manager.
+	// Sessions はブラウザへの入口を発行し、BaseURL はその入口が導く先である。
+	// 両方が nil であれば、このアプリケーションはコマンドラインから開けない。
+	// これは session manager を持たないビルドの状態である。
 	Sessions *session.Manager
 	BaseURL  string
 }
@@ -57,13 +57,13 @@ type connectResponse struct {
 	Warnings     []string `json:"warnings"`
 }
 
-// OpenPath is where the command line asks for a way into the browser.
+// OpenPath は、コマンドラインがブラウザへの入口を求める場所である。
 //
-// A bootstrap token is spent on first use and only a new process printed
-// another, which is fine when the user starts the application and it prints a
-// URL, and useless when it runs as a background agent whose standard output
-// goes nowhere. Rather than write that URL to a log file — a live credential in
-// a place nothing protects — it is minted here, when somebody asks.
+// bootstrap トークンは初回使用時に消費され、別のトークンを出力できるのは新しい
+// プロセスだけだった。これは、ユーザーがアプリケーションを起動して URL が印字
+// される場合には問題ないが、標準出力がどこにも届かないバックグラウンドエージェント
+// では役に立たない。その URL を——何にも守られていない場所にある生きた credential
+// を——ログファイルへ書く代わりに、誰かが尋ねたときにここで発行する。
 const OpenPath = "/cli/open"
 
 type openResponse struct {
@@ -75,7 +75,7 @@ func registerConnectRoutes(engine *echo.Echo, handlers ConnectHandlers) {
 	engine.POST(OpenPath, handlers.Open)
 }
 
-// Open answers with a URL that will establish a session.
+// Open は、セッションを確立する URL で応答する。
 func (h ConnectHandlers) Open(c *echo.Context) error {
 	if !h.authorised(c.Request()) {
 		return c.NoContent(http.StatusForbidden)
@@ -90,20 +90,20 @@ func (h ConnectHandlers) Open(c *echo.Context) error {
 	return c.JSON(http.StatusOK, openResponse{URL: h.BaseURL + "/#bootstrap=" + bootstrap})
 }
 
-// authorised reports whether the caller read the handoff rather than guessed
-// at it. Every refusal is the same shape from outside, so a caller without the
-// secret learns nothing at all.
+// authorised は、呼び出し側が handoff を推測ではなく読んだかどうかを報告する。
+// あらゆる拒否は外から見て同じ形をしているので、secret を持たない呼び出し側は
+// 何も知ることができない。
 func (h ConnectHandlers) authorised(request *http.Request) bool {
 	presented := request.Header.Get(handoff.HeaderName)
 	return h.Secret != "" && len(presented) == len(h.Secret) &&
 		subtle.ConstantTimeCompare([]byte(presented), []byte(h.Secret)) == 1
 }
 
-// Connect answers with what one connection needs, and nothing that outlives it.
+// Connect は、1 個の接続が必要とするものだけを返し、それより長生きするものは何も返さない。
 //
-// Every refusal is the same shape from outside, so this endpoint cannot be used
-// to find out which aliases exist or which have a password: a caller without
-// the secret learns nothing at all.
+// あらゆる拒否は外から見て同じ形をしているので、このエンドポイントを
+// 使ってどの alias が存在するか、どれにパスワードがあるかを知ることはできない。
+// secret を持たない呼び出し側は何も知ることができない。
 func (h ConnectHandlers) Connect(c *echo.Context) error {
 	request := c.Request()
 	if request.Header.Get(echo.HeaderContentType) != "application/json" {
@@ -127,9 +127,9 @@ func (h ConnectHandlers) Connect(c *echo.Context) error {
 			answer.Warnings = warnings
 		}
 	}
-	// A token only where there is something to redeem it for. Everything else —
-	// a shut vault, no stored password, no endpoint — is a connection where
-	// OpenSSH asks for the password itself, which is a working connection.
+	// トークンが存在するのは、それと引き換えるものがある場合だけである。
+	// それ以外——閉じた vault、保存されたパスワードなし、エンドポイントなし——は
+	// すべて OpenSSH 自身がパスワードを尋ねる接続であり、それは正常な接続である。
 	if h.Passwords != nil && h.AskpassURL != "" {
 		if token, err := h.Passwords.IssueToken(decoded.Alias); err == nil {
 			answer.AskpassToken = token

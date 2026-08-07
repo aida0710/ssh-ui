@@ -1,8 +1,8 @@
-// Package knownhosts reads and edits the user's known_hosts file.
+// Package knownhosts は、ユーザーの known_hosts ファイルを読み書きする。
 //
-// Parsing is lossless: an unmodified file renders back byte for byte, so a
-// deletion removes exactly the lines it was asked to remove and touches
-// nothing else. Every write goes through the storage transaction manager.
+// 解析は無損失である。変更していないファイルは 1 バイト違わず元に戻るので、削除は
+// 求められた行だけを正確に取り除き、それ以外には手を触れない。書き込みはすべて
+// ストレージのトランザクションマネージャを通る。
 package knownhosts
 
 import (
@@ -14,10 +14,10 @@ import (
 	"strings"
 )
 
-// ErrInvalidKey reports a key blob that is not valid base64.
+// ErrInvalidKey は、鍵のブロブが妥当な base64 でないことを報告する。
 var ErrInvalidKey = errors.New("public key is not valid base64")
 
-// Entry is one parsed known_hosts record.
+// Entry は、解析済みの known_hosts レコードひとつ。
 type Entry struct {
 	Marker      string
 	Hosts       []string
@@ -28,8 +28,8 @@ type Entry struct {
 	Comment     string
 }
 
-// Line is one physical line. Entry is nil for a blank line, a comment, or a
-// line this package could not parse; such a line is preserved verbatim.
+// Line は物理行ひとつ。空行、コメント、そしてこのパッケージが解析できなかった行
+// では Entry が nil になる。そうした行はそのまま逐語的に保存される。
 type Line struct {
 	Number  int
 	Raw     string
@@ -38,12 +38,12 @@ type Line struct {
 	Problem string
 }
 
-// File is a parsed known_hosts file.
+// File は、解析済みの known_hosts ファイル。
 type File struct {
 	Lines []Line
 }
 
-// ParseFile splits contents into lines and parses the entries.
+// ParseFile は contents を行に分割し、エントリを解析する。
 func ParseFile(contents []byte) *File {
 	file := &File{}
 	remaining := string(contents)
@@ -67,7 +67,7 @@ func ParseFile(contents []byte) *File {
 	return file
 }
 
-// Render returns the file exactly as it was read.
+// Render は、読み込んだときとまったく同じファイルを返す。
 func (f *File) Render() []byte {
 	var builder strings.Builder
 	for _, line := range f.Lines {
@@ -77,7 +77,7 @@ func (f *File) Render() []byte {
 	return []byte(builder.String())
 }
 
-// Entries returns only the lines that hold a parsed record.
+// Entries は、解析済みレコードを持つ行だけを返す。
 func (f *File) Entries() []Line {
 	var entries []Line
 	for _, line := range f.Lines {
@@ -125,7 +125,7 @@ func parseEntry(text string) (*Entry, error) {
 	return entry, nil
 }
 
-// Fingerprint returns the SHA256 fingerprint OpenSSH prints for a public key.
+// Fingerprint は、OpenSSH が公開鍵に対して表示する SHA256 フィンガープリントを返す。
 func Fingerprint(encodedKey string) (string, error) {
 	blob, err := base64.StdEncoding.DecodeString(encodedKey)
 	if err != nil || len(blob) == 0 {
@@ -135,11 +135,11 @@ func Fingerprint(encodedKey string) (string, error) {
 	return "SHA256:" + base64.RawStdEncoding.EncodeToString(sum[:]), nil
 }
 
-// MatchesHost reports whether this entry covers host.
+// MatchesHost は、このエントリが host を対象にしているかを報告する。
 //
-// A hashed entry cannot be read back, but it can be tested: OpenSSH stores
-// |1|base64(salt)|base64(HMAC-SHA1(salt, host)), so the same computation
-// answers the question without revealing anything.
+// ハッシュ化されたエントリは読み戻せないが、検査はできる。OpenSSH は
+// |1|base64(salt)|base64(HMAC-SHA1(salt, host)) を保存するので、同じ計算をすれば
+// 何も明かさずに問いに答えられる。
 func (e *Entry) MatchesHost(host string) bool {
 	for _, pattern := range e.Hosts {
 		if e.Hashed {
@@ -170,8 +170,8 @@ func hashedMatch(field, host string) bool {
 	return hmac.Equal(mac.Sum(nil), expected)
 }
 
-// matchHostPattern implements the '*' and '?' matching OpenSSH uses for
-// known_hosts patterns, case-insensitively.
+// matchHostPattern は、known_hosts のパターンで OpenSSH が使う '*' と '?' の
+// マッチングを、大文字小文字を区別せずに実装する。
 func matchHostPattern(pattern, host string) bool {
 	loweredPattern := strings.ToLower(pattern)
 	loweredHost := strings.ToLower(host)
@@ -202,8 +202,8 @@ func matchHostPattern(pattern, host string) bool {
 	return patternIndex == len(loweredPattern)
 }
 
-// Search returns the entries whose host, key type, fingerprint or comment
-// contains query. An empty query returns every entry.
+// Search は、ホスト・鍵種別・フィンガープリント・コメントのいずれかに query を
+// 含むエントリを返す。query が空ならすべてのエントリを返す。
 func Search(file *File, query string) []Line {
 	wanted := strings.ToLower(strings.TrimSpace(query))
 	var found []Line

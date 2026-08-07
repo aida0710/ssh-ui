@@ -1,9 +1,9 @@
-// Package objectstore is an S3-compatible client, small enough to be read.
+// Package objectstore は、読み切れる程度に小さい S3 互換クライアントである。
 //
-// It exists because this application takes no new module dependency, and
-// because the part of the S3 API it needs is three verbs. Signature Version 4
-// is HMAC-SHA256 applied four times to strings this file builds explicitly, so
-// the whole of it is the standard library.
+// これがあるのは、このアプリケーションが新しいモジュール依存を持たないからであり、
+// また、必要とする S3 API の部分が三つの動詞だけだからである。Signature Version 4
+// は、このファイルが明示的に組み立てる文字列に HMAC-SHA256 を四回適用したもので、
+// その全体が標準ライブラリで書ける。
 package objectstore
 
 import (
@@ -17,18 +17,18 @@ import (
 	"time"
 )
 
-// Credentials are the access key pair. They are never logged and never appear
-// in a URL: this client signs with headers only.
+// Credentials はアクセスキーの組。ログに出ることはなく、URL に現れることもない。
+// このクライアントはヘッダーだけで署名する。
 type Credentials struct {
 	AccessKeyID     string
 	SecretAccessKey string
 }
 
-// ErrUnsignedPayloadRefused rejects a request this client will not sign.
+// ErrUnsignedPayloadRefused は、このクライアントが署名しないリクエストを拒否する。
 //
-// S3 allows UNSIGNED-PAYLOAD, and this client does not offer it. Everything it
-// sends is a snapshot of somebody's ~/.ssh; signing the body is what makes a
-// modified body a rejected request rather than an accepted one.
+// S3 は UNSIGNED-PAYLOAD を許すが、このクライアントはそれを提供しない。送るものは
+// すべて誰かの ~/.ssh のスナップショットである。本文に署名することが、改変された
+// 本文を、受理されるリクエストではなく拒否されるリクエストにしている。
 var ErrUnsignedPayloadRefused = errors.New("this client always signs the payload")
 
 const (
@@ -40,11 +40,11 @@ const (
 	dateFormat           = "20060102"
 )
 
-// Sign adds Authorization, X-Amz-Date and X-Amz-Content-Sha256 to request.
+// Sign は、リクエストに Authorization、X-Amz-Date、X-Amz-Content-Sha256 を加える。
 //
-// payload is the exact body; a nil payload signs the hash of the empty string,
-// which is what a GET or a HEAD has. now is a parameter rather than a call to
-// time.Now so that every test is exact rather than approximately right.
+// payload は本文そのもの。nil の payload は空文字列のハッシュに署名する。これは
+// GET や HEAD が持つものである。now が time.Now の呼び出しではなくパラメータなのは、
+// どのテストもおおむね正しいのではなく厳密に正しくあるためだ。
 func Sign(request *http.Request, credentials Credentials, region, service string, payload []byte, now time.Time) error {
 	if request.Header.Get(contentSHA256Header) == unsignedPayloadValue {
 		return ErrUnsignedPayloadRefused
@@ -73,9 +73,9 @@ func Sign(request *http.Request, credentials Credentials, region, service string
 	return nil
 }
 
-// CanonicalRequest builds the canonical request string. It is exported because
-// the published AWS test vectors give it explicitly, and a signer tested only
-// on its final signature tells you nothing about where it went wrong.
+// CanonicalRequest は正規化リクエスト文字列を組み立てる。公開されている AWS の
+// テストベクタがこれを明示的に与えているためエクスポートしてある。最終署名だけを
+// テストした署名器は、どこで誤ったのかを何も教えてくれない。
 func CanonicalRequest(request *http.Request, canonicalHeaders, signedHeaders, payloadHash string) string {
 	path := request.URL.EscapedPath()
 	if path == "" {
@@ -91,7 +91,7 @@ func CanonicalRequest(request *http.Request, canonicalHeaders, signedHeaders, pa
 	}, "\n")
 }
 
-// StringToSign builds the string the signature is computed over.
+// StringToSign は、署名の計算対象となる文字列を組み立てる。
 func StringToSign(algorithmName string, stamp time.Time, scope, canonical string) string {
 	return strings.Join([]string{
 		algorithmName,
@@ -101,10 +101,10 @@ func StringToSign(algorithmName string, stamp time.Time, scope, canonical string
 	}, "\n")
 }
 
-// canonicalHeaderSet returns the signed header list and the canonical header
-// block. Every header on the request is signed: this client sets only the ones
-// it means to send, so signing all of them is both simpler and stricter than
-// choosing a subset.
+// canonicalHeaderSet は、署名対象ヘッダーの一覧と正規化ヘッダーのブロックを返す。
+// リクエスト上のすべてのヘッダーに署名する。このクライアントは送るつもりのある
+// ものしか設定しないので、全部に署名する方が、部分集合を選ぶより単純でもあり
+// 厳しくもある。
 func canonicalHeaderSet(request *http.Request) (signed, canonical string) {
 	names := make([]string, 0, len(request.Header)+1)
 	values := map[string]string{}
@@ -148,8 +148,8 @@ func canonicalQuery(request *http.Request) string {
 	return strings.Join(parts, "&")
 }
 
-// escape is RFC 3986 unreserved-only percent encoding. net/url's QueryEscape
-// turns a space into "+", which SigV4 does not accept.
+// escape は RFC 3986 の unreserved のみのパーセントエンコーディング。net/url の
+// QueryEscape は空白を "+" に変えるが、SigV4 はそれを受け付けない。
 func escape(value string) string {
 	const unreserved = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.~"
 	var builder strings.Builder

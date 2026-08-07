@@ -14,8 +14,8 @@ describe("GroupInspector", () => {
     const user = userEvent.setup();
     render(<GroupInspector group={group()} members={[]} onUpdate={onUpdate} />);
 
-    // One character at a time: the control is driven by metadata the mocked
-    // parent never writes back, so each keystroke starts from the same value.
+    // 一文字ずつ。このコントロールはモックされた親が決して書き戻さない
+    // メタデータに制御されているため、各キー入力は同じ値から始まる。
     await user.type(screen.getByLabelText("Display order"), "3");
     expect(onUpdate).toHaveBeenLastCalledWith({ order: 3 });
 
@@ -36,8 +36,8 @@ describe("GroupInspector", () => {
     expect(onUpdate).toHaveBeenCalledWith({ hidden: true });
   });
 
-  // Hiding a group that holds connections would take them out of view with it.
-  // Refusing the control is better than a flag that quietly does nothing.
+  // 接続を保持するグループを隠せば、それらも一緒に見えなくなってしまう。
+  // コントロールを拒否する方が、黙って何もしないフラグよりましである。
   it("refuses hiding for a group that holds connections, and says why", () => {
     render(<GroupInspector group={group()} members={["build01"]} onUpdate={vi.fn()} />);
 
@@ -45,9 +45,9 @@ describe("GroupInspector", () => {
     expect(screen.getByText(/holds connections of its own/)).toBeInTheDocument();
   });
 
-  // A colour input has no empty state, so an unset colour shows a neutral
-  // swatch and clearing has to be its own act — otherwise "no colour" is
-  // indistinguishable from "the colour that happens to be grey".
+  // colour 入力欄には空の状態がないため、未設定の colour は中立の
+  // 見本を示し、クリア操作はそれ自体独立した行為でなければならない
+  // ——さもなければ「colour がない」ことと「たまたまグレーである colour」が区別できなくなる。
   it("offers no clear button until there is a colour to clear", async () => {
     const onUpdate = vi.fn();
     const user = userEvent.setup();

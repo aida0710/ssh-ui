@@ -17,9 +17,9 @@ export class ApiError extends Error {
   }
 }
 
-// failureCode is the code the server used to refuse an operation, so an
-// interface can quote it instead of paraphrasing it. A failure that never
-// reached the server has no code.
+// failureCode はサーバーが操作を拒否する際に使ったコードであり、インターフェースは
+// それを言い換えるのではなく引用できる。サーバーまで届かなかった
+// 失敗にはコードがない。
 export function failureCode(error: unknown): string {
   return error instanceof ApiError ? error.code : "";
 }
@@ -36,11 +36,11 @@ async function readProblem(response: Response): Promise<Problem | null> {
   }
 }
 
-// The application is behind the master password, and the vault shuts itself
-// after a day of not being used. That can happen between any two requests, so
-// every refusal is inspected for it here rather than in each screen: a screen
-// that handled it locally would show "that could not be done" on a shell that
-// is no longer usable at all.
+// アプリケーションは master password の向こうにあり、vault は使われない
+// まま 1 日経つと自ら閉じる。これはどの二つのリクエストの間にも起こり
+// 得るため、それを調べるのは各画面ではなくここで一括して行う。
+// それを各画面が個別に扱えば、もはやまったく使えなくなったシェル上で
+// 「それはできませんでした」と表示することになる。
 let onLocked: (() => void) | null = null;
 
 export function whenLocked(handler: (() => void) | null) {
@@ -80,9 +80,9 @@ export const apiClient = {
     if (!response.ok) throw new Error("health_failed");
     return validateHealth(await response.json());
   },
-  // A read carries the token as well, because the cookie alone is not proof
-  // of anything: it is not scoped to a port, so another server on 127.0.0.1
-  // receives it, while the token stays in this page's memory.
+  // 読み取りもトークンを運ぶ。クッキーだけでは何の証明にもならないからである。
+  // クッキーはポートにスコープされないため、127.0.0.1 上の別のサーバーもそれを
+  // 受け取ってしまうが、トークンはこのページのメモリに留まる。
   async read(path: string): Promise<unknown> {
     if (!csrfToken) throw new Error("csrf_unavailable");
     const response = await fetch(path, {
@@ -92,9 +92,9 @@ export const apiClient = {
     if (!response.ok) throw await failure(response);
     return response.json() as Promise<unknown>;
   },
-  // send performs a mutation and returns the raw response, so a caller can read
-  // a body that accompanies a rejection — such as the blockers the server
-  // returns with a refused restore, which are an answer rather than a failure.
+  // send は更新系の操作を実行し、生のレスポンスを返す。呼び出し側は拒否に
+  // 添えられた本体を読めるようにするためである——たとえば復元が
+  // 拒否された際にサーバーが返す blockers は、失敗ではなく答えである。
   async send(path: string, init: RequestInit): Promise<Response> {
     const target = new URL(path, window.location.origin);
     if (target.origin !== window.location.origin) {

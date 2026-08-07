@@ -23,8 +23,8 @@ import (
 
 const remoteKeyLine = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPr0nHGmQb99GXmUofxJM4BXGwGzO0jGsQFBspODbkvS fixture@example"
 
-// sequencedRunner replays one canned output per call, so a probe and a
-// registration can be answered differently without starting a process.
+// sequencedRunner は呼び出しごとに用意した出力を 1 つずつ再生する。
+// これにより、プロセスを起動せずに probe と registration に別々の応答をさせられる。
 type sequencedRunner struct {
 	commands []platform.Command
 	outputs  []platform.Output
@@ -119,8 +119,8 @@ func TestRemoteKeyPlanDescribesTheChangeWithoutContactingAnything(t *testing.T) 
 	if len(payload.Manual) == 0 {
 		t.Error("the plan must offer manual instructions")
 	}
-	// The plan shows the ProxyCommand the configuration carries, because
-	// connecting to register the key would run it.
+	// plan は設定が持つ ProxyCommand を表示する。鍵を登録するために
+	// 接続すれば、それが実行されてしまうからだ。
 	if len(payload.ExecutableDirectives) != 1 {
 		t.Errorf("executable directives = %#v", payload.ExecutableDirectives)
 	}
@@ -166,8 +166,8 @@ func TestRemoteKeyRegisterNeedsAConfirmationAndSendsTheKeyOnStdin(t *testing.T) 
 	if string(register.Stdin) != remoteKeyLine+"\n" {
 		t.Errorf("stdin = %q, want the key line", register.Stdin)
 	}
-	// Nothing variable may appear in argv: the routine is a constant and the
-	// key travels on standard input.
+	// argv に可変のものが現れてはならない。routine は定数であり、
+	// 鍵は標準入力に乗せて運ばれる。
 	for _, argument := range register.Arguments {
 		if argument == remotekey.Routine {
 			continue

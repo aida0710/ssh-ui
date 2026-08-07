@@ -1,17 +1,17 @@
 @import "tailwindcss";
 
-/* The palette, given once per theme.
+/* テーマごとに一度だけ与えるパレット。
  *
- * Names say what a value is for, not what colour it is: a token called
- * `zinc-800` cannot be given a different value in the other theme, and a token
- * called `card` can. Components reference these through Tailwind utilities —
- * `bg-card`, `text-ink-muted`, `border-line` — and never carry a `dark:`
- * variant, because the variant is this file.
+ * 名前はその値が何のためのものかを言うのであって、何色かを言うのではない。
+ * `zinc-800` という名前のトークンには別テーマで別の値を与えられないが、`card`
+ * という名前のトークンには与えられる。コンポーネントはこれらを Tailwind の
+ * ユーティリティ — `bg-card`、`text-ink-muted`、`border-line` — 経由で参照し、
+ * `dark:` variant を持つことは決してない。variant がこのファイルだからである。
  *
- * The rule these encode: the accent belongs to the one action a screen is for.
- * Amber is a notice, red destroys something, green means the local session is
- * alive. Nothing else is coloured, so colour on screen means something
- * happened.
+ * これらが符号化しているルール。accent は、その画面が存在する目的である唯一の
+ * 操作に属する。琥珀は注意、赤は何かを破壊するもの、緑はローカルセッションが
+ * 生きていることを意味する。それ以外に色は付かないので、画面上の色は何かが
+ * 起きたことを意味する。
  */
 :root {
   color-scheme: light;
@@ -92,7 +92,7 @@
   color: var(--ui-ink);
 }
 
-/* The inspector is the only thing that moves, and it stops moving here. */
+/* 動くものはインスペクタだけであり、その動きはここで止まる。 */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

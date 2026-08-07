@@ -63,8 +63,8 @@ func TestValidateMetadataRefusesKeyMaterialAndUnknownPaths(t *testing.T) {
 		t.Fatalf("path error = %v, want ErrMetadataPath", err)
 	}
 
-	// A group name is a directory path, so a document that names one this
-	// application would refuse to create must not be believed either.
+	// グループ名はディレクトリパスなので、このアプリケーションが作成を
+	// 拒否するような名前を挙げる文書もまた、信用してはならない。
 	for _, name := range []string{"../escape", "", "sshc", "work/"} {
 		withBadGroup := NewMetadata()
 		withBadGroup.Groups = []GroupMetadata{{Name: name}}
@@ -73,8 +73,8 @@ func TestValidateMetadataRefusesKeyMaterialAndUnknownPaths(t *testing.T) {
 		}
 	}
 
-	// Two groups whose names differ only in case are one directory on a default
-	// macOS volume, so the document that declares both is refused.
+	// 大文字小文字だけが異なる 2 つのグループは、デフォルトの macOS ボリューム
+	// では 1 個のディレクトリになるので、両方を宣言する文書は拒否される。
 	withCaseClash := NewMetadata()
 	withCaseClash.Groups = []GroupMetadata{{Name: "work"}, {Name: "Work"}}
 	if err := ValidateMetadata(withCaseClash); !errors.Is(err, ErrMetadataGroup) {
@@ -95,8 +95,8 @@ func TestMetadataCarriesOnlyPresentation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EncodeMetadata error = %v", err)
 	}
-	// Membership is the directory and a note is a comment, so neither has a
-	// key here. Asserting on the bytes is what stops one creeping back.
+	// membership はディレクトリであり、note はコメントなので、ここにはどちら
+	// のキーも無い。バイト列そのものを assert することが、こっそり戻るのを防ぐ。
 	for _, absent := range []string{`"group"`, `"parent"`} {
 		if strings.Contains(string(encoded), absent) {
 			t.Errorf("encoded metadata still carries %s:\n%s", absent, encoded)
@@ -108,9 +108,9 @@ func TestMetadataCarriesOnlyPresentation(t *testing.T) {
 }
 
 func TestDecodeMetadataDropsGroupMembershipFromAnOlderDocument(t *testing.T) {
-	// A version 1 document decodes and simply loses the two fields that no
-	// longer mean anything. The directory is authoritative now, and a v1
-	// document's group names a layout that does not exist on disk yet.
+	// バージョン 1 の文書はデコードされ、もはや意味を持たない 2 個のフィールドを
+	// 単に失う。今やディレクトリが正であり、v1 文書のグループが名指す
+	// レイアウトはディスク上にはまだ存在しない。
 	const document = `{"schemaVersion":1,"groups":[{"name":"work","parent":"company"}],` +
 		`"hosts":[{"identity":{"path":"config","alias":"bastion"},"group":"work","colour":"#f97316"}]}`
 
@@ -230,11 +230,11 @@ func TestRenameHostIdentityMovesExactlyOneEntry(t *testing.T) {
 	}
 }
 
-// Hidden is presentation, like Colour and Order: this engine carries it and
-// never acts on it. A group whose purpose is to hold other groups has nothing
-// of its own to show in the connections tree, and this takes its heading out of
-// it — while leaving the Include line, the directory and every answer ssh gives
-// exactly as they were.
+// Hidden は Colour や Order と同様に見た目であり、このエンジンはそれを運ぶ
+// だけで決して作用しない。他のグループを保持することが目的のグループは、
+// connections ツリーにそれ自体として示すものが何もなく、これはその見出し
+// をそこから取り除く——一方で Include 行、ディレクトリ、ssh が返す
+// あらゆる答えはそのままにする。
 func TestGroupMetadataCarriesTheHiddenFlagThroughARoundTrip(t *testing.T) {
 	metadata := NewMetadata()
 	metadata.Groups = []GroupMetadata{{Name: "dubguild", Hidden: true}, {Name: "dubguild/mdx"}}
@@ -256,8 +256,8 @@ func TestGroupMetadataCarriesTheHiddenFlagThroughARoundTrip(t *testing.T) {
 	}
 }
 
-// A group that is not hidden writes no key at all, so an untouched workspace's
-// metadata does not grow a field for every group the moment this ships.
+// hidden でないグループはキーを一切書き込まないので、これが出荷された瞬間に、
+// 手つかずのワークスペースの metadata がすべてのグループ分のフィールドを増やすことはない。
 func TestAGroupThatIsNotHiddenWritesNoHiddenKey(t *testing.T) {
 	metadata := NewMetadata()
 	metadata.Groups = []GroupMetadata{{Name: "work"}}

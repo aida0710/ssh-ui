@@ -53,8 +53,8 @@ func TestPlanProducesOneTransaction(t *testing.T) {
 }
 
 func TestEveryChangeCarriesAPrecondition(t *testing.T) {
-	// A change with a zero precondition would overwrite blind, which is the
-	// one thing this application does not do anywhere else either.
+	// 事前条件がゼロの変更は、見ずに上書きすることになる。それは、このアプリケーション
+	// が他のどこでもしていない唯一のことである。
 	remote := manifestOf(file("config", "new", false))
 	base := manifestOf(file("config", "old", false))
 	local := map[string]string{"config": digestOf("old")}
@@ -83,12 +83,12 @@ func TestANewFileGetsAPreconditionThatItDoesNotExist(t *testing.T) {
 	}
 }
 
-// A pull that overwrites a local private key keeps the previous one.
+// ローカルの秘密鍵を上書きする pull は、以前のものを残す。
 //
-// It used to ask for no backup, because the copy would have been the key in the
-// clear. The backups are sealed with the master password now, and this is
-// exactly the case where the key that was replaced is what somebody wants
-// back: a snapshot from another machine landing on top of a local key.
+// 以前はバックアップを求めなかった。そのコピーが平文の鍵になってしまうからだ。いま
+// バックアップはマスターパスワードで封じられており、そしてここは、置き換えられた鍵
+// こそが取り戻したいものになるまさにその場合である。別のマシンからのスナップショット
+// が、ローカルの鍵の上に着地するのだから。
 func TestPlanKeepsTheKeyAPullOverwrites(t *testing.T) {
 	remote := manifestOf(
 		file("config", "c", false),
@@ -111,12 +111,12 @@ func TestPlanKeepsTheKeyAPullOverwrites(t *testing.T) {
 }
 
 func TestPlanDistinguishesDeletedThereFromCreatedHere(t *testing.T) {
-	// The last-synced manifest is the only thing that can tell them apart, and
-	// getting it wrong deletes a file the user just made.
+	// 両者を区別できるのは、最後に同期したマニフェストだけである。ここを間違えると、
+	// ユーザーがいま作ったばかりのファイルが削除される。
 	base := manifestOf(file("connections/gone.conf", "old", false))
 	local := map[string]string{
-		"connections/gone.conf": digestOf("old"),  // in the base, not in the remote → deleted there
-		"connections/new.conf":  digestOf("mine"), // in neither → created here
+		"connections/gone.conf": digestOf("old"),  // base にあり remote にない → あちらで削除された
+		"connections/new.conf":  digestOf("mine"), // どちらにもない → ここで作られた
 	}
 	remote := manifestOf(file("config", "c", false))
 
@@ -138,9 +138,9 @@ func TestPlanDistinguishesDeletedThereFromCreatedHere(t *testing.T) {
 }
 
 func TestPlanReportsAConflictInsteadOfChoosing(t *testing.T) {
-	// Changed on both sides. A merge of two ssh_config files that both changed
-	// the same Host block has no correct answer, and guessing one would
-	// violate the byte-preservation promise the parser exists to keep.
+	// 両側で変わった。同じ Host ブロックを双方が変えた二つの ssh_config のマージに
+	// 正解はなく、推測すれば、パーサが守るために存在するバイト保存の約束に反する
+	// ことになる。
 	base := manifestOf(file("config", "common ancestor", false))
 	local := map[string]string{"config": digestOf("mine")}
 	remote := manifestOf(file("config", "theirs", false))
@@ -164,8 +164,8 @@ func TestPlanReportsAConflictInsteadOfChoosing(t *testing.T) {
 }
 
 func TestAConflictCarriesNoContents(t *testing.T) {
-	// A conflict record that carried a private key's bytes would be a copy of
-	// that key in a response body.
+	// 秘密鍵のバイト列を運ぶ衝突レコードは、レスポンス本文の中にあるその鍵のコピー
+	// になってしまう。
 	base := manifestOf(file("keys/id_ed25519", "ancestor", true))
 	local := map[string]string{"keys/id_ed25519": digestOf("local key material")}
 	remote := manifestOf(file("keys/id_ed25519", "remote key material", true))
@@ -203,8 +203,8 @@ func TestDeletedThereButEditedHereIsAConflict(t *testing.T) {
 }
 
 func TestAFirstSyncDeletesNothing(t *testing.T) {
-	// With no base manifest nothing can be called a deletion, so a machine
-	// that has never synced cannot lose a file by pulling.
+	// base のマニフェストがなければ何も削除とは呼べないので、一度も同期していない
+	// マシンが pull によってファイルを失うことはない。
 	local := map[string]string{"connections/local-only.conf": digestOf("mine")}
 	remote := manifestOf(file("config", "c", false))
 
@@ -232,10 +232,10 @@ func TestAnIdenticalSnapshotIsNothingToApply(t *testing.T) {
 }
 
 func TestPlanNeedsNothingStorageDoesNotAlreadyHave(t *testing.T) {
-	// If a pull could not be expressed with today's Change, Removal and
-	// Request, the design would be wrong and should come back to the plan
-	// rather than grow the storage layer. This asserts the shape it produces
-	// is exactly that vocabulary.
+	// 現在の Change、Removal、Request で pull を表現できないなら、設計の方が誤って
+	// いるのであって、ストレージ層を膨らませるのではなく計画へ戻るべきである。これは、
+	// 生成される形がまさにその語彙だけでできていることを
+	// 表明する。
 	base := manifestOf(file("config", "old", false), file("gone.conf", "g", false))
 	local := map[string]string{"config": digestOf("old"), "gone.conf": digestOf("g")}
 	remote := manifestOf(file("config", "new", false))

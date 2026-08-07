@@ -1,9 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// Traces, videos and screenshots are all disabled on purpose. One end-to-end
-// flow reveals a private key on screen by design, and an artefact directory is
-// exactly the kind of place a secret is forgotten. Failures are diagnosed from
-// the assertion message and the server's own output.
+// trace、動画、スクリーンショットはすべて意図的に無効化されてい
+// る。1 つの end-to-end フローは設計上、秘密鍵を画面に表示するので
+// あり、成果物のディレクトリはまさに secret が忘れ去られる類いの場
+// 所だ。失敗は検証のメッセージとサーバー自身の出力から診断する。
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
@@ -15,10 +15,10 @@ export default defineConfig({
   reporter: [["list"]],
   use: {
     ...devices["Desktop Chrome"],
-    // The suite selects by English text. The application picks its language
-    // from the browser, so the locale is pinned here rather than left to the
-    // runner: without this, the same specs would pass or fail depending on
-    // the machine they run on.
+    // このスイートは英語のテキストで要素を選ぶ。アプリケー
+    // ションはブラウザから言語を選ぶため、ロケールをランナー任せ
+    // にせずここで固定する。そうしなければ、同じ spec が実行
+    // するマシンによって合格したり失敗したりしてしまう。
     locale: "en-US",
     trace: "off",
     video: "off",

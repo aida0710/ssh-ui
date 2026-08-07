@@ -21,8 +21,8 @@ import (
 	"sshc/internal/storage"
 )
 
-// stubRunner answers without starting a process and records every argv it was
-// asked to run, so a test can prove that nothing ran.
+// stubRunner はプロセスを起動せずに応答し、実行を頼まれたすべての argv を
+// 記録する。これにより、テストは何も実行されなかったことを証明できる。
 type stubRunner struct {
 	commands []platform.Command
 	output   platform.Output
@@ -92,8 +92,8 @@ func newDiagnosticsServer(t *testing.T) (*echo.Echo, session.Credentials, *stubR
 	return engine, credentials, runner, service
 }
 
-// diagnosticsToken asks the server for a confirmation exactly as the UI does,
-// so the evidence the token carries is the evidence the server derived.
+// diagnosticsToken は、UI と全く同じ方法でサーバーに確認を求める。
+// したがって、トークンが運ぶ evidence はサーバーが導出した evidence である。
 func diagnosticsToken(t *testing.T, engine *echo.Echo, credentials session.Credentials, kind, target string) string {
 	t.Helper()
 	body, err := json.Marshal(api.IssueActionRequest{Kind: kind, Target: target})
@@ -111,8 +111,8 @@ func diagnosticsToken(t *testing.T, engine *echo.Echo, credentials session.Crede
 	return issued.Token
 }
 
-// problemCode reads the stable code out of a problem+json body, so a test can
-// assert which check rejected a request rather than only that one did.
+// problemCode は problem+json ボディから安定した code を読み取る。これにより、
+// テストはどれかが拒否したことだけでなく、どのチェックが拒否したかを表明できる。
 func problemCode(t *testing.T, body []byte) string {
 	t.Helper()
 	var payload api.Problem
@@ -240,10 +240,10 @@ func TestDiagnosticsRejectUnsafeAliasesAndOversizedBodies(t *testing.T) {
 		t.Fatal("an unsafe alias started a process")
 	}
 
-	// A body over the ceiling is now refused by Security.Middleware before the
-	// handler decodes anything, so it answers 413 rather than the handler's
-	// 400. The property this case guards is unchanged: the request is refused
-	// and no process starts.
+	// 上限を超えるボディは、ハンドラが何かをデコードする前に、いまでは
+	// Security.Middleware によって拒否される。したがってハンドラの 400 では
+	// なく 413 で応答する。このケースが守っている性質は変わらない:
+	// リクエストは拒否され、プロセスは起動しない。
 	oversized := sendKeyRequest(t, engine, credentials, http.MethodPost, "/api/v1/diagnostics/effective",
 		mustMarshal(t, api.AliasRequest{Alias: strings.Repeat("a", maxRequestBody)}), "")
 	if oversized.Code != http.StatusRequestEntityTooLarge {
@@ -286,10 +286,10 @@ func (launcher *recordingLauncher) Launch(_ context.Context, alias string) error
 	return nil
 }
 
-// TestTerminalEndpointsSeparateCopyableCommandsFromLaunches proves the alias
-// gate holds at the HTTP boundary: an alias carrying AppleScript quoting and a
-// `do shell script` payload is described as copyable text and refused for
-// launch, and never reaches the launcher in any escaped form.
+// TestTerminalEndpointsSeparateCopyableCommandsFromLaunches は、
+// alias の関門が HTTP 境界で保たれていることを証明する: AppleScript の
+// クォートと `do shell script` ペイロードを運ぶ alias は、コピー可能な
+// テキストとして記述され、起動は拒否され、どんなエスケープ形式でも launcher に届かない。
 func TestTerminalEndpointsSeparateCopyableCommandsFromLaunches(t *testing.T) {
 	engine, credentials, _, service := newDiagnosticsServer(t)
 	terminal := &recordingLauncher{}
@@ -317,9 +317,9 @@ func TestTerminalEndpointsSeparateCopyableCommandsFromLaunches(t *testing.T) {
 	if refused.Code != http.StatusBadRequest {
 		t.Fatalf("launching an unsafe alias = %d, want 400", refused.Code)
 	}
-	// The code is asserted, not just the status, so this proves the launch
-	// handler's own gate rejected the alias rather than some later layer
-	// happening to answer 400 as well.
+	// status だけでなく code も表明される。これにより、たまたま後段の層も
+	// 400 で応答したのではなく、launch ハンドラ自身の関門が alias を
+	// 拒否したことが証明される。
 	if code := problemCode(t, refused.Body.Bytes()); code != "alias_not_launchable" {
 		t.Fatalf("problem code = %q, want alias_not_launchable from the launch gate", code)
 	}
@@ -349,8 +349,8 @@ func TestTerminalEndpointsSeparateCopyableCommandsFromLaunches(t *testing.T) {
 
 func TestAuthenticationEndpointRefusesUnacknowledgedExecutableDirectives(t *testing.T) {
 	engine, credentials, _, service := newDiagnosticsServer(t)
-	// A ProxyCommand cannot be disabled from the command line, so connecting
-	// runs it and the caller must acknowledge that exact command first.
+	// ProxyCommand はコマンドラインから無効化できないので、接続すればそれが
+	// 実行される。呼び出し側は、まずその正確なコマンドを承認しなければならない。
 	service.Authentication.ConfigPath = service.ConfigPath()
 
 	token := diagnosticsToken(t, engine, credentials, session.ActionAuthentication, "risky")

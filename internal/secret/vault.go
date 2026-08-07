@@ -1,15 +1,15 @@
-// Package secret holds the passwords this application can hand to OpenSSH.
+// Package secret は、このアプリケーションが OpenSSH へ渡しうるパスワードを保持する。
 //
-// They live in one encrypted file inside the workspace, ~/.ssh/sshc/secrets,
-// and not in the macOS Keychain. That is a deliberate choice with one reason:
-// a Keychain item belongs to a machine, and these have to travel. The
-// workspace is what syncs, so anything that must arrive on a second machine
-// has to be a file in it.
+// それらはワークスペース内のひとつの暗号化ファイル ~/.ssh/sshc/secrets の中に
+// あり、macOS のキーチェーンにはない。これは意図的な選択で、理由はひとつ。
+// キーチェーンの項目はマシンに属するが、これらは移動しなければならないからだ。
+// 同期されるのはワークスペースなので、二台目のマシンに届かねばならないものは、
+// その中のファイルでなければならない。
 //
-// The consequence is that the file is at rest on disk in a place any process
-// running as the user can read, so it is encrypted before it is written, with
-// a key derived from a passphrase this application never stores. Nothing here
-// can decrypt anything without that passphrase being supplied.
+// その結果、このファイルは、同じユーザーで動くどのプロセスからも読める場所に
+// ディスク上で静止することになる。だから書かれる前に暗号化される。鍵は、この
+// アプリケーションが決して保存しないパスフレーズから導出される。ここにあるものは、
+// そのパスフレーズが与えられない限り、何も復号できない。
 package secret
 
 import (
@@ -23,28 +23,28 @@ import (
 	"sshc/internal/platform"
 )
 
-// WorkspacePath is where the sealed file lives, relative to the workspace
-// root. It has no extension that invites an editor to open it and no name that
-// suggests it can be read.
+// WorkspacePath は、封をされたファイルの置き場所。ワークスペースルートからの
+// 相対である。エディタに開いてくれと誘うような拡張子を持たず、読めそうに見える
+// 名前も持たない。
 const WorkspacePath = "sshc/secrets"
 
-// SettingsPath is the object store's settings, sealed with the same master
-// password and kept beside the vault rather than inside it.
+// SettingsPath は、オブジェクトストアの設定。同じマスターパスワードで封じられ、
+// vault の中ではなく隣に置かれる。
 //
-// The vault travels: remotesync.Collect names sshc/secrets outright. Putting
-// the access key inside it would put the key to the bucket inside the bucket,
-// and someone who obtained one snapshot by any means, along with its
-// passphrase, would gain the live bucket and every snapshot after it rather
-// than the one they already had. Collect lists what it takes, so this file is
-// excluded by construction and not by a rule anyone has to remember.
+// vault は移動する。remotesync.Collect は sshc/secrets を明示的に名指しする。
+// アクセスキーをその中に入れれば、バケットへの鍵をバケットの中に入れることになり、
+// 何らかの手段でスナップショットをひとつ入手し、そのパスフレーズも得た者は、すでに
+// 手にしている一つ分ではなく、生きたバケットとその後のすべてのスナップショットを
+// 手に入れてしまう。Collect は何を取るかを列挙するので、このファイルは、誰かが
+// 覚えておくべきルールによってではなく、構造上除外される。
 const SettingsPath = "sshc/sync-settings"
 
-// SchemaVersion is the version of the plaintext document, inside the
-// encryption. The header carries its own version for the envelope.
+// SchemaVersion は、暗号化の内側にある平文文書のバージョン。ヘッダーは envelope
+// 用に自前のバージョンを運ぶ。
 const SchemaVersion = 2
 
-// The envelope's errors are re-exported so a caller handling a vault does not
-// have to know which package sealed it.
+// envelope のエラーは再エクスポートしてある。vault を扱う呼び出し側が、どの
+// パッケージがそれを封じたかを知らずに済むようにするためだ。
 var (
 	ErrWrongPassphrase    = envelope.ErrWrongPassphrase
 	ErrNotAVault          = envelope.ErrNotAnEnvelope
@@ -54,38 +54,38 @@ var (
 )
 
 var (
-	// ErrUnsafeName rejects an alias that is not a safe alias.
+	// ErrUnsafeName は、安全な alias ではない alias を拒否する。
 	ErrUnsafeName = errors.New("that is not a safe host alias")
-	// ErrEmptySecret rejects an empty password, which is indistinguishable at
-	// the prompt from a wrong one.
+	// ErrEmptySecret は空のパスワードを拒否する。プロンプト上では、誤ったものと
+	// 区別がつかないからだ。
 	ErrEmptySecret = errors.New("the password is empty")
-	// ErrOldVault reports a document from before secrets had names. There is at
-	// most one in the world and a migration would be larger than what it
-	// migrates, so it is refused and the screen offers to start again.
+	// ErrOldVault は、秘密に名前が付く前の文書を報告する。世界に多くともひとつしか
+	// 存在せず、移行のコードは移行される対象より大きくなるので、拒否したうえで画面が
+	// 最初からやり直すことを提案する。
 	ErrOldVault = errors.New("this vault predates named credentials and cannot be read")
-	// ErrUnknownKind rejects a namespace that is neither of the two.
+	// ErrUnknownKind は、どちらでもない名前空間を拒否する。
 	ErrUnknownKind = errors.New("that is not a credential kind")
-	// ErrUnknownCredential rejects a reference to a name that does not exist in
-	// that namespace — which is also how a host is stopped from referencing a
-	// key's passphrase.
+	// ErrUnknownCredential は、その名前空間に存在しない名前への参照を拒否する —
+	// これは、ホストが鍵のパスフレーズを参照するのを止めている仕組みでも
+	// ある。
 	ErrUnknownCredential = errors.New("no credential of that kind has that name")
-	// ErrCredentialInUse refuses to remove a secret something still points at.
+	// ErrCredentialInUse は、まだ何かが指している秘密の削除を拒む。
 	ErrCredentialInUse = errors.New("something still uses this credential")
 )
 
-// MinPassphraseLength is the shortest vault passphrase this will accept.
+// MinPassphraseLength は、これが受け付ける最短の vault パスフレーズ長。
 const MinPassphraseLength = envelope.MinPassphraseLength
 
-// Kind names a credential namespace.
+// Kind は、資格情報の名前空間を表す。
 //
-// A host may reference only KindPassword and a key only KindKeyPassphrase. One
-// namespace would let a host's password picker offer a key's passphrase, and
-// picking it would send that passphrase to a remote host as a login password.
-// Two make that impossible to express rather than merely unlikely.
+// ホストは KindPassword のみを、鍵は KindKeyPassphrase のみを参照できる。名前空間が
+// ひとつなら、ホストのパスワード選択画面が鍵のパスフレーズを提示できてしまい、それを
+// 選べばそのパスフレーズがログインパスワードとしてリモートホストへ送られる。二つに
+// 分ければ、それは起こりにくいどころか、表現すること自体が不可能になる。
 //
-// They differ in what they protect as well: an account password admits you to
-// one account, and a key passphrase unlocks a key that may admit you to many
-// machines. Sharing is ordinary within each and meaningless across them.
+// 守るものも異なる。アカウントのパスワードはひとつのアカウントへの入場を許すが、
+// 鍵のパスフレーズは、多くのマシンへの入場を許しうる鍵を解錠する。共有は、それぞれ
+// の中では普通のことであり、両者をまたぐと意味をなさない。
 type Kind string
 
 const (
@@ -93,24 +93,24 @@ const (
 	KindKeyPassphrase Kind = "key_passphrase"
 )
 
-// ValidKind reports whether a value names a namespace. It is the one place the
-// set is decided, so a route and a form cannot disagree about it.
+// ValidKind は、値が名前空間を表しているかを報告する。この集合が決まる唯一の場所
+// なので、ルートとフォームがそれについて食い違うことはありえない。
 func ValidKind(kind Kind) bool {
 	return kind == KindPassword || kind == KindKeyPassphrase
 }
 
-// SyncSettings is what the object store needs.
+// SyncSettings は、オブジェクトストアが必要とするもの。
 //
-// It is sealed with the same master password as the vault and kept in its own
-// file, because the vault travels: Collect names sshc/secrets outright, and
-// putting the access key inside the vault would put the key to the bucket
-// inside the bucket. Someone who obtained one snapshot by any means, and its
-// passphrase, would gain the live bucket and every future snapshot rather than
-// the one they already had.
+// vault と同じマスターパスワードで封じられ、専用のファイルに置かれる。vault は
+// 移動するからだ。Collect は sshc/secrets を明示的に名指しするので、アクセスキーを
+// vault の中に入れれば、バケットへの鍵をバケットの中に入れることになる。何らかの
+// 手段でスナップショットをひとつと、そのパスフレーズを入手した者は、すでに手にして
+// いる一つ分ではなく、生きたバケットと今後のすべてのスナップショットを手に入れて
+// しまう。
 type SyncSettings struct {
 	Endpoint string `json:"endpoint,omitempty"`
 	Bucket   string `json:"bucket,omitempty"`
-	// Path is the prefix every object goes under, empty for the bucket root.
+	// Path は、すべてのオブジェクトが置かれる接頭辞。空ならバケットのルート。
 	Path            string `json:"path,omitempty"`
 	Region          string `json:"region,omitempty"`
 	AccessKeyID     string `json:"accessKeyId,omitempty"`
@@ -118,12 +118,12 @@ type SyncSettings struct {
 	Direction       string `json:"direction,omitempty"`
 }
 
-// document is the plaintext, and never leaves this package in this form.
+// document は平文であり、この形でこのパッケージの外へ出ることは決してない。
 //
-// Two credential maps, and one reference map per kind: hosts are keyed by alias
-// and keys by workspace-relative path. A named secret is stored once however
-// many subjects point at it, which is the whole reason for the shape — twenty
-// machines sharing a password rotate it in one place.
+// 資格情報のマップが二つ、そして種別ごとに参照のマップがひとつ。ホストは alias で、
+// 鍵はワークスペース相対のパスでキー付けされる。名前の付いた秘密は、いくつの
+// subject が指していても一度だけ保存される。この形の理由はまさにそこにある —
+// 20 台のマシンが共有するパスワードを、一か所でローテーションできる。
 type document struct {
 	SchemaVersion  int               `json:"schemaVersion"`
 	Passwords      map[string]string `json:"passwords"`
@@ -132,11 +132,11 @@ type document struct {
 	Keys           map[string]string `json:"keys"`
 }
 
-// Vault is an opened secrets file.
+// Vault は、開かれた secrets ファイル。
 //
-// It holds the derived key rather than the passphrase, so a change can be
-// re-sealed without asking again, and the passphrase is not kept anywhere
-// after Open returns.
+// パスフレーズではなく導出された鍵を保持するので、再度尋ねることなく変更を封じ
+// 直せる。そしてパスフレーズは、Open が返ったあとどこにも保持されて
+// いない。
 type Vault struct {
 	key      envelope.Key
 	secrets  map[Kind]map[string]string
@@ -148,7 +148,7 @@ func newMaps() (map[Kind]map[string]string, map[Kind]map[string]string) {
 		map[Kind]map[string]string{KindPassword: {}, KindKeyPassphrase: {}}
 }
 
-// Create returns an empty vault sealed by passphrase.
+// Create は、passphrase で封じられた空の vault を返す。
 func Create(passphrase string) (*Vault, error) {
 	key, err := envelope.Derive(passphrase)
 	if err != nil {
@@ -158,7 +158,7 @@ func Create(passphrase string) (*Vault, error) {
 	return &Vault{key: key, secrets: secrets, subjects: subjects}, nil
 }
 
-// Open decrypts sealed with passphrase.
+// Open は、passphrase で sealed を復号する。
 func Open(sealed []byte, passphrase string) (*Vault, error) {
 	plaintext, key, err := envelope.Open(sealed, passphrase)
 	if err != nil {
@@ -171,10 +171,10 @@ func Open(sealed []byte, passphrase string) (*Vault, error) {
 	if parsed.SchemaVersion > SchemaVersion {
 		return nil, ErrUnsupportedVersion
 	}
-	// A version 1 document held a password per alias and no names at all. There
-	// is at most one in the world, and a migration for it would be larger than
-	// the thing it migrates, so it is refused with an error the screen turns
-	// into "set them again" rather than silently reshaped.
+	// バージョン 1 の文書は、alias ごとにパスワードを持ち、名前をまったく持たな
+	// かった。世界に多くともひとつしか存在せず、そのための移行は移行する対象より
+	// 大きくなるので、黙って作り変えるのではなく、画面が「もう一度設定してください」
+	// に変えられるエラーで拒否する。
 	if parsed.SchemaVersion < SchemaVersion {
 		return nil, ErrOldVault
 	}
@@ -198,9 +198,9 @@ func Open(sealed []byte, passphrase string) (*Vault, error) {
 	return &Vault{key: key, secrets: secrets, subjects: subjects}, nil
 }
 
-// SealSettings encrypts the object store settings with the vault's own key, for
-// the file beside it. Same master password, different file: this one does not
-// travel.
+// SealSettings は、オブジェクトストアの設定を vault 自身の鍵で暗号化する。隣に置く
+// ファイルのためである。同じマスターパスワードで、違うファイル。こちらは移動
+// しない。
 func (v *Vault) SealSettings(settings SyncSettings) ([]byte, error) {
 	plaintext, err := json.Marshal(settings)
 	if err != nil {
@@ -209,7 +209,7 @@ func (v *Vault) SealSettings(settings SyncSettings) ([]byte, error) {
 	return v.key.Seal(plaintext)
 }
 
-// OpenSettings decrypts the file SealSettings wrote.
+// OpenSettings は、SealSettings が書いたファイルを復号する。
 func (v *Vault) OpenSettings(sealed []byte) (SyncSettings, error) {
 	plaintext, err := v.key.Open(sealed)
 	if err != nil {
@@ -222,13 +222,13 @@ func (v *Vault) OpenSettings(sealed []byte) (SyncSettings, error) {
 	return settings, nil
 }
 
-// Seal encrypts the vault for writing.
-// Rekey derives a fresh key from passphrase and adopts it.
+// Seal は、書き込みのために vault を暗号化する。
+// Rekey は passphrase から新しい鍵を導出し、それを採用する。
 //
-// The contents are untouched; what changes is what opens them. Everything the
-// old key sealed has to be re-sealed by the caller in the same breath, which is
-// why this is a method on the vault rather than a new vault: the caller needs
-// both keys at once.
+// 中身には手を触れない。変わるのは、それを開くものの方だ。古い鍵が封じたものは
+// すべて、同じ流れの中で呼び出し側が封じ直さなければならない。これが新しい vault
+// ではなく vault のメソッドである理由はそこにある。呼び出し側は、二つの鍵を同時に
+// 必要とするからだ。
 func (v *Vault) Rekey(passphrase string) (envelope.Key, error) {
 	key, err := envelope.Derive(passphrase)
 	if err != nil {
@@ -239,16 +239,16 @@ func (v *Vault) Rekey(passphrase string) (envelope.Key, error) {
 	return previous, nil
 }
 
-// SealBytes seals arbitrary bytes with this vault's key.
+// SealBytes は、任意のバイト列をこの vault の鍵で封じる。
 //
-// It is what turns the generational backup directory from a pile of previous
-// file contents — including, for the writes that used to refuse a backup
-// entirely, previous private keys — into a pile of ciphertext.
+// これが、世代バックアップのディレクトリを、以前のファイル内容の山 — バックアップ
+// をまったく拒んでいた書き込みについては、以前の秘密鍵そのもの — から、暗号文の
+// 山へと変える。
 func (v *Vault) SealBytes(plaintext []byte) ([]byte, error) {
 	return v.key.Seal(plaintext)
 }
 
-// OpenBytes is its inverse, for a rollback or a restore.
+// OpenBytes はその逆で、巻き戻しや復元のためにある。
 func (v *Vault) OpenBytes(sealed []byte) ([]byte, error) {
 	return v.key.Open(sealed)
 }
@@ -267,19 +267,19 @@ func (v *Vault) Seal() ([]byte, error) {
 	return v.key.Seal(plaintext)
 }
 
-// Names returns the credential names of one kind, sorted. A name is not itself
-// a secret; the value it stands for is.
+// Names は、ある種別の資格情報名をソートして返す。名前そのものは秘密ではない。
+// 秘密なのは、それが表す値の方である。
 func (v *Vault) Names(kind Kind) []string {
 	return slices.Sorted(maps.Keys(v.secrets[kind]))
 }
 
-// Secret returns the value a name stands for.
+// Secret は、名前が表す値を返す。
 func (v *Vault) Secret(kind Kind, name string) (string, bool) {
 	value, ok := v.secrets[kind][name]
 	return value, ok
 }
 
-// Set stores a credential under a name, creating it or replacing its value.
+// Set は、名前の下に資格情報を保存する。新規作成か、値の置き換えである。
 func (v *Vault) Set(kind Kind, name, value string) error {
 	if !ValidKind(kind) {
 		return ErrUnknownKind
@@ -294,11 +294,11 @@ func (v *Vault) Set(kind Kind, name, value string) error {
 	return nil
 }
 
-// Delete forgets a credential, and refuses while anything still points at it.
+// Delete は資格情報を忘れる。まだ何かが指しているあいだは拒否する。
 //
-// The point of naming a secret is that many subjects share one entry, so
-// removing the entry from under them would break every one of them at once,
-// later, somewhere else.
+// 秘密に名前を付ける意味は、多くの subject がひとつのエントリを共有することにある。
+// だからその足元でエントリを取り除けば、あとになって、別のどこかで、すべての
+// subject が一度に壊れることになる。
 func (v *Vault) Delete(kind Kind, name string) error {
 	if len(v.Uses(kind, name)) > 0 {
 		return ErrCredentialInUse
@@ -307,7 +307,7 @@ func (v *Vault) Delete(kind Kind, name string) error {
 	return nil
 }
 
-// Uses lists the subjects referencing a credential, sorted.
+// Uses は、資格情報を参照している subject をソートして列挙する。
 func (v *Vault) Uses(kind Kind, name string) []string {
 	var uses []string
 	for subject, referenced := range v.subjects[kind] {
@@ -319,12 +319,12 @@ func (v *Vault) Uses(kind Kind, name string) []string {
 	return uses
 }
 
-// Assign points a subject at a credential of the same kind.
+// Assign は、subject を同じ種別の資格情報へ向ける。
 //
-// The kind is the whole guard: a host names an alias and may reference only an
-// account password, a key names a workspace-relative path and may reference
-// only a key passphrase. Crossing them is not refused by a check that could be
-// forgotten — there is no map in which the other kind's names appear.
+// 種別こそが防護のすべてである。ホストは alias を名前とし、アカウントのパスワード
+// だけを参照できる。鍵はワークスペース相対のパスを名前とし、鍵のパスフレーズだけを
+// 参照できる。両者をまたぐことは、忘れうる検査によって拒否されるのではない —
+// 他方の種別の名前が現れるマップが、そもそも存在しないのである。
 func (v *Vault) Assign(kind Kind, subject, name string) error {
 	if !ValidKind(kind) {
 		return ErrUnknownKind
@@ -343,23 +343,23 @@ func (v *Vault) Assign(kind Kind, subject, name string) error {
 	return nil
 }
 
-// Unassign forgets a subject's reference. A missing subject is not an error.
+// Unassign は subject の参照を忘れる。subject がなくてもエラーではない。
 func (v *Vault) Unassign(kind Kind, subject string) {
 	delete(v.subjects[kind], subject)
 }
 
-// Assigned returns the credential a subject references.
+// Assigned は、subject が参照している資格情報を返す。
 func (v *Vault) Assigned(kind Kind, subject string) (string, bool) {
 	name, ok := v.subjects[kind][subject]
 	return name, ok
 }
 
-// Subjects returns every subject of one kind that references a credential.
+// Subjects は、ある資格情報を参照している、ある種別のすべての subject を返す。
 func (v *Vault) Subjects(kind Kind) []string {
 	return slices.Sorted(maps.Keys(v.subjects[kind]))
 }
 
-// SecretFor resolves a subject to the value it should be given.
+// SecretFor は、subject を、それに与えるべき値へ解決する。
 func (v *Vault) SecretFor(kind Kind, subject string) (string, bool) {
 	name, ok := v.subjects[kind][subject]
 	if !ok {
@@ -368,9 +368,9 @@ func (v *Vault) SecretFor(kind Kind, subject string) (string, bool) {
 	return v.Secret(kind, name)
 }
 
-// Rename carries a subject's reference to a new name, which is what a host
-// rename has to do or the reference is silently orphaned under a name nothing
-// asks for.
+// Rename は、subject の参照を新しい名前へ引き継ぐ。ホストの名前変更はこれを
+// しなければならず、さもなければ参照は、誰も尋ねない名前の下に黙って孤児に
+// なる。
 func (v *Vault) Rename(kind Kind, from, to string) error {
 	name, ok := v.subjects[kind][from]
 	if !ok {
@@ -386,9 +386,9 @@ func (v *Vault) Rename(kind Kind, from, to string) error {
 	return nil
 }
 
-// validCredentialName accepts a name a person would type and a screen can show.
-// It is not an alias: a credential is named after what it is for, which may be
-// "the office VMs" rather than a hostname.
+// validCredentialName は、人が打ち込み、画面が表示できる名前を受け付ける。これは
+// alias ではない。資格情報は、それが何のためのものかにちなんで名付けられ、それは
+// ホスト名ではなく「オフィスの VM 群」かもしれないからだ。
 func validCredentialName(name string) bool {
 	if name == "" || len(name) > 128 {
 		return false

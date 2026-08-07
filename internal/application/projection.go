@@ -7,11 +7,11 @@ import (
 	"sshc/internal/config"
 )
 
-// ErrHostNotFound reports that no Host block in the graph declares the
-// requested identity.
+// ErrHostNotFound は、graph 内のどの Host ブロックも要求された
+// identity を宣言していないことを報告する。
 var ErrHostNotFound = errors.New("host block not found")
 
-// FieldCategory decides which tab of the host editor shows a directive.
+// FieldCategory は、ホスト editor のどの tab がディレクティブを示すかを決める。
 type FieldCategory string
 
 const (
@@ -20,9 +20,9 @@ const (
 	CategoryAdvanced FieldCategory = "advanced"
 )
 
-// basicKeywords and jumpKeywords hold the directives with a dedicated form.
-// Everything else is edited as an arbitrary key-value pair, so a directive
-// OpenSSH adds later is still fully editable without a code change.
+// basicKeywords と jumpKeywords は、専用の form を持つディレクティブを保持する。
+// それ以外のすべては任意の key-value ペアとして編集されるので、
+// OpenSSH が後から追加するディレクティブも、コード変更無しに完全に編集可能なままである。
 var basicKeywords = map[string]bool{
 	"hostname": true, "user": true, "port": true, "identityfile": true,
 	"identitiesonly": true, "addkeystoagent": true, "tag": true,
@@ -32,14 +32,14 @@ var jumpKeywords = map[string]bool{
 	"proxyjump": true, "proxycommand": true, "forwardagent": true, "requesttty": true,
 }
 
-// dangerousKeywords are the executable directives of design §8.3. They may be
-// edited and saved, but never evaluated or executed by this application.
+// dangerousKeywords は、設計書§8.3 の実行可能なディレクティブである。編集して保存
+// することはできるが、このアプリケーションによって評価または実行されることは決してない。
 var dangerousKeywords = map[string]bool{
 	"proxycommand": true, "knownhostscommand": true, "localcommand": true,
 	"remotecommand": true, "permitlocalcommand": true,
 }
 
-// CategoryFor decides where a directive belongs.
+// CategoryFor は、ディレクティブがどこに属するかを決める。
 func CategoryFor(keyword string) FieldCategory {
 	lowered := strings.ToLower(keyword)
 	switch {
@@ -52,13 +52,13 @@ func CategoryFor(keyword string) FieldCategory {
 	}
 }
 
-// IsDangerousKeyword reports a directive whose value OpenSSH can execute.
+// IsDangerousKeyword は、値を OpenSSH が実行できるディレクティブを報告する。
 func IsDangerousKeyword(keyword string) bool {
 	return dangerousKeywords[strings.ToLower(keyword)]
 }
 
-// FormField is one directive occurrence inside a host block. Line is 1-based so
-// it matches the diagnostics and the editor gutter.
+// FormField は、ホスト block 内の 1 個のディレクティブの出現である。Line は
+// 1-based であり、diagnostics と editor の gutter に一致する。
 type FormField struct {
 	Line      int           `json:"line"`
 	Keyword   string        `json:"keyword"`
@@ -69,8 +69,8 @@ type FormField struct {
 	Editable  bool          `json:"editable"`
 }
 
-// FileRef identifies a configuration file for the UI. Files outside the root
-// are displayed but carry no relative identifier, so no edit can address them.
+// FileRef は、UI のために設定ファイルを識別する。root 外側のファイルは
+// 表示されるが相対識別子を持たないので、どんな編集もそれらを指し示せない。
 type FileRef struct {
 	Path     string `json:"path,omitempty"`
 	Absolute string `json:"absolute"`
@@ -85,7 +85,7 @@ func NewFileRef(root, absolute string) FileRef {
 	return FileRef{Path: relative, Absolute: absolute}
 }
 
-// HostEntry is one Host block as the tree shows it.
+// HostEntry は、tree が示すとおりの 1 個の Host ブロックである。
 type HostEntry struct {
 	Identity  HostIdentity `json:"identity"`
 	File      FileRef      `json:"file"`
@@ -95,32 +95,32 @@ type HostEntry struct {
 	Negated   bool         `json:"negated,omitempty"`
 	Duplicate bool         `json:"duplicate,omitempty"`
 	Editable  bool         `json:"editable"`
-	// Group is the group this host belongs to, which is the directory its file
-	// sits in. Nothing else records it: metadata carries presentation only.
+	// Group は、このホストが属するグループであり、それはそのファイルが置かれているディレクトリ
+	// である。それ以外にこれを記録するものはない。metadata が運ぶのは presentation だけである。
 	Group string `json:"group,omitempty"`
 }
 
-// HostForm is one Host block projected for the detail editor. Raw is the exact
-// text of the block, so saving it back unchanged reproduces the file byte for
-// byte.
+// HostForm は、detail editor のために射影された 1 個の Host
+// ブロックである。Raw はそのブロックの厳密なテキストなので、変更
+// せずに書き戻せばファイルを 1 バイトも違わず再現する。
 type HostForm struct {
 	Entry  HostEntry   `json:"entry"`
 	Fields []FormField `json:"fields"`
 	Raw    string      `json:"raw"`
-	// Comment is the text of the comment lines attached above the Host line,
-	// with the '#' markers stripped. It is empty when the block has none.
+	// Comment は Host 行の上に付随するコメント行のテキストであり、'#'記号は
+	// 取り除かれている。ブロックがコメントを持たない場合は空である。
 	Comment string `json:"comment"`
-	// CommentLines is how many physical lines that comment occupies. A client
-	// that rewrites the whole file — deleting or duplicating a block — needs
-	// the count to include them, and cannot derive it from Comment because the
-	// markers and indentation were stripped.
+	// CommentLines は、そのコメントが占める物理的な行数である。ファイル
+	// 全体を書き換えるクライアント——ブロックを削除したり複製したり
+	// する——は、それらを含めるためにこの数を必要とするが、記号と
+	// インデントが取り除かれているので Comment から導出することはできない。
 	CommentLines int      `json:"commentLines"`
 	Notices      []Notice `json:"notices,omitempty"`
 }
 
-// PrimaryAlias returns the first concrete alias of a Host line, which is the
-// alias the UI uses as an identity. A line made only of wildcards or negations
-// has no primary alias.
+// PrimaryAlias は、Host 行の最初の具体的な alias を返し、それが UI が
+// identity として使う alias である。wildcard や negation だけで構成された
+// 行には primary alias が無い。
 func PrimaryAlias(patterns []config.Pattern) string {
 	for _, pattern := range patterns {
 		if pattern.Negated || pattern.Wildcard {
@@ -131,9 +131,9 @@ func PrimaryAlias(patterns []config.Pattern) string {
 	return ""
 }
 
-// MatchesPattern implements OpenSSH's match_pattern: '*' matches any run of
-// characters and '?' matches exactly one. Matching is case sensitive and there
-// are no character classes.
+// MatchesPattern は OpenSSH の match_pattern を実装する。'*'は任意の
+// 文字の連なりに match し、'?'はちょうど 1 文字に match する。matching は
+// 大文字小文字を区別し、文字クラスは存在しない。
 func MatchesPattern(pattern, candidate string) bool {
 	patternIndex, candidateIndex := 0, 0
 	starIndex, resumeIndex := -1, 0
@@ -160,8 +160,8 @@ func MatchesPattern(pattern, candidate string) bool {
 	return patternIndex == len(pattern)
 }
 
-// MatchHostLine applies OpenSSH's rule that any matching negated pattern
-// rejects the whole line, and at least one positive pattern must match.
+// MatchHostLine は、match する negated pattern が 1 個でもあれば行全体を却下し、positive
+// pattern が少なくとも 1 個 match しなければならないという OpenSSH の規則を適用する。
 func MatchHostLine(patterns []config.Pattern, candidate string) bool {
 	matched := false
 	for _, pattern := range patterns {
@@ -176,8 +176,8 @@ func MatchHostLine(patterns []config.Pattern, candidate string) bool {
 	return matched
 }
 
-// ProjectHosts lists every Host block in reading order together with the
-// notices explaining why some of them cannot be edited as simple hosts.
+// ProjectHosts は、すべての Host ブロックを読み取り順に列挙し、その
+// 一部が単純なホストとして編集できない理由を説明する通知も併せて示す。
 func ProjectHosts(graph *config.Graph, root string) ([]HostEntry, []Notice) {
 	var hosts []HostEntry
 	var notices []Notice
@@ -233,12 +233,12 @@ func ProjectHosts(graph *config.Graph, root string) ([]HostEntry, []Notice) {
 		if !entry.File.External {
 			entry.Identity = HostIdentity{Path: entry.File.Path, Alias: alias}
 		}
-		// Keyed on the alias alone, not on the file it sits in. OpenSSH keeps
-		// the first value it reads across the whole Include graph, so the pair
-		// that matters is the one split across two files: each block looks
-		// correct where it sits, and only the reading order says which one the
-		// user actually gets. The walk is in reading order, so the first block
-		// seen is the winner and every later one is shadowed.
+		// alias だけを key にし、それが置かれているファイルは key にしない。
+		// OpenSSH は Include graph 全体を通じて最初に読んだ値を保持するので、
+		// 重要な組は 2 個のファイルにまたがって分かれている組である。どちらの
+		// ブロックもそれが置かれている場所では正しく見え、実際にユーザーが
+		// 得るのはどちらかを言えるのは読み取り順だけである。walk は読み取り順で
+		// 行われるので、最初に見つかったブロックが勝者となり、それ以降のものはすべて陰に隠れる。
 		if seen[alias] {
 			entry.Duplicate = true
 			notices = appendNotice(notices, Notice{
@@ -255,8 +255,8 @@ func ProjectHosts(graph *config.Graph, root string) ([]HostEntry, []Notice) {
 	return hosts, notices
 }
 
-// ProjectHostForm builds the detail view of one host block. The first block
-// declaring the identity wins, which is also the block OpenSSH reads first.
+// ProjectHostForm は、1 個のホストブロックの詳細 view を構築する。
+// identity を宣言する最初のブロックが勝ち、それは OpenSSH が最初に読むブロックでもある。
 func ProjectHostForm(graph *config.Graph, root string, identity HostIdentity) (HostForm, error) {
 	absolute, err := AbsolutePath(root, identity.Path)
 	if err != nil {
@@ -279,8 +279,8 @@ func ProjectHostForm(graph *config.Graph, root string, identity HostIdentity) (H
 			Patterns: make([]string, 0, len(block.Patterns)),
 			Editable: node.Editable,
 		},
-		// Fields is required by the contract, so it is an empty array rather
-		// than null for a block that declares no directive.
+		// Fields は contract によって必須とされているので、どのディレクティブも
+		// 宣言しないブロックに対しても null ではなく空の配列になる。
 		Fields:       []FormField{},
 		Comment:      node.File.CommentText(block.Header),
 		CommentLines: block.Header - node.File.CommentRun(block.Header),
@@ -295,14 +295,14 @@ func ProjectHostForm(graph *config.Graph, root string, identity HostIdentity) (H
 	keywordSeen := map[string]bool{}
 	var raw strings.Builder
 	raw.WriteString(node.File.Lines[block.Header].Render())
-	// A block's range runs to the next header, so its tail holds the comment
-	// attached to the block that follows. That comment describes a connection
-	// this form does not own, and the Raw editor and the delete path both write
-	// this text back, so including it would let an edit here rewrite or remove
-	// the next connection's description.
-	// It can hold the generated region too, which belongs to no connection: the
-	// Raw editor writes this text back, so showing it here would let an edit to
-	// one host delete every group declaration.
+	// ブロックの範囲は次のヘッダーまで及ぶので、その末尾は後続の
+	// ブロックに付随するコメントを保持している。そのコメントはこの form
+	// が所有しない connection を説明するものであり、Raw editor と delete
+	// path はどちらもこのテキストを書き戻すので、これを含めてしまうと、
+	// ここでの編集が次の connection の説明を書き換えたり消したりできてしまう。
+	// これは生成領域を保持していることもあり、それはどの
+	// connection にも属さない。Raw editor はこのテキストを書き戻すので、
+	// ここに示してしまうと、1 個のホストへの編集がすべてのグループ宣言を削除できてしまう。
 	end := node.File.CommentRun(block.End)
 	_, end = ClampToRegion(node.File, block.Header, end)
 	for index := block.Start; index < end; index++ {
@@ -337,7 +337,7 @@ func ProjectHostForm(graph *config.Graph, root string, identity HostIdentity) (H
 	return form, nil
 }
 
-// FindHostBlock returns the first Host block whose primary alias matches.
+// FindHostBlock は、primary alias が match する最初の Host ブロックを返す。
 func FindHostBlock(file *config.File, alias string) (config.Block, bool) {
 	for _, block := range file.Blocks() {
 		if block.Kind != config.BlockHost {
@@ -350,7 +350,7 @@ func FindHostBlock(file *config.File, alias string) (config.Block, bool) {
 	return config.Block{}, false
 }
 
-// DiagnosticView is a config.Diagnostic prepared for the HTTP contract.
+// DiagnosticView は、HTTP contract 向けに準備された config.Diagnostic である。
 type DiagnosticView struct {
 	Severity string `json:"severity"`
 	Code     string `json:"code"`
@@ -361,7 +361,7 @@ type DiagnosticView struct {
 	Detail   string `json:"detail,omitempty"`
 }
 
-// SeverityName renders a severity as the stable string the contract uses.
+// SeverityName は、severity を contract が使う安定した文字列として表す。
 func SeverityName(severity config.Severity) string {
 	switch severity {
 	case config.SeverityError:

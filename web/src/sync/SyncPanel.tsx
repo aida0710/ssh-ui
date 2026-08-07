@@ -21,10 +21,10 @@ import { Card, Notice, Row } from "../ui/surface";
 
 type SyncPanelProps = { api?: IntegrationsApi };
 
-// The refusals this screen can meet, named. A code the server took the trouble
-// to distinguish is a code the user can act on, and "that could not be done"
-// sends them looking in the wrong place: a mistyped master password is not a
-// bucket problem, and an endpoint with a path is not a credentials problem.
+// この画面が出会いうる拒否に、名前を付けたもの。サーバーがわざわざ
+// 区別したコードは、ユーザーが対処できるコードであり、「それはできなかった」
+// では見当違いの場所を探させてしまう: 打ち間違えたマスターパスワードは
+// バケットの問題ではなく、パスを含むエンドポイントは資格情報の問題ではない。
 const refusals: Record<string, MessageKey> = {
   wrong_master_password: "sync.wrongMaster",
   bucket_refused: "sync.unreachable",
@@ -32,11 +32,11 @@ const refusals: Record<string, MessageKey> = {
   endpoint_must_have_no_path: "sync.endpointPath",
 };
 
-// The remote snapshot.
+// リモートのスナップショット。
 //
-// Everything on this screen is a deliberate act. A pull previews first and
-// applies only on a second press, which is the same shape every other write in
-// this application takes, and a conflict is shown rather than resolved.
+// この画面のすべては意図的な行為だ。pull はまずプレビューし、
+// 2 回目の押下でのみ適用する。これはこのアプリケーションの他のあらゆる
+// 書き込みが取る形と同じであり、衝突は解決されるのではなく表示される。
 export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
   const t = useTranslate();
   const [status, setStatus] = useState<SyncStatus | null>(null);
@@ -65,8 +65,8 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
     void reload();
   }, [reload]);
 
-  // explain turns a refusal the server named into the sentence for it, so a
-  // caller that has more than one way to fail can say which one happened.
+  // explain は、サーバーが名指した拒否をそのための文へと変える。
+  // これにより、失敗の仕方が複数ある呼び出し側が、どれが起きたかを言える。
   async function run<T>(
     operation: () => Promise<T>,
     apply: (value: T) => void,
@@ -91,10 +91,10 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
     return <p role="status" className={hintText}>{t("sync.loading")}</p>;
   }
 
-  // A shut vault cannot fill this form in, and neither push nor pull can run
-  // without the settings it holds. Showing the form anyway would read as "your
-  // bucket is gone" and invite the user to type the access key a second time,
-  // which is the thing storing it was meant to stop.
+  // 閉じた vault はこのフォームを埋められず、push も pull もそれが
+  // 保持する設定なしには実行できない。それでもフォームを見せれば
+  // 「バケットが消えた」と読め、アクセスキーの再入力をユーザーに促してしまう。
+  // それはまさに、保存することが防ぐはずだったことだ。
   if (status.locked) {
     return (
       <div className="flex flex-col gap-4">
@@ -121,9 +121,9 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
                   setMaster("");
                   void reload();
                 },
-                // A machine that has never made a vault is not a machine whose
-                // master password was wrong, and saying so would send someone
-                // hunting for a password that does not exist.
+                // 一度も vault を作ったことのないマシンは、マスターパスワードが
+                // 間違っていたマシンではない。そう言ってしまえば、誰かに存在しない
+                // パスワードを探し回らせてしまう。
                 t("sync.unlockFailed"),
                 (code) => (code === "vault_missing" ? t("sync.noVault") : ""),
               )
@@ -143,9 +143,9 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
     <div className="flex flex-col gap-4">
       <h2 className="font-medium">{t("sync.heading")}</h2>
       {/*
-        Said before the form, not after it. Everything in ~/.ssh travels,
-        including the private keys, and the passphrase is the only thing
-        between the bucket and them.
+        フォームの後ではなく前に伝える。~/.ssh の中身はすべて、秘密鍵を
+        含めて移動する。バケットとそれらの間にあるのは
+        パスフレーズだけだ。
       */}
       <p className={hintText}>{t("sync.warning")}</p>
       {error === "" ? null : <Notice tone="danger">{error}</Notice>}
@@ -161,9 +161,9 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
           <p className="text-sm text-ink-muted">{t("sync.notConfigured")}</p>
         )}
         {/*
-          One card of rows rather than a two-column grid of stacked fields.
-          The hints here are whole sentences; beside a control they were
-          squeezed into half a column, and under a row they have the width.
+          積み重なったフィールドの 2 列グリッドではなく、行を持つ 1 枚のカードだ。
+          ここのヒントは完全な文であり、コントロールの脇に置けば
+          半分の列に押し込まれてしまうが、行の下ならその幅がある。
         */}
         <Card>
           <Row label={t("sync.endpoint")} hint={t("sync.endpointHint")}>
@@ -178,9 +178,9 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
             <input value={bucket} onChange={(event) => setBucket(event.target.value)} className={control} />
           </Row>
           {/*
-            Empty means the bucket root, which is the common case: a bucket is
-            usually named for this application already, and a folder inside it
-            repeating the name is one level of nothing.
+            空欄はバケットのルートを意味し、これがよくある場合だ: バケットは
+            通常このアプリケーション用に既に名前が付けられており、その中で
+            名前を繰り返すフォルダは何もない階層をもう 1 つ重ねるだけだ。
           */}
           <Row label={t("sync.path")} hint={t("sync.pathHint")}>
             <input value={path} onChange={(event) => setPath(event.target.value)} className={control} />
@@ -193,10 +193,10 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
             />
           </Row>
           {/*
-            The credentials are sealed with the master password and kept beside
-            the vault rather than inside it. The vault travels; the key to the
-            bucket must not, because anyone who obtained one snapshot could
-            otherwise fetch every later one.
+            資格情報はマスターパスワードで封印され、vault の中ではなくその隣に
+            保管される。vault は持ち運ばれるが、バケットへの鍵はそうであっては
+            ならない。さもないと、1 つのスナップショットを入手した誰もが、
+            以降のすべてを取得できてしまう。
           */}
           <Row label={t("sync.secretAccessKey")} hint={t("sync.credentialsNote")}>
             <input
@@ -207,11 +207,11 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
             />
           </Row>
           {/*
-            Which way this machine may move data. It governs the two writes: a
-            machine set to send never has another machine's bytes applied to it,
-            and one set to receive never writes to the bucket. The preview stays
-            available either way, so a machine that may not apply can still be
-            told how far behind it is.
+            このマシンがデータをどちらの向きに動かしてよいか。これは 2 つの
+            書き込みを統べる: 送信に設定されたマシンは決して他のマシンのバイト列を
+            適用されず、受信に設定されたマシンは決してバケットに書き込まない。
+            プレビューはどちらにせよ使えるので、適用できないマシンでも
+            自分がどれだけ遅れているかを知ることはできる。
           */}
           <Row label={t("sync.direction")} hint={t(`sync.direction.${direction}.hint`)}>
             <select
@@ -263,9 +263,9 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
           </Row>
         </Card>
         {status.direction === "both" ? null : (
-          // The refusal is stated where the button is, not only when it is
-          // pressed: a disabled control with no reason beside it reads as a
-          // fault in the application rather than as a setting.
+          // 拒否はボタンが押されたときだけでなく、ボタンがある場所に
+          // 述べられる: 隣に理由のない無効化されたコントロールは、設定ではなく
+          // アプリケーションの不具合に見えてしまう。
           <p role="status" className="text-sm text-notice-ink">
             {t(`sync.direction.${status.direction}.active`)}
           </p>
@@ -319,9 +319,9 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
           {conflicted ? (
             <>
               {/*
-                Two files that both changed have no correct merge. Guessing one
-                would violate the byte-preservation promise the parser exists
-                to keep, so this says which files and stops.
+                両方が変更した 2 つのファイルに、正しいマージはない。どちらかを
+                推測すれば、パーサーが守るために存在するバイト保存の約束を
+                破ることになるので、これはどのファイルかを述べて止まる。
               */}
               <p className="text-sm text-notice-ink">{t("sync.conflictExplain")}</p>
               <ul className="flex flex-col gap-1 font-mono text-xs text-notice-ink">

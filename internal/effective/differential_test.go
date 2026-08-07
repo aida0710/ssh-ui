@@ -13,15 +13,15 @@ import (
 	"sshc/internal/storage"
 )
 
-// TestProjectionMatchesInstalledOpenSSH is the differential test the
-// config-engine plan deferred to this subsystem.
+// TestProjectionMatchesInstalledOpenSSH は、設定エンジンの計画がこのサブシステム
+// に先送りした差分テストである。
 //
-// Every fixture is safe by construction: none contains ProxyCommand,
-// LocalCommand, RemoteCommand, KnownHostsCommand or Match exec, so evaluating
-// it cannot run a program. Each fixture lives in its own t.TempDir() and the
-// real ~/.ssh is never read. The comparison is limited to keywords the fixture
-// sets, because `ssh -G -F file` still reads /etc/ssh/ssh_config for
-// everything else.
+// どのフィクスチャも構造上安全である。ProxyCommand、LocalCommand、RemoteCommand、
+// KnownHostsCommand、Match exec のいずれも含まないので、評価してもプログラムは
+// 実行されえない。各フィクスチャは自身の t.TempDir() の中にあり、本物の ~/.ssh が
+// 読まれることはない。比較はフィクスチャが設定するキーワードに限定する。
+// `ssh -G -F file` は、それ以外については依然として /etc/ssh/ssh_config を読む
+// からである。
 func TestProjectionMatchesInstalledOpenSSH(t *testing.T) {
 	toolchain := macos.NewToolchain()
 	if _, err := toolchain.SSH(); err != nil {
@@ -31,9 +31,9 @@ func TestProjectionMatchesInstalledOpenSSH(t *testing.T) {
 	tests := []struct {
 		name     string
 		contents string
-		// files are written beside the entry file, by workspace-relative path.
-		// A group fixture needs them: the whole claim is about which file an
-		// Include reaches and in which order.
+		// files は、ワークスペース相対のパスで、エントリファイルの隣に書かれる。
+		// グループのフィクスチャにはこれが要る。主張の全体が、Include が
+		// どのファイルにどの順で到達するかについてのものだからだ。
 		files      map[string]string
 		alias      string
 		keywords   []string
@@ -72,11 +72,11 @@ func TestProjectionMatchesInstalledOpenSSH(t *testing.T) {
 			wantSimple: true,
 		},
 		{
-			// The generated region, verbatim, in front of the real OpenSSH.
-			// The claim under test is the ordering rule: one Include per group,
-			// deepest first, then the compiled settings. lon-1 is in the nested
-			// group, so its own file wins over the parent group's settings
-			// block, and connections/work/*.conf must not reach it at all.
+			// 生成されたリージョンを、そのまま本物の OpenSSH の前に置く。
+			// 試験対象の主張は順序のルールである。グループごとに Include を
+			// ひとつ、深いものから順に、そのあとにコンパイル済みの設定。lon-1
+			// は入れ子のグループにあるので、自分のファイルが親グループの設定
+			// ブロックに勝ち、connections/work/*.conf は到達してはならない。
 			name: "generated group region",
 			contents: "# >>> sshc groups (generated). Child groups first: OpenSSH keeps the first value it reads.\n" +
 				"# Edit through the UI; lines between these markers are replaced on the next save.\n" +
@@ -136,19 +136,19 @@ func TestProjectionMatchesInstalledOpenSSH(t *testing.T) {
 				t.Fatalf("fixture is not safe for automatic evaluation: %#v", report.Directives)
 			}
 
-			// ssh anchors a relative Include at ~/.ssh — not at the directory
-			// of the file handed to -F — and takes ~ from HOME. Left to
-			// inherit this process's HOME, every Include in a fixture reached
-			// the real user's ~/.ssh, matched nothing, and ssh -G answered
-			// with its built-in defaults: the alias as the hostname, port 22,
-			// the login user. The comparison then measured an empty
-			// configuration against a populated one.
+			// ssh は相対 Include を ~/.ssh に固定する — -F に渡された
+			// ファイルのディレクトリではない — そして ~ を HOME から取る。
+			// このプロセスの HOME をそのまま継承させると、フィクスチャ内の
+			// すべての Include が本物のユーザーの ~/.ssh に到達し、何にも
+			// 一致せず、ssh -G は組み込みの既定値で答えた。alias をホスト名
+			// とし、ポート 22、ログインユーザー、と。比較はそのとき、空の設定
+			// と中身のある設定を突き合わせていたことになる。
 			//
-			// The fixture home is the child's HOME, which is the same
-			// arrangement the application ships: platform.MinimalEnvironment
-			// over the process's own HOME, whose ~/.ssh/config is the file
-			// being read. The two resolve a relative Include to the same
-			// directory only when that holds.
+			// フィクスチャのホームが子プロセスの HOME である。これは
+			// アプリケーションが出荷している構成と同じで、プロセス自身の
+			// HOME の上に platform.MinimalEnvironment を置き、その
+			// ~/.ssh/config が読まれるファイルになる。相対 Include を両者が
+			// 同じディレクトリへ解決するのは、それが成り立つときだけである。
 			evaluator := effective.Evaluator{
 				Runner:     macos.NewOutputRunner(),
 				Toolchain:  toolchain,

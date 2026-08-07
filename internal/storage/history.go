@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-// HistoryRecord is a finished transaction. It holds paths and hashes only; it
-// never stores file contents, and the engine never deletes a backup on its own.
+// HistoryRecord は完了したトランザクション。パスとハッシュだけを保持し、ファイルの
+// 内容を保存することはない。エンジンが自らバックアップを削除することもない。
 type HistoryRecord struct {
 	ID         string
 	Operation  string
@@ -17,7 +17,7 @@ type HistoryRecord struct {
 	BackupDir  string
 }
 
-// History returns finished transactions, newest first.
+// History は完了したトランザクションを、新しいものから順に返す。
 func (m *Manager) History() ([]HistoryRecord, error) {
 	records, err := m.readRecords(m.historyDirectory())
 	if err != nil {

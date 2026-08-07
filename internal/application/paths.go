@@ -1,7 +1,7 @@
-// Package application holds the use cases that sit between the lossless
-// configuration engine and the filesystem transaction manager. It never
-// performs a syscall directly: every read and write goes through the storage
-// workspace it is given.
+// Package application は、lossless な設定 engine と filesystem transaction
+// manager との間に位置する use case を保持する。syscall を直接行うことは
+// 決してない。すべての読み書きは、与えられた storage workspace を
+// 経由する。
 package application
 
 import (
@@ -10,13 +10,13 @@ import (
 	"strings"
 )
 
-// ErrExternalPath reports a path that is not a real location inside the
-// resolved ~/.ssh directory. The UI may display files outside the root, but no
-// identifier the UI sends back may address one.
+// ErrExternalPath は、解決された~/.ssh ディレクトリの内側にある実在の
+// 場所ではない path を報告する。UI は root の外側にあるファイルを表示して
+// もよいが、UI が送り返す識別子がそれを指し示すことは許されない。
 var ErrExternalPath = errors.New("path is outside the ssh directory")
 
-// RelativePath converts an absolute path inside root into the slash-separated
-// identifier used by metadata and the HTTP API.
+// RelativePath は、root 内側の絶対 path を、metadata と HTTP API が使う
+// スラッシュ区切りの識別子に変換する。
 func RelativePath(root, absolute string) (string, error) {
 	if !filepath.IsAbs(absolute) {
 		return "", ErrExternalPath
@@ -35,9 +35,9 @@ func RelativePath(root, absolute string) (string, error) {
 	return filepath.ToSlash(relative), nil
 }
 
-// AbsolutePath converts an identifier received from the UI back into an
-// absolute path inside root. It rejects absolute input, empty input and any
-// path that escapes the root after cleaning.
+// AbsolutePath は、UI から受け取った識別子を root 内側の絶対 path へ
+// 変換し直す。絶対 path の入力、空の入力、そしてクリーニング後に
+// root を脱出する path を拒否する。
 func AbsolutePath(root, relative string) (string, error) {
 	if relative == "" || strings.HasPrefix(relative, "/") || strings.Contains(relative, "\x00") {
 		return "", ErrExternalPath

@@ -288,12 +288,12 @@ func TestCommitFailureWhileStagingLeavesEveryFileUntouched(t *testing.T) {
 	if readErr != nil || len(journalEntries) != 1 {
 		t.Fatalf("journal = %#v, %v", journalEntries, readErr)
 	}
-	// Nothing was renamed, so the recovery test in Task 7 can roll this back
-	// without restoring any file.
+	// 何も rename されなかったので、Task 7 の復旧テストは、ファイルをひとつも復元
+	// せずにこれを巻き戻せる。
 }
 
-// faultyFileSystem injects one failure into an otherwise real filesystem so a
-// test can interrupt a transaction at a chosen stage.
+// faultyFileSystem は、それ以外は本物のファイルシステムに失敗をひとつ注入する。
+// これによりテストは、選んだ段階でトランザクションを中断できる。
 type faultyFileSystem struct {
 	FileSystem
 	failOn func(operation, path string) error
@@ -474,9 +474,9 @@ func TestNoteRecordsAnAuditFactWithoutFileContents(t *testing.T) {
 	}
 }
 
-// A private key must never be duplicated into the generational backup
-// directory, so a caller that replaces key material opts out of the backup and
-// accepts that the change cannot be rolled back afterwards.
+// 秘密鍵が世代バックアップのディレクトリへ複製されることは決してあってはならない。
+// そこで、鍵素材を置き換える呼び出し側はバックアップを取らないことを選び、その
+// 変更があとから巻き戻せないことを受け入れる。
 func TestCommitSkipsTheGenerationalBackupWhenTheCallerOptsOut(t *testing.T) {
 	manager, workspace := newTestManager(t)
 	secret := writeWorkspaceFile(t, workspace, "id_work", "PRIVATE KEY BYTES\n", 0o600)
@@ -512,9 +512,9 @@ func TestCommitSkipsTheGenerationalBackupWhenTheCallerOptsOut(t *testing.T) {
 }
 
 func TestCommitCreatesADirectoryAndTheFileInsideItInOneTransaction(t *testing.T) {
-	// Before this, a caller had to EnsureDirectory outside the journal and
-	// accept that a crash between the mkdir and the commit left an empty
-	// directory behind.
+	// これがなかった頃は、呼び出し側はジャーナルの外で EnsureDirectory を呼び、
+	// mkdir とコミットのあいだでクラッシュすれば空のディレクトリが残ることを
+	// 受け入れるしかなかった。
 	manager, workspace := newTestManager(t)
 	nested := filepath.Join(workspace.Root(), "connections", "work", "eu")
 
@@ -547,8 +547,8 @@ func TestCommitCreatesADirectoryAndTheFileInsideItInOneTransaction(t *testing.T)
 }
 
 func TestCommitRemovesAnEmptyDirectoryAndRefusesAFullOne(t *testing.T) {
-	// A recursive delete cannot be rolled back without restoring contents the
-	// transaction never read, so only an empty directory goes.
+	// 再帰的な削除は、トランザクションが一度も読んでいない内容を復元しない限り
+	// 巻き戻せない。だから消えるのは空のディレクトリだけである。
 	manager, workspace := newTestManager(t)
 	full := filepath.Join(workspace.Root(), "connections", "work")
 	if err := os.MkdirAll(full, 0o700); err != nil {
@@ -584,8 +584,8 @@ func TestCommitRemovesAnEmptyDirectoryAndRefusesAFullOne(t *testing.T) {
 }
 
 func TestRemovingADirectoryThatIsAlreadyGoneIsNotAnError(t *testing.T) {
-	// It is the state the caller asked for. A group rename that has already
-	// had its leftover cleaned up should not fail the next transaction.
+	// これは呼び出し側が求めた状態である。すでに残骸が片付けられているグループ名の
+	// 変更が、次のトランザクションを失敗させてはならない。
 	manager, workspace := newTestManager(t)
 
 	if _, err := manager.Commit(Request{
@@ -602,8 +602,8 @@ func TestRemovingADirectoryThatIsAlreadyGoneIsNotAnError(t *testing.T) {
 }
 
 func TestARefusedDirectoryRequestCreatesNothing(t *testing.T) {
-	// The validator runs after the directories are planned and before any of
-	// them is made, so a refused request must leave the disk untouched.
+	// バリデータは、ディレクトリが計画されたあと、そのどれかが作られる前に走る。
+	// したがって拒否されたリクエストは、ディスクに手を触れずに終わらねばならない。
 	manager, workspace := newTestManager(t)
 	manager.Validate = func(Request) error { return errors.New("refused") }
 	nested := filepath.Join(workspace.Root(), "connections", "work")
@@ -633,10 +633,10 @@ func TestADirectoryOutsideTheWorkspaceIsRefused(t *testing.T) {
 }
 
 func TestARemovalCanKeepABackupSoHistoryCanRestoreIt(t *testing.T) {
-	// A configuration file the user deleted from the explorer is not key
-	// material, and every other change this application makes can be undone
-	// from History. The generational copy is what puts a removal on the same
-	// footing: Restore reads exactly this file.
+	// ユーザーがエクスプローラから削除した設定ファイルは鍵素材ではないし、この
+	// アプリケーションが行う他のすべての変更は History から取り消せる。世代コピーは、
+	// 削除を同じ土俵に載せるものだ。Restore が読むのは、まさにこのファイルで
+	// ある。
 	manager, workspace := newTestManager(t)
 	path := writeWorkspaceFile(t, workspace, "conf.d/10-home.conf", "Host nas\n\tUser aida\n", 0o600)
 
@@ -673,9 +673,9 @@ func TestARemovalCanKeepABackupSoHistoryCanRestoreIt(t *testing.T) {
 }
 
 func TestAPurgeStillCopiesNothingIntoTheBackupDirectory(t *testing.T) {
-	// The permanent key delete is the reason removals keep nothing by default.
-	// Copying key material into the backup directory would defeat the two
-	// confirmations the user gave for it.
+	// 恒久的な鍵の削除こそ、削除が既定では何も残さない理由である。鍵素材を
+	// バックアップディレクトリへコピーすれば、ユーザーがそのために与えた二度の
+	// 確認を台無しにしてしまう。
 	manager, workspace := newTestManager(t)
 	path := writeWorkspaceFile(t, workspace, "keys/id_ed25519", "PRIVATE", 0o600)
 
@@ -694,11 +694,11 @@ func TestAPurgeStillCopiesNothingIntoTheBackupDirectory(t *testing.T) {
 	}
 }
 
-// A backup is ciphertext, and the manager is the only thing that knows it.
+// バックアップは暗号文であり、それを知っているのはマネージャだけである。
 //
-// Nothing else reads the backup directory directly: rollback and restore both
-// come back through here, so there is one place that knows what those bytes
-// are and no caller that can forget.
+// ほかにバックアップディレクトリを直接読むものはない。巻き戻しも復元もここへ
+// 戻ってくるので、それらのバイト列が何であるかを知る場所はひとつだけであり、
+// それを忘れうる呼び出し側は存在しない。
 func TestBackupsAreSealedAndReadBackThroughTheManager(t *testing.T) {
 	manager, workspace := newTestManager(t)
 	manager.Seal = sealForTest
@@ -737,9 +737,9 @@ func TestBackupsAreSealedAndReadBackThroughTheManager(t *testing.T) {
 	}
 }
 
-// sealForTest stands in for the vault's key. It is reversible and obviously not
-// the identity: the bytes on disk must not be the bytes that went in, or a
-// guard that greps a backup for key material would pass on plaintext.
+// sealForTest は vault の鍵の代役である。可逆であり、かつ明らかに恒等写像では
+// ない。ディスク上のバイト列は入ってきたバイト列と違わねばならず、さもなければ
+// バックアップを鍵素材で grep する検査が平文の上を素通りしてしまう。
 func sealForTest(plaintext []byte) ([]byte, error) {
 	sealed := make([]byte, 0, len(plaintext)+len(testSealMarker))
 	sealed = append(sealed, testSealMarker...)
@@ -763,13 +763,13 @@ func unsealForTest(sealed []byte) ([]byte, error) {
 
 var testSealMarker = []byte("sealed:")
 
-// A directory this very request empties can be removed by it.
+// このリクエスト自身が空にするディレクトリは、このリクエストで取り除ける。
 //
-// The check used to be against the disk as it stands, so a caller had to move
-// the files out in one transaction and remove the directory in the next — which
-// meant a group rename could not finish what it started, and a crash between
-// the two left the empty shell behind. It is now against the disk as this
-// request will leave it.
+// 以前は現状のディスクに対して検査していたので、呼び出し側は一方のトランザクション
+// でファイルを外へ移し、次のトランザクションでディレクトリを取り除かねばならな
+// かった — つまりグループ名の変更が自分で始めたことを終えられず、二つのあいだで
+// クラッシュすれば空の抜け殻が残った。いまは、このリクエストが残すことになる
+// ディスクの状態に対して検査する。
 func TestADirectoryEmptiedByTheSameRequestIsRemoved(t *testing.T) {
 	manager, workspace := newTestManager(t)
 	from := writeWorkspaceFile(t, workspace, "connections/work/web.conf", "Host web\n", 0o600)
@@ -792,8 +792,8 @@ func TestADirectoryEmptiedByTheSameRequestIsRemoved(t *testing.T) {
 				Precondition: Precondition{Exists: true, Digest: Digest([]byte("Host lon\n"))},
 			},
 		},
-		// Listed parent first on purpose: the order that can work is deepest
-		// first, and the caller should not have to know that.
+		// 意図して親を先に列挙している。成立する順序は深いものからであり、呼び出し側が
+		// それを知っている必要はない。
 		RemoveDirectories: []DirectoryRemoval{
 			{Path: filepath.Join(workspace.Root(), "connections", "work")},
 			{Path: filepath.Join(workspace.Root(), "connections", "work", "eu")},
@@ -812,8 +812,8 @@ func TestADirectoryEmptiedByTheSameRequestIsRemoved(t *testing.T) {
 	}
 }
 
-// A directory holding something this request does not touch is still refused.
-// The rule that changed is what counts as empty, not whether emptiness matters.
+// このリクエストが触れない何かを保持しているディレクトリは、やはり拒否される。
+// 変わったのは何をもって空とするかであって、空であることが重要かどうかではない。
 func TestADirectoryHoldingSomethingElseIsStillRefused(t *testing.T) {
 	manager, workspace := newTestManager(t)
 	from := writeWorkspaceFile(t, workspace, "connections/work/web.conf", "Host web\n", 0o600)
@@ -836,7 +836,7 @@ func TestADirectoryHoldingSomethingElseIsStillRefused(t *testing.T) {
 	if !errors.Is(err, ErrDirectoryNotEmpty) {
 		t.Fatalf("Commit = %v, want ErrDirectoryNotEmpty", err)
 	}
-	// Refused before anything happened.
+	// 何かが起きる前に拒否された。
 	if _, statErr := os.Stat(from); statErr != nil {
 		t.Errorf("the file moved despite the refusal: %v", statErr)
 	}

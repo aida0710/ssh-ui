@@ -30,11 +30,11 @@ func FuzzParseRendersOriginalBytes(f *testing.F) {
 	})
 }
 
-// FuzzExpandIncludePattern fuzzes the step that turns an Include argument into
-// a filesystem glob. It is the only place in the engine where text from a
-// configuration file becomes a path, so a pattern that expanded to a relative
-// path, to an uncleaned path, or to a home directory the engine had to guess
-// would widen what the resolver reads.
+// FuzzExpandIncludePattern は、Include の引数をファイルシステムのグロブに変える
+// 段階をファズする。設定ファイル中のテキストがパスになるのはエンジン内でここだけ
+// なので、相対パスや、正規化されていないパスや、エンジンが推測せざるを得ない
+// ホームディレクトリへ展開されるパターンがあれば、リゾルバが読む範囲が広がって
+// しまう。
 func FuzzExpandIncludePattern(f *testing.F) {
 	for _, seed := range []string{
 		"conf.d/*.conf",
@@ -55,8 +55,8 @@ func FuzzExpandIncludePattern(f *testing.F) {
 	} {
 		f.Add(seed)
 	}
-	// Seed from the committed golden fixture too, so the corpus starts from
-	// arguments a real configuration actually contains.
+	// コミット済みのゴールデンフィクスチャからも種を与え、コーパスが実際の設定に
+	// 含まれる引数から始まるようにする。
 	golden, err := os.ReadFile(filepath.Join("testdata", "golden", "realistic.conf"))
 	if err != nil {
 		f.Fatal(err)
@@ -70,10 +70,10 @@ func FuzzExpandIncludePattern(f *testing.F) {
 		}
 	}
 
-	// Seeds that once broke an assertion in this target are kept permanently.
-	// "~%d" expands its token first and only then reads as "~/...", which is a
-	// reference to the home directory this resolver was given rather than to
-	// some user's home it would have had to look up.
+	// このターゲットの表明を過去に壊した種は、恒久的に保持する。
+	// "~%d" はまずトークンを展開し、そのうえで "~/..." として読まれる。これは、
+	// どこかのユーザーのホーム — 調べに行かなければならないもの — ではなく、この
+	// リゾルバに与えられたホームディレクトリへの参照である。
 	f.Add("~%d")
 	f.Add("%d")
 	f.Add("~%%d")
@@ -85,11 +85,11 @@ func FuzzExpandIncludePattern(f *testing.F) {
 		Tokens: map[byte]string{'d': "/Users/tester"},
 	}
 
-	// A '~user' form needs a password database lookup this engine does not do,
-	// so it is refused rather than guessed at. This is asserted directly rather
-	// than as a rule inside the fuzz body, because expressing it there would
-	// mean restating the order in which tokens and tildes are expanded, and a
-	// test that restates the implementation checks nothing.
+	// '~user' の形式は、このエンジンが行わない passwd データベースの参照を必要と
+	// するので、推測せずに拒否する。これはファズ本体のルールとしてではなく直接
+	// 表明する。そこで表現すると、トークンとチルダが展開される順序を言い直すことに
+	// なり、実装を言い直すテストは何ひとつ検査していないことに
+	// なるからだ。
 	for _, guessed := range []string{"~root/config", "~nobody", "~a/b"} {
 		if _, err := resolver.expandPattern(guessed); !errors.Is(err, ErrUnsupportedExpansion) {
 			f.Fatalf("expandPattern(%q) = %v, want ErrUnsupportedExpansion", guessed, err)
@@ -110,13 +110,13 @@ func FuzzExpandIncludePattern(f *testing.F) {
 		if cleaned := path.Clean(expanded); cleaned != expanded {
 			t.Fatalf("expandPattern(%q) = %q, which is not cleaned (%q)", argument, expanded, cleaned)
 		}
-		// No percent token may survive unexpanded into a path the resolver will
-		// glob. A literal percent can only come from the "%%" escape.
+		// リゾルバがグロブするパスへ、未展開のパーセントトークンが生き残ってはならない。
+		// リテラルのパーセントは "%%" のエスケープからしか生まれない。
 		//
-		// There is deliberately no rule about tildes here. A leading tilde is
-		// already excluded by the absoluteness check above, and a tilde
-		// anywhere else is an ordinary character in a filename: "%%~" expands
-		// to the literal name "%~", which OpenSSH would also treat literally.
+		// ここには意図してチルダに関するルールを置いていない。先頭のチルダは上の
+		// 絶対性の検査ですでに排除されており、それ以外の位置のチルダはファイル名の中の
+		// 普通の文字である。"%%~" はリテラルの名前 "%~" に展開され、OpenSSH もそれを
+		// リテラルとして扱う。
 		if strings.Contains(expanded, "%") && !strings.Contains(argument, "%%") {
 			t.Fatalf("expandPattern(%q) = %q, which still contains an unexpanded token", argument, expanded)
 		}

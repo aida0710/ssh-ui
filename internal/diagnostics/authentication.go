@@ -13,20 +13,20 @@ import (
 )
 
 const (
-	// AuthenticatedMarker is the phrase OpenSSH prints once a session is
-	// authenticated. Watching for it lets the test finish as soon as the
-	// question is answered instead of waiting for its own timeout.
+	// AuthenticatedMarker は、セッションが認証されたときに OpenSSH が表示する語句。
+	// これを監視することで、自前のタイムアウトを待たずに、問いの答えが出た時点で
+	// テストを終えられる。
 	AuthenticatedMarker = "Authenticated to "
-	// MaxReportedOutput bounds the captured stderr handed back for display.
+	// MaxReportedOutput は、表示用に返す stderr の取り込み量に上限を設ける。
 	MaxReportedOutput = 8 << 10
-	// DefaultAuthenticationTimeout bounds one authentication test.
+	// DefaultAuthenticationTimeout は、認証テスト一回に上限を設ける。
 	DefaultAuthenticationTimeout = 20 * time.Second
-	// DefaultConnectTimeout is passed to OpenSSH so a stalled TCP connection
-	// fails before this application's own timeout fires.
+	// DefaultConnectTimeout は OpenSSH に渡す。これにより、停止した TCP 接続は
+	// このアプリケーション自身のタイムアウトが発火する前に失敗する。
 	DefaultConnectTimeout = 8 * time.Second
 )
 
-// Authentication test outcomes.
+// 認証テストの結果。
 const (
 	OutcomeAuthenticated  = "authenticated"
 	OutcomeDenied         = "authentication_denied"
@@ -38,8 +38,8 @@ const (
 	OutcomeFailed         = "failed"
 )
 
-// ExecutableDirectiveError reports that connecting would run a command that no
-// command-line option can disable, and that the user has not confirmed it.
+// ExecutableDirectiveError は、接続するとコマンドラインオプションでは無効化できない
+// コマンドが実行されること、そしてユーザーがそれを確認していないことを報告する。
 type ExecutableDirectiveError struct {
 	Directives []effective.Executable
 }
@@ -48,7 +48,7 @@ func (e *ExecutableDirectiveError) Error() string {
 	return fmt.Sprintf("connecting would run %d configured command(s) that cannot be disabled", len(e.Directives))
 }
 
-// AuthenticationResult is one completed authentication test.
+// AuthenticationResult は、完了した認証テストひとつ分。
 type AuthenticationResult struct {
 	Outcome       string
 	Authenticated bool
@@ -58,26 +58,26 @@ type AuthenticationResult struct {
 	Elapsed       time.Duration
 }
 
-// Authentication runs one real SSH authentication attempt.
+// Authentication は、本物の SSH 認証の試行を一回実行する。
 type Authentication struct {
 	Runner         platform.OutputRunner
 	Toolchain      platform.Toolchain
 	ConfigPath     string
 	Timeout        time.Duration
 	ConnectTimeout time.Duration
-	// Environment is the child's complete environment, normally
-	// platform.MinimalEnvironment. It withholds SSH_ASKPASS, without which an
-	// exported askpass program could turn this bounded, non-interactive test
-	// into a wait on a passphrase dialog.
+	// Environment は子プロセスの完全な環境。通常は platform.MinimalEnvironment で
+	// ある。これは SSH_ASKPASS を与えない。与えてしまうと、エクスポートされた askpass
+	// プログラムが、上限付きで非対話的なこのテストを、パスフレーズのダイアログ待ちに
+	// 変えてしまいかねない。
 	Environment []string
 }
 
-// HardeningOptions returns the command-line options that neutralise everything
-// this test does not need. Command-line options take precedence over every
-// configuration file, which is why the test can rely on them: SessionType=none
-// asks for no shell and no remote command, ClearAllForwardings drops local,
-// remote and dynamic forwards, PermitLocalCommand=no blocks LocalCommand, and
-// StrictHostKeyChecking=yes refuses to trust an unknown host key silently.
+// HardeningOptions は、このテストに不要なものすべてを無力化するコマンドライン
+// オプションを返す。コマンドラインオプションはあらゆる設定ファイルに優先するので、
+// テストはそれに頼れる。SessionType=none はシェルもリモートコマンドも要求せず、
+// ClearAllForwardings はローカル・リモート・動的の各転送を落とし、
+// PermitLocalCommand=no は LocalCommand を封じ、StrictHostKeyChecking=yes は
+// 未知のホスト鍵を黙って信頼することを拒む。
 func HardeningOptions(connectTimeout time.Duration) []string {
 	seconds := int(connectTimeout.Seconds())
 	if seconds < 1 {
@@ -106,11 +106,11 @@ func HardeningOptions(connectTimeout time.Duration) []string {
 	return options
 }
 
-// Test authenticates against alias and stops as soon as the answer is known.
+// Test は alias に対して認証し、答えが判明した時点で止まる。
 //
-// acknowledged must come from a consumed action token that displayed the exact
-// commands in report.Unavoidable(); without it, a configuration that would run
-// such a command does not start.
+// acknowledged は、report.Unavoidable() のコマンドをそのまま表示したうえで消費
+// されたアクショントークンから来なければならない。これがなければ、そうした
+// コマンドを実行することになる設定は起動しない。
 func (a Authentication) Test(ctx context.Context, report effective.Report, alias string, acknowledged bool) (AuthenticationResult, error) {
 	if err := platform.ValidateAlias(alias); err != nil {
 		return AuthenticationResult{}, err

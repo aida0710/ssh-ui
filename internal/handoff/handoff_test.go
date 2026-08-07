@@ -30,7 +30,7 @@ func TestWritingTheHandoffAndTakingItAway(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the handoff was not written: %v", err)
 	}
-	// Readable by this user and nobody else, like everything else in ~/.ssh.
+	// ~/.ssh の他のすべてと同じく、このユーザーだけが読める。
 	if info.Mode().Perm() != 0o600 {
 		t.Errorf("mode = %v, want 0600", info.Mode().Perm())
 	}
@@ -49,15 +49,15 @@ func TestWritingTheHandoffAndTakingItAway(t *testing.T) {
 	if _, err := handoff.Read(directory); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("Read after Remove = %v, want a missing file", err)
 	}
-	// Removing what is not there is the state the caller asked for.
+	// ないものを削除することは、呼び出し側が求めた状態である。
 	if err := handoff.Remove(directory); err != nil {
 		t.Errorf("Remove twice = %v", err)
 	}
 }
 
-// A second run replaces the first one's file rather than trusting it. The
-// secret is per run, so a handoff left behind by a process that was killed
-// points at a port nothing is listening on with a secret nothing accepts.
+// 二度目の実行は、一度目のファイルを信用せずに置き換える。秘密は実行ごとのもの
+// なので、強制終了されたプロセスが残したハンドオフは、何も待ち受けていないポート
+// を、誰も受け付けない秘密とともに指しているだけである。
 func TestASecondRunReplacesTheHandoff(t *testing.T) {
 	directory := filepath.Join(t.TempDir(), "sshc")
 	firstSecret, err := handoff.Mint(strings.NewReader(strings.Repeat("a", 64)))

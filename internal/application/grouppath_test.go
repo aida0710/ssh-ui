@@ -7,11 +7,11 @@ import (
 	"testing"
 )
 
-// A group is read by one Include line and nothing else, so a file this
-// application puts into a group must have a name that line matches. Deriving a
-// destination name from a source that is not already a .conf file — the entry
-// file "config" above all, which is where every ungrouped connection starts —
-// writes a file OpenSSH never reads.
+// グループは 1 つの Include 行だけによって読まれるので、この
+// アプリケーションがグループに入れるファイルは、その行が一致する
+// 名前を持たなければならない。まだ .conf ファイルでないソースから
+// 宛先名を導出すると — 何よりもエントリファイル "config" は、宣言され
+// ていないすべての connection の起点だが — OpenSSH が決して読まないファイルを書いてしまう。
 func TestGroupFileNameIsAlwaysReadByTheGroupInclude(t *testing.T) {
 	const group = "work"
 	pattern := GroupIncludePattern(group)
@@ -42,24 +42,24 @@ func TestValidateGroupNameRefusesEverythingThatIsNotASafeRelativeDirectory(t *te
 	}
 
 	refused := []string{
-		"",             // a group must be named
-		"/work",        // absolute
-		"work/",        // empty trailing segment
-		"work//eu",     // empty middle segment
-		".",            // the connections directory itself
-		"..",           // above it
-		"work/..",      // and the same by traversal
-		"work/../home", // which cleaning would hide
-		"work\x00eu",   // a NUL never reaches a path
-		".hidden",      // a leading dot is how ~/.ssh hides its own files
-		"work/.hidden", // at any depth
-		"sshc",         // the engine's own state directory
-		"SSHC",         // and the same file on a case-insensitive volume
-		"Config",       // a name the application depends on
+		"",             // グループには名前が必要
+		"/work",        // 絶対パス
+		"work/",        // 末尾の空セグメント
+		"work//eu",     // 途中の空セグメント
+		".",            // connections ディレクトリ自体
+		"..",           // その上位
+		"work/..",      // traverse による同じもの
+		"work/../home", // クリーンにすると隠れてしまうもの
+		"work\x00eu",   // NUL はパスに決して現れない
+		".hidden",      // 先頭のドットは ~/.ssh が自分のファイルを隠す方法
+		"work/.hidden", // どの深さでも
+		"sshc",         // エンジン自身の状態ディレクトリ
+		"SSHC",         // 大小文字を区別しないボリューム上の同じファイル
+		"Config",       // アプリケーションが依存する名前
 		"known_hosts",  //
 		"authorized_keys",
-		strings.Repeat("a", 65), // one segment longer than the limit
-		"a/b/c/d/e/f/g",         // deeper than MaxGroupSegments
+		strings.Repeat("a", 65), // 制限より 1 セグメント長い
+		"a/b/c/d/e/f/g",         // MaxGroupSegments より深い
 		"work/eu/../..",         //
 	}
 	for _, name := range refused {
@@ -69,12 +69,12 @@ func TestValidateGroupNameRefusesEverythingThatIsNotASafeRelativeDirectory(t *te
 	}
 }
 
-// MaxGroupSegments exists because of a limit in another package, so the reason
-// is asserted rather than left as a number somebody will later "tidy up".
+// MaxGroupSegments は別パッケージの制限に由来して存在するので、その
+// 理由は、誰かが後で「整理」してしまう単なる数値として残すのではなく、明示的に検証する。
 func TestMaxGroupSegmentsStaysInsideTheKeyScannerDepth(t *testing.T) {
-	// keys/<segments…>/<file> must stay within keys.maxScanDepth counted from
-	// ~/.ssh, or the key is reported as depth_exceeded and drops out of the
-	// inventory rather than being listed.
+	// keys/<segments…>/<file> は、~/.ssh から数えて
+	// keys.maxScanDepth に収まらなければならない。さもなければ鍵は
+	// depth_exceeded として報告され、一覧に載る代わりにインベントリから外れる。
 	const keyScannerDepth = 8
 	if 1+MaxGroupSegments+1 > keyScannerDepth {
 		t.Fatalf("a key %d directories deep exceeds the scanner's %d", 1+MaxGroupSegments+1, keyScannerDepth)
@@ -89,9 +89,9 @@ func TestGroupOfPathReadsMembershipFromTheDirectory(t *testing.T) {
 	}{
 		{"connections/work/web.conf", "work", true},
 		{"connections/work/eu/lon.conf", "work/eu", true},
-		// A file directly under connections/ belongs to no group: no Include is
-		// generated for it, so nothing reads it, and inventing a fourth
-		// precedence tier for it would be harder to state than it is worth.
+		// connections/ の直下にあるファイルはどのグループにも属さない:
+		// それに対して Include は生成されないので何にも読まれず、
+		// そのために 4 番目の優先順位階層を作るのは、割に合わないほど説明が難しくなる。
 		{"connections/loose.conf", "", false},
 		{"conf.d/10.conf", "", false},
 		{"config", "", false},
@@ -153,8 +153,8 @@ func TestParentGroupNameIsTheParentDirectory(t *testing.T) {
 }
 
 func TestGroupNameOrderPutsChildrenBeforeParents(t *testing.T) {
-	// OpenSSH keeps the first value it reads, so the deeper group's Include has
-	// to come first or a parent would beat its own child.
+	// OpenSSH は最初に読んだ値を保持するので、より深いグループの
+	// Include が先に来なければ、親が自分の子に勝ってしまう。
 	ordered := GroupNameOrder([]string{"work", "work/eu", "home"}, nil)
 	want := []string{"work/eu", "home", "work"}
 	if len(ordered) != len(want) {

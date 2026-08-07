@@ -23,8 +23,8 @@ func sealedVault(t *testing.T, entries map[string]string) []byte {
 		t.Fatalf("Create = %v", err)
 	}
 	for alias, password := range entries {
-		// "store a password for this host" is a credential named after the
-		// alias, plus the alias pointing at it.
+		// 「このホストのためにパスワードを保存する」とは、alias にちなんで名付けられた
+		// 資格情報と、その alias がそれを指すこと、の組である。
 		if err := vault.Set(secret.KindPassword, alias, password); err != nil {
 			t.Fatalf("Set(%q) = %v", alias, err)
 		}
@@ -46,7 +46,7 @@ func TestSealThenOpenRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open = %v", err)
 	}
-	// A password may legitimately end in a space. Nothing here may trim it.
+	// パスワードは正当に空白で終わりうる。ここにあるものがそれを削ってはならない。
 	if got, ok := vault.SecretFor(secret.KindPassword, "bastion"); !ok || got != "hunter2 " {
 		t.Errorf("Password(bastion) = %q, %v", got, ok)
 	}
@@ -59,8 +59,8 @@ func TestSealThenOpenRoundTrips(t *testing.T) {
 }
 
 func TestSealedBytesContainNoPasswordAndNoAlias(t *testing.T) {
-	// The file syncs. An observer who obtains it must not learn which hosts
-	// have a stored password, let alone what it is.
+	// このファイルは同期される。それを入手した観測者が、どのホストにパスワードが
+	// 保存されているかを知ってはならないし、まして中身を知ってはならない。
 	sealed := sealedVault(t, map[string]string{"bastion": "hunter2"})
 
 	for _, plaintext := range []string{"hunter2", "bastion", "passwords", "schemaVersion"} {
@@ -83,14 +83,14 @@ func TestOpenRefusesTheWrongPassphrase(t *testing.T) {
 }
 
 func TestOpenRefusesATamperedFileIncludingItsHeader(t *testing.T) {
-	// The header carries the KDF cost. If it were not authenticated, an
-	// attacker could rewrite it to the cheapest possible parameters and attack
-	// the passphrase at that cost instead of the one it was sealed with.
+	// ヘッダーは KDF のコストを運ぶ。それが認証されていなければ、攻撃者はそれを
+	// 可能な限り安いパラメータへ書き換え、封じられたときのコストではなくそのコストで
+	// パスフレーズを攻撃できてしまう。
 	sealed := sealedVault(t, map[string]string{"bastion": "hunter2"})
 
-	// Byte 27 is the salt length, 28 is the first salt byte, and the last byte
-	// is inside the tag. The cost fields have their own test above, because
-	// they are refused before any key is derived rather than by the AEAD.
+	// 27 バイト目はソルト長、28 バイト目はソルトの先頭バイトで、最後のバイトはタグの
+	// 中にある。コストのフィールドには上に専用のテストがある。それらは AEAD ではなく、
+	// 鍵が導出される前に拒否されるからだ。
 	for _, index := range []int{27, 28, 31, len(sealed) - 1} {
 		tampered := slices.Clone(sealed)
 		tampered[index] ^= 0x01
@@ -143,20 +143,20 @@ func TestOpenRefusesSomethingThatIsNotAVault(t *testing.T) {
 }
 
 func TestOpenRefusesAHeaderDemandingAbsurdWork(t *testing.T) {
-	// This file arrives from other machines. A header claiming time=65539 over
-	// 64 MiB asks for about ninety minutes of one core per attempt, so an
-	// unlock would simply never return. Found by this package's own tamper
-	// test, which hung for five minutes before anyone looked.
+	// このファイルは他のマシンから届く。64 MiB 上で time=65539 を主張するヘッダーは、
+	// 試行あたり 1 コアで約 90 分を要求するので、ロック解除は単に戻ってこなくなる。
+	// このパッケージ自身の改竄テストが見つけた。誰かが見に来るまで 5 分間ハングして
+	// いたのである。
 	sealed := sealedVault(t, map[string]string{"bastion": "hunter2"})
 
 	expensiveTime := slices.Clone(sealed)
-	expensiveTime[19] = 0x01 // time becomes 65539
+	expensiveTime[19] = 0x01 // time が 65539 になる
 	if _, err := secret.Open(expensiveTime, passphrase); !errors.Is(err, secret.ErrCostRefused) {
 		t.Fatalf("Open = %v, want ErrCostRefused", err)
 	}
 
 	expensiveMemory := slices.Clone(sealed)
-	expensiveMemory[22] = 0xFF // memory becomes about 4 TiB
+	expensiveMemory[22] = 0xFF // memory が約 4 TiB になる
 	if _, err := secret.Open(expensiveMemory, passphrase); !errors.Is(err, secret.ErrCostRefused) {
 		t.Fatalf("Open = %v, want ErrCostRefused", err)
 	}
@@ -169,26 +169,26 @@ func TestOpenRefusesAHeaderDemandingAbsurdWork(t *testing.T) {
 }
 
 func TestOpenSaysUpgradeRatherThanCorruptForAFutureFile(t *testing.T) {
-	// "Your data is gone" and "this build is too old" are different messages
-	// and a user must not be shown the first when the second is true.
+	// 「あなたのデータは失われた」と「このビルドは古すぎる」は別のメッセージであり、
+	// 後者が真であるときに前者を見せてはならない。
 	sealed := sealedVault(t, map[string]string{"bastion": "hunter2"})
 	future := slices.Clone(sealed)
-	future[16] = 99 // envelope version
+	future[16] = 99 // envelope のバージョン
 
 	if _, err := secret.Open(future, passphrase); !errors.Is(err, secret.ErrUnsupportedVersion) {
 		t.Fatalf("Open = %v, want ErrUnsupportedVersion", err)
 	}
 
 	futureKDF := slices.Clone(sealed)
-	futureKDF[17] = 99 // KDF id
+	futureKDF[17] = 99 // KDF の ID
 	if _, err := secret.Open(futureKDF, passphrase); !errors.Is(err, secret.ErrUnsupportedVersion) {
 		t.Fatalf("Open = %v, want ErrUnsupportedVersion", err)
 	}
 }
 
 func TestCreateRefusesAShortPassphrase(t *testing.T) {
-	// This file can be copied off the machine and attacked offline for as long
-	// as anyone likes. Length is the only thing that makes that expensive.
+	// このファイルはマシンの外へコピーでき、好きなだけ時間をかけてオフラインで攻撃
+	// できる。それを高くつくものにする唯一のものが長さである。
 	if _, err := secret.Create("short"); !errors.Is(err, secret.ErrWeakPassphrase) {
 		t.Fatalf("Create = %v, want ErrWeakPassphrase", err)
 	}
@@ -202,9 +202,9 @@ func TestSetRefusesAnUnsafeAliasAndAnEmptyPassword(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The alias rule moved with the thing it describes. A credential is named
-	// after what it is for — "the office VMs" is a fine name — so Set no longer
-	// judges aliases; Assign does, because that is where an alias appears.
+	// alias のルールは、それが記述する対象と一緒に移った。資格情報は、それが何のため
+	// のものかにちなんで名付けられる —「オフィスの VM 群」でよい — ので、Set はもはや
+	// alias を判定しない。判定するのは Assign である。alias が現れるのはそこだからだ。
 	if err := vault.Set(secret.KindPassword, "shared", "x"); err != nil {
 		t.Fatalf("Set = %v", err)
 	}
@@ -219,9 +219,9 @@ func TestSetRefusesAnUnsafeAliasAndAnEmptyPassword(t *testing.T) {
 }
 
 func TestRenameCarriesThePasswordAndLeavesNothingBehind(t *testing.T) {
-	// A host rename that left the password filed under the old alias would
-	// orphan it: nothing would ever ask for that name again, and the user
-	// would see the password silently stop working.
+	// パスワードを古い alias の下に残したままホストの名前を変えれば、それは孤児に
+	// なる。その名前を尋ねるものは二度と現れず、ユーザーからは、パスワードが黙って
+	// 効かなくなったように見える。
 	vault, err := secret.Create(passphrase)
 	if err != nil {
 		t.Fatal(err)
@@ -248,9 +248,9 @@ func TestRenameCarriesThePasswordAndLeavesNothingBehind(t *testing.T) {
 }
 
 func TestPackageImportsNoLogger(t *testing.T) {
-	// Every password in the application passes through this package. A log
-	// statement here, however well meant, is the one thing that could put one
-	// in a file, and a comment asking people not to add one is not a guard.
+	// このアプリケーションのすべてのパスワードはこのパッケージを通る。ここにある
+	// ログ出力は、どれほど善意でも、パスワードをファイルに残しうる唯一のものであり、
+	// 「追加しないでください」というコメントは防護ではない。
 	entries, err := os.ReadDir(".")
 	if err != nil {
 		t.Fatalf("read package directory: %v", err)
@@ -283,7 +283,7 @@ func zeroCostVault(t *testing.T) []byte {
 	t.Helper()
 	sealed := sealedVault(t, map[string]string{"a": "b"})
 	zeroed := slices.Clone(sealed)
-	// memory = 0, which would make the KDF free.
+	// memory = 0。これでは KDF が無料になってしまう。
 	zeroed[22], zeroed[23], zeroed[24], zeroed[25] = 0, 0, 0, 0
 	return zeroed
 }
@@ -294,10 +294,10 @@ func headerOf(t *testing.T) []byte {
 	return sealed[:44]
 }
 
-// One namespace would let a host's password picker offer a key's passphrase,
-// and picking it would send that passphrase to a remote host as a login
-// password. The separation is asserted rather than commented, because a comment
-// cannot refuse anything.
+// 名前空間がひとつなら、ホストのパスワード選択画面が鍵のパスフレーズを提示でき、
+// それを選べばそのパスフレーズがログインパスワードとしてリモートホストへ送られて
+// しまう。分離はコメントではなく表明で示す。コメントは何も拒否できないから
+// である。
 func TestVaultKeepsTheTwoNamespacesApart(t *testing.T) {
 	vault, err := secret.Create(passphrase)
 	if err != nil {
@@ -324,8 +324,8 @@ func TestVaultKeepsTheTwoNamespacesApart(t *testing.T) {
 	}
 }
 
-// The point of naming a secret is that twenty machines share one entry, so the
-// one entry cannot be removed while any of them still points at it.
+// 秘密に名前を付ける意味は、20 台のマシンがひとつのエントリを共有することにある。
+// だからそのエントリは、まだどれかが指しているあいだは取り除けない。
 func TestVaultRefusesToDeleteACredentialInUseAndSaysWhatUsesIt(t *testing.T) {
 	vault, err := secret.Create(passphrase)
 	if err != nil {
@@ -350,9 +350,9 @@ func TestVaultRefusesToDeleteACredentialInUseAndSaysWhatUsesIt(t *testing.T) {
 	}
 }
 
-// A version 1 document held a password per alias and no names. There is at most
-// one in the world; a migration would be larger than the thing it migrates, so
-// it is refused with an error the screen can turn into "set them again".
+// バージョン 1 の文書は、alias ごとにパスワードを持ち、名前は持たなかった。世界に
+// 多くともひとつしか存在せず、移行は移行する対象より大きくなるので、画面が「もう
+// 一度設定してください」に変えられるエラーで拒否する。
 func TestAVersionOneDocumentIsRefused(t *testing.T) {
 	key, err := envelope.Derive(passphrase)
 	if err != nil {

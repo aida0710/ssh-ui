@@ -7,36 +7,36 @@ import (
 )
 
 const (
-	// ConnectionsDirectory holds one directory per group, each containing the
-	// configuration files of the connections in it. A file's directory is what
-	// makes it a member; nothing else records the membership.
+	// ConnectionsDirectory はグループごとに 1 つのディレクトリを
+	// 保持し、それぞれがそのグループの connections の設定ファイルを
+	// 収める。ファイルの置かれたディレクトリがメンバーシップを決め、他に記録するものはない。
 	ConnectionsDirectory = "connections"
-	// KeysDirectory mirrors ConnectionsDirectory for key files. It is created
-	// on demand and never speculatively.
+	// KeysDirectory は鍵ファイルについて ConnectionsDirectory を
+	// 反映する。オンデマンドで作られ、先回りして作られることはない。
 	KeysDirectory = "keys"
 
-	// MaxGroupSegments bounds how deep a group may nest.
+	// MaxGroupSegments は、グループがネストできる深さを制限する。
 	//
-	// The limit comes from the key scanner, not from anything here: it walks at
-	// most eight directories down from ~/.ssh, and "keys" itself consumes one,
-	// so a key inside a seventh group segment would be reported as
-	// depth_exceeded and would vanish from the inventory instead of being
-	// listed. Refusing the name is better than accepting it and dropping the
-	// file that lands there.
+	// この制限はここではなく鍵スキャナー由来である。~/.ssh から
+	// 最大 8 階層のディレクトリを歩き、"keys" 自体がそのうち 1 つを
+	// 消費するので、7 段目のグループセグメントの中にある鍵は
+	// depth_exceeded として報告され、一覧に載る代わりにインベントリから消える。
+	// その名前を拒否する方が、受け入れた上でそこに置かれた
+	// ファイルを取りこぼすより良い。
 	MaxGroupSegments = 6
 
-	// maxGroupSegmentBytes matches the key vault's file-name policy, so a group
-	// directory cannot be a name the rest of the workspace would refuse.
+	// maxGroupSegmentBytes は鍵 vault のファイル名ポリシーに合わせてあり、グループ
+	// ディレクトリがワークスペースの他の部分が拒否するような名前にはならないようにする。
 	maxGroupSegmentBytes = 64
 )
 
-// ErrInvalidGroupName reports a group name that is not a safe relative
-// directory path under the connections directory.
+// ErrInvalidGroupName は、connections ディレクトリ配下の
+// 安全な相対ディレクトリパスになっていないグループ名を報告する。
 var ErrInvalidGroupName = errors.New("group name is not a safe relative directory path")
 
-// reservedGroupNames are the names OpenSSH and this application already give a
-// meaning inside ~/.ssh. The comparison is case-insensitive because a default
-// macOS volume treats "Config" and "config" as one directory entry.
+// reservedGroupNames は、OpenSSH とこのアプリケーションが ~/.ssh の中で
+// 既に意味を与えている名前である。比較は大小文字を区別しない。既定の
+// macOS ボリュームは "Config" と "config" を同じディレクトリエントリとして扱うからだ。
 var reservedGroupNames = map[string]bool{
 	"sshc":             true,
 	"config":           true,
@@ -50,12 +50,12 @@ var reservedGroupNames = map[string]bool{
 	"keys":             true,
 }
 
-// ValidateGroupName accepts a slash-separated relative directory path whose
-// every segment is a safe single path component.
+// ValidateGroupName は、すべてのセグメントが安全な単一の
+// パス構成要素であるスラッシュ区切りの相対ディレクトリパスを受け入れる。
 //
-// The check is done segment by segment on the raw string rather than on a
-// cleaned one: cleaning turns "work/../home" into "home", so validating the
-// cleaned form would silently accept a name that traverses.
+// このチェックは、クリーンな文字列ではなく生の文字列に対して
+// セグメントごとに行う。クリーンにすると "work/../home" は "home"
+// になってしまい、クリーンな形を検証すると traverse する名前を黙って受け入れてしまう。
 func ValidateGroupName(name string) error {
 	if name == "" || strings.ContainsRune(name, '\x00') {
 		return ErrInvalidGroupName
@@ -96,35 +96,35 @@ func validateGroupSegment(segment string) error {
 	return nil
 }
 
-// GroupDirectory is the workspace-relative directory holding a group's
-// connection files.
+// GroupDirectory は、グループの connection ファイルを保持する
+// ワークスペース相対のディレクトリである。
 func GroupDirectory(name string) string { return ConnectionsDirectory + "/" + name }
 
-// GroupKeyDirectory is the workspace-relative directory holding a group's keys.
+// GroupKeyDirectory は、グループの鍵を保持するワークスペース相対のディレクトリである。
 func GroupKeyDirectory(name string) string { return KeysDirectory + "/" + name }
 
-// GroupIncludePattern is the Include argument that reads one group's files.
+// GroupIncludePattern は、1 つのグループのファイルを読む Include 引数である。
 //
-// It is one line per group rather than a single wildcard because '*' does not
-// cross a path separator, in filepath.Glob or in glob(3), so a single pattern
-// could never reach a nested group — and because the order of the lines is what
-// decides precedence, which a glob would leave to lexical accident.
+// 単一のワイルドカードではなくグループごとに 1 行なのは、
+// filepath.Glob でも glob(3) でも '*' がパス区切りを越えないため、
+// 単一のパターンではネストしたグループに決して届かないからだ。また
+// 行の順序が優先順位を決めるが、glob ではそれが辞書順の偶然任せになってしまうからでもある。
 func GroupIncludePattern(name string) string { return GroupDirectory(name) + "/*.conf" }
 
-// groupFileSuffix is the extension GroupIncludePattern matches. A file inside a
-// group directory whose name does not end in it is not part of the group: the
-// Include line does not name it, so nothing reads it.
+// groupFileSuffix は GroupIncludePattern が一致させる拡張子である。
+// グループディレクトリ内にあってもこれで終わらない名前のファイルは
+// そのグループの一部ではない。Include 行がそれを名指ししないので、何にも読まれない。
 const groupFileSuffix = ".conf"
 
-// GroupFileName turns a source file's base name into one the group's Include
-// reads, by appending the suffix when it is not already there.
+// GroupFileName は、まだ付いていなければ拡張子を追加することで、
+// ソースファイルのベース名をグループの Include が読む名前に変える。
 //
-// A move into a group keeps the source file's name so it is the same file in a
-// new place, which is what the operation looks like in a shell. That is only
-// true while the name survives the move. The entry file is called "config" and
-// is where every ungrouped connection starts, so the commonest move of all
-// produced "connections/<group>/config" — a file the group's own Include
-// pattern cannot match, written successfully and then read by nobody.
+// グループへの移動はソースファイルの名前を保つので、シェル上で
+// 見ればそれは新しい場所にある同じファイルである。ただしそれが
+// 成り立つのは、その名前が移動を生き延びる場合だけだ。エントリ
+// ファイルは "config" という名前で、宣言されていないすべての connection の
+// 起点であるため、最もありふれた移動が "connections/<group>/config" を生む — グループ
+// 自身の Include パターンには一致せず、正常に書かれた上で誰にも読まれないファイルである。
 func GroupFileName(base string) string {
 	if strings.HasSuffix(base, groupFileSuffix) && base != groupFileSuffix {
 		return base
@@ -132,13 +132,13 @@ func GroupFileName(base string) string {
 	return base + groupFileSuffix
 }
 
-// GroupOfPath reports the group a configuration file belongs to, by where it
-// sits. A file directly under the connections directory belongs to no group.
+// GroupOfPath は、設定ファイルが置かれている場所によって属するグループ
+// を報告する。connections ディレクトリの直下にあるファイルはどのグループにも属さない。
 func GroupOfPath(relative string) (name string, inGroup bool) {
 	return groupOfPath(relative, ConnectionsDirectory)
 }
 
-// GroupOfKeyPath reports the group a key file belongs to.
+// GroupOfKeyPath は、鍵ファイルが属するグループを報告する。
 func GroupOfKeyPath(relative string) (name string, inGroup bool) {
 	return groupOfPath(relative, KeysDirectory)
 }
@@ -156,8 +156,8 @@ func groupOfPath(relative, root string) (string, bool) {
 	return name, true
 }
 
-// ParentGroupName is the group one level up, or the empty string at the top.
-// The name carries the hierarchy, so there is no parent field to disagree with.
+// ParentGroupName は 1 階層上のグループ、最上位では空文字列で
+// ある。名前自体が階層を運ぶので、食い違いうる parent フィールドは存在しない。
 func ParentGroupName(name string) string {
 	index := strings.LastIndex(name, "/")
 	if index < 0 {
@@ -166,7 +166,7 @@ func ParentGroupName(name string) string {
 	return name[:index]
 }
 
-// GroupSegments splits a group name into its directory components.
+// GroupSegments は、グループ名をディレクトリ構成要素へ分割する。
 func GroupSegments(name string) []string {
 	if name == "" {
 		return nil
@@ -174,12 +174,12 @@ func GroupSegments(name string) []string {
 	return strings.Split(name, "/")
 }
 
-// GroupDepth counts the directories in a group name.
+// GroupDepth は、グループ名中のディレクトリ数を数える。
 func GroupDepth(name string) int { return len(GroupSegments(name)) }
 
-// GroupNameOrder sorts group names deepest first, then by display order, then
-// by name — the same comparator the generated settings file uses, so a reader
-// does not have to hold two precedence rules in their head.
+// GroupNameOrder は、グループ名を深い順、次に表示順、次に
+// 名前順でソートする — 生成される settings ファイルが使うのと
+// 同じ比較器であり、読み手が 2 つの優先順位規則を頭の中に持たずに済む。
 func GroupNameOrder(names []string, order map[string]int) []string {
 	ordered := append([]string(nil), names...)
 	sort.SliceStable(ordered, func(first, second int) bool {

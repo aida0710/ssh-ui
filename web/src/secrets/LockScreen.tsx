@@ -7,21 +7,21 @@ import { PasswordField } from "../ui/PasswordField";
 import { Notice } from "../ui/surface";
 
 type LockScreenProps = {
-  // exists distinguishes the two things this screen does. They look the same
-  // and are not: one creates a vault that cannot be recovered, the other opens
-  // one that already holds everything.
+  // exists は、この画面が行う 2 つのことを区別する。両者は同じに
+  // 見えて違う: 一方は復元できない vault を作り、もう一方は
+  // 既にすべてを保持しているものを開く。
   exists: boolean;
   onOpen: () => void;
   api?: IntegrationsApi;
 };
 
-// The way in.
+// 入り口。
 //
-// The master password is not a per-screen unlock any more. It is asked for
-// before anything else is reachable, because every generational backup is
-// sealed with it: a write that happened while the vault was shut would either
-// leave a copy in the clear or leave no copy at all, and which of those it was
-// would depend on a state nobody is thinking about while they edit a file.
+// マスターパスワードはもはや画面ごとのアンロックではない。他の
+// 何に到達するよりも前に尋ねられる。すべての世代バックアップが
+// それで封印されているからだ: vault が閉じている間に起きた書き込みは、
+// 平文でコピーを残すか、コピーを一切残さないかのどちらかになり、
+// どちらになるかは、ファイルを編集している間誰も意識していない状態次第だった。
 export function LockScreen({ exists, onOpen, api = integrationsApi }: LockScreenProps) {
   const t = useTranslate();
   const [password, setPassword] = useState("");
@@ -64,9 +64,9 @@ export function LockScreen({ exists, onOpen, api = integrationsApi }: LockScreen
       <h1 className="text-lg font-medium">{t("shell.title")}</h1>
       <p className={hintText}>{exists ? t("lock.explainOpen") : t("lock.explainNew")}</p>
       {/*
-        Said where the password is chosen, not afterwards. There is no recovery
-        path for a key derived from a password nobody has, and somebody typing
-        one for the first time is the only person who can act on that.
+        パスワードを選ぶその場で伝え、後からは伝えない。誰も持っていない
+        パスワードから導出された鍵に、復元の経路はなく、それを初めて
+        入力する人こそが、それについて行動できる唯一の人物だ。
       */}
       {exists ? null : <p className="text-sm text-notice-ink">{t("lock.noRecovery")}</p>}
       {error === "" ? null : (

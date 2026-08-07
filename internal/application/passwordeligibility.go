@@ -11,40 +11,40 @@ import (
 	"sshc/internal/knownhosts"
 )
 
-// Codes for what stands between a host and a stored password.
+// ホストと保存されたパスワードとの間に立ちはだかるものを表す code である。
 const (
-	// BlockerPasswordAuthenticationOff reports PasswordAuthentication no for
-	// this host. It is client-side, so the client will never offer a password
-	// however good one is: storing it would be storing a secret that cannot be
-	// used, which is the worst of both.
+	// BlockerPasswordAuthenticationOff は、このホストに PasswordAuthentication
+	// no が設定されていることを報告する。これはクライアント側の設定なので、
+	// クライアントはどれほど良いパスワードでも決して提示しない。それを保存
+	// することは、使えない秘密を保存することになり、両方の意味で最悪である。
 	BlockerPasswordAuthenticationOff = "password_authentication_off"
-	// BlockerAliasNotSimple reports a pattern rather than a host. A password
-	// belongs to one account on one machine; there is no such thing for `*`.
+	// BlockerAliasNotSimple は、ホストではなく pattern であることを報告する。パスワードは
+	// 1 台のマシンの 1 個のアカウントに属するものであり、`*`にはそのようなものは存在しない。
 	BlockerAliasNotSimple = "alias_not_simple"
-	// WarnIdentityFileConfigured reports that a key is already configured for
-	// this host. It may still ask for a password — the key may not be
-	// authorised there — so this does not block, but a password stored for a
-	// host that never asks is exposure bought for nothing.
+	// WarnIdentityFileConfigured は、このホストに既に鍵が設定されている
+	// ことを報告する。それでもパスワードを尋ねてくる可能性はある——その鍵が
+	// 向こう側で認可されていないかもしれない——のでこれは block しないが、決してパスワードを
+	// 尋ねてこないホストのために保存されたパスワードは、何の見返りもない露出である。
 	WarnIdentityFileConfigured = "identity_file_configured"
-	// WarnHostKeyUnknown reports that known_hosts has nothing for this host.
-	// The first connection therefore asks whether to trust the key, and this
-	// application refuses to answer that question on the user's behalf, so the
-	// connection will stop there with the password unused.
+	// WarnHostKeyUnknown は、known_hosts にこのホストの情報が何もないことを
+	// 報告する。したがって最初の接続は鍵を信頼するかどうかを尋ねることに
+	// なり、このアプリケーションはユーザーに代わってその問いに答えることを
+	// 拒否するので、接続はパスワードが使われないままそこで止まる。
 	WarnHostKeyUnknown = "host_key_unknown"
-	// WarnHostNameUnresolved reports that the engine could not attribute a
-	// HostName. The password is filed under the alias either way, so this is
-	// said rather than guessed at.
+	// WarnHostNameUnresolved は、engine が HostName を特定できなかったことを
+	// 報告する。パスワードはいずれにせよ alias の下に保存されるので、
+	// これは推測せずに言明される。
 	WarnHostNameUnresolved = "hostname_unresolved"
 )
 
-// PasswordEligibility is what this application knows about storing a password
-// for one alias, before anything is stored.
+// PasswordEligibility は、何も保存する前に、このアプリケーションが
+// 1 個の alias のパスワード保存について知っていることである。
 //
-// Blockers and warnings are kept apart on purpose. A blocker is a fact that
-// makes the stored password unusable, and refusing is then a kindness rather
-// than a restriction. A warning is a fact the user may know better about — a
-// key that is configured but not authorised on the far side is an ordinary
-// situation — so it is said and the decision is left where it belongs.
+// Blocker と Warning は意図的に分けて扱われている。blocker は保存した
+// パスワードを使えなくする事実であり、その場合拒否することは制限では
+// なくむしろ親切である。warning はユーザーの方がよく知っているかもしれ
+// ない事実である——設定されてはいるが向こう側で認可されていない鍵は
+// 普通の状況である——ので、これは言明され、判断はそれが属する場所に委ねられる。
 type PasswordEligibility struct {
 	Alias    string   `json:"alias"`
 	Storable bool     `json:"storable"`
@@ -54,13 +54,13 @@ type PasswordEligibility struct {
 	Port     string   `json:"port,omitempty"`
 }
 
-// PasswordEligibility reads the configuration and known_hosts and reports what
-// stands between this alias and a stored password.
+// PasswordEligibility は設定と known_hosts を読み、この alias と保存された
+// パスワードとの間に立ちはだかるものを報告する。
 //
-// It reads. It never writes, never connects, and never runs ssh: everything
-// here is answerable from the files this application already parses, and a
-// check that opened a connection to decide whether to store a password would
-// be a connection the user did not ask for.
+// これは読むだけである。書き込むことも、接続することも、ssh を実行する
+// ことも決してない。ここでのすべては、このアプリケーションが既に
+// パースしているファイルから答えられるものであり、パスワードを保存すべきか
+// 判断するために接続を開くようなチェックは、ユーザーが求めていない接続になってしまう。
 func (s *Service) PasswordEligibility(alias string) (PasswordEligibility, error) {
 	report := PasswordEligibility{
 		Alias:    alias,
@@ -118,11 +118,11 @@ func (s *Service) PasswordEligibility(alias string) (PasswordEligibility, error)
 	return report, nil
 }
 
-// hostKeyIsKnown reports whether known_hosts already holds a key for this host.
+// hostKeyIsKnown は、known_hosts が既にこのホストの鍵を保持しているかを報告する。
 //
-// A non-default port is written `[host]:port` in known_hosts, so both forms are
-// tried. A missing file is not an error: it is the normal state of a machine
-// that has not connected anywhere yet, and the answer is simply no.
+// デフォルト以外のポートは known_hosts に`[host]:port`の形で書かれるので、
+// 両方の形を試す。ファイルが無いことはエラーではない。それはどこにも
+// まだ接続したことのないマシンの通常の状態であり、答えは単純に no である。
 func (s *Service) hostKeyIsKnown(host, port string) (bool, error) {
 	body, err := s.workspace.FileSystem().ReadFile(filepath.Join(s.workspace.Root(), "known_hosts"))
 	if err != nil {

@@ -16,11 +16,11 @@ import (
 )
 
 const (
-	// entryFileName is the OpenSSH user configuration file this application
-	// treats as the root of the Include graph.
+	// entryFileName は、このアプリケーションが Include graph の root として
+	// 扱う、OpenSSH のユーザー設定ファイルである。
 	entryFileName = "config"
-	// maxEffectivePreviews bounds how many aliases a group preview explains, so
-	// a large configuration cannot turn one preview into an unbounded walk.
+	// maxEffectivePreviews は、グループ preview が説明する alias の数の上限
+	// であり、大規模な設定が 1 回の preview を無制限の walk に変えてしまわないようにする。
 	maxEffectivePreviews = 50
 )
 
@@ -28,15 +28,15 @@ var (
 	ErrUnknownEditKind       = errors.New("unknown edit kind")
 	ErrUnknownRecoveryAction = errors.New("unknown recovery action")
 	ErrNotEditable           = errors.New("file is not editable through this application")
-	// ErrGroupNotDeclared refuses an operation naming a group that no Include
-	// line declares. A directory that exists is not a group.
+	// ErrGroupNotDeclared は、どの Include 行も宣言していないグループを
+	// 名指す操作を拒否する。存在するディレクトリがグループであるとは限らない。
 	ErrGroupNotDeclared = errors.New("no generated Include line declares that group")
-	// ErrAmbiguousDestination refuses a move that names both a group and a
-	// path, because the two can disagree and this application will not pick.
+	// ErrAmbiguousDestination は、グループと path の両方を名指す move を拒否する。
+	// その 2 つは食い違うことがあり、このアプリケーションはどちらかを選ぶことをしない。
 	ErrAmbiguousDestination = errors.New("a move names either a destination group or a destination path")
 )
 
-// EditKind names the operations the UI can request.
+// EditKind は、UI が要求できる操作を名指す。
 type EditKind string
 
 const (
@@ -47,36 +47,36 @@ const (
 	EditGroups     EditKind = "groups"
 	EditMetadata   EditKind = "metadata"
 	EditMove       EditKind = "move"
-	// EditComment sets the comment lines above a Host block. The comment lives
-	// in the configuration rather than in metadata, so it survives for anyone
-	// reading the file without this application.
+	// EditComment は、Host ブロックの上のコメント行を設定する。コメントは
+	// metadata ではなく設定の中に存在するので、このアプリケーション無し
+	// でそのファイルを読む誰にとっても残り続ける。
 	EditComment EditKind = "comment"
-	// EditFileRename moves one configuration file and rewrites the Include
-	// lines that named it. EditFileDelete removes one and removes those lines.
-	// Both are file operations rather than block operations, which is why they
-	// are their own kinds rather than a shape of file_raw: file_raw can empty a
-	// file but cannot make it stop existing, and a file that is no longer
-	// included is a different thing from a file that is empty.
+	// EditFileRename は 1 個の設定ファイルを移動し、それを名指していた
+	// Include 行を書き換える。EditFileDelete は 1 個を削除し、それらの行を
+	// 取り除く。どちらもブロック操作ではなくファイル操作なので、
+	// file_raw の一形態としてではなく独自の種類として存在する。file_raw
+	// はファイルを空にはできるが、その存在を止めることはできず、もはや
+	// include されていないファイルは空のファイルとは別のものだからである。
 	EditFileRename EditKind = "file_rename"
 	EditFileDelete EditKind = "file_delete"
-	// EditDirectoryCreate and EditDirectoryDelete are the explorer's directory
-	// operations. Renaming one is not here: it would have to carry the Include
-	// lines that name every file inside, which is the same work file_rename
-	// does for one file and needs those rewrites to accumulate.
+	// EditDirectoryCreate と EditDirectoryDelete は、explorer の
+	// ディレクトリ操作である。rename はここには無い。それは中のすべての
+	// ファイルを名指す Include 行を運ばなければならず、これは file_rename
+	// が 1 個のファイルに対して行うのと同じ作業であり、それらの書き換えが積み重なる必要がある。
 	EditDirectoryCreate EditKind = "directory_create"
 	EditDirectoryDelete EditKind = "directory_delete"
 )
 
-// EditRequest is one requested change.
+// EditRequest は、要求された 1 個の変更である。
 //
-// Base carries the exact bytes the client loaded for Path. Every file-targeted
-// edit is applied to those bytes and committed with their digest as the
-// precondition, so the user always edits what they saw and an external change
-// produces a real three-way diff instead of a silent overwrite.
+// Base は、クライアントが Path のために読み込んだ厳密なバイト列を
+// 運ぶ。ファイルを対象とするすべての編集はそのバイト列に対して適用され、
+// その digest を事前条件として commit されるので、ユーザーは常に自分が
+// 見たものを編集することになり、外部の変更は黙った上書きではなく本物の三者 diff を生む。
 //
-// Every line number in Fields is 1-based, matching the line numbers this
-// service reports in FormField, Source and DiffLine. The 0-based indices of
-// internal/config never cross this boundary in either direction.
+// Fields 内のすべての行番号は 1-based であり、この service が FormField、
+// Source、DiffLine で報告する行番号と一致する。internal/config の
+// 0-based の index が、この境界をどちらの方向にも越えることは決してない。
 type EditRequest struct {
 	Kind     EditKind    `json:"kind"`
 	Path     string      `json:"path,omitempty"`
@@ -87,18 +87,18 @@ type EditRequest struct {
 	Raw      string      `json:"raw,omitempty"`
 	Comment  string      `json:"comment,omitempty"`
 	Metadata *Metadata   `json:"metadata,omitempty"`
-	// DestinationGroup moves a host into a group by naming the group rather
-	// than the file. The destination path is derived from it, so the caller
-	// cannot name a group and a path that disagree; sending both is refused.
+	// DestinationGroup は、ファイルではなくグループを名指すことでホストを
+	// グループへ移動する。destination path はそこから導出されるので、
+	// 呼び出し側は食い違うグループと path を名指すことができない。両方を送ることは拒否される。
 	DestinationGroup string `json:"destinationGroup,omitempty"`
-	// DestinationPath and DestinationBase describe the second file of a move.
-	// DestinationBase carries the exact bytes the client loaded for it, so the
-	// destination has the same precondition guarantee as the source.
+	// DestinationPath と DestinationBase は、move の 2 番目のファイルを記述する。
+	// DestinationBase は、クライアントがそれのために読み込んだ厳密な
+	// バイト列を運ぶので、destination は source と同じ事前条件の保証を持つ。
 	DestinationPath string `json:"destinationPath,omitempty"`
 	DestinationBase string `json:"destinationBase,omitempty"`
 }
 
-// SavePreview is exactly what a save would write.
+// SavePreview は、save が書き込むであろうものそのものである。
 type SavePreview struct {
 	Operation string          `json:"operation"`
 	Diffs     []FileDiff      `json:"diffs"`
@@ -106,14 +106,14 @@ type SavePreview struct {
 	Notices   []Notice        `json:"notices,omitempty"`
 }
 
-// SaveResult reports a committed transaction.
+// SaveResult は、commit された transaction を報告する。
 type SaveResult struct {
 	TransactionID string      `json:"transactionId"`
 	Written       []string    `json:"written"`
 	Preview       SavePreview `json:"preview"`
 }
 
-// IncludeReference is one Include argument and what it resolved to.
+// IncludeReference は、1 個の Include 引数と、それが解決した先である。
 type IncludeReference struct {
 	Line      int       `json:"line"`
 	Pattern   string    `json:"pattern"`
@@ -121,7 +121,7 @@ type IncludeReference struct {
 	Matches   []FileRef `json:"matches,omitempty"`
 }
 
-// FileNode is one file of the Include graph.
+// FileNode は、Include graph の 1 個のファイルである。
 type FileNode struct {
 	File     FileRef            `json:"file"`
 	Missing  bool               `json:"missing,omitempty"`
@@ -130,7 +130,7 @@ type FileNode struct {
 	Includes []IncludeReference `json:"includes,omitempty"`
 }
 
-// FileContents is a whole configuration file for the raw editor.
+// FileContents は、raw editor のための設定ファイル全体である。
 type FileContents struct {
 	File     FileRef `json:"file"`
 	Contents string  `json:"contents"`
@@ -139,7 +139,7 @@ type FileContents struct {
 	Exists   bool    `json:"exists"`
 }
 
-// PendingView is an interrupted transaction the user must decide about.
+// PendingView は、ユーザーが判断しなければならない中断された transaction である。
 type PendingView struct {
 	ID          string   `json:"id"`
 	Operation   string   `json:"operation"`
@@ -150,7 +150,7 @@ type PendingView struct {
 	CanComplete bool     `json:"canComplete"`
 }
 
-// HistoryEntry is one completed transaction.
+// HistoryEntry は、1 個の完了した transaction である。
 type HistoryEntry struct {
 	ID         string   `json:"id"`
 	Operation  string   `json:"operation"`
@@ -161,7 +161,7 @@ type HistoryEntry struct {
 	Restorable []string `json:"restorable,omitempty"`
 }
 
-// Overview is everything the Connections tree and Config Explorer need.
+// Overview は、Connections tree と Config Explorer が必要とするすべてである。
 type Overview struct {
 	Entry       FileRef          `json:"entry"`
 	Files       []FileNode       `json:"files"`
@@ -173,8 +173,8 @@ type Overview struct {
 	Pending     []PendingView    `json:"pending,omitempty"`
 }
 
-// HostDetail is everything the host editor needs, including the whole file so
-// the client can send it back as the edit base.
+// HostDetail は、ホスト editor が必要とするすべてであり、クライアント
+// が edit base として送り返せるようファイル全体を含む。
 type HostDetail struct {
 	Form      HostForm     `json:"form"`
 	Metadata  HostMetadata `json:"metadata"`
@@ -182,9 +182,9 @@ type HostDetail struct {
 	File      FileContents `json:"file"`
 }
 
-// Service owns the workspace and the transaction manager. It is the only writer
-// in the process: every mutation is serialised by saveMutex, and the manager's
-// Validate hook is installed here so no code path can commit without it.
+// Service はワークスペースと transaction manager を所有する。これはプロセス内で唯一の書き
+// 手である。すべての mutation は saveMutex によって直列化され、manager の Validate
+// hook はここで設置されるので、どの code path もそれ無しで commit することはできない。
 type Service struct {
 	workspace *storage.Workspace
 	manager   *storage.Manager
@@ -209,9 +209,9 @@ func NewService(workspace *storage.Workspace, manager *storage.Manager) *Service
 	return service
 }
 
-// displayPath renders a path for the UI and for error payloads: relative to
-// ~/.ssh when the file is inside it, absolute only when an Include points
-// outside. Log lines never receive either form.
+// displayPath は、UI とエラー payload のために path を表す。ファイルが
+// その内側にあるときは~/.ssh からの相対 path、Include が外側を
+// 指しているときのみ絶対 path となる。log 行はどちらの形式も受け取ることがない。
 func (s *Service) displayPath(absolute string) string {
 	reference := NewFileRef(s.workspace.Root(), absolute)
 	if reference.External {
@@ -241,7 +241,7 @@ func (s *Service) resolveWith(pending map[string][]byte) (*config.Graph, error) 
 	return resolver.Resolve(s.entryPath)
 }
 
-// Overview builds the Connections tree, the Include graph and the metadata.
+// Overview は、Connections tree、Include graph、metadata を構築する。
 func (s *Service) Overview() (Overview, error) {
 	graph, err := s.resolve()
 	if err != nil {
@@ -264,18 +264,18 @@ func (s *Service) Overview() (Overview, error) {
 	notices = append(notices, orphanNotices...)
 	notices = append(notices, s.unreachedConnectionFiles(graph)...)
 
-	// What the declaration and the disk say about each other. A directory
-	// under connections/ that no Include names is the one that silently does
-	// nothing: the files in it are configuration nobody reads.
-	// A workspace whose entry file is missing declares no groups, and asking a
-	// nil file what it declares is how this first reached production.
+	// 宣言とディスクが互いについて何を語っているか。connections/配下に
+	// あってどの Include も名指していないディレクトリこそが、黙って
+	// 何もしないものである。その中のファイルは誰も読まない設定である。
+	// エントリファイルが無いワークスペースはグループを何も宣言せず、nil のファイル
+	// に何を宣言しているか尋ねることが、これが最初に production へ届いた経緯である。
 	entryNode := graph.Nodes[s.entryPath]
 	var groups []GroupView
 	if entryNode != nil && entryNode.File != nil {
-		// A region with one marker declares nothing as far as this application
-		// can tell, which would make every group look undeclared. That is not
-		// what happened, and saying it four times over would send the user
-		// looking at four directories whose Include lines are right there.
+		// 1 個のマーカーしか持たない生成領域は、このアプリケーションから見れば
+		// 何も宣言していないことになり、すべてのグループが未宣言に見えて
+		// しまう。実際に起きたのはそういうことではないし、それを 4 回繰り返して言うことは、
+		// Include 行がまさにそこにある 4 個のディレクトリをユーザーに見に行かせることになる。
 		if _, _, _, regionErr := FindRegion(entryNode.File); errors.Is(regionErr, ErrRegionDamaged) {
 			notices = append(notices, Notice{
 				Code: NoticeRegionDamaged, Path: s.displayPath(s.entryPath),
@@ -325,9 +325,9 @@ func (s *Service) Overview() (Overview, error) {
 	}
 	overview.Pending = pending
 
-	// Required contract arrays are never null on the wire: the frontend
-	// validates shapes at runtime and an absent array is a contract violation,
-	// not an empty list.
+	// contract で必須の配列は、通信上で決して null にならない。frontend は
+	// 実行時に形を validate し、配列が無いことは contract 違反であって
+	// 空のリストではない。
 	if overview.Files == nil {
 		overview.Files = []FileNode{}
 	}
@@ -343,7 +343,7 @@ func (s *Service) Overview() (Overview, error) {
 	return overview, nil
 }
 
-// HostDetail projects one host block together with its explained values.
+// HostDetail は、説明された値と共に 1 個のホストブロックを射影する。
 func (s *Service) HostDetail(relative, alias string) (HostDetail, error) {
 	graph, err := s.resolve()
 	if err != nil {
@@ -376,7 +376,7 @@ func (s *Service) HostDetail(relative, alias string) (HostDetail, error) {
 	return detail, nil
 }
 
-// FileContents reads one editable file inside the workspace.
+// FileContents は、ワークスペース内の編集可能な 1 個のファイルを読む。
 func (s *Service) FileContents(relative string) (FileContents, error) {
 	absolute, err := AbsolutePath(s.workspace.Root(), relative)
 	if err != nil {
@@ -399,17 +399,17 @@ func (s *Service) FileContents(relative string) (FileContents, error) {
 	}, nil
 }
 
-// planned is one prepared transaction: the exact changes, the base contents the
-// validator compares against, and the preview the caller sees.
-// directoryCreates and directoryRemovals put the planned directories into the
-// shapes the journal takes. Creation is by absolute path already; removal is
-// planned in workspace-relative terms, which is the vocabulary the notices and
-// the group names use.
-// requestFor is the one place a planned transaction becomes a storage request.
+// planned は、1 個の準備された transaction である。厳密な変更、
+// validator が比較対象とする base の内容、そして呼び出し側が見る preview である。
+// directoryCreates と directoryRemovals は、計画されたディレクトリを
+// journal が取る形に変換する。作成は既に絶対 path で表され、削除は
+// ワークスペース相対の言葉で計画される。それは通知とグループ名が
+// 使う語彙である。
+// requestFor は、計画された transaction が storage request になる唯一の場所である。
 //
-// There were two, and the group path quietly dropped whatever the save path
-// had that it did not: the removals, and then the directory removals a rename
-// needs to finish what it started. One function cannot drift from itself.
+// 以前はこれが 2 個あり、グループ側の path は、save 側の path が持っていて
+// 自分には無いもの——removals と、rename が始めたことを終えるために必要なディレクトリの
+// removals——を静かに落としていた。1 個の関数は自分自身からずれることはできない。
 func (s *Service) requestFor(prepared planned) storage.Request {
 	return storage.Request{
 		Operation:         prepared.operation,
@@ -421,9 +421,9 @@ func (s *Service) requestFor(prepared planned) storage.Request {
 	}
 }
 
-// Both deduplicate. The planners append a destination directory once per file
-// that lands in it, which was harmless while directories were created outside
-// the journal and is a duplicate path inside it.
+// どちらも重複を除去する。planner は、destination ディレクトリに
+// 着地するファイルごとに 1 回それを追加していく。これはディレクトリが journal の外側で
+// 作成されていたときは無害だったが、journal の内側では重複した path になる。
 func directoryCreates(absolute []string) []storage.DirectoryCreate {
 	creates := make([]storage.DirectoryCreate, 0, len(absolute))
 	seen := map[string]bool{}
@@ -455,14 +455,14 @@ func directoryRemovals(root string, relative []string) []storage.DirectoryRemova
 type planned struct {
 	operation string
 	changes   []storage.Change
-	// moves and removals travel in the same transaction as the changes, so a
-	// file relocation and the configuration that names it land together or not
-	// at all. directories are created before Commit resolves its write paths.
+	// move と removal は、変更と同じ transaction で運ばれるので、ファイルの
+	// 再配置とそれを名指す設定は一緒に着地するか、まったく着地しないか
+	// のどちらかになる。ディレクトリは、Commit がその書き込み path を解決する前に作成される。
 	moves    []storage.Move
 	removals []storage.Removal
-	// directories are created before anything is written and removed after
-	// everything else, both inside the transaction: a mkdir or an rmdir outside
-	// the journal is a filesystem effect with no recovery record.
+	// ディレクトリは、何かが書き込まれる前に作成され、他のすべての後に
+	// 削除される。どちらも transaction の内側で行われる。journal の外側
+	// での mkdir や rmdir は、復旧記録の無い filesystem 上の効果になってしまう。
 	directories       []string
 	removeDirectories []string
 	base              map[string][]byte
@@ -470,7 +470,7 @@ type planned struct {
 	preview           SavePreview
 }
 
-// Preview prepares a transaction and returns its diffs without writing.
+// Preview は transaction を準備し、書き込まずにその diff を返す。
 func (s *Service) Preview(request EditRequest) (SavePreview, error) {
 	s.saveMutex.Lock()
 	defer s.saveMutex.Unlock()
@@ -481,7 +481,7 @@ func (s *Service) Preview(request EditRequest) (SavePreview, error) {
 	return prepared.preview, nil
 }
 
-// Save prepares the same transaction and commits it.
+// Save は同じ transaction を準備し、それを commit する。
 func (s *Service) Save(request EditRequest) (SaveResult, error) {
 	s.saveMutex.Lock()
 	defer s.saveMutex.Unlock()
@@ -489,9 +489,9 @@ func (s *Service) Save(request EditRequest) (SaveResult, error) {
 	if err != nil {
 		return SaveResult{}, err
 	}
-	// Commit resolves a write path against real directories, so the ones this
-	// transaction needs are created first. Only a planned transaction gets
-	// here: a refusal returns above, leaving the disk untouched.
+	// Commit は実際のディレクトリに対して書き込み path を解決するので、
+	// この transaction が必要とするものは先に作成される。ここに到達するのは
+	// 計画済みの transaction だけである。拒否は上流で返され、ディスクは手つかずのままになる。
 	metadataPath := filepath.Clean(s.metadata.Path())
 	for _, change := range prepared.changes {
 		if filepath.Clean(change.Path) != metadataPath {
@@ -643,10 +643,10 @@ func (s *Service) planFileEdit(graph *config.Graph, request EditRequest) (planne
 			BuildFileDiff(s.displayPath(change.Path), previous, change.Contents))
 	}
 
-	// A comment retires the note for the same host. Both are the same thing
-	// written in two places, and the configuration is the one that survives
-	// without this application, so the note goes in the same transaction that
-	// writes the comment rather than being left to disagree with it.
+	// コメントは同じホストの note を退役させる。両者は 2 箇所に書かれた
+	// 同じものであり、このアプリケーション無しでも生き残るのは設定の
+	// 方なので、note はコメントと食い違ったまま残されるのではなく、
+	// コメントを書くのと同じ transaction に入る。
 	if request.Kind == EditComment {
 		stored, precondition, err := s.metadata.Load()
 		if err != nil {
@@ -687,17 +687,17 @@ func (s *Service) planFileEdit(graph *config.Graph, request EditRequest) (planne
 	return prepared, nil
 }
 
-// resolveDestination turns a destination group into the destination path.
+// resolveDestination は、destination グループを destination path へ変える。
 //
-// The file keeps its own name and changes directory, so a move between groups
-// is exactly what it looks like in a shell: the same file, somewhere else. The
-// name passes through GroupFileName first, because a group is read by one
-// Include pattern and a name that pattern does not match would land the block
-// somewhere OpenSSH never looks.
+// ファイルは自分自身の名前を保ったままディレクトリを変えるので、
+// グループ間の move は shell で見えるとおりのものそのものである。同じ
+// ファイルが、どこか別の場所にある。名前はまず GroupFileName を通る。
+// グループは 1 個の Include pattern によって読まれるので、その pattern に match
+// しない名前は、OpenSSH が決して見に行かない場所にブロックを着地させてしまうからである。
 //
-// The group must already be declared — creating one is its own operation with
-// its own preview, and inferring a group from a move would put an Include in
-// the entry file as a side effect of an unrelated request.
+// グループは既に宣言されていなければならない——グループを作ることは
+// それ自身の preview を持つそれ自身の操作であり、move からグループを推測することは、
+// 無関係な要求の副作用としてエントリファイルに Include を置いてしまうことになる。
 func (s *Service) resolveDestination(graph *config.Graph, request EditRequest) (EditRequest, error) {
 	if request.DestinationGroup == "" {
 		return request, nil
@@ -723,14 +723,14 @@ func (s *Service) resolveDestination(graph *config.Graph, request EditRequest) (
 	return request, nil
 }
 
-// destinationWillBeRead reports whether OpenSSH reads the destination once the
-// move has written it.
+// destinationWillBeRead は、move が destination を書き込んだ後に
+// OpenSSH がそれを読むかどうかを報告する。
 //
-// A file already in the Include graph is read. A file that is not there yet is
-// read when a declared group's Include pattern matches it: the graph's globs
-// were resolved against the disk as it was, and this move is what puts the file
-// on it. Warning about those would attach the notice to every first move into a
-// group, which is exactly how a user learns to click past it.
+// 既に Include graph の中にあるファイルは読まれる。まだそこに無いファイルは、
+// 宣言済みグループの Include pattern がそれに match するときに読まれる。graph の glob
+// は、そのときのディスクの状態に対して解決されたものであり、この move こそがファイルをそこ
+// に置くものである。それについて警告すると、グループへの最初の move すべてに通知
+// が付いてしまい、ユーザーがそれをクリックして通り過ぎることを学ぶ、まさにその原因になる。
 func (s *Service) destinationWillBeRead(graph *config.Graph, absolute, relative string) bool {
 	if _, included := graph.Nodes[absolute]; included {
 		return true
@@ -744,23 +744,23 @@ func (s *Service) destinationWillBeRead(graph *config.Graph, absolute, relative 
 	return false
 }
 
-// unreachedConnectionFiles reports every .conf file under connections/ that no
-// Include in the resolved graph reaches.
+// unreachedConnectionFiles は、解決済み graph 内のどの Include も
+// 届かない、connections/配下のすべての.conf ファイルを報告する。
 //
-// A file there is read by nobody, and looks entirely correct while it is: the
-// blocks parse, the host is spelled right, and `ssh` has simply never heard of
-// it. The group delete puts a file in exactly this position on purpose when it
-// is given no destination, so the promise that it would be reported has to be
-// kept somewhere, and this is the only view every screen already reads.
+// そこにあるファイルは誰にも読まれないが、その間ずっと完全に正しく見える。
+// ブロックは parse でき、ホストの綴りも合っていて、`ssh` は単にそれについて一度も
+// 聞いたことがないだけである。グループ delete は、destination を与えられなかったとき、
+// 意図的にファイルをまさにこの位置に置く。だから、それが報告されるという約束はどこかで
+// 守られなければならず、これは既にすべての画面が読んでいる唯一の view である。
 //
-// A directory that is not a declared group is walked too, because being
-// undeclared is precisely what makes the files inside it unreachable.
-// presentGroupDirectories lists the directories under connections/, workspace
-// relative and slash separated, which is the vocabulary a group name uses.
+// 宣言されたグループではないディレクトリも walk される。未宣言で
+// あることこそが、その中のファイルを到達不能にしているものだからである。
+// presentGroupDirectories は、connections/配下のディレクトリを
+// ワークスペース相対でスラッシュ区切りで列挙する。それはグループ名が使う語彙である。
 //
-// Being there is not what makes one a group — an Include line is — and that is
-// exactly why this list is needed: the difference between the two is what the
-// diagnostics report.
+// そこに存在することがグループを作るのではない——Include 行が
+// そうするのである——そして、まさにそれゆえにこのリストが必要になる。
+// その 2 つの違いこそが diagnostics が報告するものである。
 func (s *Service) presentGroupDirectories() ([]string, error) {
 	root := s.workspace.Root()
 	base := filepath.Join(root, ConnectionsDirectory)
@@ -835,17 +835,17 @@ func (s *Service) unreachedConnectionFiles(graph *config.Graph) []Notice {
 	return notices
 }
 
-// refuseTakenAlias refuses a rename onto a name another Host block already
-// declares, anywhere the Include graph reaches.
+// refuseTakenAlias は、Include graph が届くどこであれ、別の Host
+// ブロックが既に宣言している名前への rename を拒否する。
 //
-// The graph is the one resolved before the edit, so the block being renamed
-// still carries its old name and cannot match the new one. A rename to the name
-// it already has is a no-op and is let through rather than refused for
-// colliding with itself.
+// graph は編集の前に解決されたものなので、rename されているブロック
+// はまだ古い名前を持っていて、新しい名前と match することはない。
+// 既に持っている名前への rename は no-op であり、自分自身と衝突すると
+// して拒否されるのではなく通される。
 //
-// Only a block that names the alias outright counts. A catch-all matches every
-// alias and declares none, so refusing on it would refuse every rename in any
-// configuration that ends with `Host *` — which is most of them.
+// その alias を直接に名指すブロックだけが数えられる。catch-all はすべての alias に
+// match しどれも宣言しないので、それを理由に拒否してしまうと、`Host *` で終わるあらゆる設定
+// ——それはほとんどの設定である——ですべての rename を拒否することになってしまう。
 func refuseTakenAlias(graph *config.Graph, from, to string) error {
 	if from == to {
 		return nil
@@ -864,7 +864,7 @@ func refuseTakenAlias(graph *config.Graph, from, to string) error {
 	return taken
 }
 
-// declaredGroups reads the group declaration out of the resolved entry file.
+// declaredGroups は、解決済みのエントリファイルからグループ宣言を読み出す。
 func (s *Service) declaredGroups(graph *config.Graph) []string {
 	node := graph.Nodes[s.entryPath]
 	if node == nil || node.File == nil {
@@ -873,10 +873,10 @@ func (s *Service) declaredGroups(graph *config.Graph) []string {
 	return DeclaredGroups(node.File)
 }
 
-// planMoveHost moves one host block into another file. Both configuration
-// files and the metadata document are one storage.Request, so the move is a
-// single journalled transaction: every precondition is checked before anything
-// is staged, and a mismatch on either file writes nothing.
+// planMoveHost は、1 個のホストブロックを別のファイルへ移動する。
+// 両方の設定ファイルと metadata 文書は 1 個の storage.Request なので、
+// move は単一の journal 化された transaction である。何かが stage される前に
+// すべての事前条件がチェックされ、どちらかのファイルが一致しなければ何も書き込まれない。
 func (s *Service) planMoveHost(graph *config.Graph, request EditRequest) (planned, error) {
 	root := s.workspace.Root()
 	request, err := s.resolveDestination(graph, request)
@@ -908,17 +908,17 @@ func (s *Service) planMoveHost(graph *config.Graph, request EditRequest) (planne
 
 	sourceBase := []byte(request.Base)
 	destinationBase := []byte(request.DestinationBase)
-	// A move that named a group did not name a destination file, so the client
-	// never read one and could not have supplied its bytes. Comparing the file
-	// on disk against that empty base reported every group file that already
-	// held a connection as changed outside the application — so the first
-	// connection into a group worked and every one after it failed, with a
-	// message about an external edit that had not happened.
+	// グループを名指した move は destination ファイルを名指していなかった
+	// ので、クライアントはそれを読んだことがなく、そのバイト列を渡す
+	// こともできなかった。ディスク上のファイルをその空の base と比較する
+	// と、既に connection を保持しているグループファイルはすべて、アプリケーション外部で
+	// 変更されたものとして報告されてしまう——そのため、グループへの最初の connection は
+	// 成功し、それ以降のものはすべて、起きてもいない外部編集についてのメッセージで失敗した。
 	//
-	// The guarantee is unchanged. The precondition below still carries the
-	// digest of what was just read, and storage re-checks it while committing,
-	// so a file that changes between this read and the write still stops the
-	// whole transaction.
+	// 保証は変わっていない。下にある事前条件は依然としてたった今
+	// 読んだものの digest を運び、storage は commit 中にそれを再チェック
+	// するので、この読み取りと書き込みの間に変化したファイルは、
+	// 依然として transaction 全体を止める。
 	if request.DestinationGroup != "" && request.DestinationBase == "" {
 		destinationBase = destinationDisk
 	}
@@ -1002,9 +1002,9 @@ func (s *Service) planMoveHost(graph *config.Graph, request EditRequest) (planne
 		})
 	}
 	if request.DestinationGroup != "" {
-		// The directory is created before Commit resolves the write path. It is
-		// created only for a plan that got this far, so a refusal leaves no
-		// empty directory behind.
+		// ディレクトリは、Commit が書き込み path を解決する前に作成される。
+		// ここまでたどり着いた plan のためにのみ作成されるので、拒否は
+		// 空のディレクトリを後に残さない。
 		directory, dirErr := AbsolutePath(root, GroupDirectory(request.DestinationGroup))
 		if dirErr != nil {
 			return planned{}, dirErr
@@ -1017,9 +1017,9 @@ func (s *Service) planMoveHost(graph *config.Graph, request EditRequest) (planne
 		})
 	}
 
-	// Moving a block changes where OpenSSH reads it, and OpenSSH keeps the
-	// first value it finds. Show the before and after explanation for every
-	// concrete alias the block declares instead of assuming nothing changed.
+	// ブロックを移動すると、OpenSSH がそれを読む場所が変わり、OpenSSH は
+	// 見つけた最初の値を保持する。何も変わらなかったと仮定するのでは
+	// なく、そのブロックが宣言するすべての具体的な alias について、前後の説明を示す。
 	pending := map[string][]byte{
 		filepath.Clean(sourceAbsolute):      sourceUpdated,
 		filepath.Clean(destinationAbsolute): destinationUpdated,
@@ -1083,8 +1083,8 @@ func (s *Service) planMetadataEdit(graph *config.Graph, request EditRequest) (pl
 		return prepared, nil
 	}
 
-	// Group compilation also writes the generated configuration file and, when
-	// it is not included yet, one Include line in the entry file.
+	// グループの compilation は、生成された設定ファイルと、まだ
+	// include されていない場合はエントリファイル内の 1 本の Include 行も書き込む。
 	groupsRelative := reconciled.GroupsPath()
 	groupsAbsolute, err := AbsolutePath(root, groupsRelative)
 	if err != nil {
@@ -1103,10 +1103,10 @@ func (s *Service) planMetadataEdit(graph *config.Graph, request EditRequest) (pl
 	}
 	entryFile := config.Parse(entryContents)
 
-	// The declared set is whatever the region already names plus every group the
-	// metadata carries presentation for. Declaring a group is what makes its
-	// directory a group at all, so this is the whole of it: a directory nobody
-	// declared stays a stranger's directory.
+	// 宣言済み集合は、生成領域が既に名指しているものすべてに、metadata
+	// が presentation を運んでいるすべてのグループを加えたものである。
+	// グループを宣言することが、そもそもそのディレクトリをグループにしているものなので、
+	// これで全部である。誰も宣言しなかったディレクトリは、他人のディレクトリのままである。
 	declared := declaredGroupSet(entryFile, reconciled)
 	regionPlan, err := PlanRegion(entryFile, declared, groupsRelative)
 	if err != nil {
@@ -1132,10 +1132,10 @@ func (s *Service) planMetadataEdit(graph *config.Graph, request EditRequest) (pl
 		pending[filepath.Clean(s.entryPath)] = entryUpdated
 	}
 
-	// Membership has to be read from the configuration the region produces, not
-	// from the one that came in: until the region names a group's directory
-	// nothing reads it, so every host in a group this save is declaring would
-	// otherwise be invisible and its settings block would come out empty.
+	// membership は、入ってきた設定からではなく、生成領域が生み出す設定から読まなければ
+	// ならない。生成領域がグループのディレクトリを名指すまでは何もそれを読まないので、
+	// この save が宣言しようとしているグループ内のすべてのホストは、
+	// そうしなければ見えないままになり、その settings ブロックは空のまま出てきてしまう。
 	reachable, err := s.resolveWith(pending)
 	if err != nil {
 		return planned{}, err
@@ -1155,9 +1155,9 @@ func (s *Service) planMetadataEdit(graph *config.Graph, request EditRequest) (pl
 	prepared.preview.Diffs = append(prepared.preview.Diffs,
 		BuildFileDiff(groupsRelative, diskOrNil(previousGroups, groupsExist), groupContents))
 	pending[filepath.Clean(groupsAbsolute)] = groupContents
-	// A declared group whose directory does not exist yet produces an
-	// include_no_match warning and nothing else, so the directories are created
-	// here rather than left for the first host to arrive.
+	// ディレクトリがまだ存在しない宣言済みグループは、
+	// include_no_match 警告を生むだけで他には何も生まないので、ディレクトリは
+	// 最初に到着するホストに任せるのではなく、ここで作成される。
 	for _, name := range declared {
 		absolute, dirErr := AbsolutePath(root, GroupDirectory(name))
 		if dirErr != nil {
@@ -1170,9 +1170,9 @@ func (s *Service) planMetadataEdit(graph *config.Graph, request EditRequest) (pl
 	if err != nil {
 		return planned{}, err
 	}
-	// The hosts to explain are the ones the saved configuration will have, not
-	// the ones it has: a group's files are unreadable until the region names
-	// them, so a host arriving with its group would otherwise be invisible here.
+	// 説明すべきホストは、今の設定が持っているものではなく、保存後の
+	// 設定が持つことになるものである。グループのファイルは生成領域がそれらを名指すまで読めな
+	// いので、そうしなければ、グループと共に到着するホストはここで見えないままになってしまう。
 	afterHosts, _ := ProjectHosts(after, root)
 	for _, host := range afterHosts {
 		if host.Group == "" || host.Identity.IsZero() || len(prepared.preview.Effective) >= maxEffectivePreviews {
@@ -1200,8 +1200,8 @@ func diskOrNil(contents []byte, exists bool) []byte {
 	return contents
 }
 
-// Pending lists interrupted transactions so a partial write is never presented
-// as a healthy state.
+// Pending は中断された transaction を列挙し、部分的な書き込みが
+// 健全な状態として示されることが決してないようにする。
 func (s *Service) Pending() ([]PendingView, error) {
 	pending, err := s.manager.Pending()
 	if err != nil {
@@ -1225,9 +1225,9 @@ func (s *Service) Pending() ([]PendingView, error) {
 	return views, nil
 }
 
-// Recover finishes or reverts an interrupted transaction. Both paths replay a
-// journal whose contents were already validated before they were staged, so
-// they deliberately do not run the validator again.
+// Recover は、中断された transaction を完了させるか元に戻す。どちらの
+// 経路も、stage される前に既に validate されていた内容を持つ journal
+// を再生するので、意図的に validator を再度実行しない。
 func (s *Service) Recover(identifier, action string) error {
 	s.saveMutex.Lock()
 	defer s.saveMutex.Unlock()
@@ -1241,8 +1241,8 @@ func (s *Service) Recover(identifier, action string) error {
 	}
 }
 
-// History lists completed transactions and which of their files can be restored
-// from the generation backup.
+// History は、完了した transaction と、それらのファイルのうち
+// generational backup から復元できるものを列挙する。
 func (s *Service) History() ([]HistoryEntry, error) {
 	records, err := s.manager.History()
 	if err != nil {
@@ -1276,8 +1276,8 @@ func (s *Service) History() ([]HistoryEntry, error) {
 	return entries, nil
 }
 
-// Restore writes a generation backup back through a new transaction, so the
-// restore itself is journalled, validated and reversible.
+// Restore は、新しい transaction を通じて generational backup を書き
+// 戻すので、restore それ自体も journal 化され、validate され、取り消し可能である。
 func (s *Service) Restore(identifier, relative string) (SaveResult, error) {
 	s.saveMutex.Lock()
 	defer s.saveMutex.Unlock()
@@ -1300,8 +1300,8 @@ func (s *Service) Restore(identifier, relative string) (SaveResult, error) {
 	if err != nil {
 		return SaveResult{}, err
 	}
-	// Through the manager, because a backup is ciphertext: reading the file
-	// directly would write the sealed bytes over the user's configuration.
+	// manager を通す。バックアップは ciphertext だからである。ファイルを
+	// 直接読むと、封印されたバイト列がユーザーの設定の上に書き込まれてしまう。
 	contents, err := s.manager.ReadBackup(filepath.Join(record.BackupDir, filepath.FromSlash(relative)))
 	if err != nil {
 		return SaveResult{}, err
@@ -1343,14 +1343,14 @@ func (s *Service) Restore(identifier, relative string) (SaveResult, error) {
 	}, nil
 }
 
-// WorkspaceFiles lists every configuration file inside the workspace, by
-// workspace-relative path.
+// WorkspaceFiles は、ワークスペース内のすべての設定ファイルを、
+// ワークスペース相対の path で列挙する。
 //
-// It exists for the remote snapshot, which has to know what a configuration is
-// without being able to see the Include graph. Files outside the workspace —
-// /etc/ssh/ssh_config reached by an Include — are excluded: this application
-// never writes outside ~/.ssh, and it must never carry a file it would refuse
-// to write.
+// これは remote snapshot のために存在する。それは、Include graph を見ることが
+// できないまま、何が設定であるかを知らなければならない。ワークスペース
+// の外側にあるファイル——Include で到達する /etc/ssh/ssh_config など——
+// は除外される。このアプリケーションは ~/.ssh の外側に書き込むことは決してなく、
+// 書き込むことを拒否するはずのファイルを運ぶことも決してあってはならない。
 func (s *Service) WorkspaceFiles() ([]string, error) {
 	graph, err := s.resolver.Resolve(s.entryPath)
 	if err != nil {

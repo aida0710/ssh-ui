@@ -12,8 +12,8 @@ import (
 	"sshc/internal/storage"
 )
 
-// SyntaxError refuses a save whose new contents cannot be represented. It
-// carries a location, never the file contents.
+// SyntaxError は、新しい内容を表現できない save を拒否する。これは
+// location を運ぶが、ファイルの内容を運ぶことは決してない。
 type SyntaxError struct {
 	Path   string
 	Line   int
@@ -25,30 +25,30 @@ func (e *SyntaxError) Error() string {
 	return "configuration syntax error at line " + strconv.Itoa(e.Line)
 }
 
-// GraphError refuses a save that would introduce a new Include graph error.
+// GraphError は、新しい Include graph のエラーを持ち込む save を拒否する。
 type GraphError struct {
 	Diagnostics []DiagnosticView
 }
 
 func (e *GraphError) Error() string { return "include graph error" }
 
-// ConflictError reports that the file on disk is not the file the user edited.
+// ConflictError は、ディスク上のファイルが編集時のものと違うことを報告する。
 type ConflictError struct {
 	Report ConflictReport
 }
 
 func (e *ConflictError) Error() string { return "external change detected" }
 
-// overlayLoader lets the resolver see the contents a transaction is about to
-// write, including files the transaction creates, and lets it stop seeing the
-// files the transaction is about to take away.
+// overlayLoader は、resolver に、transaction が作成しようとしている
+// ファイルを含め、これから書き込もうとしている内容を見せ、
+// そしてこれから取り去ろうとしているファイルを見えなくする。
 //
-// gone is not an optimisation. A transaction that moves a file writes it at the
-// destination and removes it from the source, so an overlay carrying only
-// pending would resolve the graph against a world where the file exists in both
-// places at once: an Include glob would match twice, a duplicate alias would be
-// reported that will not exist, and a diagnostic the move actually fixes would
-// still look present. The same is true of a removal.
+// gone は最適化ではない。ファイルを移動する transaction は、
+// destination にそれを書き込み source からそれを取り除くので、
+// pending だけを運ぶ overlay は、そのファイルが両方の場所に同時に
+// 存在する世界に対して graph を解決してしまうことになる。Include glob は 2
+// 回 match し、存在しなくなるはずの重複 alias が報告され、move が実際には直している
+// diagnostic が依然として存在するように見えてしまう。removal についても同じことが言える。
 type overlayLoader struct {
 	base    config.Loader
 	pending map[string][]byte
@@ -60,8 +60,8 @@ func (loader overlayLoader) ReadFile(name string) ([]byte, error) {
 	if contents, ok := loader.pending[cleaned]; ok {
 		return contents, nil
 	}
-	// pending wins over gone, so a transaction that moves a file onto a path it
-	// also removes still reads the new contents rather than reporting nothing.
+	// pending は gone に勝つので、ファイルを、自らも削除する path へ
+	// 移動する transaction は、何も報告しないのではなく新しい内容を読む。
 	if loader.gone[cleaned] {
 		return nil, fs.ErrNotExist
 	}
@@ -99,9 +99,9 @@ func (loader overlayLoader) Glob(pattern string) ([]string, error) {
 	return matches, nil
 }
 
-// overlayFor describes the filesystem a request is about to produce: the
-// contents it writes, and the paths that will no longer be there. A move
-// contributes to both, because its destination arrives and its source leaves.
+// overlayFor は、リクエストが生み出そうとしている filesystem を記述
+// する。それが書き込む内容と、もはやそこに無くなる path である。
+// move はその両方に寄与する。その destination が到着し、その source が去るからである。
 func overlayFor(request storage.Request) (map[string][]byte, map[string]bool) {
 	pending := make(map[string][]byte, len(request.Changes)+len(request.Moves))
 	gone := make(map[string]bool, len(request.Moves)+len(request.Removals))
@@ -117,8 +117,8 @@ func overlayFor(request storage.Request) (map[string][]byte, map[string]bool) {
 	return pending, gone
 }
 
-// diagnosticKey identifies a diagnostic so a save is blocked only by problems
-// it introduces, not by problems the configuration already had.
+// diagnosticKey は diagnostic を識別し、save が、設定が既に抱えていた
+// 問題によってではなく、それ自身が持ち込む問題によってのみ block されるようにする。
 func diagnosticKey(diagnostic config.Diagnostic) string {
 	return diagnostic.Code + "\x00" + diagnostic.Path + "\x00" + strconv.Itoa(diagnostic.Line)
 }
@@ -131,9 +131,9 @@ func diagnosticBaseline(graph *config.Graph) map[string]bool {
 	return baseline
 }
 
-// newUnstructuredLine finds a line the edit made unparsable. Lines that were
-// already unparsable stay allowed, because the engine preserves them verbatim
-// and the user may only be able to fix them gradually.
+// newUnstructuredLine は、編集が parse 不能にしてしまった行を見つける。
+// 既に parse 不能だった行は許され続ける。エンジンはそれらを逐語的に
+// 保存し、ユーザーは徐々にしか直せないかもしれないからである。
 func newUnstructuredLine(before, after *config.File) (line, column int, found bool) {
 	known := map[string]int{}
 	if before != nil {
@@ -163,20 +163,20 @@ func unstructuredColumn(text string) int {
 	return 1
 }
 
-// validate is installed as storage.Manager.Validate, so it runs after the
-// preconditions are checked and before anything is journalled, staged or
-// renamed. It parses every new configuration file, proves the parse renders
-// back to the same bytes, refuses newly unparsable lines, and re-resolves the
-// whole Include graph with the pending contents overlaid.
+// validate は storage.Manager.Validate として設置されるので、
+// 事前条件がチェックされた後、何かが journal 化・stage・rename される
+// 前に実行される。これはすべての新しい設定ファイルを parse し、
+// その parse が同じバイト列へ描き戻せることを証明し、新たに parse
+// 不能になった行を拒否し、pending の内容を重ねた状態で Include graph 全体を再解決する。
 //
-// It validates configuration and nothing else. Files inside the workspace
-// state directory are this application's own — metadata.json, journals,
-// backups, the password vault — and are not ssh_config. Parsing them as though
-// they were is not merely pointless: the password vault is ciphertext, and a
-// blob whose random bytes happen to contain an odd number of quotation marks
-// was rejected as "unbalanced quoting". That is a coin flip on every save, and
-// it is how this was found — an end-to-end test that stored a password passed
-// locally and failed in CI.
+// これは設定だけを validate し、他の何も validate しない。ワークスペース
+// の状態ディレクトリの中にあるファイル——metadata.json、journal、
+// backup、password vault——はこのアプリケーション自身のものであり、
+// ssh_config ではない。それらを ssh_config であるかのように parse する
+// ことは、単に無意味であるだけではない。password vault は ciphertext であり、ランダム
+// なバイト列がたまたま奇数個の引用符を含んでしまった blob は"unbalanced quoting"
+// として拒否されていた。それは save のたびのコイン投げであり、これが見つかった経緯
+// である——パスワードを保存した end-to-end テストは、local では通り CI では失敗した。
 func (s *Service) validate(request storage.Request) error {
 	pending, gone := overlayFor(request)
 
@@ -190,8 +190,8 @@ func (s *Service) validate(request storage.Request) error {
 			}
 			continue
 		}
-		// Anything else under sshc/ is application state, never read by
-		// OpenSSH and never part of the Include graph.
+		// sshc/配下のそれ以外のものはすべてアプリケーションの状態であり、
+		// OpenSSH に読まれることも、Include graph の一部になることも決してない。
 		if isInside(stateDir, cleaned) {
 			continue
 		}
@@ -208,12 +208,12 @@ func (s *Service) validate(request storage.Request) error {
 		}
 	}
 
-	// A request that touches nothing OpenSSH reads cannot have changed the
-	// Include graph, so it is not asked to produce a resolvable one. The vault
-	// lives under sshc/ and the whole application is behind it: without this,
-	// a workspace whose config file is missing or broken is a workspace where
-	// the master password cannot be set, and the tool for fixing a broken
-	// configuration would refuse to start because the configuration is broken.
+	// OpenSSH が読む何にも触れないリクエストは、Include graph を変えている
+	// はずがないので、解決可能な graph を生み出すことを求められない。
+	// vault は sshc/配下にあり、アプリケーション全体がその向こう側にある。
+	// これが無ければ、config ファイルが無いか壊れているワークスペースは、
+	// master password を設定できないワークスペースになってしまい、壊れた
+	// 設定を直すためのツールが、設定が壊れているという理由で起動を拒否することになる。
 	if !s.touchesConfiguration(request) {
 		return nil
 	}
@@ -237,10 +237,10 @@ func (s *Service) validate(request storage.Request) error {
 	return nil
 }
 
-// touchesConfiguration reports whether any path in the request is somewhere
-// OpenSSH could read. The metadata document is this application's own, but it
-// sits beside the state directory rather than inside it, so it is named here
-// too — changing it cannot change the graph either.
+// touchesConfiguration は、リクエストの中のどれかの path が、OpenSSH が
+// 読み得る場所であるかどうかを報告する。metadata 文書はこの
+// アプリケーション自身のものだが、状態ディレクトリの内側ではなく隣に置かれているので、
+// ここでも名指される——それを変えても graph を変えることはできないからである。
 func (s *Service) touchesConfiguration(request storage.Request) bool {
 	stateDir := filepath.Clean(s.workspace.StateDir())
 	metadataPath := filepath.Clean(s.metadata.Path())
@@ -263,15 +263,15 @@ func (s *Service) touchesConfiguration(request storage.Request) bool {
 			return true
 		}
 	}
-	// A directory this application creates or removes is only ever a group
-	// directory or one of its own, and a group directory changes what an
-	// Include reaches.
+	// このアプリケーションが作成または削除するディレクトリは、常に
+	// グループのディレクトリか自分自身のもののどちらかでしかなく、
+	// グループのディレクトリは Include が届く範囲を変える。
 	return len(request.Directories) > 0 || len(request.RemoveDirectories) > 0
 }
 
-// isInside reports whether path is directory itself or below it. It compares
-// cleaned paths component-wise rather than by string prefix, so a sibling
-// named sshc-backup is not mistaken for a child of sshc.
+// isInside は、path が directory それ自体かその下にあるかを報告する。
+// これは文字列の前方一致ではなく、クリーニング済みの path を構成要素ごとに比較するので、
+// sshc-backup という名前の兄弟が sshc の子であると誤認されることはない。
 func isInside(directory, path string) bool {
 	if path == directory {
 		return true

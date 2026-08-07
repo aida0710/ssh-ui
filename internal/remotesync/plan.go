@@ -8,15 +8,15 @@ import (
 	"sshc/internal/storage"
 )
 
-// ErrNothingToApply reports that the remote snapshot already matches this
-// disk. It is an answer, not a failure.
+// ErrNothingToApply は、リモートのスナップショットがすでにこのディスクと一致して
+// いることを報告する。これは失敗ではなく答えである。
 var ErrNothingToApply = errors.New("this workspace already matches the snapshot")
 
-// Conflict is one file that changed on both sides since the last sync.
+// Conflict は、前回の同期以降に両側で変わったファイルひとつ。
 //
-// It carries digests and never contents: a three-way view is assembled by the
-// caller from files it can read, and a conflict record that carried a private
-// key's bytes would be a copy of that key in a response body.
+// ダイジェストを運び、内容は決して運ばない。三方向のビューは、呼び出し側が自分で
+// 読めるファイルから組み立てる。秘密鍵のバイト列を運ぶ衝突レコードは、レスポンス
+// 本文の中にあるその鍵のコピーになってしまう。
 type Conflict struct {
 	Path         string
 	BaseDigest   string
@@ -24,24 +24,24 @@ type Conflict struct {
 	RemoteDigest string
 }
 
-// Plan turns a decrypted snapshot and the current workspace into the exact
-// transaction that would make this machine match it — or into conflicts.
+// Plan は、復号したスナップショットと現在のワークスペースから、このマシンをそれに
+// 一致させるトランザクションそのもの — あるいは衝突 — を導き出す。
 //
-// This is the part of the design that costs least and buys most. A pull that
-// could not be expressed as one storage.Request would be a pull that escapes
-// every safety property this codebase has; because it can be, it inherits all
-// of them for free: the Manager.Validate hook re-parses and re-resolves, so a
-// snapshot that would break the Include graph is refused before a byte lands;
-// every replaced file except the keys is backed up into a generation
-// directory, so a bad pull is one click of the existing History screen away
-// from being undone; the journal makes an interrupted pull completable; and
-// the preview the user approves is the existing per-file diff.
+// ここは、設計の中で最もコストが低く、最も多くを買っている部分である。ひとつの
+// storage.Request として表現できない pull は、このコードベースが持つあらゆる安全性
+// を逃れる pull になる。表現できるからこそ、それらすべてをただで受け継ぐ。
+// Manager.Validate のフックが再解析と再解決を行うので、Include グラフを壊す
+// スナップショットは 1 バイトも着地する前に拒否される。鍵を除く置き換えられたすべて
+// のファイルは世代ディレクトリへバックアップされるので、まずい pull は既存の
+// History 画面のクリック 1 回で取り消せる。ジャーナルは、中断された pull を完了
+// 可能にする。そしてユーザーが承認するプレビューは、既存のファイル単位の差分
+// そのものである。
 //
-//   - base is the manifest of the snapshot this machine last synced. A nil
-//     base means this machine has never synced, so nothing can be called a
-//     deletion and no file is removed.
-//   - local maps workspace-relative path to the digest on this disk now.
-//   - remote is the manifest just fetched, and contents its files.
+//   - base は、このマシンが最後に同期したスナップショットのマニフェスト。base が
+//     nil なら、このマシンは一度も同期していないので、何も削除とは呼べず、
+//     ファイルはひとつも取り除かれない。
+//   - local は、ワークスペース相対のパスを、いまこのディスク上のダイジェストへ対応付ける。
+//   - remote は、いま取得したマニフェストで、contents はそのファイル群。
 func Plan(root string, base *Manifest, local map[string]string, remote Manifest, contents map[string][]byte) (storage.Request, []Conflict, error) {
 	baseDigests := map[string]string{}
 	if base != nil {
@@ -64,10 +64,10 @@ func Plan(root string, base *Manifest, local map[string]string, remote Manifest,
 		}
 		baseDigest, hadBase := baseDigests[item.Path]
 		if present && hadBase && localDigest != baseDigest {
-			// Changed here and changed there. There is no correct automatic
-			// answer — a merge of two ssh_config files that both changed the
-			// same Host block would violate the byte-preservation promise the
-			// parser exists to keep — so this is reported, never guessed.
+			// ここでも変わり、あちらでも変わった。自動的な正解は存在しない — 同じ
+			// Host ブロックを双方が変えた二つの ssh_config をマージすることは、
+			// パーサが守るために存在するバイト保存の約束に反する — ので、これは
+			// 推測せずに報告する。
 			conflicts = append(conflicts, Conflict{
 				Path: item.Path, BaseDigest: baseDigest,
 				LocalDigest: localDigest, RemoteDigest: item.SHA256,
@@ -75,8 +75,8 @@ func Plan(root string, base *Manifest, local map[string]string, remote Manifest,
 			continue
 		}
 		if present && !hadBase {
-			// It exists on both sides, differs, and this machine has never
-			// synced it. Nothing here knows which is newer.
+			// 両側に存在し、内容が異なり、このマシンは一度も同期していない。
+			// ここにはどちらが新しいかを知るものがない。
 			conflicts = append(conflicts, Conflict{
 				Path: item.Path, LocalDigest: localDigest, RemoteDigest: item.SHA256,
 			})
@@ -90,19 +90,19 @@ func Plan(root string, base *Manifest, local map[string]string, remote Manifest,
 			Path:         filepath.Join(root, filepath.FromSlash(item.Path)),
 			Contents:     contents[item.Path],
 			Precondition: precondition,
-			// A private key this pull overwrites keeps a backup like anything
-			// else. It used to keep none, because the copy would have been the
-			// key in the clear; the backups are sealed with the master password
-			// now, and a pull replacing a local key is exactly the case where
-			// the previous one is what somebody wants back.
+			// この pull が上書きする秘密鍵も、他のものと同じくバックアップを残す。
+			// 以前は残さなかった。そのコピーが平文の鍵になってしまうからだ。いま
+			// バックアップはマスターパスワードで封じられており、ローカルの鍵を pull が
+			// 置き換えるこの場面こそ、以前のものを取り戻したくなるまさにその場合で
+			// ある。
 		})
 	}
 
-	// A file present locally and absent from the snapshot is either "deleted
-	// on the other machine" or "created here since the last sync". The
-	// last-synced manifest is the only thing that can tell them apart:
-	// present in the base and absent from the remote means deleted; absent
-	// from both means new here, and it is left alone.
+	// ローカルに存在しスナップショットに存在しないファイルは、「別のマシンで削除
+	// された」か「前回の同期以降ここで作られた」かのどちらかである。両者を区別
+	// できるのは、最後に同期したマニフェストだけである。base にあって remote に
+	// ないなら削除、どちらにもないならここで新しく作られたものであり、手を触れ
+	// ない。
 	for path, localDigest := range local {
 		if _, stillRemote := remoteDigests[path]; stillRemote {
 			continue
@@ -112,7 +112,7 @@ func Plan(root string, base *Manifest, local map[string]string, remote Manifest,
 			continue
 		}
 		if localDigest != baseDigest {
-			// Deleted there, edited here.
+			// あちらで削除され、こちらで編集された。
 			conflicts = append(conflicts, Conflict{
 				Path: path, BaseDigest: baseDigest, LocalDigest: localDigest,
 			})

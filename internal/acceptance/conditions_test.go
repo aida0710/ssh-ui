@@ -40,17 +40,17 @@ type proof struct {
 	Reference string
 }
 
-// verdict says how far automation actually gets for one condition.
+// verdict は、ある 1 つの condition について automation が実際どこまで到達するかを示す。
 type verdict int
 
 const (
-	// verdictAutomated: automation proves the condition end to end.
+	// verdictAutomated: automation が condition を端から端まで証明する。
 	verdictAutomated verdict = iota
-	// verdictPartial: automation proves it up to a boundary it must not cross,
-	// and Manual names the rest. Gap must say what is missing.
+	// verdictPartial: automation は越えてはならない境界まで
+	// 証明し、残りは Manual が名指しする。Gap には欠落が要る。
 	verdictPartial
-	// verdictConditional: automation proves it only when an optional capability
-	// is present, and records it as unproven otherwise.
+	// verdictConditional: automation は任意の capability が
+	// あるときのみ証明し、なければ unproven として記録する。
 	verdictConditional
 )
 
@@ -69,16 +69,16 @@ func (v verdict) String() string {
 
 type completionCondition struct {
 	Number int
-	// Text is design §12 verbatim, or, for row 13, §10.1 verbatim.
+	// Text は design §12 の逐語そのもの、行 13 のみ §10.1 の逐語である。
 	Text string
-	// Automated names everything a machine checks.
+	// Automated は、機械が検査するものすべてを名指しする。
 	Automated []proof
-	// Manual names the part automation must not perform.
+	// Manual は、automation が行ってはならない部分を名指しする。
 	Manual []proof
-	// Verdict is the honest reading of the two lists above.
+	// Verdict は、上の 2 つのリストを正直に読んだ結論である。
 	Verdict verdict
-	// Gap states plainly what is not proven. Required unless the verdict is
-	// verdictAutomated.
+	// Gap は、証明されていないものを率直に述べる。verdict が
+	// verdictAutomated である場合を除き必須である。
 	Gap string
 }
 
@@ -179,10 +179,10 @@ func completionConditions() []completionCondition {
 			Text:    "外部変更と部分失敗で既存設定を黙って破壊しない",
 			Verdict: verdictPartial,
 			Automated: []proof{
-				// External change, end to end and at the transaction boundary.
+				// 外部変更、端から端まで、かつトランザクション境界において。
 				{proofPlaywright, "refuses a save whose base is stale and shows the three-way conflict"},
 				{proofGoTest, "TestCommitRejectsExternalChangesWithThreeWayData"},
-				// Partial failure: staging, rename and rollback each have a test.
+				// 部分的失敗: staging、rename、rollback それぞれにテストがある。
 				{proofGoTest, "TestCommitFailureWhileStagingLeavesEveryFileUntouched"},
 				{proofGoTest, "TestCommitLeavesRecoverableJournalWhenRenameFails"},
 				{proofGoTest, "TestRollbackRestoresEveryCommittedFile"},
@@ -239,10 +239,10 @@ func completionConditions() []completionCondition {
 			Text:    "危険ディレクティブを暗黙実行しない",
 			Verdict: verdictPartial,
 			Automated: []proof{
-				// The evaluation gate, at the seam and through HTTP.
+				// evaluation ゲート、継ぎ目においても HTTP 経由でも。
 				{proofGoTest, "TestEvaluateRefusesToRunWhenEvaluationCanExecuteACommand"},
 				{proofGoTest, "TestEvaluationOfAnExecutableConfigurationNeedsAConfirmation"},
-				// The connection gate.
+				// connection gate。
 				{proofGoTest, "TestEveryGuardedRouteRefusesAMissingWrongOrExpiredToken"},
 				{proofGoTest, "TestNoRouteEverPutsAHostileValueOnACommandLine"},
 				{proofGoTest, "TestTheProcessSeamRefusesAHostileAliasWithoutTheHTTPGuard"},
@@ -303,8 +303,8 @@ func TestDesignCompletionConditions(t *testing.T) {
 						condition.Number, item.Kind, item.Reference)
 				}
 			}
-			// A condition that automation cannot finish must say so, and a
-			// condition that claims to be finished must name no manual step.
+			// automation が完了できない condition はそう述べねばならず、
+			// 完了したと主張する condition は手動の手順を一切名指ししてはならない。
 			if condition.Verdict != verdictAutomated && condition.Gap == "" {
 				t.Errorf("condition %d is not fully automated but states no gap", condition.Number)
 			}
@@ -328,14 +328,14 @@ func gapLine(gap string) string {
 	return "\n    gap: " + gap
 }
 
-// TestCompletionAuditCountsWhatItClaims keeps the summary honest.
+// TestCompletionAuditCountsWhatItClaims は、要約を正直に保つ。
 //
-// The audit is only useful if the number of conditions it reports matches the
-// number design §12 actually lists, and if the mix of verdicts is stated rather
-// than left for a reader to count.
+// この監査が役立つのは、報告する condition の数が design
+// §12 が実際に挙げる数と一致し、かつ verdict の内訳が
+// 読み手に数えさせるのではなく明記されている場合に限る。
 func TestCompletionAuditCountsWhatItClaims(t *testing.T) {
 	conditions := completionConditions()
-	// Twelve from design §12 plus the §10.1 isolation rule as row 13.
+	// design §12 の 12 個に、行 13 として §10.1 の隔離規則を加えたもの。
 	if len(conditions) != 13 {
 		t.Fatalf("the audit lists %d conditions, want 13", len(conditions))
 	}

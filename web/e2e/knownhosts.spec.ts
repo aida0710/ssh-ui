@@ -1,10 +1,10 @@
 import { clickAndAwait, expect, openSection, test, openApplication } from "./support/environment";
 
-// This spec deliberately stops short of "Scan". ssh-keyscan opens a connection
-// to whatever host it is given, and no automated test in this repository is
-// allowed to contact one. The scan-and-add flow, and the fingerprint-or-
-// acknowledgement gate in front of it, are covered by the panel's Vitest suite
-// against a stubbed API and by manual test M1.
+// この試験は意図的に "Scan" の手前で止める。ssh-keyscan は与えられた
+// どんなホストにも接続を開いてしまうため、このリポジトリのどの自動
+// テストも接続してはならない。scan-and-add の流れと、その手前にある
+// fingerprint または確認のゲートは、スタブ化された API に対するパネルの
+// Vitest スイートと手動テスト M1 でカバーされる。
 test("lists the known_hosts entries and deletes one through a confirmation", async ({
   page,
   installation,
@@ -20,7 +20,7 @@ test("lists the known_hosts entries and deletes one through a confirmation", asy
   await expect(row).toContainText("ssh-ed25519");
   await expect(row).toContainText("SHA256:");
 
-  // Deleting asks first, and says what it will remove.
+  // 削除はまず尋ね、何を取り除くかを告げる。
   await row.getByRole("button", { name: "Delete" }).click();
   await expect(page.getByText(/Remove line \d+/)).toBeVisible();
 
@@ -38,6 +38,6 @@ test("keeps the search box scoped to the file it is showing", async ({ page, ins
   await page.getByLabel("Search").fill("no-such-host-anywhere");
   await expect(page.getByRole("row").filter({ hasText: "203.0.113.10" })).toHaveCount(0);
 
-  // A search that matches nothing must not have changed the file.
+  // 何にもマッチしない検索は、ファイルを変更していないはずだ。
   expect(await installation.read("known_hosts")).toContain("203.0.113.10");
 });

@@ -1,18 +1,18 @@
 import type { ReactNode } from "react";
 
-// One sprite of stroke icons, defined once and referenced by `<use>`.
+// ストロークアイコンの 1 枚のスプライトを一度だけ定義し、`<use>` で参照する。
 //
-// Inline rather than an icon font or a sprite file: the UI is served from an
-// embedded filesystem and must not fetch anything, and a font would render as
-// squares for the moment before it loaded.
+// アイコンフォントやスプライトファイルではなくインラインにしているのは、
+// UI が埋め込みファイルシステムから配信され、何も fetch してはならず、
+// フォントは読み込まれるまでの間、四角として描画されてしまうからだ。
 //
-// The shapes are JSX rather than markup strings. A string would have to reach
-// the DOM through dangerouslySetInnerHTML, and this repository should not have
-// to prove, every time someone reads it, that the string beside that call is
-// still a constant.
+// 形状はマークアップ文字列ではなく JSX だ。文字列にすると
+// dangerouslySetInnerHTML を通じて DOM に届けることになり、この
+// リポジトリは、誰かが読むたびにその呼び出しの隣の文字列がいまだに
+// 定数のままだと証明せずに済むべきだ。
 //
-// Every icon here sits beside its own label. They are decoration, so they are
-// hidden from the accessibility tree; the word is the accessible name.
+// ここにあるすべてのアイコンは自分自身のラベルの隣に座る。それらは
+// 装飾なので accessibility tree から隠され、accessible name は語の方になる。
 export const iconNames = [
   "connections",
   "config",

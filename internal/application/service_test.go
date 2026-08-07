@@ -44,7 +44,7 @@ func newTestService(t *testing.T) (*Service, *storage.Workspace) {
 	return NewService(workspace, manager), workspace
 }
 
-// writeGroupFile puts a connection file where its group says it lives.
+// writeGroupFile は、そのグループが示す場所に connection ファイルを置く。
 func writeGroupFile(t *testing.T, workspace *storage.Workspace, group, name, contents string) string {
 	t.Helper()
 	relative := GroupDirectory(group) + "/" + name
@@ -149,11 +149,11 @@ func TestSaveHostFieldsWritesOnlyTheEditedFile(t *testing.T) {
 	}
 }
 
-// TestFieldEditLineNumbersAreOneBasedAcrossTheServiceBoundary pins the one
-// conversion the service owns: config indices are 0-based, every line number
-// crossing this boundary is 1-based. The test feeds a line number the service
-// itself reported straight back as an edit, so dropping the conversion or
-// applying it twice rewrites HostName or Port instead of User and fails.
+// TestFieldEditLineNumbersAreOneBasedAcrossTheServiceBoundary は、
+// service が担う唯一の変換を固定する。config 側の index は 0-based であり、
+// この境界を越えるすべての行番号は 1-based である。このテストは、
+// service 自身が報告した行番号をそのまま編集として送り返すので、変換を落とすかそれを
+// 二重に適用すると、User ではなく HostName や Port を書き換えてしまい失敗する。
 func TestFieldEditLineNumbersAreOneBasedAcrossTheServiceBoundary(t *testing.T) {
 	service, workspace := newTestService(t)
 
@@ -254,12 +254,12 @@ func TestSaveRejectsAnEditThatIntroducesAnIncludeCycle(t *testing.T) {
 	}
 }
 
-// TestSaveIsBlockedOnlyByBreakageItIntroduces proves both halves of the
-// validation rule. Pre-existing breakage — an Include cycle that is a
-// SeverityError diagnostic, and a line the parser cannot decompose — must not
-// block an unrelated save, because a user who inherited a broken file must
-// still be able to fix it one edit at a time. Breakage the edit itself adds
-// must be refused.
+// TestSaveIsBlockedOnlyByBreakageItIntroduces は、validation 規則の
+// 両半分を証明する。既存の壊れ——SeverityError の diagnostic である
+// Include cycle と、parser が分解できない行——は、無関係な save を
+// 妨げてはならない。壊れたファイルを引き継いだユーザーは、それでも
+// 1 回の編集ずつ直せなければならないからである。編集それ自体が
+// 加える壊れは拒否されなければならない。
 func TestSaveIsBlockedOnlyByBreakageItIntroduces(t *testing.T) {
 	service, workspace := newTestService(t)
 	const broken = "Include config\nHost nas\n\tUser aida\n\tSendEnv \"broken\n"
@@ -267,8 +267,8 @@ func TestSaveIsBlockedOnlyByBreakageItIntroduces(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Half one: a save into an already-broken graph that introduces nothing new
-	// succeeds, even though the graph carries a SeverityError cycle throughout.
+	// 半分の 1 つ目。graph が終始 SeverityError の cycle を抱えているにも
+	// かかわらず、既に壊れている graph へ何も新しいものを持ち込まない save は成功する。
 	if _, err := service.Save(EditRequest{
 		Kind:   EditHostFields,
 		Path:   "config",
@@ -282,8 +282,8 @@ func TestSaveIsBlockedOnlyByBreakageItIntroduces(t *testing.T) {
 		t.Fatalf("config = %q", readFile(t, workspace, "config"))
 	}
 
-	// Still half one, now editing the broken file itself: keeping the existing
-	// unparsable line while changing another line is allowed.
+	// 依然として半分の 1 つ目、今度は壊れたファイル自体を編集する。
+	// 既存の parse できない行を残したまま別の行を変更することは許される。
 	const keptBroken = "Include config\nHost nas\n\tUser root\n\tSendEnv \"broken\n"
 	if _, err := service.Save(EditRequest{
 		Kind: EditFileRaw,
@@ -297,8 +297,8 @@ func TestSaveIsBlockedOnlyByBreakageItIntroduces(t *testing.T) {
 		t.Fatalf("conf.d/10-home.conf = %q", readFile(t, workspace, "conf.d/10-home.conf"))
 	}
 
-	// Half two: the same file, the same pre-existing breakage, plus one newly
-	// unparsable line. Only the new line is refused, and nothing is written.
+	// 半分の 2 つ目。同じファイル、同じ既存の壊れに加えて、新たに parse できなくなった
+	// 1 行がある。拒否されるのはその新しい行だけであり、何も書き込まれない。
 	_, err := service.Save(EditRequest{
 		Kind: EditFileRaw,
 		Path: "conf.d/10-home.conf",
@@ -319,10 +319,10 @@ func TestSaveIsBlockedOnlyByBreakageItIntroduces(t *testing.T) {
 
 func TestSaveGroupsWritesConfigurationAndMetadataInOneTransaction(t *testing.T) {
 	service, workspace := newTestService(t)
-	// Membership is where the file sits, so the host has to sit there — and
-	// only there: two blocks declaring one alias is a different situation with
-	// its own notice. The region this save writes is what makes
-	// connections/home/*.conf read at all.
+	// membership はファイルが置かれている場所なので、ホストはそこに
+	// 置かれなければならない——そしてそこにだけ。2 個のブロックが 1 個の
+	// alias を宣言するのは別の状況であり、それ専用の通知を持つ。この
+	// save が書き込む生成領域こそが、connections/home/*.conf をそもそも読ませているものである。
 	if err := os.Remove(filepath.Join(workspace.Root(), "conf.d", "10-home.conf")); err != nil {
 		t.Fatal(err)
 	}
@@ -343,9 +343,9 @@ func TestSaveGroupsWritesConfigurationAndMetadataInOneTransaction(t *testing.T) 
 	if len(preview.Effective) != 1 || preview.Effective[0].Alias != "nas" {
 		t.Fatalf("effective preview = %#v", preview.Effective)
 	}
-	// Two changes, not one: this save is what makes connections/home readable,
-	// so the host's own User arrives at the same moment as the group's Port.
-	// Saying only "Port changed" would hide half of what the save does.
+	// 1 個ではなく 2 個の変更。この save こそが connections/home を読める
+	// ようにするものなので、ホストそれ自身の User がグループの Port と同じ瞬間に到着する。
+	// "Port changed"とだけ言うことは、この save が行っていることの半分を隠してしまう。
 	changed := map[string]string{}
 	for _, change := range preview.Effective[0].Changes {
 		changed[change.Keyword] = strings.Join(change.After, " ")
@@ -362,8 +362,8 @@ func TestSaveGroupsWritesConfigurationAndMetadataInOneTransaction(t *testing.T) 
 		t.Fatalf("groups file = %q", groups)
 	}
 	entry := readFile(t, workspace, "config")
-	// One Include per declared group, then the settings file, all inside the
-	// generated region.
+	// 宣言済みグループごとに 1 本の Include、それに続く settings ファイル、
+	// それらすべてが生成領域の内側にある。
 	for _, want := range []string{
 		RegionStartMarker,
 		"Include " + GroupIncludePattern("home") + "\n",
@@ -456,9 +456,9 @@ func TestHistoryListsCommitsAndRestoreRevertsOneFile(t *testing.T) {
 	}
 }
 
-// snapshotConfigFiles reads every configuration file in the workspace, skipping
-// the sshc state directory whose journal, history and backups are expected to
-// change on every commit. It exists to prove a move touches nothing else.
+// snapshotConfigFiles は、ワークスペース内のすべての設定ファイルを読むが、
+// journal、history、backup が commit のたびに変化することが期待される sshc の状態ディレク
+// トリはスキップする。これは、move が他の何にも触れないことを証明するために存在する。
 func snapshotConfigFiles(t *testing.T, workspace *storage.Workspace) map[string]string {
 	t.Helper()
 	files := map[string]string{}
@@ -525,11 +525,11 @@ func TestSaveMoveCommitsBothFilesAndMetadataInOneTransaction(t *testing.T) {
 	if len(preview.Effective) != 1 || preview.Effective[0].Alias != "bastion" {
 		t.Fatalf("move preview effective = %#v", preview.Effective)
 	}
-	// Every directive the block carries keeps its value and reports a new source
-	// file, which is the reordering the user needs to see. ServerAliveInterval
-	// still comes from the entry file's Host * block with the same value and the
-	// same governing condition; only its line number shifted because the block
-	// above it left, and a pure line shift is not a change.
+	// そのブロックが運ぶすべてのディレクティブは値を保ったまま新しい source
+	// ファイルを報告する。それこそがユーザーが見る必要のある並び替え
+	// である。ServerAliveInterval は依然としてエントリファイルの Host *
+	// ブロックから、同じ値と同じ governing condition で来ている。変わったのはその行番号だけ
+	// であり、それは上にあったブロックが去ったためであって、純粋な行のずれは変更ではない。
 	wantSourceFile := map[string]string{
 		"HostName": "conf.d/10-home.conf",
 		"Port":     "conf.d/10-home.conf",
@@ -568,7 +568,7 @@ func TestSaveMoveCommitsBothFilesAndMetadataInOneTransaction(t *testing.T) {
 		t.Fatalf("destination = %q", got)
 	}
 
-	// Nothing else in the configuration tree may have moved a byte.
+	// 設定 tree の他の何も、1 バイトたりとも動いていないはずである。
 	after := snapshotConfigFiles(t, workspace)
 	if len(after) != len(before) {
 		t.Fatalf("the move added or removed a file: before %v, after %v", before, after)
@@ -665,9 +665,9 @@ func TestSaveMoveReportsAStaleDestinationBase(t *testing.T) {
 		DestinationBase: "Host nas\n\tUser aida\t# personal\n",
 	}
 
-	// Preview never reaches Commit, so only the planner's own precondition check
-	// can catch a stale destination here. Asserting on Save alone would pass on
-	// the storage layer's check and prove nothing about the planner.
+	// Preview は Commit に決して到達しないので、ここでは古くなった destination を捉えられるのは
+	// planner 自身の事前条件チェックだけである。Save だけについて assert
+	// すると、storage 層のチェックを通ってしまい、planner については何も証明しない。
 	_, previewErr := service.Preview(stale)
 	var previewConflict *ConflictError
 	if !errors.As(previewErr, &previewConflict) {
@@ -756,9 +756,9 @@ func TestSaveMoveWarnsWhenNoIncludeReachesTheDestination(t *testing.T) {
 	}
 }
 
-// declareGroup writes the region into the entry file so the group exists.
-// Declaring is what makes a directory a group; the move refuses to do it as a
-// side effect, so a test that moves has to declare first.
+// declareGroup は、グループが存在するように生成領域をエントリファイルに書き込む。
+// 宣言することが、ディレクトリをグループにしているものである。move はそれを副作用として
+// 行うことを拒否するので、move するテストは先に宣言しなければならない。
 func declareGroup(t *testing.T, service *Service, names ...string) {
 	t.Helper()
 	metadata := NewMetadata()
@@ -785,8 +785,8 @@ func TestMoveHostIntoAGroupDerivesTheDestinationPath(t *testing.T) {
 		t.Fatalf("Save error = %v", err)
 	}
 
-	// The file keeps its own name and changes directory, which is what a move
-	// between groups is in a shell too.
+	// ファイルは自分自身の名前を保ったままディレクトリを変える。それは
+	// shell においてもグループ間の move がそういうものであるのと同じである。
 	moved := readFile(t, workspace, "connections/work/10-home.conf")
 	if moved != homeConfig {
 		t.Errorf("moved block = %q, want the bytes it had", moved)
@@ -796,11 +796,11 @@ func TestMoveHostIntoAGroupDerivesTheDestinationPath(t *testing.T) {
 	}
 }
 
-// The entry file is where every ungrouped connection starts, so moving one out
-// of it is the first move a workspace makes. Its base name is "config", which
-// "connections/<group>/*.conf" does not match, so a destination derived from it
-// verbatim is written and then never read: the connection disappears from the
-// configuration OpenSSH sees while both files look correct on disk.
+// エントリファイルは、グループ化されていないすべての connection が始まる場所であり、
+// そこから 1 個を移動することが、ワークスペースが行う最初の move である。そのファイル名は
+// "config"であり、これは"connections/<group>/*.conf"に match しないので、そこから逐語的に
+// 導出された destination は書き込まれた後で決して読まれることがなくなる。両方のファイル
+// がディスク上では正しく見えているのに、connection は OpenSSH が見る設定から消えてしまう。
 func TestMoveHostFromTheEntryFileIntoAGroupLandsWhereTheIncludeReadsIt(t *testing.T) {
 	service, workspace := newTestService(t)
 	declareGroup(t, service, "work")
@@ -833,10 +833,10 @@ func TestMoveHostFromTheEntryFileIntoAGroupLandsWhereTheIncludeReadsIt(t *testin
 	}
 }
 
-// The notice tells the user OpenSSH will not read the block until they add an
-// Include. A declared group already has one, and the destination is named so
-// that it matches, so saying otherwise here trains the user to click past the
-// warning in the one case where it is true.
+// この通知は、Include を追加するまで OpenSSH がそのブロックを読まないことを
+// ユーザーに伝える。宣言済みのグループは既にそれを持っており、destination は
+// match するように名指されているので、ここで別のことを言うと、それが真であるまさに
+// その 1 つのケースで、ユーザーに警告をクリックして通り過ぎることを訓練してしまう。
 func TestMoveHostIntoADeclaredGroupDoesNotWarnThatNoIncludeReachesIt(t *testing.T) {
 	service, _ := newTestService(t)
 	declareGroup(t, service, "work")
@@ -893,8 +893,8 @@ func TestMoveHostIntoAGroupUpdatesTheMetadataIdentityInTheSameTransaction(t *tes
 		t.Fatalf("hosts = %#v", stored.Hosts)
 	}
 	host := stored.Hosts[0]
-	// The identity changed because the path did, and everything the entry
-	// carried travelled with it rather than being orphaned.
+	// path が変わったので identity も変わり、entry が運んでいたすべての
+	// ものは、orphan になるのではなくそれと共に移動した。
 	if host.Identity.Path != "connections/work/10-home.conf" || host.Orphan {
 		t.Errorf("identity = %#v", host)
 	}
@@ -927,8 +927,8 @@ func TestMoveHostIntoAnUndeclaredGroupIsRefusedAndLeavesNoDirectory(t *testing.T
 	if !errors.Is(err, ErrGroupNotDeclared) {
 		t.Fatalf("Save error = %v, want ErrGroupNotDeclared", err)
 	}
-	// A refusal must leave nothing behind, not even the directory it would
-	// have needed.
+	// 拒否は何も後に残してはならない、それが必要としていた
+	// はずのディレクトリでさえも。
 	if _, statErr := os.Stat(filepath.Join(workspace.Root(), "connections")); !errors.Is(statErr, os.ErrNotExist) {
 		t.Errorf("a refused move created the connections directory: %v", statErr)
 	}
@@ -952,15 +952,15 @@ func TestMoveHostRefusesBothADestinationGroupAndAPath(t *testing.T) {
 }
 
 func TestASecondConnectionCanBeMovedIntoAGroupThatAlreadyHoldsOne(t *testing.T) {
-	// The bug, reported from a real workspace: the first connection into a
-	// group worked and every one after it failed with "this file was changed
-	// outside the application", naming an external edit that had not happened.
+	// 実際のワークスペースから報告された bug。グループへの最初の connection
+	// は成功し、それ以降のものはすべて"this file was changed outside
+	// the application"で失敗し、起きてもいない外部編集を名指していた。
 	//
-	// A move that names a group does not name a destination file, so the client
-	// never read one and could not send its bytes. The empty base it sent
-	// instead was compared against the group file on disk, which by then held
-	// the first connection — so the comparison was between "nothing" and "the
-	// work this application had just done itself".
+	// グループを名指す move は destination ファイルを名指さないので、
+	// クライアントはそれを読んだことがなく、そのバイト列を送ることも
+	// できなかった。代わりに送った空の base は、その時点で最初の
+	// connection を既に保持していたディスク上のグループファイルと比較された——つまり比較は
+	// "nothing"と"このアプリケーションがたった今自分で行った作業"の間で行われたのである。
 	service, workspace := newTestService(t)
 	declareGroup(t, service, "work")
 
@@ -986,8 +986,8 @@ func TestASecondConnectionCanBeMovedIntoAGroupThatAlreadyHoldsOne(t *testing.T) 
 		t.Fatalf("the second move into the same group = %v", err)
 	}
 
-	// Both are in the group file, and the first was not overwritten by the
-	// second — which is the other way this could have been "fixed".
+	// 両方ともグループファイルの中にあり、最初のものが 2 番目のもので
+	// 上書きされることはなかった——それが、これが"fixed"にされ得たもう 1 つのやり方である。
 	moved := readFile(t, workspace, "connections/work/10-home.conf")
 	if !strings.Contains(moved, "Host nas") || !strings.Contains(moved, "Host printer") {
 		t.Errorf("the group file holds %q, want both connections", moved)
@@ -998,10 +998,10 @@ func TestASecondConnectionCanBeMovedIntoAGroupThatAlreadyHoldsOne(t *testing.T) 
 }
 
 func TestAGroupMoveStillRefusesAFileThatChangedUnderIt(t *testing.T) {
-	// Reading the destination rather than trusting a base the client never had
-	// must not become "write regardless". The source base is still the client's
-	// and is still checked, and the digest read for the destination is the
-	// precondition storage verifies while committing.
+	// クライアントが決して持っていなかった base を信用するのではなく
+	// destination を読むことは、"write regardless"になってはならない。
+	// source 側の base は依然としてクライアントのものであり依然としてチェックされ、
+	// destination のために読まれる digest は、storage が commit 中に検証する事前条件である。
 	service, workspace := newTestService(t)
 	declareGroup(t, service, "work")
 
@@ -1018,8 +1018,8 @@ func TestAGroupMoveStillRefusesAFileThatChangedUnderIt(t *testing.T) {
 		t.Fatalf("the first move = %v", err)
 	}
 
-	// The second move carries the base from before the first one, which is what
-	// a second browser tab would send.
+	// 2 回目の move は、最初の move より前の base を運んでいる。それは
+	// 2 番目の browser tab が送るであろうものである。
 	var conflict *ConflictError
 	_, err := service.Save(EditRequest{
 		Kind: EditMove, Path: "conf.d/10-home.conf", Base: both,
@@ -1033,11 +1033,11 @@ func TestAGroupMoveStillRefusesAFileThatChangedUnderIt(t *testing.T) {
 	}
 }
 
-// A rename that lands on an alias something else already declares does not
-// create a second host: it creates a second claim on one name, and OpenSSH
-// gives the name to whichever block it reads first. The move path has refused
-// this since it was written; rename accepted it, wrote it, and said nothing,
-// so a rename could take a live alias away from the host that owned it.
+// 何か他のものが既に宣言している alias に着地する rename は、第 2 の
+// ホストを作るわけではない。それは 1 個の名前への第 2 の主張を作り、
+// OpenSSH はその名前を最初に読んだブロックへ与える。move path は
+// 書かれたときからこれを拒否してきた。rename はそれを受け入れ、書き込み、何も言わなかった
+// ので、rename は生きている alias をそれを所有していたホストから奪ってしまい得た。
 func TestRenameOntoAnAliasAnotherFileDeclaresIsRefused(t *testing.T) {
 	service, workspace := newTestService(t)
 	before := readFile(t, workspace, "conf.d/10-home.conf")
@@ -1047,7 +1047,7 @@ func TestRenameOntoAnAliasAnotherFileDeclaresIsRefused(t *testing.T) {
 		Path:     "conf.d/10-home.conf",
 		Base:     before,
 		Alias:    "nas",
-		NewAlias: "bastion", // declared by the entry file
+		NewAlias: "bastion", // エントリファイルによって宣言されている
 	})
 	if !errors.Is(err, ErrAliasAlreadyDeclared) {
 		t.Fatalf("Save error = %v, want ErrAliasAlreadyDeclared", err)
@@ -1089,10 +1089,10 @@ func TestRenameToAFreeAliasStillWorks(t *testing.T) {
 	}
 }
 
-// A .conf file under connections/ that no Include names is read by nobody. The
-// group delete puts one there deliberately when it is given no destination, on
-// the stated understanding that the interface reports it; nothing did, so a
-// connection could leave the configuration without a word being said about it.
+// connections/配下にあってどの Include も名指していない.conf ファイルは、
+// 誰にも読まれない。グループ delete は、destination を与えられなかったとき、interface
+// がそれを報告するという明言された理解の下で、意図的にファイルをそこに置く。
+// 何も報告しなかったので、connection は一言も言われることなく設定から抜け落ちてしまい得た。
 func TestOverviewReportsAConnectionFileNothingIncludes(t *testing.T) {
 	service, workspace := newTestService(t)
 	if err := workspace.EnsureDirectory(filepath.Join(workspace.Root(), "connections")); err != nil {

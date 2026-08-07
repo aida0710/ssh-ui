@@ -16,7 +16,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// Algorithm names a key algorithm family in the spelling the HTTP API uses.
+// Algorithm は、HTTP API が使う綴りで鍵アルゴリズムの系統を表す。
 type Algorithm string
 
 const (
@@ -27,7 +27,7 @@ const (
 	AlgorithmECDSASK   Algorithm = "ecdsa-sk"
 )
 
-// DefaultRSABits is used when an RSA request does not choose a size.
+// DefaultRSABits は、RSA のリクエストがサイズを選ばなかったときに使われる。
 const DefaultRSABits = 3072
 
 var (
@@ -40,13 +40,13 @@ var (
 	ErrPassphraseRequired   = errors.New("key is passphrase protected")
 )
 
-// Material describes a private key file without exposing the key itself.
+// Material は、鍵そのものを露出せずに秘密鍵ファイルを記述する。
 //
-// Fingerprint is empty when the file is encrypted in a container that does not
-// carry a cleartext public key, which is the case for the legacy
-// "-----BEGIN RSA PRIVATE KEY-----" form with a DEK-Info header. The caller
-// recovers the fingerprint from a matching public key file or reports that it
-// is unavailable; it never guesses.
+// Fingerprint が空になるのは、平文の公開鍵を含まないコンテナでファイルが暗号化
+// されている場合である。DEK-Info ヘッダーを持つ旧来の
+// "-----BEGIN RSA PRIVATE KEY-----" 形式がそれにあたる。呼び出し側は、対応する
+// 公開鍵ファイルからフィンガープリントを復元するか、得られないと報告する。推測は
+// 決してしない。
 type Material struct {
 	Container   string
 	Encrypted   bool
@@ -56,7 +56,7 @@ type Material struct {
 	Fingerprint string
 }
 
-// PublicKeyInfo describes one authorized-keys style line.
+// PublicKeyInfo は、authorized-keys 形式の行ひとつを記述する。
 type PublicKeyInfo struct {
 	KeyType                string
 	Algorithm              Algorithm
@@ -71,20 +71,20 @@ type PublicKeyInfo struct {
 	SignedKeyFingerprint   string
 }
 
-// Wipe overwrites a secret buffer with zeroes.
+// Wipe は、秘密を保持するバッファをゼロで上書きする。
 //
-// This is best effort only. Go's garbage collector may already have copied the
-// bytes while growing a slice or moving a stack, and the runtime offers no way
-// to find or erase those copies. Wipe shortens the window in which a secret is
-// readable in this process; it does not guarantee erasure.
+// これはベストエフォートにすぎない。Go のガベージコレクタは、スライスの拡張や
+// スタックの移動の際にすでにバイト列をコピーしているかもしれず、ランタイムには
+// そのコピーを見つけたり消したりする手段がない。Wipe は、秘密がこのプロセス内で
+// 読める時間の幅を縮めるだけで、消去を保証するものではない。
 func Wipe(secret []byte) {
 	for index := range secret {
 		secret[index] = 0
 	}
 }
 
-// InspectPrivateKey reports what a private key file holds and whether it is
-// passphrase protected, without needing the passphrase.
+// InspectPrivateKey は、パスフレーズを必要とせずに、秘密鍵ファイルが何を保持して
+// いるか、そしてパスフレーズで保護されているかを報告する。
 func InspectPrivateKey(contents []byte) (Material, error) {
 	block, _ := pem.Decode(contents)
 	if block == nil || !strings.HasSuffix(block.Type, "PRIVATE KEY") {
@@ -115,8 +115,8 @@ func InspectPrivateKey(contents []byte) (Material, error) {
 	return material, nil
 }
 
-// InspectPublicKey reads one authorized-keys style line, which may be a plain
-// public key or an OpenSSH certificate.
+// InspectPublicKey は authorized-keys 形式の行をひとつ読む。素の公開鍵の場合も、
+// OpenSSH の証明書の場合もある。
 func InspectPublicKey(line []byte) (PublicKeyInfo, error) {
 	publicKey, comment, _, _, err := ssh.ParseAuthorizedKey(line)
 	if err != nil {
@@ -144,9 +144,9 @@ func InspectPublicKey(line []byte) (PublicKeyInfo, error) {
 	return info, nil
 }
 
-// GeneratePrivateKey creates a software key pair. RSA and ECDSA keys are
-// returned as pointers because ssh.MarshalPrivateKeyWithPassphrase rejects the
-// value forms.
+// GeneratePrivateKey はソフトウェアの鍵ペアを作る。RSA と ECDSA の鍵をポインタで
+// 返すのは、ssh.MarshalPrivateKeyWithPassphrase が値の形を拒否するから
+// である。
 func GeneratePrivateKey(algorithm Algorithm, bits int, random io.Reader) (crypto.PrivateKey, error) {
 	switch algorithm {
 	case AlgorithmEd25519:
@@ -179,9 +179,9 @@ func GeneratePrivateKey(algorithm Algorithm, bits int, random io.Reader) (crypto
 	}
 }
 
-// EncodePrivateKey serialises a key in the OpenSSH private key container. An
-// empty passphrase produces the unencrypted form; the caller decides whether an
-// unencrypted key is acceptable.
+// EncodePrivateKey は、OpenSSH の秘密鍵コンテナに鍵を直列化する。パスフレーズが
+// 空なら暗号化されない形になる。暗号化されていない鍵を許容するかは呼び出し側が
+// 決める。
 func EncodePrivateKey(privateKey crypto.PrivateKey, comment string, passphrase []byte) ([]byte, error) {
 	var block *pem.Block
 	var err error
@@ -196,7 +196,7 @@ func EncodePrivateKey(privateKey crypto.PrivateKey, comment string, passphrase [
 	return pem.EncodeToMemory(block), nil
 }
 
-// EncodePublicKey renders the authorized-keys line for a private key.
+// EncodePublicKey は、秘密鍵に対応する authorized-keys の行を出力する。
 func EncodePublicKey(privateKey crypto.PrivateKey, comment string) ([]byte, error) {
 	signer, err := ssh.NewSignerFromKey(privateKey)
 	if err != nil {
@@ -211,7 +211,7 @@ func EncodePublicKey(privateKey crypto.PrivateKey, comment string) ([]byte, erro
 	return append(line, '\n'), nil
 }
 
-// DecodePrivateKey returns the raw key from a private key file.
+// DecodePrivateKey は、秘密鍵ファイルから生の鍵を返す。
 func DecodePrivateKey(contents []byte, passphrase []byte) (crypto.PrivateKey, error) {
 	if len(passphrase) == 0 {
 		privateKey, err := ssh.ParseRawPrivateKey(contents)

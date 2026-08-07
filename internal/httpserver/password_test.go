@@ -26,8 +26,8 @@ func passwordEngine(t *testing.T) (*echo.Echo, *secret.Service) {
 	return engine, service
 }
 
-// passwordEngineIn also hands back the home, for the tests that read what was
-// actually written rather than what the API said it wrote.
+// passwordEngineIn は home も返す。API の返答ではなく実際に書かれた
+// ものを読むテストのためである。
 func passwordEngineIn(t *testing.T) (*echo.Echo, *secret.Service, string) {
 	t.Helper()
 	home := t.TempDir()
@@ -63,9 +63,9 @@ func send(t *testing.T, engine *echo.Echo, method, path, body string, headers ma
 }
 
 func TestNoPasswordRouteEverReturnsAPassword(t *testing.T) {
-	// The assertion that must not be allowed to rot. Every route in this file
-	// is swept, including the ones that write, and none of their bodies may
-	// contain the stored value.
+	// 腐らせてはならないアサーションである。このファイルの全ルートが
+	// 走査対象であり、書き込みを行うものも含め、どの body にも
+	// 保存された値が含まれてはならない。
 	engine, service := passwordEngine(t)
 	if err := service.Initialise(testPassphrase); err != nil {
 		t.Fatal(err)
@@ -194,8 +194,8 @@ func TestAskpassRefusesWithoutAValidRequest(t *testing.T) {
 	}{
 		"no token":    {map[string]string{echo.HeaderContentType: "application/json"}, body},
 		"wrong token": {askpassHeaders("not-the-token"), body},
-		// A form content type is what a cross-origin page could send without a
-		// preflight, so it must not be a way in.
+		// form の content type は、クロスオリジンのページがプリフライトなしに
+		// 送れるものなので、侵入経路になってはならない。
 		"form content type": {map[string]string{
 			echo.HeaderContentType: "application/x-www-form-urlencoded",
 			AskpassTokenHeader:     token,
@@ -219,7 +219,7 @@ func TestAskpassRefusesWithoutAValidRequest(t *testing.T) {
 }
 
 func TestAskpassNeverAnswersWithoutAPromptRule(t *testing.T) {
-	// A nil predicate must mean "answer nothing", never "answer everything".
+	// nil の predicate は「何も答えない」を意味し、決して「何でも答える」ではない。
 	home := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(home, ".ssh"), 0o700); err != nil {
 		t.Fatal(err)
@@ -251,9 +251,9 @@ func TestAskpassNeverAnswersWithoutAPromptRule(t *testing.T) {
 }
 
 func TestStoreRefusesAPasswordTheHostWouldNeverBeOffered(t *testing.T) {
-	// The interface disables the field, but the interface is replaceable and
-	// this side is not. A blocker means the stored password could never be
-	// used, so storing it would put a secret on disk for nothing.
+	// interface はこのフィールドを無効化するが、interface は差し替え
+	// 可能でもこちら側はそうではない。blocker があれば保存された
+	// パスワードは決して使われず、保存しても無駄に secret をディスクに置くだけになる。
 	engine, service := passwordEngine(t)
 	if err := service.Initialise(testPassphrase); err != nil {
 		t.Fatal(err)
@@ -285,12 +285,12 @@ func TestStoreRefusesAPasswordTheHostWouldNeverBeOffered(t *testing.T) {
 	if body.Code != "password_not_storable" {
 		t.Errorf("code = %q", body.Code)
 	}
-	// The reason travels with the refusal. A bare 409 sends the user looking
-	// at the vault for a decision the configuration made.
+	// 理由は拒否と共に運ばれる。理由のない 409 だけでは、ユーザーは
+	// 設定が下した判断を vault のせいだと思って探してしまう。
 	if len(body.Blockers) != 1 || body.Blockers[0] != application.BlockerPasswordAuthenticationOff {
 		t.Errorf("blockers = %#v", body.Blockers)
 	}
-	// And nothing was stored.
+	// そして何も保存されなかった。
 	if service.Has("bastion") {
 		t.Error("the vault holds a password for a host that refused one")
 	}
@@ -331,9 +331,9 @@ func credentialPath(kind, rest string) string {
 	return "/api/v1/credentials/" + kind + rest
 }
 
-// The sweep that must not be allowed to rot, extended to the routes that carry
-// credentials. Every one of them is asked, including the ones that write, and
-// none of their bodies may contain a value.
+// 腐らせてはならない走査を、credential を運ぶルートにも広げたもの
+// である。書き込みを行うものも含め、すべてに問い合わせ、
+// どの body にも値が含まれてはならない。
 func TestNoCredentialRouteEverReturnsASecret(t *testing.T) {
 	engine, service := passwordEngine(t)
 	if err := service.Initialise(testPassphrase); err != nil {
@@ -379,8 +379,8 @@ func TestCredentialsListNamesAndUses(t *testing.T) {
 	}
 }
 
-// Deleting a name two machines still point at would break both of them, later,
-// somewhere else. The refusal says which.
+// 2 台のマシンがまだ指している名前を削除すれば、後でどこか別の
+// 場所で両方が壊れる。拒否はどれが使っているかを教える。
 func TestDeletingACredentialInUseIsRefusedWithItsUses(t *testing.T) {
 	engine, service := passwordEngine(t)
 	if err := service.Initialise(testPassphrase); err != nil {
@@ -398,7 +398,7 @@ func TestDeletingACredentialInUseIsRefusedWithItsUses(t *testing.T) {
 	}
 }
 
-// The separation, at the boundary a browser actually reaches.
+// ブラウザが実際に到達する境界における、その分離である。
 func TestAHostCannotBePointedAtAKeyPassphraseThroughTheAPI(t *testing.T) {
 	engine, service := passwordEngine(t)
 	if err := service.Initialise(testPassphrase); err != nil {
@@ -443,12 +443,12 @@ func TestEveryCredentialRouteRefusesALockedVault(t *testing.T) {
 	}
 }
 
-// The whole arrangement, end to end.
+// 端から端までの、仕組み全体である。
 //
-// One secret under a name, two hosts pointing at it, and a file on disk that
-// names neither the hosts nor the secret. This is what naming secrets bought:
-// before it, the same password for two machines was two copies, and changing it
-// was two edits with no way to tell they were the same password.
+// 1 つの名前の下に secret が 1 つ、それを指すホストが 2 つ、そして
+// ホストも secret も名指ししないディスク上のファイルがある。これが
+// secret に名前を付けて得たものだ——以前は 2 台の同じパスワードは
+// 2 つのコピーであり、変更は 2 箇所の編集で、同じものと分かる術がなかった。
 func TestOneNamedSecretServesTwoHostsAndTheFileNamesNeither(t *testing.T) {
 	engine, _, home := passwordEngineIn(t)
 
@@ -489,8 +489,8 @@ func TestOneNamedSecretServesTwoHostsAndTheFileNamesNeither(t *testing.T) {
 		}
 	}
 
-	// A second service over the same workspace is the next run of the
-	// application, which is the case the whole file format exists for.
+	// 同じワークスペースに対する 2 つ目の service は、このファイル形式が
+	// 存在する理由そのものである、application の次回の実行である。
 	workspace, err := storage.NewWorkspace(storage.OSFileSystem{}, home)
 	if err != nil {
 		t.Fatal(err)
@@ -506,8 +506,8 @@ func TestOneNamedSecretServesTwoHostsAndTheFileNamesNeither(t *testing.T) {
 	}
 }
 
-// Changing the master password re-seals the bucket's live snapshot too, and
-// says so when it cannot.
+// マスターパスワードの変更は bucket の最新スナップショットも再封印し、
+// できなかった場合はそう伝える。
 func TestChangingTheMasterPasswordReportsWhetherTheBucketFollowed(t *testing.T) {
 	engine, service, _ := passwordEngineIn(t)
 	if code := send(t, engine, http.MethodPost, "/api/v1/passwords/initialise",
@@ -516,8 +516,8 @@ func TestChangingTheMasterPasswordReportsWhetherTheBucketFollowed(t *testing.T) 
 	}
 	_ = service
 
-	// No bucket wired: the local half is done and the answer does not claim the
-	// remote one was.
+	// bucket が配線されていない場合、ローカル側は完了しており、応答は
+	// リモート側も完了したとは主張しない。
 	recorder := send(t, engine, http.MethodPost, "/api/v1/passwords/change",
 		`{"current":"`+testPassphrase+`","next":"a different master password"}`, nil)
 	if recorder.Code != http.StatusOK {
@@ -531,7 +531,7 @@ func TestChangingTheMasterPasswordReportsWhetherTheBucketFollowed(t *testing.T) 
 		t.Error("it claims the bucket was updated when no bucket is configured")
 	}
 
-	// And the new one is the one that works now.
+	// そして今動くのは新しい方である。
 	if code := send(t, engine, http.MethodPost, "/api/v1/passwords/unlock",
 		`{"passphrase":"`+testPassphrase+`"}`, nil).Code; code != http.StatusForbidden {
 		t.Error("the old master password still unlocks")

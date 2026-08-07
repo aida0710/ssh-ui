@@ -13,8 +13,8 @@ import (
 	"sshc/internal/diagnostics"
 )
 
-// dialerFunc turns a function into a Dialer so a test can decide the outcome
-// without opening a socket.
+// dialerFunc は関数を Dialer に変える。これにより、テストはソケットを開かずに
+// 結果を決められる。
 type dialerFunc func(ctx context.Context, network, address string) (net.Conn, error)
 
 func (dial dialerFunc) DialContext(ctx context.Context, network, address string) (net.Conn, error) {

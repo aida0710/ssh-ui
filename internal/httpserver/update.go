@@ -10,23 +10,23 @@ import (
 	"sshc/internal/selfupdate"
 )
 
-// UpdateHandlers report the version and whether a newer one is published.
+// UpdateHandlers はバージョンと、新しいものが公開されているかを報告する。
 //
-// This is the only part of the application that contacts a host other than
-// itself, and it does so only when asked. The browser never does: the request
-// goes out from here, so the page's connect-src stays 'self' and the end-to-end
-// test that no foreign origin is contacted stays true of the interface.
+// これは application の中で唯一、自分以外のホストと通信する部分
+// であり、それも求められたときだけ行う。ブラウザは決して行わない。
+// リクエストはここから出て行くため、ページの connect-src は 'self' のままであり、
+// 外部の origin に接続しないという end-to-end テストも interface について真であり続ける。
 //
-// It fetches nothing and replaces nothing. Replacing the running binary from
-// the network was here and is gone: the signature that guarded it needed a key
-// the release workflow could read, which is a key anybody who controls the
-// repository can read, so the defence and the attack had the same key. Saying
-// "there is a newer one, here is where to read about it" keeps the use and
-// drops the risk.
+// 何も fetch せず、何も置き換えない。動作中のバイナリをネットワーク
+// から置き換える機能はかつてここにあったが、なくなった。それを
+// 守っていた署名は release workflow が読める鍵を必要としており、
+// その鍵はリポジトリを制御できる者なら誰でも読めるものだった。
+// つまり防御と攻撃が同じ鍵を持っていたのだ。「新しいものがある、
+// ここで詳細が読める」と伝えることで、使い道は残し危険は手放した。
 type UpdateHandlers struct {
 	Current string
-	// Checker is nil when this build has nothing to compare itself with, in
-	// which case the version is reported and nothing else is.
+	// Checker は、このビルドが自身と比較すべきものを持たない場合に
+	// nil になる。その場合バージョンだけが報告され、他は何も報告されない。
 	Checker *selfupdate.Checker
 }
 
@@ -43,7 +43,7 @@ func (h *UpdateHandlers) answer(c *echo.Context, latest selfupdate.Release, avai
 	return c.JSON(http.StatusOK, status)
 }
 
-// Check asks what the newest release is.
+// Check は最新のリリースが何かを尋ねる。
 func (h *UpdateHandlers) Check(c *echo.Context) error {
 	if h.Checker == nil {
 		return h.answer(c, selfupdate.Release{}, false)

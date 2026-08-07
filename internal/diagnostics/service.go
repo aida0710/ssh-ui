@@ -12,7 +12,7 @@ import (
 	"sshc/internal/storage"
 )
 
-// ConfigFile is one file of the Include graph, summarised for display.
+// ConfigFile は Include グラフのファイルひとつを、表示用に要約したもの。
 type ConfigFile struct {
 	Path     string
 	Editable bool
@@ -21,14 +21,14 @@ type ConfigFile struct {
 	Includes int
 }
 
-// ConfigReport is the syntax and Include check. It starts no process.
+// ConfigReport は構文と Include のチェック。プロセスは何も起動しない。
 type ConfigReport struct {
 	Root        string
 	Files       []ConfigFile
 	Diagnostics []config.Diagnostic
 }
 
-// Inspection is everything the effective-configuration screen needs.
+// Inspection は、実効設定の画面が必要とするすべて。
 type Inspection struct {
 	Alias                string
 	Report               effective.Report
@@ -41,9 +41,9 @@ type Inspection struct {
 	Failure              *effective.OpenSSHError
 }
 
-// Service composes the configuration engine with the checks in this package.
-// It re-reads the configuration for every request, because the files are the
-// source of truth and may change between two requests.
+// Service は、設定エンジンとこのパッケージのチェックを組み合わせる。リクエストの
+// たびに設定を読み直す。ファイルこそが真実の源であり、二つのリクエストのあいだに
+// 変わりうるからである。
 type Service struct {
 	Workspace      *storage.Workspace
 	Resolver       config.Resolver
@@ -51,21 +51,21 @@ type Service struct {
 	Reachability   Reachability
 	Authentication Authentication
 	Terminal       platform.TerminalLauncher
-	// Self is the absolute path of this binary, so the command shown to the
-	// user is one they can run. Nothing inside the application knows where it
-	// was installed; the entry point resolves it once and passes it in. An
-	// empty one falls back to a plain ssh, which still connects.
+	// Self はこのバイナリの絶対パス。ユーザーに見せるコマンドを、実際に実行できる
+	// ものにするためである。アプリケーションの内側には、それがどこにインストール
+	// されたかを知るものがない。エントリポイントが一度だけ解決して渡す。空の場合は
+	// 素の ssh にフォールバックし、それでも接続はできる。
 	Self string
 }
 
-// NewService wires the production dependencies together.
+// NewService は本番用の依存を配線する。
 //
-// lookup reads the parent environment and may be nil in a test, in which case
-// the children inherit this process's environment. In production it is the
-// entry point's os.LookupEnv, so every OpenSSH program this service starts
-// receives platform.MinimalEnvironment instead: SSH_ASKPASS is withheld, and a
-// passphrase prompt can only go to the standard input this application
-// supplies rather than to a program the user happens to have exported.
+// lookup は親の環境を読む。テストでは nil でもよく、その場合、子はこのプロセスの
+// 環境を継承する。本番ではエントリポイントの os.LookupEnv であり、このサービスが
+// 起動するすべての OpenSSH プログラムは代わりに platform.MinimalEnvironment を
+// 受け取る。SSH_ASKPASS は与えられないので、パスフレーズのプロンプトは、ユーザーが
+// たまたまエクスポートしていたプログラムではなく、このアプリケーションが用意する
+// 標準入力にしか向かえない。
 func NewService(workspace *storage.Workspace, runner platform.OutputRunner, toolchain platform.Toolchain, terminal platform.TerminalLauncher, lookup func(string) (string, bool)) *Service {
 	configPath := filepath.Join(workspace.Root(), "config")
 	var environment []string
@@ -84,16 +84,16 @@ func NewService(workspace *storage.Workspace, runner platform.OutputRunner, tool
 	}
 }
 
-// ConfigPath is the user configuration this service evaluates.
+// ConfigPath は、このサービスが評価するユーザー設定。
 func (s *Service) ConfigPath() string { return filepath.Join(s.Workspace.Root(), "config") }
 
-// Home is the user's home directory, used to sanitise captured output before
-// it leaves this process.
+// Home はユーザーのホームディレクトリ。取り込んだ出力がこのプロセスから出ていく
+// 前に、それを浄化するために使う。
 func (s *Service) Home() string { return s.Workspace.Home() }
 
 func (s *Service) graph() (*config.Graph, error) { return s.Resolver.Resolve(s.ConfigPath()) }
 
-// Safety scans the current configuration for executable directives.
+// Safety は、現在の設定に実行を伴うディレクティブがないか走査する。
 func (s *Service) Safety() (effective.Report, error) {
 	graph, err := s.graph()
 	if err != nil {
@@ -102,7 +102,7 @@ func (s *Service) Safety() (effective.Report, error) {
 	return effective.Scan(graph), nil
 }
 
-// ConfigCheck reports the Include graph and its diagnostics.
+// ConfigCheck は、Include グラフとその診断を報告する。
 func (s *Service) ConfigCheck() (ConfigReport, error) {
 	graph, err := s.graph()
 	if err != nil {
@@ -125,11 +125,11 @@ func (s *Service) ConfigCheck() (ConfigReport, error) {
 	return report, nil
 }
 
-// Inspect explains one alias and, when that is allowed, evaluates it.
+// Inspect は alias ひとつを説明し、許されている場合はそれを評価する。
 //
-// A refused evaluation and a failing ssh are both returned as data: the screen
-// still shows the engine's own projection and the exact commands that must be
-// confirmed first.
+// 拒否された評価も、失敗した ssh も、どちらもデータとして返る。画面には、エンジン
+// 自身の射影と、先に確認しなければならないコマンドそのものが引き続き表示
+// される。
 func (s *Service) Inspect(ctx context.Context, alias string, confirmed bool) (Inspection, error) {
 	if err := platform.ValidateAlias(alias); err != nil {
 		return Inspection{}, err
@@ -148,16 +148,16 @@ func (s *Service) Inspect(ctx context.Context, alias string, confirmed bool) (In
 	var opensshError *effective.OpenSSHError
 	switch {
 	case err == nil:
-		// ssh reports absolute paths — UserKnownHostsFile and the default
-		// IdentityFile list always, ControlPath and others when they are set —
-		// and every one of them begins with the user's home directory. The
-		// stderr of an authentication test has been shortened since it was
-		// written; these values are the same ssh output going into the same
-		// kind of response, and they were not.
+		// ssh は絶対パスを報告する — UserKnownHostsFile と既定の IdentityFile 一覧は
+		// 常に、ControlPath などは設定されているときに — そして、そのどれもがユーザーの
+		// ホームディレクトリで始まる。認証テストの stderr は、書かれたあとに短縮する
+		// 処理が入った。一方でこれらの値は、同じ ssh の出力が同じ種類のレスポンスへ
+		// 入るものであるにもかかわらず、その処理が入っていなかった。だからここで
+		// 行う。
 		inspection.Values = sanitiseValues(values, s.Workspace.Home())
 		inspection.Evaluated = true
 	case errors.Is(err, effective.ErrEvaluationNotConfirmed):
-		// Expected: the caller has not confirmed yet.
+		// 想定内。呼び出し側はまだ確認していない。
 	case errors.As(err, &opensshError):
 		inspection.Failure = opensshError
 	default:
@@ -166,10 +166,10 @@ func (s *Service) Inspect(ctx context.Context, alias string, confirmed bool) (In
 	return inspection, nil
 }
 
-// Destination returns the hostname and port the engine projects for alias.
+// Destination は、エンジンが alias に対して射影するホスト名とポートを返す。
 //
-// It never runs ssh, so a reachability check still works while evaluation is
-// blocked by an executable directive.
+// ssh を実行しないので、実行を伴うディレクティブによって評価が阻まれている
+// あいだも到達性のチェックは機能する。
 func (s *Service) Destination(alias string) (string, string, error) {
 	if err := platform.ValidateAlias(alias); err != nil {
 		return "", "", err
@@ -190,12 +190,12 @@ func (s *Service) Destination(alias string) (string, string, error) {
 	return hostname, port, nil
 }
 
-// ProjectedValue returns the engine's own reading of one keyword for alias.
+// ProjectedValue は、alias に対するキーワードひとつについてエンジン自身の読みを返す。
 //
-// Like Destination it starts no process, so a caller can describe a
-// destination while evaluation is blocked by an executable directive. The
-// value is the engine's projection, not OpenSSH's answer, and callers that
-// display it must say so.
+// Destination と同様にプロセスを起動しないので、実行を伴うディレクティブで評価が
+// 阻まれているあいだも、呼び出し側は接続先を記述できる。この値は OpenSSH の答え
+// ではなくエンジンの射影であり、それを表示する呼び出し側は、その旨を述べなければ
+// ならない。
 func (s *Service) ProjectedValue(alias, keyword string) (string, bool) {
 	if err := platform.ValidateAlias(alias); err != nil {
 		return "", false
@@ -211,7 +211,7 @@ func (s *Service) ProjectedValue(alias, keyword string) (string, bool) {
 	return source.Value, true
 }
 
-// Reach dials the destination directly, ignoring ProxyJump.
+// Reach は接続先へ直接ダイヤルし、ProxyJump を無視する。
 func (s *Service) Reach(ctx context.Context, alias string) (ReachabilityResult, error) {
 	hostname, port, err := s.Destination(alias)
 	if err != nil {
@@ -223,13 +223,13 @@ func (s *Service) Reach(ctx context.Context, alias string) (ReachabilityResult, 
 	return s.Reachability.Check(ctx, hostname, port), nil
 }
 
-// ErrTerminalNotConfigured reports that no terminal launcher was wired in.
+// ErrTerminalNotConfigured は、端末ランチャーが配線されていないことを報告する。
 var ErrTerminalNotConfigured = errors.New("terminal launcher is not configured")
 
-// UnsafeAliasWarning explains why an alias is copy-only.
+// UnsafeAliasWarning は、なぜその alias がコピー専用なのかを説明する。
 const UnsafeAliasWarning = "This alias contains characters that could change the meaning of a command line. Copy the command and check it before running it yourself."
 
-// LaunchTerminal opens an interactive session for alias.
+// LaunchTerminal は、alias のための対話セッションを開く。
 func (s *Service) LaunchTerminal(ctx context.Context, alias string) error {
 	if err := platform.ValidateAlias(alias); err != nil {
 		return err
@@ -240,16 +240,16 @@ func (s *Service) LaunchTerminal(ctx context.Context, alias string) error {
 	return s.Terminal.Launch(ctx, alias)
 }
 
-// TerminalCommand returns the command a user would run by hand.
+// TerminalCommand は、ユーザーが手で実行するであろうコマンドを返す。
 //
-// It is this binary and the alias, because that is the whole command: it asks
-// the running application for a stored password and falls back to a plain ssh
-// when there is none. What it replaced was five environment variables and a
-// flag, which was the hand-written form of what the Terminal button does for
-// itself and was never meant to be typed.
+// これはこのバイナリと alias である。それがコマンドの全体だからだ。動作中の
+// アプリケーションに保存済みパスワードを求め、なければ素の ssh にフォールバック
+// する。これが置き換えたのは五つの環境変数とフラグで、それは Terminal のボタンが
+// 自前で組み立てているものを手書きにした形にすぎず、そもそも人が打ち込むための
+// ものではなかった。
 //
-// An alias outside the safe character set is never launched; the command is
-// still returned as text so the user can inspect and quote it themselves.
+// 安全な文字集合の外にある alias が起動されることは決してない。コマンド自体は
+// テキストとして返るので、ユーザーは自分で内容を確かめ、引用符で囲める。
 func (s *Service) TerminalCommand(alias string) (string, bool, string) {
 	command := "ssh -- " + alias
 	if s.Self != "" {
@@ -261,11 +261,11 @@ func (s *Service) TerminalCommand(alias string) (string, bool, string) {
 	return command, true, ""
 }
 
-// Authenticate runs the authentication test for alias.
+// Authenticate は、alias に対する認証テストを実行する。
 //
-// The captured stderr is shown to the user, so the home directory is rewritten
-// to "~" first: verbose OpenSSH output names every file it read by absolute
-// path, which would otherwise carry the account name into a response body.
+// 取り込んだ stderr はユーザーに表示されるので、先にホームディレクトリを "~" に
+// 書き換える。冗長な OpenSSH の出力は、読んだファイルをすべて絶対パスで名指しする
+// ため、そうしないとアカウント名がレスポンスの本文へ運ばれてしまう。
 func (s *Service) Authenticate(ctx context.Context, alias string, acknowledged bool) (AuthenticationResult, error) {
 	report, err := s.Safety()
 	if err != nil {
@@ -279,16 +279,16 @@ func (s *Service) Authenticate(ctx context.Context, alias string, acknowledged b
 	return result, nil
 }
 
-// ErrPasswordLaunchUnsupported reports that the configured terminal cannot arm
-// the askpass helper.
+// ErrPasswordLaunchUnsupported は、設定された端末では askpass ヘルパーを武装
+// できないことを報告する。
 var ErrPasswordLaunchUnsupported = errors.New("this terminal cannot open a session with a stored password")
 
-// LaunchTerminalWithPassword opens the session with the helper armed.
+// LaunchTerminalWithPassword は、ヘルパーを武装させた状態でセッションを開く。
 //
-// The helper path and the endpoint are decided by the caller, which is the
-// only place that knows where this binary is and what address it is serving
-// on. Nothing here reads a password: the token is what the helper presents,
-// and the password never enters this process's request path at all.
+// ヘルパーのパスとエンドポイントは呼び出し側が決める。このバイナリがどこにあり、
+// どのアドレスで待ち受けているかを知るのはそこだけだからだ。ここではパスワードを
+// 一切読まない。ヘルパーが提示するのはトークンであり、パスワードがこのプロセスの
+// リクエスト経路に入ることはそもそもない。
 func (s *Service) LaunchTerminalWithPassword(ctx context.Context, alias, helperPath, endpoint, token string) error {
 	if err := platform.ValidateAlias(alias); err != nil {
 		return err
@@ -303,9 +303,9 @@ func (s *Service) LaunchTerminalWithPassword(ctx context.Context, alias, helperP
 	return launcher.LaunchWithPassword(ctx, alias, helperPath, endpoint, token)
 }
 
-// sanitiseValues rewrites the home directory to "~" in every value ssh
-// reported. The keyword list is left alone: a keyword is a fixed OpenSSH name
-// and can never contain a path.
+// sanitiseValues は、ssh が報告したすべての値の中で、ホームディレクトリを "~" に
+// 書き換える。キーワードの一覧には手を触れない。キーワードは OpenSSH の固定名で
+// あり、パスを含みようがないからだ。
 func sanitiseValues(values effective.Values, home string) effective.Values {
 	if home == "" {
 		return values

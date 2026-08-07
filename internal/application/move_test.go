@@ -8,10 +8,10 @@ import (
 	"sshc/internal/config"
 )
 
-// regionSource is the shape every entry file takes once groups are declared.
-// The region is inserted before the first catch-all, which puts it inside the
-// line range of the concrete block above it — a block's range runs to the next
-// header, and the region sits between the two.
+// regionSource は、グループが宣言された後にすべてのエントリファイルが取る形である。
+// 生成領域は最初の catch-all の手前に挿入されるので、その上にある具体的な
+// ブロックの行範囲の内側に収まる——ブロックの範囲は次のヘッダーまで
+// 及ぶので、生成領域はその 2 つの間に座ることになる。
 const regionSource = `Host bastion
 	User ops
 
@@ -24,11 +24,11 @@ Host *
 	ServerAliveInterval 30
 `
 
-// The generated region is the entry file's own structure, not part of any
-// connection. Carrying it off with a moved block un-declares every group at
-// once: the entry file keeps a lone end marker, which FindRegion then refuses
-// as damaged, and the Include lines land in a file that is only read because
-// one of them named it.
+// 生成領域はエントリファイル自身の構造であり、どの connection の
+// 一部でもない。移動するブロックと一緒に持ち去ると、一度にすべての
+// グループを未宣言にしてしまう。エントリファイルには終端マーカーだけが残り、
+// FindRegion はそれを damaged として拒否し、Include 行は、そのうちの
+// 1 個が名指したことによってのみ読まれているファイルに行き着いてしまう。
 func TestExtractHostBlockLeavesTheGeneratedRegionBehind(t *testing.T) {
 	file := config.Parse([]byte(regionSource))
 	extracted, err := ExtractHostBlock(file, "bastion")
@@ -50,15 +50,15 @@ func TestExtractHostBlockLeavesTheGeneratedRegionBehind(t *testing.T) {
 	}
 }
 
-// moveSource exercises every construct the move must carry across untouched:
-// the comment attached above the header, an inline trailing comment, a comment
-// line inside the block, blank lines and a line the engine cannot decompose.
+// moveSource は、move が手つかずのまま運び越さなければならない
+// あらゆる構造——ヘッダーの上に付随するコメント、行末の inline コメント、
+// ブロック内のコメント行、空行、そしてエンジンが分解できない行——を演習する。
 //
-// The first line has no blank line under it, so it is bastion's attached
-// comment and not a file banner. That is the rule everywhere in the file: the
-// same text in the middle of a file describes the block below it, and making
-// the first block special would mean the same two lines meant different things
-// depending on where they sat.
+// 先頭行はその下に空行を持たないので、これはファイル banner ではなく
+// bastion に付随するコメントである。これはファイル全体を通じて成り立つ
+// 規則である。ファイルの途中にある同じテキストはその下のブロックを
+// 説明するのであり、先頭のブロックだけを特別扱いすると、同じ 2 行が
+// 置かれた場所によって違うことを意味してしまう。
 const moveSource = `# the comment attached to bastion
 Host bastion
 	User ops	# inline
@@ -84,8 +84,8 @@ func TestMoveHostBlockCarriesTheBlockByteForByte(t *testing.T) {
 		t.Fatalf("moved %d lines, want the attached comment, the header and five owned lines", len(moved))
 	}
 
-	// The comment left with the block it described. Leaving it would have made
-	// it nas's description.
+	// コメントは、それが説明していたブロックと共に去った。残していたら、
+	// それは nas の説明になってしまっていただろう。
 	const wantSource = "Host nas\n\tUser aida\n"
 	if got := string(source.Render()); got != wantSource {
 		t.Fatalf("source =\n%q\nwant\n%q", got, wantSource)

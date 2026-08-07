@@ -8,14 +8,14 @@ import (
 	"sshc/internal/config"
 )
 
-// cumulativeKeywords are the directives OpenSSH accumulates instead of keeping
-// only the first value. Every other keyword follows first-value-wins.
+// cumulativeKeywords は、最初の値だけを残すのではなく
+// OpenSSH が累積するディレクティブである。他の keyword はすべて先勝ちに従う。
 var cumulativeKeywords = map[string]bool{
 	"identityfile": true, "certificatefile": true, "localforward": true,
 	"remoteforward": true, "dynamicforward": true, "sendenv": true, "setenv": true,
 }
 
-// Source is where a value came from.
+// Source は値がどこから来たかを表す。
 type Source struct {
 	Path      string `json:"path,omitempty"`
 	Absolute  string `json:"absolute,omitempty"`
@@ -23,19 +23,19 @@ type Source struct {
 	Condition string `json:"condition,omitempty"`
 }
 
-// EffectiveEntry is one explained value.
+// EffectiveEntry は説明付きの 1 つの値である。
 type EffectiveEntry struct {
 	Keyword string   `json:"keyword"`
 	Values  []string `json:"values"`
 	Source  Source   `json:"source"`
 }
 
-// Effective is this engine's explanation of the values an alias receives.
+// Effective は、alias が受け取る値についてのこのエンジンの説明である。
 //
-// Approximate is always true: design §5.5 makes the installed OpenSSH's
-// `ssh -G` the authority, and that evaluation belongs to a later subsystem
-// because it can execute user commands. This view exists to show where a value
-// comes from, and it says so instead of claiming to be the final answer.
+// Approximate は常に true である。設計 §5.5 はインストール
+// 済みの OpenSSH の `ssh -G` を権威としており、その評価は
+// ユーザーのコマンドを実行しうるため後段のサブシステムに属する。このビューは
+// 値がどこから来るかを示すために存在し、最終的な答えだと主張する代わりにそう言っている。
 type Effective struct {
 	Alias       string           `json:"alias"`
 	Approximate bool             `json:"approximate"`
@@ -43,9 +43,9 @@ type Effective struct {
 	Notices     []Notice         `json:"notices,omitempty"`
 }
 
-// declaresExactly reports whether a Host line names this alias outright rather
-// than matching it through a pattern. A catch-all matches every alias and
-// declares none, so it can never be the "two blocks claim this name" case.
+// declaresExactly は、Host 行がパターンによる一致ではなく
+// この alias を名指ししているかどうかを報告する。catch-all は全 alias に一致し
+// 何も宣言しないので、「2 つのブロックがこの名前を主張する」ケースには決してなり得ない。
 func declaresExactly(patterns []config.Pattern, alias string) bool {
 	for _, pattern := range patterns {
 		if pattern.Negated || pattern.Wildcard {
@@ -58,20 +58,20 @@ func declaresExactly(patterns []config.Pattern, alias string) bool {
 	return false
 }
 
-// ComputeEffective walks the graph in reading order and records the first value
-// for each keyword, accumulating the keywords OpenSSH accumulates. Match blocks
-// are never evaluated, because `Match exec` can run the user's shell; their
-// presence is reported as a complex external rule instead.
+// ComputeEffective は読み込み順にグラフをたどり、各 keyword の
+// 最初の値を記録し、OpenSSH が累積する keyword は累積する。
+// Match ブロックは、`Match exec` がユーザーのシェルを
+// 実行しうるため決して評価されない。その存在は代わりに複雑な外部ルールとして報告される。
 func ComputeEffective(graph *config.Graph, root, alias string) Effective {
 	effective := Effective{Alias: alias, Approximate: true, Entries: []EffectiveEntry{}}
 	effective.Notices = appendNotice(effective.Notices, Notice{Code: NoticeExplainedValuesOnly})
 	seen := map[string]bool{}
-	// Blocks that name this alias outright, keyed by where they are, because
-	// the walk visits a block once per directive. A catch-all that happens to
-	// match is not one of these: it is reported as a wildcard shadow, which is
-	// a different statement. Two blocks declaring one alias is the case where
-	// the values on screen are not the values the user gets, so the tab that
-	// exists to answer "what do I actually get?" has to say it.
+	// この alias を名指ししているブロックを、それがある場所を
+	// キーにして保持する。走査はディレクティブごとに 1 回ブロックを
+	// 訪れるからだ。たまたま一致した catch-all はこれに含まれない。
+	// それは別の話であるワイルドカードシャドウとして報告される。
+	// 2 つのブロックが 1 つの alias を宣言している場合、画面上の値とユーザーが実際に得る
+	// 値が異なる。「実際には何を得るのか?」に答えるためのタブは、それを言わなければならない。
 	declaring := map[string]bool{}
 
 	WalkDirectives(graph, func(visit Visit) bool {
@@ -142,7 +142,7 @@ func ComputeEffective(graph *config.Graph, root, alias string) Effective {
 	return effective
 }
 
-// EffectiveChange is one keyword whose explained value changes.
+// EffectiveChange は、説明付きの値が変化する 1 つの keyword である。
 type EffectiveChange struct {
 	Keyword       string   `json:"keyword"`
 	Before        []string `json:"before"`
@@ -151,14 +151,14 @@ type EffectiveChange struct {
 	AfterSources  []Source `json:"afterSources,omitempty"`
 }
 
-// EffectiveDiff is the before/after view design §5.4 requires before a group
-// change is saved.
+// EffectiveDiff は、グループの変更を保存する前に設計 §5.4 が
+// 要求する前後比較ビューである。
 type EffectiveDiff struct {
 	Alias   string            `json:"alias"`
 	Changes []EffectiveChange `json:"changes"`
 }
 
-// DiffEffective compares two explanations keyword by keyword.
+// DiffEffective は 2 つの説明を keyword ごとに比較する。
 func DiffEffective(before, after Effective) EffectiveDiff {
 	diff := EffectiveDiff{Alias: after.Alias, Changes: []EffectiveChange{}}
 	if diff.Alias == "" {
@@ -232,12 +232,12 @@ func equalStrings(first, second []string) bool {
 	return true
 }
 
-// equalSources compares where two explanations got their values from, ignoring
-// the line number. A value that kept its file and its governing block has not
-// changed just because an edit elsewhere in that file pushed it down a line;
-// reporting that as a change would fill the group preview with edits the user
-// did not make. A value that genuinely moved to another file or another Host
-// or Match block differs in Path, Absolute or Condition and is still reported.
+// equalSources は、行番号を無視して 2 つの説明が値をどこから得たかを
+// 比較する。ファイルとそれを支配するブロックが変わっていない値は、
+// そのファイルの他の場所での編集が行を 1 つ下げただけでは変化した
+// ことにならない。それを変化として報告すれば、グループのプレビューが
+// ユーザーがしていない編集で埋まってしまう。別のファイルや別の Host / Match
+// ブロックへ本当に移動した値は Path、Absolute、Condition が異なり、引き続き報告される。
 func equalSources(first, second []Source) bool {
 	if len(first) != len(second) {
 		return false

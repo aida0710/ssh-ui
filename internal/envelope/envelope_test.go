@@ -8,10 +8,10 @@ import (
 	"sshc/internal/envelope"
 )
 
-// Seal works from a key alone, and opening is its mirror. A caller that already
-// holds the key — the vault, which keeps the key and deliberately not the
-// passphrase — can seal a second file beside its own and read it back without
-// asking the user again.
+// Seal は鍵だけで動き、開く操作はその鏡像である。すでに鍵を保持している
+// 呼び出し側 — 鍵を保持し、パスフレーズは意図的に保持しない vault — は、自分の
+// ファイルの隣にもうひとつ封をし、ユーザーに再度尋ねることなく読み戻すことが
+// できる。
 func TestAKeyOpensWhatItSealed(t *testing.T) {
 	key, err := envelope.Derive("correct horse battery staple")
 	if err != nil {
@@ -66,13 +66,13 @@ func TestAKeyRefusesTamperedBytes(t *testing.T) {
 	}
 }
 
-// Deriving a key is deliberately expensive, so how many can run at once is a
-// number this decides rather than one a caller does.
+// 鍵の導出は意図的に高価なので、同時に何個走れるかは呼び出し側ではなくこちらが
+// 決める数字である。
 //
-// Unlocking, pushing and pulling all derive, and all three are ordinary
-// requests: a page with a few tabs, or a script, can otherwise ask for dozens
-// at 64 MiB apiece. The wait this adds is nothing — a local interface where one
-// person is pressing things — and the memory it does not allocate is gigabytes.
+// アンロックも push も pull も導出を行い、三つとも普通のリクエストである。放って
+// おけば、タブがいくつか開いたページやスクリプトが、64 MiB ずつのものを何十個も
+// 要求しうる。これが加える待ち時間は無に等しく — 一人が操作するローカルの
+// インターフェースだ — 確保せずに済むメモリはギガバイト単位である。
 func TestDerivationsDoNotAllRunAtOnce(t *testing.T) {
 	const attempts = 8
 	var running, peak int64
@@ -108,11 +108,11 @@ func TestDerivationsDoNotAllRunAtOnce(t *testing.T) {
 	}
 }
 
-// An envelope that arrived over a network is held to a tighter ceiling than one
-// this installation wrote. The parameters in it were chosen by whoever wrote
-// it, and opening is where the cost is paid.
+// ネットワーク越しに届いた envelope には、このインストールが書いたものより厳しい
+// 上限を課す。その中のパラメータを選んだのはそれを書いた誰かであり、コストを
+// 払うのは開くときだからである。
 func TestARemoteEnvelopeMayNotAskForWhatALocalOneMay(t *testing.T) {
-	// Sealed with parameters this installation would accept locally.
+	// このインストールがローカルで受け入れるパラメータで封をしたもの。
 	key, err := envelope.Derive("a passphrase long enough")
 	if err != nil {
 		t.Fatal(err)
@@ -125,7 +125,7 @@ func TestARemoteEnvelopeMayNotAskForWhatALocalOneMay(t *testing.T) {
 		t.Fatalf("what Derive writes must open under the remote ceiling: %v", err)
 	}
 
-	// A ceiling below what Derive writes refuses rather than spending the cost.
+	// Derive が書く値を下回る上限は、コストを払わずに拒否する。
 	tiny := envelope.Limits{Time: 1, MemoryKiB: 1024, Threads: 1}
 	if _, _, err := envelope.OpenWithin(sealed, "a passphrase long enough", tiny); !errors.Is(err, envelope.ErrCostRefused) {
 		t.Errorf("OpenWithin under a tiny ceiling = %v, want ErrCostRefused", err)

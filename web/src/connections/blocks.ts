@@ -1,6 +1,6 @@
-// These helpers compose the exact text of a whole-file raw edit. They never
-// reformat anything they did not add, so the server's byte-for-byte guarantee
-// still holds for creating, duplicating and deleting a host.
+// これらのヘルパーはファイル全体のそのままの編集の正確なテキストを組み立てる。
+// 自分が追加していないものを決して再整形しないため、ホストの作成・
+// 複製・削除においてもサーバーのバイト単位の保証は保たれる。
 
 function offsetOfLine(contents: string, line: number): number {
   let offset = 0;
@@ -35,8 +35,8 @@ export function duplicateHostBlock(
   if (aliasIndex < 0) throw new Error("block_moved");
   tokens[aliasIndex] = newAlias;
   const copied = `${tokens.join(" ")}${rest}`;
-  // A copy carries the description of what it is a copy of. Without it the
-  // duplicate arrives unexplained next to an original that is explained.
+  // コピーは、それが何のコピーであるかの説明を運ぶ。それがなければ、
+  // 複製は説明された元の隣に、説明のないまま現れてしまう。
   let comment = "";
   if (commentLines > 0 && line > 0) {
     const offset = offsetOfLine(contents, line);
@@ -46,12 +46,12 @@ export function duplicateHostBlock(
   return `${terminated}\n${comment}${copied.endsWith("\n") ? copied : `${copied}\n`}`;
 }
 
-// commentOffset walks back commentLines physical lines from the block's own
-// offset, which is where its attached comment begins.
+// commentOffset はブロック自身の offset から commentLines 分の物理行を
+// 遡る。そこが付属する comment の始まる位置である。
 //
-// The count comes from the parser rather than from the comment text, because
-// the text has had its markers and indentation stripped and cannot be measured
-// against the file.
+// この数は comment のテキストからではなくパーサーから得る。テキストはマーカーと
+// インデントが取り除かれているため、ファイルに対して測ることが
+// できないからである。
 function commentOffset(contents: string, offset: number, commentLines: number): number {
   let start = offset;
   for (let remaining = commentLines; remaining > 0; remaining--) {
@@ -69,8 +69,8 @@ export function removeHostBlock(
 ): string {
   const offset = offsetOfLine(contents, line);
   if (!contents.startsWith(raw, offset)) throw new Error("block_moved");
-  // The comment goes with the block. Left behind, it would attach to whichever
-  // block follows and silently become that connection's description.
+  // comment はブロックと共に移動する。取り残されれば、後に続くどの
+  // ブロックにも付着し、黙ってその接続の説明になってしまう。
   const start = commentOffset(contents, offset, commentLines);
   return contents.slice(0, start) + contents.slice(offset + raw.length);
 }

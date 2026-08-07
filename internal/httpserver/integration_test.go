@@ -158,8 +158,8 @@ func TestIntegratedBootstrapFlow(t *testing.T) {
 	}
 	readBody(replay)
 
-	// Fetch Metadata now accompanies every API request, including a read, so
-	// these three carry the header the frontend's own fetch would carry.
+	// Fetch Metadata はいまや読み取りを含むすべての API リクエストに伴う。
+	// そのため、この 3 つはフロントエンド自身の fetch が運ぶはずのヘッダーを運ぶ。
 	sameOriginRead := map[string]string{"Sec-Fetch-Site": "same-origin"}
 	unauthenticatedHealth := do(http.MethodGet, server.URL()+"/api/v1/health", host, sameOriginRead, nil)
 	if unauthenticatedHealth.StatusCode != http.StatusUnauthorized {

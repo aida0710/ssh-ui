@@ -5,9 +5,9 @@ import { HostDetailPanel } from "./HostDetail";
 import type { HostDetail } from "../api/config";
 import type { IntegrationsApi } from "../api/integrations";
 
-// The Diagnostics tab runs the same checks as the Diagnostics section, so this
-// injects the same client. Every method is a mock: a test that reached the real
-// one would dial a host, and no test in this suite may start a process.
+// Diagnostics タブは Diagnostics section と同じ検査を行うため、
+// これは同じクライアントを注入する。どのメソッドもモックである。実物に届く
+// テストはホストへ発信してしまい、このスイートのどのテストもプロセスを起動してはならない。
 function buildIntegrations(overrides: Partial<IntegrationsApi> = {}): IntegrationsApi {
   return {
     configCheck: vi.fn(),
@@ -205,7 +205,7 @@ describe("HostDetailPanel", () => {
 
     await user.click(screen.getByRole("tab", { name: "Diagnostics" }));
 
-    // The tab is addressed by the open connection, so it asks for no alias.
+    // このタブは開いている接続によって指定されるため、alias を求めない。
     expect(screen.queryByLabelText("Host alias")).not.toBeInTheDocument();
     expect(integrations.reachability).not.toHaveBeenCalled();
 
@@ -231,8 +231,8 @@ describe("HostDetailPanel", () => {
     expect(screen.getByText(/names no destination of its own/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Check reachability" })).not.toBeInTheDocument();
   });
-  // The colour, the tags, the favourite flag and the display order moved to
-  // the inspector; HostInspector.test.tsx holds what used to be asserted here.
+  // colour、tags、favourite flag、display order はインスペクターへ
+  // 移った。以前ここで検証されていたものは HostInspector.test.tsx にある。
   it("writes a comment into the configuration rather than into metadata", async () => {
     const user = userEvent.setup();
     const handlers = renderPanel();
@@ -241,11 +241,11 @@ describe("HostDetailPanel", () => {
     await user.click(screen.getByRole("button", { name: "Save comment" }));
 
     expect(handlers.onComment).toHaveBeenCalledWith("the production bastion");
-    // That the comment is a configuration edit and not metadata used to be
-    // asserted here, by watching an onMetadata that was never called. The
-    // panel has no such prop any more — the metadata controls are the
-    // inspector's — so the type says it and the assertion would be watching
-    // a callback nothing could reach.
+    // comment がメタデータではなく設定への編集であることは、
+    // 以前ここで、決して呼ばれない onMetadata を監視することで
+    // 検証されていた。パネルにはもうそうしたプロパティはない——メタデータ
+    // コントロールはインスペクターのものである——ため型がそれを示しており、
+    // その検証はどこにも届かないコールバックを監視することになってしまう。
   });
 
   it("seeds the editor from a legacy note and says the save retires it", () => {
@@ -266,17 +266,17 @@ describe("HostDetailPanel", () => {
       },
     });
 
-    // Once the comment exists it is the only source; the note is on its way out
-    // and must never win over what the file says.
+    // comment が存在すればそれが唯一の由来となる。note は廃止に
+    // 向かっており、ファイルが述べることに勝ってはならない。
     expect(screen.getByLabelText("Comment")).toHaveValue("in the file");
     expect(screen.queryByText(/retires the note/)).not.toBeInTheDocument();
   });
 });
 
 describe("taking a connection out of every group", () => {
-  // The button was disabled for the empty choice, so there was no way at all to
-  // take a connection back out of a group without a mouse — and, before
-  // dragging existed, no way with one either.
+  // ボタンは空の選択に対して無効化されていたため、マウスなしで
+  // 接続をグループから外に戻す方法がまったくなかった——そして
+  // ドラッグ操作が存在する前は、マウスを使っても方法がなかった。
   const grouped: HostDetail = {
     ...detail,
     form: { ...detail.form, entry: { ...detail.form.entry, group: "work" } },

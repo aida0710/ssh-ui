@@ -8,14 +8,14 @@ import (
 	"testing"
 )
 
-// FuzzParseKnownHostsRoundTrip fuzzes the known_hosts reader.
+// FuzzParseKnownHostsRoundTrip は known_hosts のリーダーをファズする。
 //
-// The file is written by ssh, by ssh-keyscan and by hand, so it is the one
-// artefact under ~/.ssh this application reads that it did not write. Two
-// invariants matter: rendering an unmodified file returns the original bytes,
-// because a deletion rewrites the whole file and every untouched line must
-// survive; and a Line that claims to carry an Entry must carry a complete one,
-// because the deletion path selects lines by their parsed identity.
+// このファイルは ssh が、ssh-keyscan が、そして人の手が書く。つまり、このアプリ
+// ケーションが読む ~/.ssh 配下の成果物のうち、自分で書いたのではない唯一のもの
+// である。重要な不変条件は二つ。変更していないファイルをレンダリングすると元の
+// バイト列が返ること — 削除はファイル全体を書き直すので、触れていない行はすべて
+// 生き残らなければならない — と、Entry を持つと主張する Line は完全なものを
+// 持たなければならないこと。削除の経路は、解析された同一性で行を選ぶからである。
 func FuzzParseKnownHostsRoundTrip(f *testing.F) {
 	sample, err := os.ReadFile(filepath.Join("testdata", "known_hosts.sample"))
 	if err != nil {
@@ -71,9 +71,9 @@ func FuzzParseKnownHostsRoundTrip(f *testing.F) {
 				t.Fatalf("line %d fingerprint = %q", line.Number, entry.Fingerprint)
 			}
 			for _, host := range entry.Hosts {
-				// A hashed entry cannot be matched by the literal it hashes, so
-				// only the call itself is asserted: it must terminate and must
-				// not panic on any host string the file contained.
+				// ハッシュ化されたエントリは、その元になったリテラルではマッチできない。
+				// そこで表明するのは呼び出しそのものだけだ。ファイルに含まれていたどんな
+				// ホスト文字列に対しても、終了し、panic しないこと。
 				_ = entry.MatchesHost(host)
 			}
 		}

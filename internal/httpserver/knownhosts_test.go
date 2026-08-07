@@ -141,9 +141,9 @@ func TestKnownHostsDeleteNeedsAConfirmationAndIsJournalled(t *testing.T) {
 	}
 }
 
-// TestKnownHostsDeleteRejectsAStaleTargetWithAConflict is the precondition
-// case: the file changed after the user confirmed, so the request answers 409
-// rather than removing whatever now sits on that line.
+// TestKnownHostsDeleteRejectsAStaleTargetWithAConflict は事前条件の
+// ケースである。ユーザーが確認した後にファイルが変わったので、
+// リクエストはその行の今の中身を消さず、409 を返す。
 func TestKnownHostsDeleteRejectsAStaleTargetWithAConflict(t *testing.T) {
 	engine, credentials, _, service := newKnownHostsServer(t)
 
@@ -239,7 +239,7 @@ func TestKnownHostsAddRefusesAnUnverifiedKeyUntilItIsProvenOrAcknowledged(t *tes
 		t.Fatal("an unverified key was written")
 	}
 
-	// A fingerprint the user obtained out of band proves the key.
+	// ユーザーが別経路で得たフィンガープリントが鍵を証明する。
 	request.ExpectedFingerprint = knownHostFingerprint
 	proven := diagnosticsToken(t, engine, credentials, session.ActionKnownHostsAdd, "new.example.com")
 	accepted := sendKeyRequest(t, engine, credentials, http.MethodPost, "/api/v1/known-hosts/add",

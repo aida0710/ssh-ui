@@ -1,18 +1,18 @@
-// Package handoff is how the running application tells a command-line
-// invocation of the same binary where to find it.
+// Package handoff は、動作中のアプリケーションが、同じバイナリのコマンドライン
+// 起動に対して自分の居場所を伝えるための仕組みである。
 //
-// It exists so that connecting from a terminal is `sshc <alias>` rather than
-// five environment variables and a flag. Those variables are the hand-written
-// form of what the Terminal button already does for itself; nothing about them
-// was ever meant to be typed.
+// これがあるおかげで、端末からの接続は五つの環境変数とフラグではなく
+// `sshc <alias>` で済む。それらの変数は、Terminal のボタンがすでに自前でやって
+// いることを手書きにした形にすぎない。そもそも人が打ち込むためのものでは
+// なかった。
 //
-// The file holds a URL and a secret minted for this run. Anyone who can read it
-// can already read the vault's ciphertext and every private key — it lives in
-// the same directory under the same permissions — so it moves no boundary. What
-// it does move is the reach of a stale one: the secret is worthless the moment
-// the run that minted it ends, so a file left behind by a process that was
-// killed points at a port nothing is listening on with a secret nothing
-// accepts.
+// このファイルは URL と、この実行のために発行された秘密を持つ。これを読める者は
+// すでに vault の暗号文とすべての秘密鍵を読める — 同じディレクトリに同じ権限で
+// 置かれているからだ — ので、境界を動かすことはない。動かすのは古くなったものの
+// 到達範囲である。秘密は、それを発行した実行が終わった瞬間に無価値になる。だから
+// 強制終了されたプロセスが残していったファイルは、何も待ち受けていないポートを、
+// 誰も受け付けない秘密とともに指しているだけに
+// なる。
 package handoff
 
 import (
@@ -24,30 +24,30 @@ import (
 	"path/filepath"
 )
 
-// FileName is the handoff inside the application's state directory.
+// FileName は、アプリケーションの状態ディレクトリ内のハンドオフファイル。
 const FileName = "cli"
 
-// secretLength is the number of random bytes behind the secret.
+// secretLength は、秘密の元になるランダムバイト数。
 const secretLength = 32
 
-// Handoff is where this run is listening and what proves a caller read the
-// file rather than guessed at it.
+// Handoff は、この実行がどこで待ち受けているか、そして呼び出し側が推測ではなく
+// ファイルを読んだことを何が証明するかを保持する。
 type Handoff struct {
 	URL    string `json:"url"`
 	Secret string `json:"secret"`
 }
 
-// HeaderName carries the secret on a request from the command line.
+// HeaderName は、コマンドラインからのリクエストに秘密を載せる。
 //
-// A custom header is a request no web page can send cross-origin without a
-// preflight, and this server answers no preflight, so the handoff route is
-// unreachable from a browser however much it knows.
+// 独自ヘッダーは、プリフライトなしにはどのウェブページもクロスオリジンで送れない
+// リクエストであり、このサーバーはプリフライトに応答しない。したがってハンドオフ
+// のルートは、ブラウザからどれだけ事情を知っていても到達できない。
 const HeaderName = "X-SSHC-CLI"
 
-// Mint returns a secret for one run.
+// Mint は、一回の実行のための秘密を返す。
 //
-// It is separate from Write because the server has to be told the secret before
-// it starts listening, and the file cannot be written until the URL is known.
+// Write と分けてあるのは、サーバーが待ち受けを始める前に秘密を知らせる必要が
+// あり、一方でファイルは URL が判明するまで書けないからである。
 func Mint(random io.Reader) (string, error) {
 	raw := make([]byte, secretLength)
 	if _, err := io.ReadFull(random, raw); err != nil {
@@ -56,8 +56,8 @@ func Mint(random io.Reader) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(raw), nil
 }
 
-// Write records where this run is listening and what proves a caller read the
-// file, replacing whatever is there.
+// Write は、この実行がどこで待ち受けているか、そして呼び出し側がファイルを読んだ
+// ことを何が証明するかを記録し、そこにあるものを置き換える。
 func Write(directory, url, secret string) (Handoff, error) {
 	written := Handoff{URL: url, Secret: secret}
 	body, err := json.Marshal(written)
@@ -73,7 +73,7 @@ func Write(directory, url, secret string) (Handoff, error) {
 	return written, nil
 }
 
-// Read returns what the running application left behind.
+// Read は、動作中のアプリケーションが残したものを返す。
 func Read(directory string) (Handoff, error) {
 	body, err := os.ReadFile(filepath.Join(directory, FileName))
 	if err != nil {
@@ -86,7 +86,7 @@ func Read(directory string) (Handoff, error) {
 	return read, nil
 }
 
-// Remove takes it away. A file that is not there is the state this asks for.
+// Remove はそれを取り除く。ファイルがないことは、これが求める状態である。
 func Remove(directory string) error {
 	err := os.Remove(filepath.Join(directory, FileName))
 	if err != nil && !os.IsNotExist(err) {
@@ -95,5 +95,5 @@ func Remove(directory string) error {
 	return nil
 }
 
-// Random is the source Write draws from when a caller has no opinion.
+// Random は、呼び出し側に指定がないときに Write が引く乱数源。
 var Random io.Reader = rand.Reader

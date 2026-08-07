@@ -15,23 +15,23 @@ const (
 	noIdentitiesMessage = "The agent has no identities."
 )
 
-// KeyAgent drives ssh-add.
+// KeyAgent は ssh-add を駆動する。
 //
-// ssh-add reads a passphrase from standard input when one is available, so this
-// adapter needs neither SSH_ASKPASS nor a terminal, and the secret never
-// reaches argv or the environment. Every invocation replaces the child
-// environment with platform.MinimalEnvironment, because SSH_ASKPASS together
-// with SSH_ASKPASS_REQUIRE=force would make ssh-add ignore that standard input
-// and ask a program this application did not choose for the passphrase
-// instead. The key path is always an absolute path inside the workspace, so it
-// can never be read as an option.
+// ssh-add は、標準入力が利用できるならそこからパスフレーズを読む。したがって
+// このアダプタには SSH_ASKPASS も端末も不要であり、秘密が argv や環境に届くことは
+// 決してない。呼び出しのたびに子プロセスの環境を platform.MinimalEnvironment で
+// 置き換えるのは、SSH_ASKPASS が SSH_ASKPASS_REQUIRE=force と組み合わさると、
+// ssh-add がその標準入力を無視して、このアプリケーションが選んだのではない
+// プログラムにパスフレーズを尋ねてしまうからだ。鍵のパスは常にワークスペース内の
+// 絶対パスなので、オプションとして読まれることは決して
+// ない。
 //
-// --apple-use-keychain is the documented macOS flag that also stores the
-// passphrase in the login Keychain. It is used only when the user asked for it.
+// --apple-use-keychain は、パスフレーズをログインキーチェーンにも保存する、
+// 文書化された macOS のフラグ。ユーザーがそれを求めたときにだけ使う。
 //
-// The program path comes from a Toolchain rather than a constant, so this
-// adapter runs the same OpenSSH the rest of the application does and never
-// depends on PATH.
+// プログラムのパスは定数ではなく Toolchain から来る。そのためこのアダプタは、
+// アプリケーションの他の部分と同じ OpenSSH を実行し、PATH に依存することは
+// 決してない。
 type KeyAgent struct {
 	runner    platform.OutputRunner
 	toolchain platform.Toolchain
@@ -39,14 +39,14 @@ type KeyAgent struct {
 	timeout   time.Duration
 }
 
-// NewKeyAgent builds the macOS ssh-add adapter. The lookup supplies the child
-// environment, so a test never depends on the developer's own environment.
+// NewKeyAgent は macOS の ssh-add アダプタを組み立てる。lookup が子プロセスの
+// 環境を供給するので、テストが開発者自身の環境に依存することはない。
 func NewKeyAgent(runner platform.OutputRunner, toolchain platform.Toolchain, lookup func(string) (string, bool)) platform.KeyAgent {
 	return KeyAgent{runner: runner, toolchain: toolchain, lookup: lookup, timeout: defaultAgentTimeout}
 }
 
-// Available reports whether this process can reach an agent at all: it needs a
-// socket to talk to and an ssh-add to talk with.
+// Available は、このプロセスがそもそもエージェントに到達できるかを報告する。
+// 話しかける先のソケットと、話す相手の ssh-add の両方が必要である。
 func (agent KeyAgent) Available(_ context.Context) bool {
 	if _, err := agent.toolchain.KeyAdd(); err != nil {
 		return false
@@ -100,9 +100,9 @@ func (agent KeyAgent) Remove(ctx context.Context, publicKeyPath string) error {
 	return nil
 }
 
-// run is the single place an ssh-add process is started, so the scrubbed
-// environment and the passphrase-on-stdin rule cannot be forgotten by one
-// caller.
+// run は ssh-add のプロセスが起動される唯一の場所。これにより、環境の洗浄と
+// 「パスフレーズは標準入力から」というルールを、ある呼び出し側だけが忘れる
+// ということが起きない。
 func (agent KeyAgent) run(ctx context.Context, arguments []string, stdin []byte) (platform.Output, error) {
 	if !agent.Available(ctx) {
 		return platform.Output{}, platform.ErrAgentUnavailable
@@ -132,8 +132,8 @@ func (agent KeyAgent) rejected(output platform.Output) error {
 	return fmt.Errorf("%w: %s", platform.ErrAgentRejected, agent.sanitize(message))
 }
 
-// sanitize replaces the user's home directory with '~' so a message shown in
-// the UI, or copied out of it, carries no absolute path.
+// sanitize はユーザーのホームディレクトリを '~' に置き換える。UI に表示される、
+// あるいはそこからコピーされるメッセージが絶対パスを運ばないようにするためだ。
 func (agent KeyAgent) sanitize(message string) string {
 	home, ok := agent.lookup("HOME")
 	if !ok || home == "" {
@@ -142,8 +142,8 @@ func (agent KeyAgent) sanitize(message string) string {
 	return strings.ReplaceAll(message, home, "~")
 }
 
-// parseIdentities reads `ssh-add -l` output lines of the form
-// "<bits> <fingerprint> <comment> (<ALGORITHM>)".
+// parseIdentities は `ssh-add -l` の出力行を、
+// "<bits> <fingerprint> <comment> (<ALGORITHM>)" の形式として読む。
 func parseIdentities(output string) []platform.AgentIdentity {
 	identities := make([]platform.AgentIdentity, 0)
 	for _, line := range strings.Split(output, "\n") {

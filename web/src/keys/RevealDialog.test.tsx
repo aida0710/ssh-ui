@@ -58,8 +58,8 @@ describe("RevealDialog", () => {
     expect(window.sessionStorage.length).toBe(0);
   });
 
-  // A key left on a global would outlive the dialog and be readable from the
-  // console by anything else running in the page.
+  // グローバルに残された鍵はダイアログより長生きし、ページ上で動く
+  // 他の何からでもコンソール越しに読めてしまう。
   it("puts the key material on no global object", async () => {
     const reveal = revealing();
     render(<RevealDialog keyId="key-one" relativePath="id_work" api={{ reveal }} onClose={vi.fn()} />);
@@ -86,8 +86,8 @@ describe("RevealDialog", () => {
     expect(document.body).not.toHaveTextContent("BEGIN OPENSSH PRIVATE KEY");
   });
 
-  // One confirmation buys one reveal. Showing the key again must cost a new
-  // token, so the dialog must not keep the material to re-display.
+  // 1 回の確認は 1 回の開示だけを買う。鍵を再表示するには新しい
+  // トークンが必要なので、ダイアログは再表示のために実体を保持してはならない。
   it("requires a fresh confirmation to show the key a second time", async () => {
     const reveal = revealing();
     const onClose = vi.fn();
@@ -109,7 +109,7 @@ describe("RevealDialog", () => {
     const reveal = revealing();
     render(<RevealDialog keyId="key-one" relativePath="id_work" api={{ reveal }} onClose={vi.fn()} />);
 
-    // Opening the dialog is not a disclosure, so there is nothing to copy yet.
+    // ダイアログを開くこと自体は開示ではないので、まだコピーするものはない。
     expect(screen.queryByRole("button", { name: "Copy private key" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Show private key" }));

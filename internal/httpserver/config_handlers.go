@@ -8,13 +8,13 @@ import (
 	"sshc/internal/application"
 )
 
-// ConfigHandlers serves the configuration, metadata and history endpoints.
-// Every route is same-origin, session authenticated, and — for mutations —
-// behind the CSRF header enforced by Security.Middleware.
+// ConfigHandlers は、configuration・metadata・history の各エンドポイントを提供する。
+// すべてのルートは same-origin であり、セッションで認証され、
+// 変更操作については Security.Middleware が強制する CSRF ヘッダーの背後にある。
 type ConfigHandlers struct {
 	Service *application.Service
-	// Keys supplies the inventory a group operation needs: renaming a group
-	// moves its keys, which means rewriting every IdentityFile that names them.
+	// Keys は group 操作が必要とするインベントリを供給する。group の rename は
+	// その鍵を移動させることを意味し、それらを指す IdentityFile をすべて書き換える。
 	Keys KeyService
 }
 
@@ -25,9 +25,9 @@ type groupRenameRequest struct {
 
 type groupDeleteRequest struct {
 	Name string `json:"name"`
-	// Destination is the group the connections move into. Empty moves them to
-	// the connections directory itself, where nothing reads them until the user
-	// puts them somewhere; no configuration file is ever deleted.
+	// Destination は接続の移動先となる group である。空にすると接続は
+	// connections ディレクトリ自体に移動し、ユーザーがどこかに配置するまで誰にも
+	// 読まれない。設定ファイルが削除されることは決してない。
 	Destination string `json:"destination"`
 }
 
@@ -49,7 +49,7 @@ type recoverResponse struct {
 	Status string `json:"status"`
 }
 
-// registerConfigRoutes wires the endpoints onto an Echo instance.
+// registerConfigRoutes は、各エンドポイントを Echo インスタンスに配線する。
 func registerConfigRoutes(engine *echo.Echo, handlers ConfigHandlers) {
 	engine.GET("/api/v1/config/overview", handlers.Overview)
 	engine.GET("/api/v1/config/host", handlers.Host)
@@ -124,7 +124,7 @@ func (h ConfigHandlers) Save(c *echo.Context) error {
 	return c.JSON(http.StatusOK, result)
 }
 
-// RenameGroup renames a group directory and everything that names it.
+// RenameGroup は、group ディレクトリと、それを指すすべてのものをリネームする。
 func (h ConfigHandlers) RenameGroup(c *echo.Context) error {
 	var request groupRenameRequest
 	if err := decodeJSON(c, &request); err != nil {
@@ -141,7 +141,7 @@ func (h ConfigHandlers) RenameGroup(c *echo.Context) error {
 	return c.JSON(http.StatusOK, result)
 }
 
-// DeleteGroup removes a group and relocates its connections.
+// DeleteGroup は、group を削除し、その接続を移動する。
 func (h ConfigHandlers) DeleteGroup(c *echo.Context) error {
 	var request groupDeleteRequest
 	if err := decodeJSON(c, &request); err != nil {

@@ -168,9 +168,9 @@ func firstLine(contents []byte) string {
 	return string(contents)
 }
 
-// certificateFixture is a self-signed OpenSSH user certificate built at test
-// start. Building it in-process keeps the suite independent of any file under
-// the developer's real home directory.
+// certificateFixture は、テスト開始時に組み立てられる自己署名の OpenSSH ユーザー
+// 証明書。プロセス内で作ることで、スイートは開発者の本物のホーム配下のファイルから
+// 独立していられる。
 var certificateFixture = buildCertificateFixture()
 
 func buildCertificateFixture() string {

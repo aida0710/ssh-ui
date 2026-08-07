@@ -28,9 +28,9 @@ function buildApi(status: PasswordVaultStatus, overrides: Partial<IntegrationsAp
     }),
     storePassword: vi.fn().mockResolvedValue({ ...status, aliases: ["bastion"] }),
     forgetPassword: vi.fn().mockResolvedValue({ ...status, aliases: [] }),
-    // The overrides were declared and never applied, so a test that passed one
-    // was quietly getting the default and proving nothing about the case it
-    // was written for.
+    // オーバーライドは宣言されるだけで一度も適用されておらず、それを渡した
+    // テストは静かにデフォルトを受け取っていた。そのテストが書かれた対象の
+    // ケースについて、何一つ証明していなかった。
     ...overrides,
   } as unknown as IntegrationsApi;
 }
@@ -42,8 +42,8 @@ const withPassword: PasswordVaultStatus = { exists: true, unlocked: true, aliase
 
 describe("PasswordPanel", () => {
   it("says what storing a password means before offering the field", async () => {
-    // Not a tooltip and not a footnote. Someone deciding whether to use this
-    // has to read it first.
+    // ツールチップでも脚注でもない。これを使うかどうかを決める者は、
+    // まずそれを読まなければならない。
     render(<PasswordPanel api={buildApi(unlocked)} alias="bastion" />);
 
     expect(await screen.findByText(/A key is stronger/)).toBeInTheDocument();
@@ -68,8 +68,8 @@ describe("PasswordPanel", () => {
   });
 
   it("says the vault is locked instead of claiming no password is stored", async () => {
-    // A locked vault genuinely cannot tell. Answering "none" would be a guess,
-    // and a wrong one half the time.
+    // ロックされた vault は本当に分からない。「none」と答えれば推測に
+    // なり、半分は外れる推測になる。
     render(<PasswordPanel api={buildApi(locked)} alias="bastion" />);
 
     expect(await screen.findByText(/vault is locked/)).toBeInTheDocument();
@@ -96,7 +96,7 @@ describe("PasswordPanel", () => {
     await userEvent.click(screen.getByRole("button", { name: "Store a new password for bastion" }));
 
     await waitFor(() => expect(api.storePassword).toHaveBeenCalledWith("bastion", "hunter2"));
-    // The field is cleared, and nothing renders the value back.
+    // フィールドはクリアされ、値が描き戻されることは何もない。
     await waitFor(() => expect(document.body.textContent ?? "").not.toContain("hunter2"));
   });
 
@@ -113,8 +113,8 @@ describe("PasswordPanel", () => {
   });
 
   it("drops a typed secret when the host changes", async () => {
-    // A passphrase left in a field while the user navigates is a secret
-    // sitting in the DOM for no reason.
+    // ユーザーが移動する間フィールドに残されたパスフレーズは、理由もなく DOM 内に
+    // 座っている秘密である。
     const api = buildApi(unlocked);
     const { rerender } = render(<PasswordPanel api={api} alias="bastion" />);
 
@@ -125,9 +125,9 @@ describe("PasswordPanel", () => {
   });
 
   it("warns about an unverified host key instead of saying it to every host", async () => {
-    // This used to be prose under the field, shown for every host whether or
-    // not it applied. A warning that is always there is a warning nobody
-    // reads; the server now answers it per host.
+    // これは以前フィールドの下の散文であり、当てはまるかどうかに関わらず
+    // すべてのホストに表示されていた。常にある警告は誰も読まない警告
+    // であり、サーバーは今ではホストごとにそれへ答える。
     const api = buildApi(unlocked, {
       passwordEligibility: vi.fn().mockResolvedValue({
         alias: "bastion",
@@ -139,8 +139,8 @@ describe("PasswordPanel", () => {
     render(<PasswordPanel api={api} alias="bastion" />);
 
     expect(await screen.findByText(/not in known_hosts/)).toBeInTheDocument();
-    // A warning is not a refusal: the user may know the key is about to be
-    // added, so the field still works.
+    // 警告は拒否ではない。ユーザーは鍵が今まさに追加されようとしている
+    // ことを知っているかもしれず、フィールドは依然として機能する。
     expect(screen.getByLabelText("Password for bastion")).toBeEnabled();
   });
 
@@ -162,9 +162,9 @@ describe("PasswordPanel", () => {
     expect(api.storePassword).not.toHaveBeenCalled();
   });
 
-  // The point of naming a secret: one entry, several machines. Before this the
-  // only way to give two hosts the same password was to type it twice, and
-  // rotating it meant remembering which hosts shared it.
+  // 秘密に名前を付ける意義。一つのエントリ、複数のマシン。これが
+  // 実装される前、二つのホストに同じパスワードを与える唯一の方法は二度入力することであり、
+  // ローテーションするにはどのホストが共有していたか覚えておく必要があった。
   it("points this host at a password that already has a name", async () => {
     const api = buildApi(unlocked, {
       credentials: vi.fn().mockResolvedValue({
@@ -181,8 +181,8 @@ describe("PasswordPanel", () => {
     );
   });
 
-  // The separation made visible. Picking a key's passphrase here would send it
-  // to a remote host as a login password, so this picker cannot offer one.
+  // 分離を可視化したもの。ここで鍵のパスフレーズを選べば、それをリモートホストへ
+  // ログインパスワードとして送ってしまうため、このピッカーはパスフレーズを提示できない。
   it("never offers a key passphrase as a host password", async () => {
     const api = buildApi(unlocked, {
       credentials: vi.fn().mockResolvedValue({

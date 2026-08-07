@@ -23,20 +23,20 @@ import (
 
 const syncPassphrase = "correct horse battery staple"
 
-// fakeBucket is a set of objects with ETags, and the conditional-write rules
-// the whole design rests on. It is deliberately a real HTTP server rather than
-// a stub client, so the condition is asserted where it actually travels.
+// fakeBucket は、ETag を持つオブジェクトの集合と、この設計全体が乗っている条件付き
+// 書き込みのルールである。スタブのクライアントではなく意図的に本物の HTTP サーバー
+// にしてあるので、条件は、それが実際に通る場所で表明される。
 //
-// It became a set when every push started leaving a dated copy beside the live
-// object: a single-object fake would have shown the two writes as one and
-// proved nothing about either.
+// これが集合になったのは、push のたびにライブのオブジェクトの隣へ日付付きの
+// コピーが残るようになってからだ。オブジェクトひとつの偽物では、二つの書き込みが
+// ひとつに見えてしまい、どちらについても何も示せなかったはずである。
 type fakeBucket struct {
 	mu         sync.Mutex
 	objects    map[string]storedObject
 	generation int
-	// refuseConditional makes every conditional PUT fail, which is how the
-	// fallback in the plan would be exercised if R2 turned out not to support
-	// them.
+	// refuseConditional は、すべての条件付き PUT を失敗させる。R2 がそれらに対応して
+	// いないと判明した場合に、計画にあるフォールバックがどう働くかを試すための
+	// ものである。
 	refuseConditional bool
 }
 
@@ -45,8 +45,8 @@ type storedObject struct {
 	etag string
 }
 
-// key strips the bucket name, so what the fake stores is what this application
-// calls the object.
+// key はバケット名を取り除く。これにより、偽物が保存するものは、このアプリケーション
+// がオブジェクトと呼ぶものと一致する。
 func (b *fakeBucket) key(path string) string {
 	return strings.TrimPrefix(strings.TrimPrefix(path, "/"), "sshc/")
 }
@@ -62,7 +62,7 @@ func (b *fakeBucket) keys() []string {
 	return names
 }
 
-// replace stands in for another machine having written the object.
+// replace は、別のマシンがそのオブジェクトを書いた状況の代わりを務める。
 func (b *fakeBucket) replace(key, etag string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -134,15 +134,15 @@ type installation struct {
 	workspace *storage.Workspace
 	home      string
 
-	// What Configure was called with, so a test can change one field of it
-	// without rebuilding the fixture.
+	// Configure が何で呼ばれたか。テストがフィクスチャを組み立て直さずに、
+	// そのフィールドをひとつだけ変えられるようにするためである。
 	config remotesync.Config
 	creds  objectstore.Credentials
 	client *objectstore.Client
 }
 
-// direct re-points this installation at the same bucket with a different
-// direction, the way the settings form does.
+// direct は、設定フォームと同じやり方で、このインストールを同じバケットの別の
+// direction へ向け直す。
 func (i installation) direct(direction remotesync.Direction) {
 	config := i.config
 	config.Direction = direction
@@ -172,11 +172,11 @@ func newInstallation(t *testing.T, bucket *fakeBucket, files map[string]string) 
 	}
 	manager := storage.NewManager(workspace, time.Now, rand.Reader)
 
-	// The file source is what the Include graph would answer, and the real one
-	// answers with every file inside the workspace that the graph reaches —
-	// whatever kind of file it is. It used to drop sshc/ here, which meant
-	// the exclusion test could not see the one route that reaches those files:
-	// an Include line naming one.
+	// ファイルソースは Include グラフが答えるものであり、本物のそれは、グラフが到達
+	// するワークスペース内のすべてのファイルを — 種類を問わず — 答える。以前はここで
+	// sshc/ を落としていたので、除外のテストは、それらのファイルへ到達する唯一の
+	// 経路、すなわちそれを名指しする Include 行を、見ることが
+	// できなかった。
 	source := func() ([]string, error) {
 		var paths []string
 		for name := range files {
@@ -241,7 +241,7 @@ func TestASnapshotTravelsBetweenTwoMachines(t *testing.T) {
 		t.Fatalf("Apply = %v", err)
 	}
 
-	// Byte for byte, including the CRLF and the trailing spaces.
+	// CRLF と末尾の空白も含め、1 バイト違わない。
 	if got := second.read(t, "config"); got != "Host bastion\r\n\tPort 2222   \n" {
 		t.Errorf("config = %q", got)
 	}
@@ -268,8 +268,8 @@ func TestTheObjectInTheBucketIsCiphertext(t *testing.T) {
 }
 
 func TestAPushCannotOverwriteAnotherMachine(t *testing.T) {
-	// The compare-and-swap. Without it, "automatic" would mean "whichever
-	// machine saved last wins, silently".
+	// compare-and-swap。これがなければ「自動」は「最後に保存したマシンが黙って勝つ」
+	// という意味になってしまう。
 	bucket := &fakeBucket{}
 	first := newInstallation(t, bucket, map[string]string{"config": "first\n"})
 	second := newInstallation(t, bucket, map[string]string{"config": "second\n"})
@@ -277,17 +277,17 @@ func TestAPushCannotOverwriteAnotherMachine(t *testing.T) {
 	if err := first.service.Push(context.Background(), syncPassphrase); err != nil {
 		t.Fatalf("the first push = %v", err)
 	}
-	// The second machine has never synced, so its push carries
-	// If-None-Match: * and must be refused rather than replacing the object.
+	// 二台目のマシンは一度も同期していないので、その push は If-None-Match: * を運び、
+	// オブジェクトを置き換えるのではなく拒否されなければならない。
 	if err := second.service.Push(context.Background(), syncPassphrase); !errors.Is(err, remotesync.ErrRemoteMoved) {
 		t.Fatalf("the second push = %v, want ErrRemoteMoved", err)
 	}
 
-	// And a machine that has synced, then falls behind, is refused too.
+	// そして、一度同期したあとに遅れをとったマシンも拒否される。
 	if err := first.service.Push(context.Background(), syncPassphrase); err != nil {
 		t.Fatalf("a second push from the same machine = %v", err)
 	}
-	// Another machine wrote the live object, so this one's ETag is stale.
+	// 別のマシンがライブのオブジェクトを書いたので、こちらの ETag は古い。
 	bucket.replace(remotesync.ObjectName, `"somebody else"`)
 	if err := first.service.Push(context.Background(), syncPassphrase); !errors.Is(err, remotesync.ErrRemoteMoved) {
 		t.Fatalf("a stale push = %v, want ErrRemoteMoved", err)
@@ -318,7 +318,7 @@ func TestPullOnAnEmptyBucketSaysSo(t *testing.T) {
 }
 
 func TestApplyRefusesWhileAnythingIsInConflict(t *testing.T) {
-	// Applying half a snapshot produces a workspace that matches neither side.
+	// 半分だけ適用すれば、どちらの側とも一致しないワークスペースになる。
 	bucket := &fakeBucket{}
 	first := newInstallation(t, bucket, map[string]string{"config": "theirs\n"})
 	if err := first.service.Push(context.Background(), syncPassphrase); err != nil {
@@ -366,9 +366,9 @@ func TestAnUnconfiguredServiceRefusesRatherThanPanicking(t *testing.T) {
 }
 
 func TestTheStateFileRecordsWhatWasSynced(t *testing.T) {
-	// It is the only thing that can later distinguish "deleted on the other
-	// machine" from "created here", so a push that did not write it would make
-	// the next pull unable to tell.
+	// あとで「別のマシンで削除された」と「ここで作られた」を区別できる唯一のものなので、
+	// これを書かない push は、次の pull にそれを判別させられなくして
+	// しまう。
 	bucket := &fakeBucket{}
 	machine := newInstallation(t, bucket, map[string]string{"config": "Host bastion\n"})
 	if err := machine.service.Push(context.Background(), syncPassphrase); err != nil {
@@ -418,7 +418,7 @@ func TestAReceiveOnlyMachineWillNotPush(t *testing.T) {
 	if err := machine.service.Push(context.Background(), syncPassphrase); !errors.Is(err, remotesync.ErrPushRefused) {
 		t.Fatalf("Push = %v, want ErrPushRefused", err)
 	}
-	// Refused before the request, not after it: nothing reached the bucket.
+	// リクエストのあとではなく前に拒否される。バケットには何も届いていない。
 	if keys := bucket.keys(); len(keys) != 0 {
 		t.Errorf("the bucket holds %v, pushed by a receive-only machine", keys)
 	}
@@ -434,9 +434,9 @@ func TestASendOnlyMachineWillNotApply(t *testing.T) {
 	second := newInstallation(t, bucket, map[string]string{"config": "what is on this disk\n"})
 	second.direct(remotesync.DirectionPush)
 
-	// The preview still works. A machine that may not apply is still allowed
-	// to know how far behind it is; refusing to look would make the setting a
-	// blindfold rather than a guard.
+	// プレビューは引き続き動く。適用してはいけないマシンでも、どれだけ遅れているかを
+	// 知ることは許される。見ることまで拒めば、この設定は防護ではなく目隠しに
+	// なってしまう。
 	result, err := second.service.Pull(context.Background(), syncPassphrase)
 	if err != nil {
 		t.Fatalf("Pull = %v, want a preview", err)
@@ -469,17 +469,17 @@ func TestBothIsTheDefaultAndTheEmptyStringMeansIt(t *testing.T) {
 	}
 }
 
-// The vault travels; the key to the bucket does not.
+// vault は移動する。バケットへの鍵は移動しない。
 //
-// The sealed settings hold the access key for this very bucket, so a snapshot
-// carrying them would mean anyone who obtained one snapshot could fetch every
-// later one. They are excluded by construction — Collect names what it takes —
-// and this is the test that notices if that list ever grows a wildcard.
+// 封をされた設定は、まさにこのバケットのアクセスキーを保持している。したがって、
+// それを運ぶスナップショットは、スナップショットをひとつ入手した者が以後のすべてを
+// 取得できることを意味する。これらは構造上除外されている — Collect は自分が取るものを
+// 列挙する — し、その一覧にワイルドカードが生えたら気づくのがこのテストである。
 func TestASnapshotCarriesTheVaultAndNotTheKeyToItsOwnBucket(t *testing.T) {
 	installation := newInstallation(t, &fakeBucket{}, map[string]string{
-		// The entry file names the sealed settings itself, which is the shape
-		// the exclusion has to survive: the file source is the Include graph,
-		// and the graph takes what the configuration points at.
+		// エントリファイル自身が、封をされた設定を名指ししている。これが、除外が
+		// 生き延びなければならない形である。ファイルソースは Include グラフであり、
+		// グラフは設定が指すものを取ってくるからだ。
 		"config":             "Include sshc/sync-settings\nHost bastion\n",
 		"sshc/secrets":       "sealed vault bytes",
 		"sshc/sync-settings": "sealed access key",
@@ -507,12 +507,12 @@ func TestASnapshotCarriesTheVaultAndNotTheKeyToItsOwnBucket(t *testing.T) {
 	}
 }
 
-// Registering a bucket asks the bucket first.
+// バケットの登録は、まずそのバケットに尋ねる。
 //
-// Settings that were never tried are settings that look configured and fail on
-// the first push, hours later, with the user long past the screen where the
-// typo was. A bucket with no snapshot in it yet is a working bucket: 404 is the
-// answer a correct, empty configuration gives.
+// 試されたことのない設定は、設定済みに見えて何時間もあとの最初の push で失敗する
+// 設定であり、そのときユーザーは、タイプミスをした画面からとうに離れている。まだ
+// スナップショットの入っていないバケットは機能しているバケットだ。404 は、正しくて
+// 空の設定が返す答えである。
 func TestCheckAcceptsAnEmptyBucketAndRefusesABadKey(t *testing.T) {
 	bucket := &fakeBucket{}
 	installation := newInstallation(t, bucket, map[string]string{"config": "Host bastion\n"})
@@ -531,8 +531,8 @@ func TestCheckAcceptsAnEmptyBucketAndRefusesABadKey(t *testing.T) {
 func TestCheckRefusesABucketThatWillNotAnswer(t *testing.T) {
 	bucket := &fakeBucket{}
 	installation := newInstallation(t, bucket, map[string]string{"config": "Host bastion\n"})
-	// A client pointed at a host that is not there, which is what a typo in the
-	// endpoint looks like from here.
+	// 存在しないホストへ向けられたクライアント。エンドポイントの打ち間違いは、ここから
+	// はこう見える。
 	installation.service.Configure(
 		remotesync.Config{Endpoint: "https://127.0.0.1:1", Bucket: "sshc", Region: "auto"},
 		installation.creds,
@@ -550,8 +550,8 @@ func TestCheckSaysWhenNothingIsConfigured(t *testing.T) {
 	}
 }
 
-// Settings stored before the endpoint was normalised still show correctly: the
-// service trims what it is given rather than trusting where it came from.
+// エンドポイントが正規化される前に保存された設定も正しく表示される。サービスは、
+// 与えられたものがどこから来たかを信用せず、自分で切り詰めるからだ。
 func TestAStoredTrailingSlashIsTrimmedWhenItIsConfigured(t *testing.T) {
 	installation := newInstallation(t, &fakeBucket{}, map[string]string{"config": "Host bastion\n"})
 	installation.service.Configure(
@@ -563,15 +563,15 @@ func TestAStoredTrailingSlashIsTrimmedWhenItIsConfigured(t *testing.T) {
 	}
 }
 
-// The objects go where the user says, and are named for what they are.
+// オブジェクトはユーザーが言った場所へ行き、それが何であるかにちなんで名付けられる。
 func TestTheKeysFollowTheConfiguredPath(t *testing.T) {
 	for _, test := range []struct{ path, object, dated string }{
-		// The default is the bucket root: the bucket is usually named for this
-		// application already, and a folder inside it repeating the name is one
-		// level of nothing.
+		// 既定はバケットのルート。バケットはたいていすでにこのアプリケーションにちなんで
+		// 名付けられているので、その中で同じ名前を繰り返すフォルダは、何もない階層を
+		// ひとつ増やすだけである。
 		{"", "workspace.tar.gz.enc", "snapshots/2026-08-05-000000.tar.gz.enc"},
 		{"sshc", "sshc/workspace.tar.gz.enc", "sshc/snapshots/2026-08-05-000000.tar.gz.enc"},
-		// However it is spelled, it means one thing.
+		// どう綴られていても、意味するところはひとつである。
 		{"/laptops/", "laptops/workspace.tar.gz.enc", "laptops/snapshots/2026-08-05-000000.tar.gz.enc"},
 	} {
 		config := remotesync.Config{Endpoint: "https://example.invalid", Bucket: "b", Path: test.path}
@@ -588,10 +588,10 @@ func TestTheKeysFollowTheConfiguredPath(t *testing.T) {
 	}
 }
 
-// Every push leaves a dated copy beside the live object. The live one keeps its
-// fixed key, because the conditional write needs one object to condition on:
-// dated names instead of a fixed one would remove the only thing stopping one
-// machine silently clobbering another's work.
+// push のたびに、ライブのオブジェクトの隣へ日付付きのコピーが残る。ライブの方は
+// 固定のキーを保つ。条件付き書き込みには条件をかける対象のオブジェクトがひとつ
+// 必要であり、固定名の代わりに日付名にすれば、あるマシンが別のマシンの作業を黙って
+// 踏み潰すのを止めている唯一のものが失われるからだ。
 func TestEveryPushLeavesADatedCopyBesideTheLiveObject(t *testing.T) {
 	bucket := &fakeBucket{}
 	installation := newInstallation(t, bucket, map[string]string{"config": "Host bastion\n"})
@@ -618,20 +618,20 @@ func TestEveryPushLeavesADatedCopyBesideTheLiveObject(t *testing.T) {
 	if !strings.HasSuffix(dated, ".tar.gz.enc") || !strings.Contains(dated, "2026-08-05") {
 		t.Errorf("the dated copy is %q", dated)
 	}
-	// The same bytes, so the copy costs one upload and no second sealing.
+	// 同じバイト列なので、コピーのコストはアップロード 1 回で、二度目の封じ込めは不要。
 	if !bytes.Equal(bucket.object(live), bucket.object(dated)) {
 		t.Error("the dated copy is not the snapshot that was pushed")
 	}
 }
 
-// Renaming the object, or moving it to another path, must not strand a machine
-// that has already synced.
+// オブジェクトの名前を変えたり、別のパスへ移したりしても、すでに同期済みのマシンを
+// 置き去りにしてはならない。
 //
-// The state records the ETag of the last snapshot this machine saw. It did not
-// record which object that was, so after the key changed the next push sent
-// If-Match for a generation of an object that does not exist — refused as
-// "another machine pushed, pull first" — and the pull then found nothing to
-// pull. There was no way out of that but deleting the state file by hand.
+// state は、このマシンが最後に見たスナップショットの ETag を記録する。それがどの
+// オブジェクトのものかは記録していなかったので、キーが変わったあとの次の push は、
+// 存在しないオブジェクトの世代に対して If-Match を送り —「別のマシンが push した、
+// まず pull せよ」として拒否され — そこでの pull は、pull すべきものを何も見つけ
+// られなかった。そこから抜け出す方法は、state ファイルを手で削除する以外になかった。
 func TestChangingTheObjectKeyDoesNotStrandAMachineThatHasSynced(t *testing.T) {
 	bucket := &fakeBucket{}
 	installation := newInstallation(t, bucket, map[string]string{"config": "Host bastion\n"})
@@ -639,7 +639,7 @@ func TestChangingTheObjectKeyDoesNotStrandAMachineThatHasSynced(t *testing.T) {
 		t.Fatalf("the first push = %v", err)
 	}
 
-	// The settings now name a path, so the live object is somewhere else.
+	// 設定がパスを名指しするようになったので、ライブのオブジェクトは別の場所にある。
 	config := installation.config
 	config.Path = "laptops"
 	installation.service.Configure(config, installation.creds, installation.client)

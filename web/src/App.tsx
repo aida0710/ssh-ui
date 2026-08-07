@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { apiClient, whenLocked, type HealthResponse } from "./api/client";
 import { integrationsApi, type PasswordVaultStatus } from "./api/integrations";
 import { configApi } from "./api/config";
@@ -27,9 +27,9 @@ import type { MessageKey } from "./i18n/messages";
 type AppProps = {
   bootstrap: () => Promise<SessionState>;
   health: () => Promise<HealthResponse>;
-  // vault answers whether the application is open. It is injected for the same
-  // reason bootstrap and health are: the shell's own state machine is what the
-  // tests drive, not the transport under it.
+  // vault はアプリケーションが開いているかどうかを答える。bootstrap や health と
+  // 同じ理由でここに注入されている——テストが動かすのはシェル自身の状態機械で
+  // あって、その下のトランスポートではないからだ。
   vault?: () => Promise<PasswordVaultStatus>;
 };
 
@@ -48,9 +48,9 @@ const sections = [
 type Section = (typeof sections)[number];
 const enabledSections: Section[] = [...sections];
 
-// The section identifiers stay English and untranslated: they are this
-// component's own routing vocabulary, and translating them would make which
-// panel is open depend on the display language.
+// セクション識別子は英語のまま訳さない。これはこのコンポーネント自身の
+// ルーティング語彙であり、訳してしまうとどのパネルが開いているかが表示
+// 言語に依存することになってしまう。
 const sectionLabels: Record<Section, MessageKey> = {
   Connections: "section.connections",
   Config: "section.config",
@@ -82,12 +82,12 @@ const sectionIcons: Record<Section, IconName> = {
   History: "history",
 };
 
-// Ten sections listed flat give no clue which are near each other.
+// 十個のセクションを平たく並べただけでは、どれとどれが近いのか手がかりがない。
 //
-// The group label is an `aria-label` on the list and an `aria-hidden` span for
-// the eye — deliberately not a heading. Playwright matches accessible names by
-// substring, so a heading "Keys and hosts" would make the end-to-end suite's
-// page-level query for the heading "Keys" match twice and fail on strict mode.
+// グループラベルはリストに付けた `aria-label` と、目のための `aria-hidden`
+// span である——意図的に見出しにはしていない。Playwright はアクセシブル
+// ネームを部分一致で照合するため、見出しを "Keys and hosts" にすると、end-to-end
+// スイートの "Keys" へのページレベルクエリが二重に一致し、strict モードで失敗する。
 const navGroups: { label: MessageKey; sections: Section[] }[] = [
   { label: "shell.navConnections", sections: ["Connections", "Config", "Groups"] },
   { label: "shell.navKeysHosts", sections: ["Keys", "Known Hosts", "Remote Keys"] },
@@ -103,39 +103,39 @@ const themeLabels: Record<Theme, MessageKey> = {
 export function App({ bootstrap, health, vault = integrationsApi.passwordVault }: AppProps) {
   const { t, locale, setLocale } = useLanguage();
   const { theme, setTheme } = useTheme();
-  // "locked" is the whole application, not a screen inside it. Every write
-  // keeps a backup sealed with the master password, so there is no usable state
-  // in which the vault is shut.
+  // "locked" はアプリケーション全体を指し、その中の一画面ではない。あらゆる
+  // 書き込みはマスターパスワードで封じたバックアップを残すため、vault が
+  // 閉じたまま使える状態というものは存在しない。
   const [state, setState] = useState<"starting" | "locked" | "ready" | "error">("starting");
   const [vaultExists, setVaultExists] = useState(false);
   const [version, setVersion] = useState("");
   const [section, setSection] = useState<Section>("Connections");
   const [fileTarget, setFileTarget] = useState<FileTarget | null>(null);
-  // The declared group names, read once the session is up. The Keys screen
-  // offers them as destinations; it never infers a group from a directory,
-  // because a directory is a group only when the entry file declares it.
+  // 宣言済みのグループ名は、セッションが立ち上がった時点で一度だけ読む。
+  // Keys 画面は移動先としてそれらを提示するだけで、ディレクトリからグルー
+  // プを推測しない。ディレクトリがグループになるのはエントリファイルが宣言する場合だけだ。
   const [groups, setGroups] = useState<string[]>([]);
-  // The pane belongs to the shell, not to a section. Opened on Connections it
-  // is still open on Keys: a pane that shut itself on every section change
-  // would have to be reopened constantly, and this is a preference about the
-  // window rather than about a host.
+  // ペインはシェルに属するものであり、セクションに属するものではない。
+  // Connections で開いたものは Keys でも開いたままになる——セクションを
+  // 切り替えるたびに自分で閉じるペインでは、頻繁に開き直す羽目になる。
+  // これはホストについての好みではなく、ウィンドウについての好みだからだ。
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [inspector, setInspector] = useState<InspectorContent>(null);
-  // What the open section puts in the toolbar. The shell owns the strip; the
-  // section says what belongs in it.
-  const [toolbar, setToolbar] = useState<ReactNode>(null);
 
-  // The pane's contents belong to whichever section is open; its open state
-  // does not. Leaving a section therefore clears what is in the pane without
-  // closing it. The toolbar's contents go the same way, and have no state to
-  // keep.
+  // ペインの中身はどのセクションが開いているかに属するが、開閉状態自体は
+  // そうではない。したがってセクションを離れるとペインの中身は消去され
+  // るが、ペイン自体が閉じられることはない。
+  //
+  // ヘッダーにはセクションが埋められるスロットはもう無い。かつては
+  // Connections ツリーの並び替えコントロール用のスロットがあり、ここ
+  // でクリアする実装のせいで、他の画面に移った瞬間にそのコントロールが消えてしまっていた。
+  // 一つのリストに属するコントロールは、今はそのリストの中にある。
   useEffect(() => {
     setInspector(null);
-    setToolbar(null);
   }, [section]);
 
-  // The shell owns section switching, so a view that can only address a block
-  // by file and line hands the jump up here rather than routing by itself.
+  // セクション切り替えはシェルが所有するので、ブロックをファイルと行でし
+  // か指し示せないビューは、自分でルーティングせずジャンプをここに委ねる。
   function openFile(path: string, line: number) {
     setFileTarget({ path, line });
     setSection("Config");
@@ -173,10 +173,10 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
     };
   }, [bootstrap, health, vault]);
 
-  // The vault shuts itself after a day of not being used, which can happen
-  // between any two requests. The client reports it once, here, so the shell
-  // goes back to its front door instead of every screen reporting a failure on
-  // an application that is no longer usable.
+  // vault は一日使われないと自動的に閉じ、それはどの二つのリクエストの
+  // 間にも起こり得る。クライアントはそれをここで一度だけ報告し、シェル
+  // を入口へ戻す。そうしないと、もう使えなくなったアプリケーションに対
+  // して、あらゆる画面が個別に失敗を報告することになってしまう。
   useEffect(() => {
     whenLocked(() => {
       setVaultExists(true);
@@ -185,8 +185,8 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
     return () => whenLocked(null);
   }, []);
 
-  // The declared groups are read once the application is open, not while it is
-  // shut: every route that could answer refuses until then.
+  // 宣言済みグループはアプリケーションが開いている間に一度だけ読み込ま
+  // れる。閉じている間は読まない——応答できるはずのルートも、それまでは拒否する。
   useEffect(() => {
     if (state !== "ready") return;
     let active = true;
@@ -195,8 +195,8 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
       .then((overview) => {
         if (active) setGroups((overview.metadata.groups ?? []).map((group) => group.name));
       })
-      // A shell that cannot list groups still works: the destination list is
-      // empty and every other screen is unaffected.
+      // グループを列挙できないシェルでも動作は成立する——移動先リストが
+      // 空になるだけで、他のあらゆる画面には影響しない。
       .catch(() => undefined);
     return () => {
       active = false;
@@ -216,43 +216,43 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
     );
   }
 
-  // The shell is exactly one viewport tall and never scrolls as a whole: the
-  // header and the primary navigation stay put while a panel scrolls inside
-  // main. A page-level scroll would carry the session status and the section
-  // buttons off screen, which is wrong for a shell whose status line reports
-  // whether the local session is still alive.
+  // シェルの高さはちょうどビューポート一つ分で、全体としてスクロール
+  // することはない。ヘッダーと主要なナビゲーションは固定され、main の
+  // 中でパネルだけがスクロールする。ページ全体がスクロールしてしまうと
+  // セッション状態とセクションボタンが画面外に流れてしまい、ローカル
+  // セッションがまだ生きているかを報告するステータス行を持つシェルとしては、それは誤りだ。
   //
-  // min-h-0 on the body row is what makes that true. A flex child's default
-  // min-height is its content, so without it a tall panel grows the row past
-  // the viewport and the document scrolls again. grid-rows-[minmax(0,1fr)]
-  // does the same for the implicit row, which would otherwise be sized by its
-  // content rather than clamped to the row it was given.
+  // それを実現しているのが body 行の min-h-0 だ。flex の子要素の
+  // min-height は既定でコンテンツサイズになるため、これが無いと丈の高い
+  // パネルが行をビューポートより押し広げ、ドキュメントが再びスクロール
+  // してしまう。grid-rows-[minmax(0,1fr)] は暗黙の行に対して同じ役割を
+  // 果たす——無ければその行は与えられた枠に収まらず、コンテンツのサイズで決まってしまう。
   //
-  // `relative` on the two scrolling regions is not decoration. The screen
-  // reader descriptions the connection tree writes are `sr-only`, which is
-  // `position: absolute`, and an absolutely positioned element is clipped by
-  // an ancestor's overflow only when that ancestor is its containing block. A
-  // static main is not, so those spans resolved against the initial containing
-  // block, sat at their static offset far below the fold, and stretched the
-  // document's scrolling area — the header scrolled away again while the panel
-  // itself looked correctly clipped.
+  // 二つのスクロール領域に付けた `relative` は装飾ではない。connection
+  // tree が書き出すスクリーンリーダー用の説明は `sr-only` であり、これは
+  // `position: absolute` を意味する。絶対配置の要素が祖先の overflow で
+  // クリップされるのは、その祖先が containing block である場合に限られる。
+  // static な main はそうではないため、それらの span は初期 containing
+  // block を基準に解決され、fold のはるか下の static な位置に置かれて、
+  // ドキュメントのスクロール領域を引き伸ばしていた——パネル自体は正しく
+  // クリップされて見える一方で、ヘッダーはまた画面外へ流れてしまっていた。
   //
-  // The navigation is three lists rather than one. Their group labels are
-  // `aria-label`s and `aria-hidden` spans, never headings: Playwright matches
-  // accessible names by substring, so a heading "Keys and hosts" would make the
-  // end-to-end suite's page-level query for the level-2 heading "Keys" match
-  // twice and fail on a strict-mode violation.
+  // ナビゲーションは一つではなく三つのリストである。それぞれのグループ
+  // ラベルは `aria-label` と `aria-hidden` span であり、見出しには決して
+  // しない。Playwright はアクセシブルネームを部分一致で照合するため、見
+  // 出しを "Keys and hosts" にすると、end-to-end スイートの見出しレベル
+  // 2 の "Keys" へのページレベルクエリが二重に一致し、strict モード違反で失敗する。
   return (
     <div className="flex h-screen flex-col bg-canvas text-ink">
       <IconSprite />
       <header className="flex shrink-0 items-center gap-3 border-b border-line bg-toolbar px-6 py-2.5">
         {/*
-          The application's name stays the h1 and the open section is shown
-          beside it without being a heading. Making the section a heading would
-          put "Known Hosts" and "Remote Keys" into the heading namespace twice —
-          once here and once on the panel — and Playwright matches accessible
-          names by substring, so the suite's page-level queries for those
-          headings would find two elements and fail.
+          アプリケーション名は引き続き h1 であり、開いているセクションは
+          見出しにせずその横に表示する。セクションを見出しにしてしまうと
+          "Known Hosts" と "Remote Keys" が見出し名前空間に二重に入る——
+          ここで一回、パネルでもう一回——Playwright はアクセシブル
+          ネームを部分一致で照合するため、スイートのページレベルクエリは
+          それらの見出しを二つ見つけてしまい、失敗する。
         */}
         <h1 className="shrink-0 whitespace-nowrap text-xs font-medium text-ink-muted">{t("shell.title")}</h1>
         <span aria-hidden="true" className="text-xs text-ink-faint">/</span>
@@ -261,7 +261,6 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
           <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-live" />
           {state === "ready" ? t("shell.active", { version }) : t("shell.starting")}
         </p>
-        {toolbar === null ? null : <span className="ms-4">{toolbar}</span>}
         {inspector === null ? (
           <span className="ml-auto" />
         ) : (
@@ -351,16 +350,16 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
           ))}
           </div>
           {/*
-            The version sits at the foot of the navigation, where a thing you
-            look at rarely belongs, with the one control that changes it.
+            バージョンはナビゲーションの最下部に置く。めったに見ない
+            ものが置かれる場所であり、それを変える唯一のコントロールと共に。
           */}
           <UpdateBadge />
         </nav>
         {/*
-          No padding here. A section that wants to fill the window edge to edge
-          — Connections, whose list is a surface of its own — cannot do that
-          inside a padded box, so the padding is the section's to apply and
-          SectionView applies it for the nine that want it.
+          ここに padding は無い。ウィンドウの端から端まで埋めたいセクション
+          ——それ自身が一つの面である Connections のリスト——は、padding
+          の付いた箱の中ではそれができない。だから padding を適用するのは
+          セクション側の役目であり、SectionView がそれを望む九画面に適用している。
         */}
         <main className="relative overflow-hidden">
           {state === "ready" ? (
@@ -371,7 +370,6 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
               onOpenFile={openFile}
               onLock={() => setState("locked")}
               onInspector={setInspector}
-              onToolbar={setToolbar}
             />
           ) : null}
         </main>
@@ -384,30 +382,27 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
 }
 
 type SectionViewProps = {
-  // groups are the declared group names. The Keys screen needs them to offer a
-  // destination, and it must not infer them: a directory is a group because a
-  // line in ~/.ssh/config declares it, which only the configuration API reads.
+  // groups は宣言済みのグループ名である。Keys 画面はこれを移動先とし
+  // て提示する必要があるが、推測してはならない——ディレクトリがグルー
+  // プなのは ~/.ssh/config の一行が宣言するからで、読むのは configuration API だけだ。
   groups: string[];
   section: Section;
   fileTarget: FileTarget | null;
   onOpenFile: (path: string, line: number) => void;
   onLock: () => void;
-  // A section supplies the right-hand pane's contents, or null when it has
-  // nothing to inspect. Only Connections fills it today.
+  // セクションは右側ペインの中身を提供するか、調べるものが無ければ
+  // null を返す。現時点でそれを埋めているのは Connections だけだ。
   onInspector: (content: InspectorContent) => void;
-  // What this section puts in the toolbar, or nothing.
-  onToolbar: (content: ReactNode) => void;
 };
 
 function SectionView(props: SectionViewProps) {
-  // Connections lays out its own panes to the window's edges. Every other
-  // section is a document, and a document wants a margin and a scrollbar.
+  // Connections は自前のペインをウィンドウの端まで配置する。それ以外の
+  // セクションはすべて文書であり、文書には余白とスクロールバーが要る。
   if (props.section === "Connections") {
     return (
       <ConnectionsPage
         onOpenFile={props.onOpenFile}
         onInspector={props.onInspector}
-        onToolbar={props.onToolbar}
       />
     );
   }

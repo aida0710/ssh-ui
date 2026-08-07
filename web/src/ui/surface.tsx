@@ -1,14 +1,14 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { dangerAction, hintText, primaryAction, secondaryAction } from "./form";
 
-// An inset card of rows, the way macOS System Settings groups related
-// settings: a hairline between rows, a border around the group, and the
-// group's own explanation underneath rather than inside.
+// macOS のシステム設定が関連する設定をグループ化するのと同じ、行の
+// 差し込みカード: 行の間にヘアライン、グループの周りにボーダー、
+// そしてグループ自身の説明は中ではなく下に置く。
 export function Card({ children, padded = false }: { children: ReactNode; padded?: boolean }) {
-  // Rows bring their own padding, so the card has none by default. `padded` is
-  // for the other kind of contents — a narrow pane's stacked fields, which
-  // would otherwise sit against the border. Both inspectors had copied this
-  // class string by hand rather than have somewhere to say that.
+  // 行は自前のパディングを持つので、カードは既定でパディングを持たない。
+  // `padded` は別種の中身——さもなければボーダーに接してしまう、狭い
+  // ペインの積み重なったフィールド——のためのものだ。両方の inspector が
+  // このクラス文字列を、それを言う場所を持たずに手でコピーしていた。
   return (
     <div
       className={`overflow-hidden rounded-xl border border-line bg-card ${
@@ -20,12 +20,12 @@ export function Card({ children, padded = false }: { children: ReactNode; padded
   );
 }
 
-// One setting: its name on the left, its control on the right.
+// 1 つの設定: 左に名前、右にコントロール。
 //
-// The label element wraps the control rather than pointing at it by id, which
-// is how every form in this application already associates the two, so the
-// accessible name needs no id to be unique across a page that may show the
-// same keyword for two hosts.
+// label 要素は id で指し示すのではなくコントロールを包む。これは
+// このアプリケーションのすべてのフォームが既に両者を関連付けている
+// 方法なので、accessible name が一意であるために id は不要だ。
+// 同じキーワードが 2 つのホストに表示されうるページでもそうだ。
 export function Row({
   label,
   children,
@@ -35,18 +35,18 @@ export function Row({
 }: {
   label: string;
   children: ReactNode;
-  // `| undefined` is written out because this project sets
-  // exactOptionalPropertyTypes: without it a caller cannot compute "no hint"
-  // and pass the result, only omit the attribute entirely.
+  // `| undefined` を書き出しているのは、このプロジェクトが
+  // exactOptionalPropertyTypes を設定しているからだ。これがなければ呼び出し側は、
+  // 「ヒントなし」を計算して渡すことができず、属性を丸ごと省くしかない。
   hint?: string | undefined;
-  // Amber, and announced. A hint is advice; a warning is the engine reporting
-  // something about this line.
+  // Amber であり、かつ告知される。hint は助言であり、warning はエンジンが
+  // この行について何かを報告しているものだ。
   warning?: string | undefined;
-  // A trailing control — "Remove", and its like.
+  // 末尾のコントロール——「Remove」やその類。
   //
-  // It is deliberately outside the label element. Inside it, clicking the
-  // button would also activate the label and move focus into the field, and
-  // the button's own word would join the field's accessible name.
+  // これは意図的に label 要素の外にある。中にあると、ボタンをクリック
+  // することが label も発火させてフォーカスをフィールドへ移してしまい、
+  // ボタン自身の語がフィールドの accessible name に加わってしまう。
   action?: ReactNode;
 }) {
   return (
@@ -68,8 +68,8 @@ export function Row({
   );
 }
 
-// The amber band. Amber is a notice and red destroys something; nothing else on
-// a screen is coloured, so this is what draws the eye before it reads.
+// amber の帯。amber は notice で red は何かを破壊する。画面上で他に
+// 色が付いているものはないので、これが読まれる前に目を引くものになる。
 export function Notice({ children, tone = "notice" }: { children: ReactNode; tone?: "notice" | "danger" }) {
   const danger = tone === "danger";
   return (
@@ -86,12 +86,12 @@ export function Notice({ children, tone = "notice" }: { children: ReactNode; ton
   );
 }
 
-// A segmented control: two or three exclusive choices, shown as one control
-// rather than as separate buttons.
+// segmented control: 2 つか 3 つの排他的な選択肢を、別々のボタンではなく
+// 1 つのコントロールとして示す。
 //
-// The pressed state is `aria-pressed` on each segment rather than a radio
-// group, which is what this application already used for the same control and
-// what its tests address.
+// 押下状態は、ラジオグループではなく各セグメントの `aria-pressed`
+// で表す。これはこのアプリケーションが既に同じコントロールに使っていた
+// ものであり、そのテストが対象にしているものだ。
 export function Segmented<T extends string>({
   label,
   value,
@@ -124,9 +124,9 @@ export function Segmented<T extends string>({
 
 type ButtonProps = { kind?: "primary" | "secondary" | "danger" } & ButtonHTMLAttributes<HTMLButtonElement>;
 
-// type="button" by default because every button in this application is one:
-// there is no form submission anywhere, and a button that defaulted to
-// "submit" inside a <form> would reload the page and lose the session.
+// type="button" が既定なのは、このアプリケーションのすべてのボタンが
+// そうだからだ: フォーム送信はどこにもなく、<form> の中で既定の
+// 「submit」になるボタンがあれば、ページをリロードしてセッションを失ってしまう。
 export function Button({ kind = "secondary", className = "", type = "button", ...rest }: ButtonProps) {
   const base = kind === "primary" ? primaryAction : kind === "danger" ? dangerAction : secondaryAction;
   return <button type={type} className={`${base} ${className}`} {...rest} />;

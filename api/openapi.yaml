@@ -24,11 +24,11 @@ paths:
         "409": { $ref: "#/components/responses/Problem" }
   /api/v1/session/renew:
     post:
-      # A reload loses the CSRF token, which lived in the page, and the
-      # bootstrap fragment that would have produced another is spent on first
-      # use. This mints one for the session the cookie already names. It
-      # presents no CSRF token because a reload has none; the session, the
-      # Origin and Fetch Metadata are what guard it.
+      # リロードすると、ページの中にあった CSRF トークンは失われる。そして次の
+      # ひとつを生むはずのブートストラップのフラグメントは、初回の使用で消費されて
+      # いる。これは、Cookie がすでに名指ししているセッションのためにトークンを
+      # 発行する。CSRF トークンを提示しないのは、リロード直後にはそれがないからだ。
+      # 守っているのはセッション、Origin、そして Fetch Metadata である。
       operationId: renewSession
       responses:
         "200":
@@ -447,10 +447,10 @@ paths:
   /api/v1/passwords/{alias}/eligibility:
     get:
       operationId: getPasswordEligibility
-      # Read-only, and deliberately so: everything it reports is answerable
-      # from the files this application already parses. A check that opened a
-      # connection to decide whether a password may be stored would be a
-      # connection the user did not ask for.
+      # 読み取り専用であり、それは意図的である。ここが報告する内容はすべて、この
+      # アプリケーションがすでに解析しているファイルから答えられる。パスワードを
+      # 保存してよいかを判断するために接続を開く検査は、ユーザーが求めていない
+      # 接続になってしまう。
       parameters:
         - name: alias
           in: path
@@ -832,8 +832,8 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "502": { $ref: "#/components/responses/Problem" }
     delete:
-      # Removing an identity needs no confirmation token: it destroys nothing
-      # and the worst case is that the user is asked for a passphrase again.
+      # identity の削除に確認トークンは要らない。何も破壊しないし、最悪の場合でも
+      # ユーザーがもう一度パスフレーズを尋ねられるだけである。
       operationId: deregisterKeyFromAgent
       parameters:
         - name: keyId
@@ -1175,8 +1175,8 @@ components:
       properties:
         kind: { type: string }
         name: { type: string }
-        # What points at this credential: aliases for a password, key paths for
-        # a passphrase. Never the value.
+        # この資格情報を指しているもの。パスワードなら alias、パスフレーズなら
+        # 鍵のパスである。値そのものは決して含まない。
         uses: { type: array, items: { type: string } }
     CredentialList:
       type: object
@@ -1190,22 +1190,22 @@ components:
       required: [current, available]
       properties:
         current: { type: string }
-        # Empty until something is published, or until the check has run.
+        # 何かが公開されるまで、あるいは確認が走るまでは空。
         latest: { type: string }
         available: { type: boolean }
-        # Where a person reads what changed and decides what to do. This
-        # application fetches nothing and replaces nothing.
+        # 何が変わったかを人が読み、どうするかを決める場所。このアプリケーションは
+        # 何も取得せず、何も置き換えない。
         pageUrl: { type: string }
     LoginItem:
       type: object
       additionalProperties: false
       required: [enabled, supported]
       properties:
-        # Off unless the user asks. A background process holding the key to
-        # every stored secret is not something to arrange on somebody's behalf.
+        # ユーザーが求めない限りオフ。保存済みのあらゆる秘密の鍵を握る
+        # バックグラウンドプロセスは、他人に代わって勝手に用意してよいものではない。
         enabled: { type: boolean }
-        # False when this build cannot resolve its own path, which is what a
-        # launchd agent has to name.
+        # このビルドが自分自身のパスを解決できないとき false になる。launchd の
+        # エージェントが名指ししなければならないのが、そのパスである。
         supported: { type: boolean }
     ChangeMasterPasswordRequest:
       type: object
@@ -1220,9 +1220,9 @@ components:
       required: [vault, snapshotResealed]
       properties:
         vault: { $ref: "#/components/schemas/PasswordVaultStatus" }
-        # Whether the bucket's live snapshot was sealed again with the new
-        # password. False with a reason means the local change is done and the
-        # bucket still holds one only the old password opens.
+        # バケットのライブのスナップショットが新しいパスワードで封じ直されたか。
+        # 理由付きの false は、ローカルの変更は済んでいるが、バケットにはまだ古い
+        # パスワードでしか開かないものが残っている、という意味である。
         snapshotResealed: { type: boolean }
         snapshotProblem: { type: string }
     StoreCredentialRequest:
@@ -1645,11 +1645,11 @@ components:
         command: { type: string }
         launchable: { type: boolean }
         warning: { type: string }
-    # Which way this machine is allowed to move data. It governs the writes and
-    # nothing else: "push" refuses to apply a snapshot to this disk, "pull"
-    # refuses to write one to the bucket. A preview reads and writes nothing, so
-    # it stays available either way and a machine that may not apply can still
-    # see how far behind it is.
+    # このマシンがどちら向きにデータを動かしてよいか。支配するのは書き込みだけで、
+    # それ以外は何も支配しない。"push" はこのディスクへのスナップショット適用を
+    # 拒否し、"pull" はバケットへの書き込みを拒否する。プレビューは読むだけで何も
+    # 書かないので、どちらでも利用でき、適用してはいけないマシンでも、どれだけ
+    # 遅れているかは見ることができる。
     SyncDirection:
       type: string
       enum: [both, push, pull]
@@ -1659,15 +1659,15 @@ components:
       required: [configured, locked, endpoint, bucket, synced, direction]
       properties:
         configured: { type: boolean }
-        # Why the form is empty, when it is: the settings are sealed with the
-        # master password and cannot be read until it is given. Never the access
-        # key or the secret — those go one way, into the sealed file.
+        # フォームが空のとき、その理由。設定はマスターパスワードで封じられており、
+        # それが与えられるまで読めない。アクセスキーや秘密が入ることは決してない —
+        # それらは一方通行で、封をされたファイルへ向かうだけである。
         locked: { type: boolean }
-        # The endpoint and the bucket are shown back so the user can see what
-        # this is pointed at. The access key and the secret never are.
+        # エンドポイントとバケットは、これが何を指しているかをユーザーが見られる
+        # よう返す。アクセスキーと秘密が返ることは決してない。
         endpoint: { type: string }
         bucket: { type: string }
-        # The prefix every object goes under, empty for the bucket root.
+        # すべてのオブジェクトが置かれる接頭辞。空ならバケットのルート。
         path: { type: string }
         synced: { type: boolean }
         direction: { $ref: "#/components/schemas/SyncDirection" }
@@ -1681,9 +1681,9 @@ components:
       properties:
         endpoint: { type: string, minLength: 1, maxLength: 2048 }
         bucket: { type: string, minLength: 1, maxLength: 255 }
-        # Where in the bucket the objects go. Empty, the default, is its root:
-        # a bucket is usually named for this application already, and a folder
-        # inside it repeating the name is one level of nothing.
+        # バケット内のどこにオブジェクトを置くか。既定の空はそのルートを指す。
+        # バケットはたいていすでにこのアプリケーションにちなんで名付けられており、
+        # その中で同じ名前を繰り返すフォルダは、何もない階層をひとつ増やすだけだ。
         path: { type: string, maxLength: 255 }
         region: { type: string, maxLength: 64 }
         accessKeyId: { type: string, minLength: 1, maxLength: 512 }
@@ -1695,9 +1695,9 @@ components:
       required: [passphrase]
       properties:
         passphrase: { type: string, minLength: 1, maxLength: 1024 }
-        # A pull previews by default. Applying is a second, deliberate call
-        # with the same passphrase, so the user sees the per-file preview this
-        # application shows before every other write.
+        # pull は既定でプレビューする。適用は、同じパスフレーズを伴う二度目の
+        # 意図的な呼び出しである。これにより、このアプリケーションが他のあらゆる
+        # 書き込みの前に見せるファイル単位のプレビューを、ユーザーはここでも見る。
         apply: { type: boolean }
     SyncConflict:
       type: object
@@ -1716,8 +1716,8 @@ components:
         conflicts:
           type: array
           items: { $ref: "#/components/schemas/SyncConflict" }
-        # Paths only. A pull response that carried contents would put a private
-        # key in a response body.
+        # パスのみ。内容を運ぶ pull のレスポンスは、秘密鍵をレスポンス本文に
+        # 置くことになる。
         written:
           type: array
           items: { type: string }
@@ -1732,16 +1732,16 @@ components:
       properties:
         exists: { type: boolean }
         unlocked: { type: boolean }
-        # The hosts that have a stored password. The set of names is not a
-        # secret; the values are, and no operation returns one.
+        # パスワードが保存されているホスト。名前の集合は秘密ではない。秘密なのは
+        # 値の方であり、どの操作もそれを返さない。
         aliases:
           type: array
           items: { type: string }
         minPassphraseLength: { type: integer }
-    # Blockers make a stored password unusable, so storing one is refused.
-    # Warnings are facts the user may know better about — a configured key that
-    # is not authorised on the far side is ordinary — so they are stated and
-    # the decision is left where it belongs.
+    # blocker は保存済みパスワードを使用不能にするので、保存自体を拒否する。
+    # warning は、ユーザーの方がよく知っているかもしれない事実である — 設定済みの
+    # 鍵が向こう側で認可されていないのはよくあることだ — ので、事実として述べる
+    # にとどめ、判断は本来それが属する場所に委ねる。
     PasswordEligibility:
       type: object
       additionalProperties: false
@@ -2021,9 +2021,9 @@ components:
         colour: { type: string }
         note: { type: string }
         order: { type: integer }
-        # Presentation only. A group whose purpose is to hold other groups has
-        # nothing of its own to show in the connections tree, and this takes its
-        # heading out of it. Nothing OpenSSH reads changes.
+        # 表示だけのもの。他のグループを収めることが目的のグループは、接続の
+        # ツリーに自分自身として見せるものを持たない。これはその見出しをツリーから
+        # 外す。OpenSSH が読むものは何も変わらない。
         hidden: { type: boolean }
         settings: { type: array, items: { $ref: "#/components/schemas/Setting" } }
     Metadata:
@@ -2055,9 +2055,10 @@ components:
         entry: { $ref: "#/components/schemas/FileRef" }
         files: { type: array, items: { $ref: "#/components/schemas/FileNode" } }
         hosts: { type: array, items: { $ref: "#/components/schemas/HostEntry" } }
-        # The declared groups, with what each holds and whether its directory is
-        # there. A directory under connections/ that no Include names is not one
-        # of these; it arrives as a group_not_declared notice instead.
+        # 宣言済みのグループと、それぞれが何を保持しているか、そしてその
+        # ディレクトリが存在するか。connections/ 配下にあっても、どの Include も
+        # 名指ししていないディレクトリはこれに含まれず、group_not_declared の
+        # 注意として届く。
         groups: { type: array, items: { $ref: "#/components/schemas/GroupView" } }
         metadata: { $ref: "#/components/schemas/Metadata" }
         diagnostics: { type: array, items: { $ref: "#/components/schemas/Diagnostic" } }

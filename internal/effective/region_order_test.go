@@ -9,10 +9,10 @@ import (
 	"sshc/internal/storage"
 )
 
-// The differential test skips when OpenSSH is absent, which would let a broken
-// fixture sit unnoticed until someone ran the suite on a machine that has it.
-// This asserts the same fixture against the engine's own projection, so the
-// ordering claim is checked here even when ssh -G cannot be asked.
+// 差分テストは OpenSSH がないときスキップされるので、フィクスチャが壊れていても、
+// それを持つマシンで誰かがスイートを走らせるまで気づかれないままになりうる。
+// ここでは同じフィクスチャをエンジン自身の射影に対して表明するので、ssh -G に
+// 尋ねられないときでも順序の主張が検査される。
 func TestGeneratedRegionFixtureOrdersChildBeforeParent(t *testing.T) {
 	home := t.TempDir()
 	root := filepath.Join(home, ".ssh")
@@ -48,9 +48,9 @@ func TestGeneratedRegionFixtureOrdersChildBeforeParent(t *testing.T) {
 	}
 	projection := effective.Project(graph, "lon-1")
 
-	// connections/work/*.conf does not reach connections/work/eu/lon.conf, so
-	// the nested group needs its own Include line — and having it, the child's
-	// own file is read first and its Port wins over the settings file's.
+	// connections/work/*.conf は connections/work/eu/lon.conf に到達しないので、
+	// 入れ子のグループには自前の Include 行が要る — そしてそれがあることで、子自身の
+	// ファイルが先に読まれ、その Port が設定ファイルのものに勝つ。
 	for keyword, want := range map[string]string{"hostname": "203.0.113.11", "port": "2210", "user": "ops"} {
 		source, ok := projection.Value(keyword)
 		if !ok {
@@ -62,9 +62,9 @@ func TestGeneratedRegionFixtureOrdersChildBeforeParent(t *testing.T) {
 	}
 }
 
-// File order is not load order, and the difference is not academic: it decides
-// which value a user's own catch-all beats. This is the smallest fixture that
-// distinguishes the two.
+// ファイル順は読み込み順ではなく、その違いは学術的なものではない。ユーザー自身の
+// catch-all がどの値に勝つかを決めるからだ。これは両者を区別する最小の
+// フィクスチャである。
 func TestAnIncludeAboveABlockIsReadBeforeIt(t *testing.T) {
 	home := t.TempDir()
 	root := filepath.Join(home, ".ssh")
@@ -89,10 +89,10 @@ func TestAnIncludeAboveABlockIsReadBeforeIt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The included file is read at line 1, before Host * on line 2, so its Port
-	// is the first value and the catch-all's is superseded. Walking file by
-	// file would report 22 and be wrong about every configuration whose
-	// defaults sit below its Includes — which is most of them.
+	// include されたファイルは 1 行目、2 行目の Host * より前に読まれるので、その Port
+	// が最初の値になり、catch-all のものは覆される。ファイル単位で走査すると 22 を
+	// 報告し、既定値が Include より下にあるあらゆる設定について誤ることになる — そして
+	// それはほとんどの設定である。
 	port, ok := effective.Project(graph, "nas").Value("port")
 	if !ok || port.Value != "2222" {
 		t.Fatalf("port = %#v, want the included file's 2222", port)

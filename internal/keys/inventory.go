@@ -16,7 +16,7 @@ import (
 	"sshc/internal/storage"
 )
 
-// Kind classifies a file under ~/.ssh by what it contains, never by its name.
+// Kind は、~/.ssh 配下のファイルを、名前ではなく中身によって分類する。
 type Kind string
 
 const (
@@ -28,7 +28,7 @@ const (
 	KindOther       Kind = "other"
 )
 
-// Note codes are stable identifiers the UI maps to its own wording.
+// Note のコードは、UI が自前の文言へ対応付ける安定した識別子。
 const (
 	NoteSymbolicLink           = "symbolic_link"
 	NoteFingerprintUnavailable = "fingerprint_unavailable"
@@ -37,7 +37,7 @@ const (
 	NoteCommentNotPreserved    = "comment_not_preserved"
 )
 
-// Unreadable reason codes.
+// 読めない理由のコード。
 const (
 	ReasonFileTooLarge  = "file_too_large"
 	ReasonReadFailed    = "read_failed"
@@ -46,18 +46,18 @@ const (
 )
 
 const (
-	// StateDirectoryName is the engine's own directory inside the workspace.
-	// Everything below it — backups, trash, journal and history — is engine
-	// state, so it never appears in the inventory, is never registered with an
-	// agent and is never suggested as an IdentityFile.
+	// StateDirectoryName は、ワークスペース内にあるエンジン自身のディレクトリ。
+	// その下にあるもの — バックアップ、ごみ箱、ジャーナル、履歴 — はすべてエンジンの
+	// 状態なので、インベントリに現れることはなく、エージェントに登録されることもなく、
+	// IdentityFile として提案されることもない。
 	StateDirectoryName = "sshc"
 
 	maxScanDepth   = 8
 	maxScanEntries = 4096
 )
 
-// CertificateInfo carries the parts of an OpenSSH certificate a user needs to
-// decide whether it is still useful.
+// CertificateInfo は、OpenSSH の証明書がまだ有用かどうかをユーザーが判断するのに
+// 必要な部分を運ぶ。
 type CertificateInfo struct {
 	KeyID                string
 	Principals           []string
@@ -66,7 +66,7 @@ type CertificateInfo struct {
 	SignedKeyFingerprint string
 }
 
-// Item is one classified file inside the workspace.
+// Item は、ワークスペース内で分類済みのファイルひとつ。
 type Item struct {
 	ID             string
 	RelativePath   string
@@ -86,13 +86,13 @@ type Item struct {
 	Notes          []string
 }
 
-// UnreadableFile is a file the scanner deliberately refused to interpret.
+// UnreadableFile は、スキャナが意図的に解釈を拒んだファイル。
 type UnreadableFile struct {
 	RelativePath string
 	Reason       string
 }
 
-// Inventory is the classified content of the workspace.
+// Inventory は、分類済みのワークスペースの内容。
 type Inventory struct {
 	Items                []Item
 	Unreadable           []UnreadableFile
@@ -100,7 +100,7 @@ type Inventory struct {
 	UnresolvedReferences []UnresolvedReference
 }
 
-// Find returns the item with the given identifier.
+// Find は、与えられた識別子を持つ item を返す。
 func (inventory *Inventory) Find(id string) (*Item, bool) {
 	for index := range inventory.Items {
 		if inventory.Items[index].ID == id {
@@ -110,13 +110,13 @@ func (inventory *Inventory) Find(id string) (*Item, bool) {
 	return nil, false
 }
 
-// Group returns the item together with the public key and certificate files
-// that belong to the same key pair.
+// Group は、その item と、同じ鍵ペアに属する公開鍵ファイルおよび証明書ファイルを
+// まとめて返す。
 //
-// Membership is decided by fingerprint alone. A file that merely shares a base
-// name is never grouped, so a look-alike is never moved to the trash with a key
-// it does not belong to. When the fingerprint of an encrypted private key is
-// unavailable, the group is the item by itself.
+// 所属はフィンガープリントだけで決まる。名前の基底部分が同じというだけのファイルが
+// グループ化されることは決してないので、そっくりなだけのファイルが、属していない鍵と
+// 一緒にごみ箱へ送られることはない。暗号化された秘密鍵のフィンガープリントが得られ
+// ない場合、グループはその item 単体になる。
 func (inventory *Inventory) Group(item *Item) []Item {
 	group := []Item{*item}
 	if item.Kind != KindPrivateKey || item.Fingerprint == "" {
@@ -140,16 +140,16 @@ func (inventory *Inventory) Group(item *Item) []Item {
 	return group
 }
 
-// ItemID is the stable, path-free identifier the HTTP API uses for one file.
-// It is derived from the workspace-relative path, so it survives a restart, it
-// carries no path into a URL, and it cannot address a file that the current
-// inventory does not contain.
+// ItemID は、HTTP API がファイルひとつに使う、安定した、パスを含まない識別子。
+// ワークスペース相対のパスから導出されるので、再起動しても生き残る。URL にパスを
+// 持ち込むこともなく、現在のインベントリに含まれないファイルを指すこともでき
+// ない。
 func ItemID(relativePath string) string {
 	sum := sha256.Sum256([]byte(relativePath))
 	return hex.EncodeToString(sum[:16])
 }
 
-// Scanner walks the workspace through the storage filesystem seam.
+// Scanner は、ストレージのファイルシステムの継ぎ目を通してワークスペースを走査する。
 type Scanner struct {
 	workspace *storage.Workspace
 }
@@ -158,8 +158,8 @@ func NewScanner(workspace *storage.Workspace) *Scanner {
 	return &Scanner{workspace: workspace}
 }
 
-// Scan classifies every regular file below the workspace root except the
-// engine's own state directory.
+// Scan は、エンジン自身の状態ディレクトリを除き、ワークスペースのルート配下の
+// すべての通常ファイルを分類する。
 func (scanner *Scanner) Scan() (*Inventory, error) {
 	inventory := &Inventory{}
 	visited := 0
@@ -266,10 +266,10 @@ func (scanner *Scanner) classifyFile(inventory *Inventory, absolute, relative st
 	return item
 }
 
-// classify decides what a file is from its bytes. The order matters: a private
-// key is recognised first, then an authorized-keys line, then a known_hosts
-// line, then configuration syntax. A known_hosts line would otherwise be
-// mistaken for a public key with options.
+// classify は、ファイルが何であるかをそのバイト列から決める。順序が重要である。
+// まず秘密鍵を認識し、次に authorized-keys の行、次に known_hosts の行、そして
+// 設定の構文。そうしないと known_hosts の行が、オプション付きの公開鍵と取り
+// 違えられてしまう。
 func classify(item *Item, contents []byte) {
 	if len(contents) == 0 {
 		item.Notes = append(item.Notes, NoteEmptyFile)

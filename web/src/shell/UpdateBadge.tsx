@@ -4,19 +4,19 @@ import { useTranslate } from "../i18n/context";
 
 type UpdateBadgeProps = { api?: IntegrationsApi };
 
-// The version, and whether a newer one has been published.
+// バージョンと、より新しいものが公開されているかどうか。
 //
-// The check is a request this application makes to GitHub — the only host it
-// contacts other than itself — and it is made from the server rather than the
-// page, so the page's connect-src stays 'self'. It runs when this mounts and
-// not otherwise.
+// このチェックは、このアプリケーションが GitHub に対して行うリクエストだ
+// ——自分自身以外に接続する唯一のホストだ——そしてページからではなく
+// サーバーから行うので、ページの connect-src は 'self' のままになる。
+// これはマウント時に実行され、それ以外では実行されない。
 //
-// It offers a link and not a button. Replacing the running binary with bytes
-// from a release was here and is gone: the signature that guarded it needed a
-// key the release workflow could read, which is a key anybody who controls the
-// repository can read, so the defence and the attack had the same key. What is
-// left is the useful half — knowing there is a newer version — with the
-// decision left to a person.
+// ボタンではなくリンクを提供する。動いているバイナリをリリースの
+// バイトで置き換える機能はかつてここにあったが、今はない: それを
+// 守っていた署名はリリースワークフローが読める鍵を必要としたが、
+// それはリポジトリを管理する者なら誰でも読める鍵であり、防御側と
+// 攻撃側が同じ鍵を持っていたことになる。残っているのは有用な半分
+// ——新しいバージョンがあると知ること——であり、決定は人に委ねられている。
 export function UpdateBadge({ api = integrationsApi }: UpdateBadgeProps) {
   const t = useTranslate();
   const [status, setStatus] = useState<UpdateStatus | null>(null);
@@ -28,8 +28,8 @@ export function UpdateBadge({ api = integrationsApi }: UpdateBadgeProps) {
       .then((loaded) => {
         if (active) setStatus(loaded);
       })
-      // A machine with no network still shows its version; it just cannot say
-      // whether there is a newer one.
+      // ネットワークのないマシンでも、自分のバージョンは表示し続ける。ただし
+      // より新しいものがあるかどうかは言えない。
       .catch(() => undefined);
     return () => {
       active = false;

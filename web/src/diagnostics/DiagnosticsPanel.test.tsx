@@ -89,8 +89,8 @@ describe("DiagnosticsPanel", () => {
   });
 
   it("offers no check until an alias is typed", async () => {
-    // With an empty box every button was live, and pressing one asked the
-    // server to explain the empty alias.
+    // 箱が空でもすべてのボタンが有効であり、押すとサーバーに空の
+    // alias を説明するよう求めていた。
     const api = buildApi();
     render(<DiagnosticsPanel api={api} />);
 
@@ -105,8 +105,8 @@ describe("DiagnosticsPanel", () => {
   });
 
   it("names the columns of the sources table", async () => {
-    // A path, a condition and a verdict rendered as three unlabelled greys are
-    // not self-describing, however good the caption is.
+    // パス、条件、判定を三つの無ラベル灰色として描いても、
+    // キャプションがどれほど良くても自己説明的にはならない。
     const api = buildApi();
     render(<DiagnosticsPanel api={api} />);
 
@@ -162,7 +162,7 @@ describe("DiagnosticsPanel", () => {
     await userEvent.type(screen.getByLabelText("Host alias"), "risky");
     await userEvent.click(screen.getByRole("button", { name: "Explain" }));
 
-    // The exact command and the token-escaping warning are both displayed.
+    // 正確なコマンドとトークンエスケープの警告は両方とも表示される。
     expect(await screen.findByText("test -f /tmp/at-work")).toBeInTheDocument();
     expect(screen.getByText(/does not shell-escape/)).toBeInTheDocument();
     expect(api.effective).toHaveBeenCalledTimes(1);
@@ -214,8 +214,8 @@ describe("DiagnosticsPanel", () => {
   });
 
   it("shows what OpenSSH said when it refused, instead of rendering nothing", async () => {
-    // A failed `ssh -G` is a 200 with the reason inside it. Nothing throws, so
-    // the panel used to render silence and the click looked like a no-op.
+    // 失敗した`ssh -G`は理由を内側に持つ 200 である。何もスローしない
+    // ため、パネルは以前沈黙をレンダリングし、クリックは何もしていないように見えていた。
     const api = buildApi({
       effective: vi.fn().mockResolvedValue({
         alias: "broken",
@@ -387,7 +387,7 @@ describe("DiagnosticsPanel", () => {
     render(<DiagnosticsPanel api={api} host="bastion" />);
 
     expect(screen.queryByLabelText("Host alias")).not.toBeInTheDocument();
-    // The file list belongs to the Config section; a fixed host does not read it.
+    // ファイル一覧は Config section に属し、固定されたホストはそれを読まない。
     expect(api.configCheck).not.toHaveBeenCalled();
 
     await userEvent.click(screen.getByRole("button", { name: "Check reachability" }));
@@ -414,7 +414,7 @@ describe("DiagnosticsPanel", () => {
     await userEvent.click(screen.getByRole("button", { name: "Check reachability" }));
     expect(await screen.findByText(/203\.0\.113\.10:22/)).toBeInTheDocument();
 
-    // A verdict earned by bastion must not sit under nas and read as its own.
+    // bastion が得た判定が nas の下に座り、自分のものであるかのように読めてはならない。
     rerender(<DiagnosticsPanel api={api} host="nas" />);
 
     await waitFor(() => expect(screen.queryByText(/203\.0\.113\.10:22/)).not.toBeInTheDocument());

@@ -5,8 +5,8 @@ import { ConnectionTree } from "./ConnectionTree";
 import { dragMimeType, type DragPayload } from "./dragdrop";
 import type { HostEntry, Overview } from "../api/config";
 
-// nas sits in connections/home, so its group is "home". Membership is the
-// directory, and the projection reports it on the entry rather than in metadata.
+// nas は connections/home に置かれているため、そのグループは "home"
+// になる。所属はディレクトリで決まり、射影はそれを metadata ではなくエントリ上で報告する。
 const nas: HostEntry = {
   identity: { path: "connections/home/nas.conf", alias: "nas" },
   file: { path: "connections/home/nas.conf", absolute: "/home/tester/.ssh/connections/home/nas.conf" },
@@ -73,7 +73,7 @@ const twoRulesOverview: Overview = {
 
 describe("ConnectionTree", () => {
   it("groups hosts by their primary group and marks favourites", () => {
-    render(<ConnectionTree grouping="groups" overview={overview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />);
+    render(<ConnectionTree overview={overview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />);
 
     expect(screen.getByRole("heading", { name: "home" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /nas/ })).toBeInTheDocument();
@@ -82,7 +82,7 @@ describe("ConnectionTree", () => {
   });
 
   it("shows a wildcard block as a pattern rule rather than a host", () => {
-    render(<ConnectionTree grouping="groups" overview={overview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />);
+    render(<ConnectionTree overview={overview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />);
 
     expect(screen.getByText("Host *")).toBeInTheDocument();
   });
@@ -92,7 +92,7 @@ describe("ConnectionTree", () => {
     const onSelect = vi.fn();
     const onOpenPatternRule = vi.fn();
     render(
-      <ConnectionTree grouping="groups" overview={overview} selected={null} onSelect={onSelect} onOpenPatternRule={onOpenPatternRule} onDrop={vi.fn()} />,
+      <ConnectionTree overview={overview} selected={null} onSelect={onSelect} onOpenPatternRule={onOpenPatternRule} onDrop={vi.fn()} />,
     );
 
     const rule = screen.getByRole("button", { name: /Host \*/ });
@@ -106,7 +106,7 @@ describe("ConnectionTree", () => {
 
   it("states plainly that a pattern rule outside ~/.ssh cannot be opened", () => {
     render(
-      <ConnectionTree grouping="groups" overview={externalOverview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
+      <ConnectionTree overview={externalOverview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
     );
 
     expect(screen.getByText("Host *")).toBeInTheDocument();
@@ -124,7 +124,6 @@ describe("ConnectionTree", () => {
         onSelect={vi.fn()}
         onOpenPatternRule={onOpenPatternRule}
         onDrop={vi.fn()}
-        grouping="groups"
       />,
     );
 
@@ -142,17 +141,31 @@ describe("ConnectionTree", () => {
     expect(onOpenPatternRule).toHaveBeenCalledWith("config", 14);
   });
 
-  it("switches to the Include file hierarchy", () => {
-    // Arranging by file is the page's state now, and the control that sets
-    // it is in the toolbar. This asks the tree for the arrangement directly.
-    render(<ConnectionTree grouping="files" overview={overview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />);
+  // 並び順を設定するコントロールは、このペインの先頭、フィルタの上にある。
+  // 一時期はウィンドウのツールバーにあり、そこではセクションを切り替える
+  // たびにシェルがそれをクリアしていたため、他所を見た瞬間に消えていた。
+  it("heads the pane with the arrangement control, arranged by group to begin with", () => {
+    render(<ConnectionTree overview={overview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />);
+
+    const arrange = within(screen.getByRole("navigation", { name: "Connections" }))
+      .getByRole("group", { name: "Arrange connections by" });
+
+    expect(within(arrange).getByRole("button", { name: "Groups" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(arrange).getByRole("button", { name: "Files" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("switches to the Include file hierarchy", async () => {
+    const user = userEvent.setup();
+    render(<ConnectionTree overview={overview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "Files" }));
 
     expect(screen.getByRole("heading", { name: "connections/home/nas.conf" })).toBeInTheDocument();
   });
 
   it("filters hosts as the user searches and reports an empty result", async () => {
     const user = userEvent.setup();
-    render(<ConnectionTree grouping="groups" overview={overview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />);
+    render(<ConnectionTree overview={overview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />);
 
     await user.type(screen.getByRole("searchbox", { name: "Filter connections" }), "bast");
 
@@ -165,7 +178,7 @@ describe("ConnectionTree", () => {
     const onSelect = vi.fn();
     const onOpenPatternRule = vi.fn();
     render(
-      <ConnectionTree grouping="groups" overview={overview} selected={null} onSelect={onSelect} onOpenPatternRule={onOpenPatternRule} onDrop={vi.fn()} />,
+      <ConnectionTree overview={overview} selected={null} onSelect={onSelect} onOpenPatternRule={onOpenPatternRule} onDrop={vi.fn()} />,
     );
 
     await user.click(screen.getByRole("button", { name: /bastion/ }));
@@ -191,15 +204,15 @@ describe("ConnectionTree", () => {
       },
     };
     render(
-      <ConnectionTree grouping="groups" overview={decorated} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
+      <ConnectionTree overview={decorated} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
     );
 
     const row = screen.getByRole("button", { name: /nas/ });
     expect(within(row).getByText("★")).toBeInTheDocument();
     expect(within(row).getByText("storage")).toBeInTheDocument();
     expect(within(row).getByText("lan")).toBeInTheDocument();
-    // The swatch is decorative: the description below the row still carries
-    // "favourite" for a screen reader, so this must not be announced twice.
+    // スウォッチは装飾である——行の下の description が引き続き
+    // "favourite" をスクリーンリーダーへ伝えるため、二重に読み上げてはならない。
     const swatch = row.querySelector('span[style*="background-color"]');
     expect(swatch).not.toBeNull();
     expect(swatch).toHaveAttribute("aria-hidden", "true");
@@ -218,7 +231,7 @@ describe("ConnectionTree", () => {
       },
     };
     render(
-      <ConnectionTree grouping="groups" overview={ordered} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
+      <ConnectionTree overview={ordered} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
     );
 
     const labels = screen.getAllByRole("button").map((button) => button.textContent ?? "");
@@ -234,29 +247,32 @@ describe("a group that holds nothing", () => {
     metadata: { ...overview.metadata, groups: [{ name: "home" }, { name: "work" }] },
   };
 
-  // Hiding it means a group made in the Groups panel never appears here, and —
-  // once a connection can be dragged out of a group — that emptying a group
-  // removes the only thing it could be dragged back onto.
+  // これを隠すと、Groups パネルで作ったグループはここに一切現れなくなる。
+  // そして connection をグループから引き出せるようになった以上、グルー
+  // プを空にすることは、ドラッグして戻せる唯一の場所を失わせることになる。
   it("still shows its heading", () => {
     render(
-      <ConnectionTree grouping="groups" overview={withEmptyGroup} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
+      <ConnectionTree overview={withEmptyGroup} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
     );
 
     expect(screen.getByRole("heading", { name: "work" })).toBeInTheDocument();
     expect(screen.getByText("No connection is in this group.")).toBeInTheDocument();
   });
 
-  it("does not do the same for a file, which is not a place anything can be put", () => {
+  it("does not do the same for a file, which is not a place anything can be put", async () => {
+    const user = userEvent.setup();
     render(
-      <ConnectionTree grouping="files" overview={withEmptyGroup} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
+      <ConnectionTree overview={withEmptyGroup} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
     );
+
+    await user.click(screen.getByRole("button", { name: "Files" }));
 
     expect(screen.queryByText("No connection is in this group.")).not.toBeInTheDocument();
   });
 });
 
-// jsdom has no drag implementation, so the transfer is a stub carrying the two
-// things the component touches: the private type and the payload.
+// jsdom にはドラッグの実装が無いため、transfer はコンポーネントが触れる
+// 二つのもの——プライベートな型と payload——を運ぶだけのスタブである。
 function transfer(payload: DragPayload) {
   const store = new Map<string, string>([[dragMimeType, JSON.stringify(payload)]]);
   return {
@@ -289,9 +305,11 @@ describe("dragging in the tree", () => {
         onSelect={vi.fn()}
         onOpenPatternRule={vi.fn()}
         onDrop={onDrop}
-        grouping={grouping}
       />,
     );
+    // 並び順はツリー自身の state なので、ヘルパーはツリーに prop を渡すの
+    // ではなく、読み手が押すのと同じコントロールを押す。
+    if (grouping === "files") fireEvent.click(screen.getByRole("button", { name: "Files" }));
     return onDrop;
   }
 
@@ -338,8 +356,8 @@ describe("dragging in the tree", () => {
     expect(onDrop).not.toHaveBeenCalled();
   });
 
-  // A block with no concrete alias cannot be addressed by the move API, so it
-  // is not a drag source at all.
+  // 具体的な alias を持たないブロックは move API で指し示せないため、
+  // そもそもドラッグの起点にはならない。
   it("does not let a pattern rule be dragged", () => {
     renderTree();
     const rule = screen.getByRole("button", { name: /Host \*/ });
@@ -348,9 +366,9 @@ describe("dragging in the tree", () => {
   });
 });
 
-// A group name carries its hierarchy — work/eu is inside work — and the tree
-// drew every group as a flat peer anyway, so a group made only to hold other
-// groups read as an empty sibling of its own children.
+// グループ名はそれ自体に階層を含む——work/eu は work の中にある——の
+// に、ツリーはどのグループもフラットな並びとして描いていたため、他の
+// グループを保持するためだけのグループが、自分の子の空の兄弟に見えていた。
 describe("the group hierarchy", () => {
   const lon: HostEntry = {
     identity: { path: "connections/work/eu/lon.conf", alias: "lon" },
@@ -365,7 +383,7 @@ describe("the group hierarchy", () => {
 
   function renderNested(over: Overview = nested) {
     render(
-      <ConnectionTree grouping="groups" overview={over} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
+      <ConnectionTree overview={over} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
     );
   }
 
@@ -376,8 +394,8 @@ describe("the group hierarchy", () => {
     expect(within(parent).getByRole("heading", { name: "eu" })).toBeInTheDocument();
   });
 
-  // The heading shows the segment, not the path: the rest is the route the
-  // reader has already walked to get there.
+  // 見出しに出すのはパスではなくセグメントである——残りは読み手がそこ
+  // へ辿り着くまでに既に歩いた経路だからだ。
   it("names a child by its own segment", () => {
     renderNested();
 
@@ -396,8 +414,8 @@ describe("the group hierarchy", () => {
     expect(screen.getByRole("button", { name: "Expand work" })).toBeInTheDocument();
   });
 
-  // A group whose parent no Include line declares is a root. Inventing the
-  // parent here would draw a heading for something that is not a group.
+  // どの Include 行も親を宣言しないグループは root である。ここで親を
+  // でっち上げると、グループではないものに見出しを描くことになる。
   it("roots a group whose parent is not declared", () => {
     const orphan: Overview = {
       ...nested,
@@ -424,7 +442,7 @@ describe("a hidden group", () => {
 
   function renderContainer(over: Overview = container) {
     render(
-      <ConnectionTree grouping="groups" overview={over} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
+      <ConnectionTree overview={over} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />,
     );
   }
 
@@ -441,9 +459,9 @@ describe("a hidden group", () => {
     expect(screen.getByRole("button", { name: /lon/ })).toBeInTheDocument();
   });
 
-  // The flag is ignored rather than merely un-settable in the Groups panel,
-  // because metadata.json is a file a user may edit by hand, and a heading that
-  // vanished with connections under it is the failure this guards against.
+  // このフラグは Groups パネルで設定できないだけでなく、無視もされる。
+  // metadata.json はユーザーが手で編集し得るファイルであり、connections
+  // を抱えたまま見出しが消えるのは、まさにこの防護が防ぐ失敗だからだ。
   it("is drawn anyway while it holds connections of its own", () => {
     renderContainer({ ...container, hosts: [lon, { ...nas, group: "work" }] });
 
@@ -473,7 +491,7 @@ describe("dropping on a whole block", () => {
   function renderNested() {
     const onDrop = vi.fn();
     render(
-      <ConnectionTree grouping="groups" overview={nested} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={onDrop} />,
+      <ConnectionTree overview={nested} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={onDrop} />,
     );
     return onDrop;
   }
@@ -487,8 +505,8 @@ describe("dropping on a whole block", () => {
     expect(onDrop).toHaveBeenCalledWith(payload, "work");
   });
 
-  // Blocks nest now, so a drop inside a child reaches its parent too unless the
-  // child stops it. Which one won would otherwise be an accident of bubbling.
+  // ブロックは今では入れ子になっているため、子の中へのドロップは、子が
+  // 止めない限り親にも届いてしまう。さもなければどちらが勝つかはバブリングの偶然次第になる。
   it("gives a drop in a child block to the child, not to its parent", () => {
     const onDrop = renderNested();
 

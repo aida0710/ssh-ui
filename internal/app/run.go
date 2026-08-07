@@ -36,60 +36,60 @@ type Dependencies struct {
 	Listen  ListenFunc
 	UI      fs.FS
 	Logger  *slog.Logger
-	// Home is the user's home directory. Only cmd/sshc may read it from the
-	// operating system; every test injects a temporary directory.
+	// Home はユーザーのホームディレクトリ。オペレーティングシステムから読んでよいのは
+	// cmd/sshc だけで、テストはいずれも一時ディレクトリを注入する。
 	Home string
-	// Runner, Toolchain and KeyAgent are the key vault's boundary with the
-	// operating system. A nil Runner or Toolchain leaves the algorithm
-	// catalogue on its Ed25519 fallback; a nil KeyAgent makes agent
-	// registration report that no agent is reachable. Neither is fatal, so the
-	// process still serves every other surface.
+	// Runner、Toolchain、KeyAgent は、鍵 vault とオペレーティングシステムとの境界。
+	// Runner や Toolchain が nil の場合、アルゴリズムカタログは Ed25519 への
+	// フォールバックのままになる。KeyAgent が nil の場合、エージェント登録は到達
+	// できるエージェントがないと報告する。どちらも致命的ではないので、プロセスは
+	// 他のすべての面を提供し続ける。
 	Runner    platform.OutputRunner
 	Toolchain platform.Toolchain
 	KeyAgent  platform.KeyAgent
-	// Terminal opens an interactive session. A nil launcher is valid: the
-	// diagnostics service then reports that no terminal is configured rather
-	// than panicking, which is what the tests here rely on.
+	// Terminal は対話セッションを開く。launcher が nil でも有効で、その場合
+	// diagnostics サービスは panic せずに「端末が設定されていない」と報告する。
+	// ここのテストはその挙動に依存している。
 	Terminal platform.TerminalLauncher
-	// AskpassHelper is the absolute path of the running binary, which is the
-	// program OpenSSH executes to obtain a stored password. Only cmd/sshc can
-	// know it; an empty path leaves every terminal launch on the plain path.
+	// AskpassHelper は実行中バイナリの絶対パス。OpenSSH が保存済みパスワードを得る
+	// ために実行するプログラムである。これを知り得るのは cmd/sshc だけで、パスが空
+	// なら、すべての端末起動は素の経路のままになる。
 	AskpassHelper string
-	// LoginItem turns "start at login" on and off. Off is the default and
-	// nothing here changes that: a background process holding the key to every
-	// stored secret is not something to arrange on somebody's behalf. A nil one
-	// reports the setting unsupported.
+	// LoginItem は「ログイン時に起動」を切り替える。既定はオフで、ここでそれを変える
+	// ことはない。保存済みのあらゆる秘密の鍵を握るバックグラウンドプロセスは、他人に
+	// 代わって勝手に用意してよいものではないからだ。nil の場合、この設定は未対応だと
+	// 報告する。
 	LoginItem httpserver.LoginItemController
-	// Updates looks at the project's releases. Nil offers nothing, which is
-	// what a build that is not a release should do.
+	// Updates はプロジェクトのリリースを調べる。nil なら何も提示しない。リリースで
+	// ないビルドはそうあるべきである。
 	Updates *selfupdate.Checker
-	// Answerable is the prompt rule the askpass endpoint applies. A nil rule
-	// means no prompt is ever answered, which is the safe default.
+	// Answerable は askpass エンドポイントが適用するプロンプトのルール。nil のルールは
+	// どのプロンプトにも答えないことを意味し、これが安全な既定である。
 	Answerable func(prompt string) bool
-	// Lookup reads the parent environment so the OpenSSH programs this process
-	// starts receive platform.MinimalEnvironment. Only cmd/sshc may supply
-	// os.LookupEnv; a nil value lets children inherit, which suits a test.
+	// Lookup は親の環境を読み、このプロセスが起動する OpenSSH プログラムが
+	// platform.MinimalEnvironment を受け取れるようにする。os.LookupEnv を渡してよいのは
+	// cmd/sshc だけ。nil なら子は継承する形になり、テストにはそれが向く。
 	Lookup func(string) (string, bool)
-	// SessionNow is the clock the session manager uses for action-token expiry.
-	// It is nil in production, where time.Now is used. The hardening suite sets
-	// it so a token can be aged without sleeping.
+	// SessionNow は、セッションマネージャがアクショントークンの失効に使う時計。
+	// 本番では nil で、time.Now が使われる。ハードニングのスイートはこれを設定し、
+	// sleep せずにトークンを老化させる。
 	SessionNow func() time.Time
 }
 
-// buildKeyService prepares the key vault over the same workspace the
-// configuration engine uses.
+// buildKeyService は、設定エンジンが使うのと同じワークスペース上に鍵 vault を
+// 用意する。
 //
-// It deliberately takes its own storage.Manager. application.NewService
-// installs a configuration validator on the manager it is given, and that
-// validator parses every file a transaction writes as ssh_config. The key vault
-// writes private keys, public keys and a JSON trash manifest, none of which is
-// configuration, and a manifest would be rejected outright as a syntax error.
-// Two managers over one workspace is safe: a Manager holds no mutable state
-// between calls, and every transaction is identified by its own timestamp and
-// random suffix, so the journal and the history remain one consistent stream.
-// The concrete type rather than the interface, because the wiring installs the
-// stored-passphrase lookup on it after the vault exists. It still satisfies
-// httpserver.KeyService where that is what is wanted.
+// これは意図的に自前の storage.Manager を取る。application.NewService は渡された
+// マネージャに設定バリデータを取り付け、そのバリデータはトランザクションが書く
+// すべてのファイルを ssh_config として解析する。鍵 vault が書くのは秘密鍵、公開鍵、
+// そして JSON のごみ箱マニフェストで、どれも設定ではなく、マニフェストは構文エラー
+// として即座に拒否されてしまう。ひとつのワークスペースに二つのマネージャを置いても
+// 安全である。Manager は呼び出しをまたいで可変状態を持たず、各トランザクションは
+// 自身のタイムスタンプとランダムな接尾辞で識別されるため、ジャーナルと履歴はひと
+// 続きの一貫したストリームであり続ける。
+// インターフェースではなく具体型を返すのは、vault ができたあとに配線側が保存済み
+// パスフレーズの参照関数を取り付けるためである。それでも、必要な場所では
+// httpserver.KeyService を満たす。
 func buildKeyService(workspace *storage.Workspace, dependencies Dependencies, configuration *application.Service) *keys.Service {
 	transactions := storage.NewManager(workspace, time.Now, dependencies.Random)
 	return keys.NewService(keys.ServiceOptions{
@@ -103,20 +103,20 @@ func buildKeyService(workspace *storage.Workspace, dependencies Dependencies, co
 		Agent:  dependencies.KeyAgent,
 		Now:    time.Now,
 		Random: dependencies.Random,
-		// What a group is belongs to the configuration engine, which reads the
-		// declaration out of ~/.ssh/config. The key vault asks rather than
-		// deciding, so a key can only be generated into a group that exists.
+		// グループとは何かは設定エンジンの領分であり、その宣言は ~/.ssh/config から
+		// 読まれる。鍵 vault は自分で決めずに尋ねる。そのため鍵は、存在するグループへ
+		// しか生成できない。
 		ValidateGroup: configuration.ValidateDeclaredGroup,
 	})
 }
 
-// Build wires every dependency into an HTTP server without serving it, and
-// returns the one-time bootstrap token the UI must present.
+// Build はすべての依存を HTTP サーバーへ配線するが、サーブはしない。UI が提示
+// しなければならないワンタイムのブートストラップトークンを返す。
 //
-// Run calls Build and then serves. The hardening suite calls Build directly, so
-// its assertions run against the same route table, the same middleware and the
-// same handler construction the shipped binary uses, instead of a hand-built
-// subset that can drift.
+// Run は Build を呼んでからサーブする。ハードニングのスイートは Build を直接
+// 呼ぶので、その表明は、出荷されるバイナリが使うのと同じルーティング表・同じ
+// ミドルウェア・同じハンドラ構築に対して走る。ずれていきかねない手作りの部分
+// 集合に対してではない。
 func Build(dependencies Dependencies, version string) (*httpserver.Server, string, error) {
 	listener, err := dependencies.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
@@ -137,19 +137,19 @@ func Build(dependencies Dependencies, version string) (*httpserver.Server, strin
 		listener.Close()
 		return nil, "", fmt.Errorf("workspace: %w", err)
 	}
-	// Random must be safe for concurrent use: the session manager and both
-	// transaction managers read from it. Production passes crypto/rand.
+	// Random は並行利用に耐えなければならない。セッションマネージャと二つの
+	// トランザクションマネージャが読むからだ。本番では crypto/rand を渡す。
 	transactions := storage.NewManager(workspace, time.Now, dependencies.Random)
 	configService := application.NewService(workspace, transactions)
 	keyService := buildKeyService(workspace, dependencies, configService)
 	diagnosticsService := diagnostics.NewService(
 		workspace, dependencies.Runner, dependencies.Toolchain, dependencies.Terminal, dependencies.Lookup)
-	// The command shown to the user is this binary and an alias, so it has to
-	// know where this binary is. Nothing inside the application can work that
-	// out; the entry point resolves it once and passes it in.
+	// ユーザーに見せるコマンドはこのバイナリと alias なので、このバイナリがどこに
+	// あるかを知る必要がある。アプリケーションの内側でそれを割り出せるものはない。
+	// エントリポイントが一度だけ解決して渡す。
 	diagnosticsService.Self = dependencies.AskpassHelper
-	// known_hosts shares the config transaction manager: both write ordinary
-	// managed files under ~/.ssh, so one journal covers them.
+	// known_hosts は設定のトランザクションマネージャを共有する。どちらも ~/.ssh 配下の
+	// 通常の管理対象ファイルを書くので、ジャーナルはひとつで足りる。
 	var scanEnvironment []string
 	if dependencies.Lookup != nil {
 		scanEnvironment = platform.MinimalEnvironment(dependencies.Lookup)
@@ -166,40 +166,40 @@ func Build(dependencies Dependencies, version string) (*httpserver.Server, strin
 		Environment: scanEnvironment,
 	}
 
-	// The stored-password vault shares the configuration transaction manager:
-	// it is one more ordinary managed file under ~/.ssh, so one journal covers
-	// it, and it travels with everything else the workspace holds.
+	// パスワード保管用の vault も設定のトランザクションマネージャを共有する。~/.ssh
+	// 配下のもうひとつの通常の管理対象ファイルにすぎず、ジャーナルはひとつで足り、
+	// ワークスペースが持つ他のすべてと一緒に移動する。
 	passwordService := secret.NewService(workspace, transactions, time.Now)
 
-	// A key whose passphrase is stored is added to the agent in one action
-	// rather than two. The lookup is installed here rather than imported by
-	// internal/keys, which must no more ask the secret package where a secret
-	// lives than it asks the configuration engine what a group is.
+	// パスフレーズが保存されている鍵は、二段階ではなく一度の操作でエージェントに
+	// 追加される。この参照関数を internal/keys に import させず、ここで取り付けるのは、
+	// 同パッケージが「グループとは何か」を設定エンジンに尋ねないのと同じく、「秘密が
+	// どこにあるか」を secret パッケージに尋ねてはならないからだ。
 	keyService.SetStoredPassphrase(passwordService.KeyPassphraseFor)
 
-	// Every generational backup is ciphertext. The previous contents of a file
-	// this application replaces may be a private key, which is why the writes
-	// that could produce one used to ask for no backup at all and could
-	// therefore never be undone. Sealing them buys the undo back. The manager
-	// is handed the two functions rather than the vault, so the storage layer
-	// goes on knowing nothing about secrets, and the application being behind
-	// the master password is what makes them always available.
+	// 世代バックアップはすべて暗号文である。このアプリケーションが置き換えるファイル
+	// の以前の内容は秘密鍵かもしれない。だからこそ、それを生みうる書き込みは以前は
+	// バックアップをまったく取らないよう要求しており、その結果、取り消すことが決して
+	// できなかった。封をすることで取り消しを取り戻す。マネージャに渡すのは vault では
+	// なく二つの関数なので、ストレージ層は秘密について何も知らないままでいられる。
+	// そして、アプリケーションがマスターパスワードの後ろにあることが、その二つの関数を
+	// 常に利用可能にしている。
 	transactions.Seal = passwordService.SealBackup
 	transactions.Unseal = passwordService.OpenBackup
 
-	// The snapshot needs to know which files are configuration, and that is a
-	// question the Include graph answers. Passing the answer in keeps the
-	// dependency pointing the right way: internal/remotesync imports nothing
-	// of the configuration service.
+	// スナップショットは、どのファイルが設定なのかを知る必要がある。それは Include
+	// グラフが答える問いである。答えを渡す形にすれば、依存の向きは正しいまま保たれる
+	// ── internal/remotesync は、設定サービスのものを何ひとつ import して
+	// いない。
 	syncService := remotesync.NewService(workspace, transactions,
 		func() ([]string, error) { return configService.WorkspaceFiles() },
 		func() string { return time.Now().UTC().Format(time.RFC3339) },
 		newOrigin(dependencies.Random),
 	)
 
-	// `sshc <alias>` reads this to find the running application. The secret
-	// is minted here, per run, and written after the listener is up so the URL
-	// in it is the one that answers.
+	// `sshc <alias>` は、動作中のアプリケーションを見つけるためにこれを読む。秘密は
+	// ここで実行ごとに発行され、リスナーが立ち上がったあとに書かれる。そのため、
+	// 書かれた URL は実際に応答する URL になる。
 	cliSecret, err := handoff.Mint(dependencies.Random)
 	if err != nil {
 		listener.Close()
@@ -211,9 +211,9 @@ func Build(dependencies Dependencies, version string) (*httpserver.Server, strin
 		CLISecret: cliSecret,
 		LoginItem: dependencies.LoginItem,
 		Updates:   dependencies.Updates,
-		// The alias is checked here as well as on the command line, so what a
-		// terminal is told about a host this will not launch is the same
-		// sentence the screen shows.
+		// alias はコマンドラインだけでなくここでも検査する。そのため、このアプリケーション
+		// が起動しないホストについて端末に伝えられる内容は、画面に出るのと同じ一文に
+		// なる。
 		ConnectWarnings: func(alias string) []string {
 			if _, _, warning := diagnosticsService.TerminalCommand(alias); warning != "" {
 				return []string{warning}
@@ -239,11 +239,11 @@ func Build(dependencies Dependencies, version string) (*httpserver.Server, strin
 		return nil, "", err
 	}
 
-	// Written here rather than where the process starts serving, because this
-	// is where the URL becomes known and because a server that is built is a
-	// server something can connect through. A copy left behind by a process
-	// that was killed points at a port nothing is listening on with a secret
-	// nothing accepts, so removing it is tidiness rather than a guarantee.
+	// プロセスがサーブを始める場所ではなくここで書くのは、ここで URL が判明するから
+	// であり、また、構築済みのサーバーは何かが接続できるサーバーだからである。
+	// 強制終了されたプロセスが残していったコピーは、何も待ち受けていないポートを、
+	// 誰も受け付けない秘密とともに指しているだけなので、これを取り除くのは保証では
+	// なく後片付けである。
 	if _, err := handoff.Write(HandoffDir(dependencies.Home), server.URL(), cliSecret); err != nil {
 		dependencies.Logger.Warn(
 			"write the command-line handoff; sshc <alias> will connect without a stored password",
@@ -252,9 +252,9 @@ func Build(dependencies Dependencies, version string) (*httpserver.Server, strin
 	return server, bootstrap, nil
 }
 
-// HandoffDir is where the running application leaves the file `sshc <alias>`
-// reads. It is the same state directory everything else of this application's
-// own lives in.
+// HandoffDir は、動作中のアプリケーションが `sshc <alias>` の読むファイルを置く
+// 場所。このアプリケーション自身のものが置かれる、他と同じ状態ディレクトリで
+// ある。
 func HandoffDir(home string) string {
 	return filepath.Join(home, ".ssh", "sshc")
 }
@@ -269,10 +269,10 @@ func Run(ctx context.Context, dependencies Dependencies, version string) error {
 	serverCtx, stopServer := context.WithCancel(ctx)
 	defer stopServer()
 
-	// The handoff is written once the URL is known and taken away on the way
-	// out. A copy left behind by a process that was killed points at a port
-	// nothing is listening on with a secret nothing accepts, so the removal is
-	// tidiness rather than a guarantee anything rests on.
+	// ハンドオフは URL が判明した時点で書かれ、終了時に取り除かれる。強制終了された
+	// プロセスが残していったコピーは、何も待ち受けていないポートを、誰も受け付け
+	// ない秘密とともに指しているだけなので、この削除は何かの拠り所となる保証では
+	// なく後片付けである。
 	defer func() {
 		if err := handoff.Remove(HandoffDir(dependencies.Home)); err != nil {
 			dependencies.Logger.Warn("remove the command-line handoff", "error", err)
@@ -297,11 +297,11 @@ func Run(ctx context.Context, dependencies Dependencies, version string) error {
 	}
 }
 
-// newOrigin mints this installation's opaque identifier.
+// newOrigin は、このインストールの不透明な識別子を発行する。
 //
-// It is random and is derived from nothing about the machine. An identifier
-// built from a hostname would put that hostname in an object anyone with the
-// bucket can read, for no benefit beyond what a random string gives.
+// 乱数であり、マシンに関する何からも導出されない。ホスト名から作った識別子は、
+// バケットを読める者すべてが見られるオブジェクトにそのホスト名を書き込むことに
+// なり、ランダムな文字列で得られる以上の利点は何もない。
 func newOrigin(random io.Reader) func() (string, error) {
 	return func() (string, error) {
 		if random == nil {
@@ -315,19 +315,19 @@ func newOrigin(random io.Reader) func() (string, error) {
 	}
 }
 
-// boundPrompt turns the prompt rule from a check on the shape of a question
-// into a check on who is asking it.
+// boundPrompt は、プロンプトのルールを「問いの形」に対する検査から「誰が尋ねて
+// いるか」に対する検査へと変える。
 //
-// The shape rule is right and not enough: a keyboard-interactive prompt is
-// written by the remote server, so a server that sends "admin's password: "
-// gets a stored password without password authentication being in use at all.
-// What this adds is the projection — the user and hostname this alias resolves
-// to — and a requirement that the prompt name them, which is what OpenSSH's own
-// password prompt does.
+// 形のルールは正しいが、それだけでは足りない。keyboard-interactive のプロンプトは
+// リモートサーバーが書くので、"admin's password: " を送るサーバーは、パスワード
+// 認証がまったく使われていなくても保存済みパスワードを得てしまう。ここで加える
+// のは射影 — この alias が解決するユーザー名とホスト名 — と、プロンプトがそれらを
+// 名指ししていることの要求である。これは OpenSSH 自身のパスワードプロンプトが
+// していることでもある。
 //
-// When the configuration cannot be projected the shape rule stands alone. That
-// is the state of a host this application cannot read, and refusing every
-// connection to it would be a worse answer than the one it had before.
+// 設定を射影できない場合は、形のルールだけが残る。それはこのアプリケーションが
+// 読めないホストの状態であり、そこへの接続をすべて拒否するのは、以前の答えより
+// 悪い答えになってしまう。
 func boundPrompt(
 	shape func(prompt string) bool,
 	projection func(alias string) (user, hostname string, ok bool),
@@ -347,8 +347,8 @@ func boundPrompt(
 	}
 }
 
-// projectionOf reads the user and hostname an alias resolves to, which is what
-// OpenSSH puts in its own password prompt.
+// projectionOf は、alias が解決するユーザー名とホスト名を読む。これは OpenSSH が
+// 自身のパスワードプロンプトに入れるものである。
 func projectionOf(service *diagnostics.Service) func(string) (string, string, bool) {
 	return func(alias string) (string, string, bool) {
 		user, hasUser := service.ProjectedValue(alias, "user")

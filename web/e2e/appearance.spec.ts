@@ -14,15 +14,15 @@ const sections = [
   "History",
 ];
 
-// The failure this guards against is specific and has happened here before:
-// `ui/form.tsx` exists because three panels grew their own controls and one had
-// none at all, so a field was black text on a black page. A component left on a
-// literal colour reproduces exactly that in whichever theme it was not written
-// for, on whichever screen was missed.
+// これが防ぐ失敗は具体的で、実際にここで起きたことがある。`ui/form.tsx` があるのは、
+// 3 つのパネルがそれぞれ独自のコントロールを増やし、1 つはまったく
+// 持たなかった結果、あるフィールドが黒地に黒文字になったからだ。
+// リテラルな色のまま残されたコンポーネントは、それが書かれなかった
+// テーマや見落とされた画面で、まったく同じ症状を再現する。
 //
-// Reading computed colour rather than eyeballing: a token that resolves to
-// nothing leaves the element transparent, and transparent-on-transparent is the
-// shape the failure takes.
+// 目視ではなく計算済みの色を読み取る。トークンが何にも
+// 解決されない場合、要素は透明になり、透明の上に透明が
+// 重なるというのが、この失敗が取る形だ。
 for (const appearance of ["light", "dark"] as const) {
   test(`every section renders in ${appearance}`, async ({ page, installation }) => {
     await openApplication(page, installation);
@@ -37,8 +37,8 @@ for (const appearance of ["light", "dark"] as const) {
       await expect(page.locator("html")).toHaveAttribute("data-theme", appearance);
       await expect(page.locator("main")).toBeVisible();
 
-      // The shell always paints, and the two never agree: text the same colour
-      // as what is behind it is the defect this suite is here for.
+      // シェルは必ず何かを塗るため、両者が一致しないことが
+      // ある。背景と同じ色の文字こそ、このスイートが検出する不具合だ。
       const painted = await page.evaluate(() => {
         const shell = document.querySelector("main");
         if (shell === null) return null;
@@ -53,9 +53,9 @@ for (const appearance of ["light", "dark"] as const) {
   });
 }
 
-// Every control the palette reaches has to be legible, not only the shell. This
-// walks the one screen that carries an input, a select, a button and a notice
-// at the same time, and asserts none of them is painted onto its own colour.
+// パレットが及ぶすべてのコントロールは、シェルだけでなく判読可能で
+// なければならない。この試験は input、select、button、通知を同時に
+// 持つ唯一の画面を巡り、どれも自分自身と同じ色で塗られていないことを検証する。
 test("the connections controls are legible in light", async ({ page, installation }) => {
   await openApplication(page, installation);
   await page.getByLabel("Appearance").selectOption("light");
@@ -75,15 +75,15 @@ test("the connections controls are legible in light", async ({ page, installatio
     return results;
   });
 
-  // Named rather than counted loosely: a selector that stops matching would
-  // otherwise turn this into a test that asserts nothing and still passes.
+  // 緩く数えるのではなく名指しする。マッチしなくなった
+  // セレクタは、何も検証せずに通過するテストにこれを変えてしまう。
   expect(readable.map((control) => control.where)).toEqual(
     expect.arrayContaining(["input#new-alias", "select#new-file"]),
   );
   for (const control of readable) {
     expect(control.colour, `${control.where} text`).not.toBe(control.background);
-    // A control painted near-black in the light theme is the exact regression
-    // this file exists to catch: it means a literal survived the migration.
+    // ライトテーマでほぼ黒に塗られたコントロールこそ、この
+    // ファイルが捕らえるべき退行そのものであり、リテラルが移行を生き延びたことを意味する。
     expect(control.background, `${control.where} background`).not.toBe("rgb(28, 28, 30)");
   }
 });

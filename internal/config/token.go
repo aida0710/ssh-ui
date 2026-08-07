@@ -5,21 +5,21 @@ import (
 	"strings"
 )
 
-// Argument is one directive argument together with the exact bytes that
-// produced it. Lead holds the whitespace that precedes the argument so a
-// parsed line can be rendered back byte-for-byte.
+// Argument は、ディレクティブの引数ひとつと、それを生んだ正確なバイト列の組。
+// Lead は引数の前にある空白を保持するので、解析した行を 1 バイトも違わず
+// レンダリングし直せる。
 type Argument struct {
 	Lead  string
 	Raw   string
 	Value string
 }
 
-// ErrUnquotableValue reports a value ssh_config cannot represent. OpenSSH has
-// no backslash escape inside a quoted argument, so a value containing a double
-// quote, a newline or a NUL has no spelling and is refused rather than mangled.
+// ErrUnquotableValue は、ssh_config で表現できない値を報告する。OpenSSH は引用符で
+// 囲まれた引数の中にバックスラッシュエスケープを持たないので、二重引用符・改行・
+// NUL を含む値には綴りがなく、壊すのではなく拒否する。
 var ErrUnquotableValue = errors.New("value cannot be quoted for an OpenSSH configuration")
 
-// RenderArgument writes one value using OpenSSH's quoting rules.
+// RenderArgument は、OpenSSH の引用規則に従って値をひとつ書き出す。
 func RenderArgument(lead, value string) (Argument, error) {
 	if strings.ContainsAny(value, "\n\r\x00\"") {
 		return Argument{}, ErrUnquotableValue
@@ -31,13 +31,13 @@ func RenderArgument(lead, value string) (Argument, error) {
 	return Argument{Lead: lead, Raw: raw, Value: value}, nil
 }
 
-// splitArguments splits the argument portion of a directive line.
+// splitArguments は、ディレクティブ行の引数部分を分割する。
 //
-// OpenSSH's argv_split treats a double quote that starts a token as the start
-// of a quoted string that runs to the next double quote, and supports no
-// backslash escapes. Input whose quoting cannot be reproduced under that rule
-// is reported as unstructured (ok == false) so the caller keeps the line
-// verbatim instead of guessing at its meaning.
+// OpenSSH の argv_split は、トークンの先頭にある二重引用符を、次の二重引用符まで
+// 続く引用文字列の始まりとして扱い、バックスラッシュエスケープには対応しない。
+// そのルールの下で引用を再現できない入力は非構造化として報告され（ok == false）、
+// 呼び出し側は意味を推測する代わりに、その行を逐語的に
+// 保持する。
 func splitArguments(input string) (arguments []Argument, trailing string, ok bool) {
 	index := 0
 	for {

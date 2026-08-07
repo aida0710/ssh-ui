@@ -1,8 +1,8 @@
 import { expect, openSection, test, openApplication } from "./support/environment";
 
-// A configuration long enough that the Connections panel cannot fit in the
-// 1280x720 viewport this suite runs at. Without it the assertions below would
-// pass on a shell that scrolls its header away, because nothing would scroll.
+// このスイートが動く 1280x720 のビューポートに Connections パネルが収まり
+// きらないほど長い設定。これがなければ、以下の検証は何もスクロールしな
+// いままヘッダーをスクロールで消してしまうシェルの上でも通ってしまう。
 const manyHosts = Array.from(
   { length: 40 },
   (_unused, index) => `Host lab-${String(index).padStart(2, "0")}\n\tHostName 198.51.100.${index + 1}\n`,
@@ -24,11 +24,11 @@ test("keeps the header and the primary navigation still while a panel scrolls", 
   const resting = await header.boundingBox();
   expect(resting).not.toBeNull();
 
-  // The list is its own pane now, and scrolls on its own rather than taking the
-  // whole panel with it. Its scroller is the element the tree sits in.
+  // リストは今や自分自身のペインを持ち、パネル全体を道連れに
+  // せず単独でスクロールする。そのスクローラーはツリーが置かれている要素である。
   //
-  // It must genuinely overflow. If it did not, every assertion after this one
-  // would hold on a shell that scrolls the header off screen.
+  // 本当に overflow していなければならない。そうでなければ、これ以降のすべての
+  // 検証はヘッダーを画面外へスクロールしてしまうシェルの上でも成立してしまう。
   const overflow = await tree.evaluate((element) => {
     const scroller = element.parentElement;
     if (scroller === null) return 0;
@@ -36,9 +36,9 @@ test("keeps the header and the primary navigation still while a panel scrolls", 
   });
   expect(overflow, "the fixture is not tall enough to scroll the list").toBeGreaterThan(0);
 
-  // The document itself must not scroll. This is the regression: a page-level
-  // scroll is what carried the header and the section buttons away, and a
-  // wheel over the panel produced one when nothing else could consume it.
+  // ドキュメント自体はスクロールしてはならない。これが退行そのものだ。ペー
+  // ジレベルのスクロールがヘッダーとセクションボタンを持ち去っていたのであ
+  // り、他に何も消費できなければパネル上のホイール操作がそれを生んでいた。
   const documentOverflow = await page.evaluate(() => {
     const root = document.scrollingElement ?? document.documentElement;
     return root.scrollHeight - root.clientHeight;
@@ -58,8 +58,8 @@ test("keeps the header and the primary navigation still while a panel scrolls", 
   await expect(page.getByRole("navigation", { name: "Primary" })).toBeInViewport();
   await expect(page.getByRole("button", { name: "History", exact: true })).toBeInViewport();
 
-  // The bottom of a scrolled panel must still be reachable. A shell clamped to
-  // the viewport that forgot to make the panel scrollable would hide it.
+  // スクロールされたパネルの下端には、それでも到達できなければならない。ビューポー
+  // トに固定されながらパネルをスクロール可能にし忘れたシェルは、それを隠してしまう。
   await expect(
     page.getByRole("navigation", { name: "Connections" }).getByRole("button", { name: "lab-39" }),
   ).toBeInViewport();
@@ -80,9 +80,9 @@ test("scrolls the primary navigation on its own when the viewport is short", asy
   await navigation.evaluate((element) => element.scrollTo(0, element.scrollHeight));
   expect(await navigation.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
 
-  // The last section must be reachable at this height. Before the shell owned
-  // its own scrolling, reaching it meant scrolling the whole document and
-  // losing the header on the way.
+  // この高さでも最後のセクションに到達できなければならない。
+  // シェルが自身のスクロールを持つ前は、そこへ到達するには
+  // ドキュメント全体をスクロールし、途中でヘッダーを失う必要があった。
   await expect(page.getByRole("button", { name: "History", exact: true })).toBeInViewport();
   await expect(page.getByRole("banner")).toBeInViewport();
 });

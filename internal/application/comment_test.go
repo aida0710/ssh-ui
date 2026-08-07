@@ -26,8 +26,8 @@ func TestSetHostCommentReplacesOnlyTheAttachedRun(t *testing.T) {
 	}
 
 	got := string(file.Render())
-	// The banner above the blank line is untouched, and so is every byte after
-	// the Host line.
+	// 空行の上のバナーは変更されない。Host 行より
+	// 後のバイトもすべて同じである。
 	if !strings.HasPrefix(got, "# Managed by hand since 2019. Do not reformat.\n\n") {
 		t.Fatalf("the file banner was rewritten:\n%s", got)
 	}
@@ -88,8 +88,8 @@ func TestClearHostNoteKeepsEveryOtherFieldAndEntry(t *testing.T) {
 	if cleared.Hosts[1].Note != "kept" {
 		t.Fatalf("another host's note was cleared: %#v", cleared.Hosts[1])
 	}
-	// The input must not be mutated: the planner still needs it if the save is
-	// refused before it commits.
+	// 入力を変更してはならない。保存が
+	// 拒否された場合、プランナーがまだそれを必要とするからだ。
 	if metadata.Hosts[0].Note != "gone" {
 		t.Fatalf("ClearHostNote mutated its argument")
 	}
@@ -107,9 +107,9 @@ func TestClearHostNoteDropsAnEntryThatHeldNothingElse(t *testing.T) {
 	}
 }
 
-// Making the comment above a header mean something changed what a move must
-// carry. Left behind, the description of the block that departed becomes the
-// description of whichever block follows it in the source file.
+// ヘッダーの上のコメントに意味を持たせたことで、移動が
+// 運ぶべきものが変わった。置き去りにすると、去った
+// ブロックの説明が、ソースファイル中で次に続くブロックの説明になる。
 func TestExtractHostBlockTakesTheAttachedCommentWithIt(t *testing.T) {
 	file := config.Parse([]byte(
 		"# the production bastion\n" +
@@ -132,7 +132,7 @@ func TestExtractHostBlockTakesTheAttachedCommentWithIt(t *testing.T) {
 	if strings.Contains(remaining, "the production bastion") {
 		t.Fatalf("the departed block's comment was left behind:\n%s", remaining)
 	}
-	// nas keeps its own, and does not inherit one.
+	// nas は自分自身のものを保持し、継承はしない。
 	if remaining != "# the file server\nHost nas\n" {
 		t.Fatalf("remaining = %q", remaining)
 	}
@@ -149,8 +149,8 @@ func TestExtractHostBlockLeavesAFileBannerBehind(t *testing.T) {
 		t.Fatalf("ExtractHostBlock error = %v", err)
 	}
 
-	// The banner is separated by a blank line, so it belongs to the file and
-	// stays with it.
+	// バナーは空行で区切られているので、ファイルに属し、
+	// ファイルと共にとどまる。
 	if got := string(file.Render()); got != "# Managed by hand. Do not reformat.\n\n" {
 		t.Fatalf("remaining = %q", got)
 	}

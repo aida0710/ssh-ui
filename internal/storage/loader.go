@@ -2,12 +2,12 @@ package storage
 
 import "sshc/internal/config"
 
-// ConfigLoader gives the Include graph read-only access to the disk.
+// ConfigLoader は、Include グラフにディスクへの読み取り専用アクセスを与える。
 //
-// It deliberately reads files outside the workspace root, because the design
-// requires showing an Include that points elsewhere, but it never follows a
-// symbolic link and never writes. Only Workspace.ResolveForWrite decides what
-// may be modified.
+// 意図的にワークスペースのルート外のファイルも読む。よそを指す Include を表示する
+// ことが設計上求められるからだ。ただしシンボリックリンクをたどることはなく、書き
+// 込むこともない。何を変更してよいかを決めるのは Workspace.ResolveForWrite だけで
+// ある。
 type ConfigLoader struct {
 	fileSystem FileSystem
 }
@@ -24,19 +24,19 @@ func (l ConfigLoader) Glob(pattern string) ([]string, error) {
 	return l.fileSystem.Glob(pattern)
 }
 
-// NewResolver builds the Include resolver for a workspace.
+// NewResolver は、ワークスペースのための Include リゾルバを組み立てる。
 //
-// Only '%d' is supplied as a percent token. '%u' and '%i' need the local user
-// name and uid, which the platform layer provides in a later subsystem; until
-// then those patterns are reported as unsupported instead of being guessed.
+// パーセントトークンとして供給するのは '%d' だけである。'%u' と '%i' はローカルの
+// ユーザー名と uid を必要とし、それはプラットフォーム層が後のサブシステムで提供
+// する。それまでは、それらのパターンは推測されるのではなく非対応として報告される。
 func NewResolver(workspace *Workspace) config.Resolver {
 	return config.Resolver{
 		Loader: NewConfigLoader(workspace),
 		Home:   workspace.Home(),
 		Root:   workspace.Root(),
-		// '~' and '%d' expand to the home as it was given, and every judgement
-		// about the result is made against the resolved root. Normalise is what
-		// keeps those the same file.
+		// '~' と '%d' は、与えられたままのホームへ展開され、その結果に対する判断は
+		// すべて解決済みのルートに対して行われる。両者を同じファイルに保つのが
+		// Normalise である。
 		Normalise: workspace.Normalise,
 		Tokens:    map[byte]string{'d': workspace.Home()},
 	}

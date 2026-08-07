@@ -14,9 +14,9 @@ function buildApi(overrides: Partial<IntegrationsApi> = {}): IntegrationsApi {
 }
 
 describe("LockScreen", () => {
-  // Creating a vault and opening one look the same and are not: one of them
-  // cannot be undone, and the screen says so before the field rather than
-  // after the press.
+  // vault を作ることと開くことは同じに見えて違う: 一方は
+  // 取り消せない。画面はそれを、押した後ではなくフィールドの前に
+  // 伝える。
   it("says a new master password cannot be recovered, and asks for it twice", async () => {
     const api = buildApi();
     const onOpen = vi.fn();
@@ -25,8 +25,8 @@ describe("LockScreen", () => {
     expect(screen.getByText(/cannot be recovered/i)).toBeInTheDocument();
 
     await userEvent.type(screen.getByLabelText("Master password"), "a long enough password");
-    // One field filled is not enough: a typo in a password nobody can recover
-    // would lock the user out of their own vault on the first try.
+    // 片方のフィールドが埋まっているだけでは足りない: 誰も復元できない
+    // パスワードの誤字は、最初の 1 回でユーザーを自分の vault から締め出してしまう。
     expect(screen.getByRole("button", { name: "Create the vault" })).toBeDisabled();
 
     await userEvent.type(screen.getByLabelText("Confirm master password"), "a long enough password");
@@ -71,7 +71,7 @@ describe("LockScreen", () => {
     await userEvent.click(screen.getByRole("button", { name: "Open" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/not the master password/i);
-    // And the shell stays shut.
+    // そしてシェルは閉じたままになる。
     expect(onOpen).not.toHaveBeenCalled();
   });
 });

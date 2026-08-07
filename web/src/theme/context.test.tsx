@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider, useTheme } from "./context";
 import { themeStorageKey } from "./theme";
 
-// jsdom has no matchMedia. The shell asks it once for the system preference and
-// then listens, so both halves are stubbed rather than only the first.
+// jsdom には matchMedia がない。シェルはシステムの好みを一度尋ねてから
+// listen するので、最初の半分だけでなく両方をスタブ化する。
 let prefersDark = false;
 const listeners = new Set<() => void>();
 
@@ -13,10 +13,10 @@ beforeEach(() => {
   prefersDark = false;
   listeners.clear();
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({
-    // A getter, not a value. The real MediaQueryList.matches is read at the
-    // moment it is asked, and the provider asks for it from inside the change
-    // handler; a value frozen at construction would report what the system
-    // said before it changed, and the listener would look broken.
+    // 値ではなくゲッターだ。本物の MediaQueryList.matches は尋ねられた
+    // その瞬間に読まれ、プロバイダは change ハンドラの中からそれを尋ねる。
+    // construction 時に固定された値は、変わる前にシステムが言っていたことを
+    // 報告してしまい、リスナーは壊れているように見えてしまう。
     get matches() {
       return query.includes("dark") && prefersDark;
     },
@@ -68,7 +68,7 @@ describe("ThemeProvider", () => {
     expect(window.localStorage.getItem(themeStorageKey)).toBe("dark");
   });
 
-  // A chosen theme means it. The system changing underneath must not undo it.
+  // 選ばれたテーマはそれを意味する。裏でシステムが変わってもそれを覆してはならない。
   it("ignores the system once a theme was chosen", async () => {
     const user = userEvent.setup();
     render(<ThemeProvider initial="light"><Probe /></ThemeProvider>);
@@ -80,9 +80,9 @@ describe("ThemeProvider", () => {
     expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
   });
 
-  // Returning to "system" has to be able to see a preference that changed
-  // while it was overridden, which is why the listener is always subscribed
-  // rather than only while the choice is "system".
+  // 「system」に戻るには、上書きされている間に変わった好みを見えなければ
+  // ならない。これがリスナーを、選択が「system」の間だけでなく
+  // 常に購読しておく理由だ。
   it("picks the system back up when the choice returns to it", async () => {
     const user = userEvent.setup();
 

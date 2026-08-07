@@ -47,9 +47,9 @@ func buildFixture(t *testing.T) ([]byte, map[string][]byte) {
 }
 
 func TestRoundTripIsByteIdentical(t *testing.T) {
-	// The parser's whole promise is byte preservation. The transport must not
-	// be the thing that breaks it, so the fixture carries a CRLF, trailing
-	// spaces and a file with no trailing newline.
+	// パーサの約束のすべてはバイト保存である。トランスポートがそれを壊すものであっては
+	// ならないので、フィクスチャには CRLF、末尾の空白、そして末尾に改行のないファイルを
+	// 含めてある。
 	archive, contents := buildFixture(t)
 
 	manifest, unpacked, err := remotesync.Read(archive)
@@ -70,8 +70,8 @@ func TestRoundTripIsByteIdentical(t *testing.T) {
 }
 
 func TestAPrivateKeyIsMarkedSecret(t *testing.T) {
-	// A pull applies a secret entry with SkipBackup set. Losing the mark would
-	// leave a copy of key material in ~/.ssh/sshc/backups/ on every sync.
+	// pull は secret のエントリを SkipBackup 付きで適用する。この印を失えば、同期の
+	// たびに ~/.ssh/sshc/backups/ に鍵素材のコピーが残ることになる。
 	archive, _ := buildFixture(t)
 
 	manifest, _, err := remotesync.Read(archive)
@@ -101,7 +101,7 @@ func TestManifestCarriesNoHostname(t *testing.T) {
 	if manifest.Origin == "" {
 		t.Error("no origin at all, so the interface cannot say where a snapshot came from")
 	}
-	// The field exists to distinguish installations, not to name machines.
+	// このフィールドはインストールを区別するためにあり、マシンを名指しするためではない。
 	document, _ := json.Marshal(manifest)
 	for _, forbidden := range []string{"hostname", "Hostname", ".local"} {
 		if bytes.Contains(document, []byte(forbidden)) {
@@ -111,8 +111,8 @@ func TestManifestCarriesNoHostname(t *testing.T) {
 }
 
 func TestReadRefusesAPathThatEscapesTheWorkspace(t *testing.T) {
-	// A snapshot is untrusted input and "../" in a tar is the oldest trick
-	// there is.
+	// スナップショットは信用できない入力であり、tar の中の "../" は最も古い手口で
+	// ある。
 	for _, name := range []string{
 		"../../etc/passwd",
 		"/etc/passwd",
@@ -135,8 +135,8 @@ func TestReadRefusesAPathThatEscapesTheWorkspace(t *testing.T) {
 }
 
 func TestReadRefusesAModeThisApplicationDoesNotWrite(t *testing.T) {
-	// Normalising instead of refusing would let a snapshot widen a private key
-	// to something OpenSSH still reads but other users can too.
+	// 拒否する代わりに正規化すれば、スナップショットは秘密鍵の権限を、OpenSSH はまだ
+	// 読むが他のユーザーも読める程度まで広げられてしまう。
 	for _, mode := range []string{"0644", "0666", "0777", "0400", "", "not a mode"} {
 		archive := handBuilt(t, map[string]string{"config": "x"}, remotesync.Manifest{
 			Files: []remotesync.Entry{{Path: "config", SHA256: remotesync.Digest([]byte("x")), Mode: mode}},
@@ -148,9 +148,9 @@ func TestReadRefusesAModeThisApplicationDoesNotWrite(t *testing.T) {
 }
 
 func TestReadRefusesContentsThatDoNotMatchTheManifest(t *testing.T) {
-	// The manifest is what a pull compares against the local disk. A snapshot
-	// whose files disagree with it would produce a transaction built from one
-	// set of digests and applied from another.
+	// マニフェストは、pull がローカルのディスクと比較する対象である。ファイルがそれと
+	// 食い違うスナップショットは、ある一組のダイジェストから組み立てられ、別の一組から
+	// 適用されるトランザクションを生んでしまう。
 	archive := handBuilt(t, map[string]string{"config": "actual"}, remotesync.Manifest{
 		Files: []remotesync.Entry{{Path: "config", SHA256: remotesync.Digest([]byte("claimed")), Mode: "0600"}},
 	})
@@ -158,8 +158,8 @@ func TestReadRefusesContentsThatDoNotMatchTheManifest(t *testing.T) {
 		t.Fatalf("Read = %v, want ErrManifestMismatch", err)
 	}
 
-	// A file present in the archive but absent from the manifest is the same
-	// defect from the other direction: it would be extracted unchecked.
+	// アーカイブに存在するがマニフェストにないファイルは、同じ欠陥を逆方向から見たもの
+	// である。それは検査されずに展開されてしまう。
 	extra := handBuilt(t, map[string]string{"config": "x", "stowaway": "y"}, remotesync.Manifest{
 		Files: []remotesync.Entry{{Path: "config", SHA256: remotesync.Digest([]byte("x")), Mode: "0600"}},
 	})
@@ -202,8 +202,8 @@ func TestBuildRefusesAnEntryWithNoContents(t *testing.T) {
 }
 
 func FuzzReadSnapshot(f *testing.F) {
-	// Read parses attacker-supplied input: the archive comes from a bucket,
-	// and anyone who can write that bucket chooses what is in it.
+	// Read は攻撃者由来の入力を解析する。アーカイブはバケットから来るのであり、その
+	// バケットに書ける者が、その中身を選ぶ。
 	archive, _ := buildFixture(&testing.T{})
 	f.Add(archive)
 	f.Add([]byte{})
@@ -214,8 +214,8 @@ func FuzzReadSnapshot(f *testing.F) {
 		if err != nil {
 			return
 		}
-		// Anything that parses must satisfy every invariant a caller relies on
-		// before it touches a filesystem.
+		// 解析を通るものはすべて、ファイルシステムに触れる前に、呼び出し側が依拠する
+		// あらゆる不変条件を満たさなければならない。
 		for _, item := range manifest.Files {
 			if strings.HasPrefix(item.Path, "/") || strings.Contains(item.Path, "..") {
 				t.Fatalf("an unsafe path survived: %q", item.Path)
@@ -233,8 +233,8 @@ func FuzzReadSnapshot(f *testing.F) {
 	})
 }
 
-// handBuilt writes an archive without going through Build, so a test can put
-// something in it that Build would refuse.
+// handBuilt は Build を通さずにアーカイブを書く。これにより、Build なら拒否する
+// ものをテストがその中に入れられる。
 func handBuilt(t *testing.T, files map[string]string, manifest remotesync.Manifest) []byte {
 	t.Helper()
 	if manifest.SchemaVersion == 0 {
@@ -261,7 +261,7 @@ func archiveOf(t *testing.T, entries map[string]string) []byte {
 	var compressed bytes.Buffer
 	zip := gzip.NewWriter(&compressed)
 	archive := tar.NewWriter(zip)
-	// The manifest first, then everything else, which is the order Build uses.
+	// まずマニフェスト、そのあとに他のすべて。Build が使うのと同じ順序である。
 	if body, ok := entries[remotesync.ManifestName]; ok {
 		writeRaw(t, archive, remotesync.ManifestName, body)
 	}
@@ -305,13 +305,13 @@ func gzipOf(t *testing.T, body []byte) []byte {
 	return buffer.Bytes()
 }
 
-// A snapshot may hold files and nothing else.
+// スナップショットが保持してよいのはファイルだけである。
 //
-// A symlink in a tar is the oldest way to make an extractor write outside where
-// it thinks it is writing: the link is created inside, and the next entry
-// written through it lands wherever it points. The check that refuses one has
-// been there all along and nothing noticed when it was removed, which is the
-// same as not having it.
+// tar の中のシンボリックリンクは、展開器に、自分が書いていると思っている場所の外へ
+// 書かせる最も古い手口だ。リンクは内側に作られ、それを通して書かれる次のエントリが、
+// リンクの指す先へ着地する。それを拒否する検査はずっとそこにあったのに、取り除かれた
+// ときに誰も気づかなかった。それは、その検査を持っていないのと同じことで
+// ある。
 func TestOpenRefusesAnEntryThatIsNotAFile(t *testing.T) {
 	for _, entry := range []struct {
 		name   string

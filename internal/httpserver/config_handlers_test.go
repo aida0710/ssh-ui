@@ -86,8 +86,8 @@ func (h *testHarness) call(t *testing.T, method, target string, body any, authen
 	request := httptest.NewRequest(method, target, reader)
 	request.Host = "127.0.0.1:43123"
 	request.Header.Set(echo.HeaderContentType, "application/json")
-	// Fetch Metadata is verified on every API request, so the frontend sends
-	// this header on a read as well as on a write.
+	// Fetch Metadata はすべての API リクエストで検証されるので、フロントエンドは
+	// 書き込みだけでなく読み取りでもこのヘッダーを送る。
 	request.Header.Set("Sec-Fetch-Site", "same-origin")
 	if method != http.MethodGet {
 		request.Header.Set(echo.HeaderOrigin, "http://127.0.0.1:43123")
@@ -113,8 +113,8 @@ func TestConfigEndpointsRequireASessionAndCSRF(t *testing.T) {
 	if got := harness.call(t, http.MethodPost, "/api/v1/config/save", save, true, false).Code; got != http.StatusForbidden {
 		t.Fatalf("save without CSRF = %d", got)
 	}
-	// A read without the token is refused too: the cookie is not scoped to a
-	// port and the token is.
+	// トークンのない読み取りも拒否される。cookie はポートにスコープされないが、
+	// トークンはスコープされるからだ。
 	if got := harness.call(t, http.MethodGet, "/api/v1/config/overview", nil, true, false).Code; got != http.StatusForbidden {
 		t.Fatalf("overview without CSRF = %d", got)
 	}
@@ -127,9 +127,9 @@ func TestConfigEndpointsRequireASessionAndCSRF(t *testing.T) {
 	}
 }
 
-// TestEveryConfigMutationRequiresCSRFAndEveryResponseIsUncacheable sweeps the
-// whole surface rather than one representative route, because a route added
-// later without the header check is exactly the regression this catches.
+// TestEveryConfigMutationRequiresCSRFAndEveryResponseIsUncacheable は、
+// 代表的な 1 ルートだけでなく全面を走査する。あとからヘッダーチェックなしで
+// 追加されたルートこそ、このテストが検出すべき退行そのものだからだ。
 func TestEveryConfigMutationRequiresCSRFAndEveryResponseIsUncacheable(t *testing.T) {
 	harness := newConfigHarness(t)
 
@@ -237,27 +237,27 @@ func TestSaveReportsSyntaxErrorsWithoutLeakingFileContents(t *testing.T) {
 	}
 }
 
-// TestErrorBodiesCarryLocationsNeverConfigurationText checks the whole error
-// surface, not just the syntax case. A problem response may name a file, a line
-// and a stable code; it may never echo back what the file says.
+// TestErrorBodiesCarryLocationsNeverConfigurationText は、構文エラーの
+// ケースだけでなくエラー面全体を検査する。problem レスポンスはファイル名・
+// 行番号・安定した code を含んでよいが、ファイルの中身を書き戻してはならない。
 func TestErrorBodiesCarryLocationsNeverConfigurationText(t *testing.T) {
 	harness := newConfigHarness(t)
 	const secret = "203.0.113.10"
 
 	responses := []*httptest.ResponseRecorder{
-		// Newly unparsable line.
+		// 新たにパース不能になった行。
 		harness.call(t, http.MethodPost, "/api/v1/config/save", application.EditRequest{
 			Kind: application.EditFileRaw, Path: "config", Base: handlerConfig,
 			Raw: "Host bastion\n\tHostName \"unbalanced\n",
 		}, true, true),
-		// Edit rejected by the lossless edit rules.
+		// lossless edit のルールにより拒否された編集。
 		harness.call(t, http.MethodPost, "/api/v1/config/save", application.EditRequest{
 			Kind: application.EditHostFields, Path: "config", Base: handlerConfig, Alias: "bastion",
 			Fields: []application.FieldEdit{{Action: application.ActionSet, Line: 2, Values: []string{`echo "hi"`}}},
 		}, true, true),
-		// Unknown host.
+		// 未知の host。
 		harness.call(t, http.MethodGet, "/api/v1/config/host?path=config&alias=absent", nil, true, true),
-		// Unknown transaction.
+		// 未知の transaction。
 		harness.call(t, http.MethodPost, "/api/v1/history/restore", restoreRequest{
 			TransactionID: "20260101T000000.000-aabbccdd", Path: "config",
 		}, true, true),
@@ -279,9 +279,9 @@ func TestErrorBodiesCarryLocationsNeverConfigurationText(t *testing.T) {
 		}
 	}
 
-	// A conflict carries diff lines, which are configuration text by nature, so
-	// it is the one shape that may echo the file — and only inside the conflict
-	// report the user is being asked to resolve.
+	// 衝突は diff の行を伴うが、これは本質的に設定テキストであるため、
+	// ファイルの中身を書き戻してよい唯一の形である——ただしユーザーに解決を
+	// 求めている衝突レポートの中に限る。
 	if err := os.WriteFile(filepath.Join(harness.root, "config"), []byte(handlerConfig+"Host later\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -324,8 +324,8 @@ func TestSaveReportsAConflictWithBothSides(t *testing.T) {
 	if payload.Code != "config_conflict" || payload.Conflict == nil || len(payload.Conflict.ExternalChange) == 0 {
 		t.Fatalf("payload = %#v", payload)
 	}
-	// The single most important behaviour in this subsystem: the file on disk
-	// still holds what the other writer put there.
+	// このサブシステムで最も重要なふるまい: ディスク上のファイルは、
+	// 別の書き手が置いたものをそのまま保持し続ける。
 	contents, err := os.ReadFile(filepath.Join(harness.root, "config"))
 	if err != nil {
 		t.Fatal(err)
@@ -410,12 +410,12 @@ func TestSaveRejectsAnUnknownJSONFieldAndAnOversizedBody(t *testing.T) {
 	}
 }
 
-// The kinds the application understands and this file rejects are the kinds
-// nobody can reach.
+// アプリケーションが理解し、かつこのファイルが拒否する kind は、
+// 誰にも到達できない kind である。
 //
-// The directory operations were written, tested against the service, and
-// refused here with invalid_request, because the per-kind validation is a
-// second gate that a service-level test walks straight past.
+// directory の操作は書かれ、サービスに対してテストされ、ここでは
+// invalid_request で拒否される。kind ごとの validation は第二の関門であり、
+// サービスレベルのテストはそれをそのまま素通りしてしまうからだ。
 func TestEveryEditKindTheApplicationAcceptsPassesValidation(t *testing.T) {
 	for _, kind := range []application.EditKind{
 		application.EditHostFields, application.EditBlockRaw, application.EditFileRaw,
@@ -425,8 +425,8 @@ func TestEveryEditKindTheApplicationAcceptsPassesValidation(t *testing.T) {
 		application.EditGroups, application.EditMetadata,
 	} {
 		request := application.EditRequest{Kind: kind, Path: "conf.d/10-home.conf"}
-		// Only the shape each kind needs beyond a path, so the failure below is
-		// about the kind being known rather than about a missing field.
+		// 各 kind が path 以外に必要とする形だけを見る。したがって以下の失敗は、
+		// フィールドの欠落についてではなく、kind が既知かどうかについてのものである。
 		switch kind {
 		case application.EditHostFields:
 			request.Alias = "nas"

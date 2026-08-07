@@ -2,24 +2,24 @@ package config
 
 import "strings"
 
-// LineKind classifies a physical line of an OpenSSH client configuration file.
+// LineKind は、OpenSSH クライアント設定ファイルの物理行を分類する。
 type LineKind uint8
 
 const (
-	// LineBlank is an empty line or a line containing only whitespace.
+	// LineBlank は、空行または空白だけの行。
 	LineBlank LineKind = iota
-	// LineComment is a line whose first non-whitespace character is '#'.
+	// LineComment は、最初の非空白文字が '#' である行。
 	LineComment
-	// LineDirective is a keyword with zero or more arguments.
+	// LineDirective は、キーワードと 0 個以上の引数。
 	LineDirective
-	// LineUnstructured is a line the engine preserves verbatim because its
-	// structure cannot be reproduced exactly. It is never rewritten.
+	// LineUnstructured は、構造を正確に再現できないためエンジンが逐語的に保存する行。
+	// 書き換えられることは決してない。
 	LineUnstructured
 )
 
-// Line is one physical line. For every kind except LineDirective the complete
-// line text is kept in Text. For LineDirective the components satisfy
-// Indent+Keyword+Separator+arguments+Trailing == the original line text.
+// Line は物理行ひとつ。LineDirective 以外のすべての種別では、完全な行テキストが
+// Text に保持される。LineDirective では、各構成要素が
+// Indent+Keyword+Separator+引数+Trailing == 元の行テキストを満たす。
 type Line struct {
 	Kind      LineKind
 	Text      string
@@ -31,7 +31,7 @@ type Line struct {
 	Ending    string
 }
 
-// Render returns the line exactly as it appeared in the source file.
+// Render は、ソースファイルに現れたとおりの行を返す。
 func (l Line) Render() string {
 	if l.Kind != LineDirective {
 		return l.Text + l.Ending
@@ -49,10 +49,10 @@ func (l Line) Render() string {
 	return builder.String()
 }
 
-// Values returns the unquoted argument values of a directive line, stopping at
-// the first unquoted '#' token because OpenSSH's argv_split terminates a
-// configuration line's argument list at a comment. Arguments keeps the full
-// tokenization so the line still renders byte-for-byte.
+// Values は、ディレクティブ行の引用を外した引数値を返す。最初の引用されていない
+// '#' トークンで止まるのは、OpenSSH の argv_split が設定行の引数リストをコメント
+// で終わらせるからである。Arguments は完全なトークン列を保持するので、行は
+// 1 バイトも違わずレンダリングできる。
 func (l Line) Values() []string {
 	if l.Kind != LineDirective || len(l.Arguments) == 0 {
 		return nil
@@ -70,8 +70,8 @@ func (l Line) Values() []string {
 	return values
 }
 
-// EqualKeyword compares two directive keywords the way OpenSSH does, which is
-// case-insensitively for ASCII keywords.
+// EqualKeyword は、OpenSSH と同じやり方で二つのディレクティブキーワードを比較
+// する。ASCII のキーワードについては大文字小文字を区別しない。
 func EqualKeyword(first, second string) bool {
 	return strings.EqualFold(first, second)
 }

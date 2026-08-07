@@ -16,9 +16,9 @@ describe("Row", () => {
     expect(screen.getByLabelText("HostName")).toHaveValue("bastion.eu.example.com");
   });
 
-  // The hint sits outside the label element on purpose. Inside it, a whole
-  // sentence of advice became part of the control's accessible name — the same
-  // mistake `Field` in ui/form.tsx already documents.
+  // ヒントは意図的に label 要素の外に置く。中に置くと、助言の文章
+  // 丸ごとがコントロールの accessible name の一部になってしまう——
+  // ui/form.tsx の `Field` が既に記録しているのと同じ過ちだ。
   it("keeps a hint out of the accessible name", () => {
     render(
       <Card>
@@ -34,8 +34,8 @@ describe("Row", () => {
 });
 
 describe("Row's trailing action", () => {
-  // The action must sit outside the label element. Inside it, clicking
-  // "Remove" would activate the label and move focus into the input instead.
+  // action は label 要素の外になければならない。中にあると、クリックした
+  // 「Remove」が label を発火させ、代わりに input へフォーカスを移してしまう。
   it("is a control of its own, not part of the field's label", async () => {
     const onRemove = vi.fn();
     const user = userEvent.setup();
@@ -52,7 +52,7 @@ describe("Row's trailing action", () => {
 
     expect(onRemove).toHaveBeenCalledOnce();
     expect(field).not.toHaveFocus();
-    // And the action's own words stay out of the field's name.
+    // そして action 自身の語は、フィールドの名前の外にとどまる。
     expect(screen.getByLabelText("Port")).toHaveValue("22");
   });
 });
