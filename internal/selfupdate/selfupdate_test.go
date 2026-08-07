@@ -111,7 +111,7 @@ func checkerFor(server *httptest.Server, key signer) selfupdate.Checker {
 		AssetName:     "ssh-ui-darwin-arm64",
 		ChecksumName:  "checksums.txt",
 		SignatureName: "checksums.txt.sig",
-		PublicKey:     key.public,
+		PublicKeys:    []ed25519.PublicKey{key.public},
 		HTTP:          server.Client(),
 	}
 }
@@ -251,5 +251,51 @@ func TestApplyRefusesWhenThisBuildHasNoKey(t *testing.T) {
 	}
 	if err := checker.Apply(context.Background(), found, filepath.Join(t.TempDir(), "ssh-ui")); !errors.Is(err, selfupdate.ErrUnsigned) {
 		t.Fatalf("Apply = %v, want ErrUnsigned", err)
+	}
+}
+
+// A key has to be replaceable, and an installed binary pins what it was built
+// with. Replacing one takes two releases: the first signed with the old key,
+// carrying a binary that trusts both; the second signed with the new one. This
+// is the binary in the middle, and without it the first release cannot exist.
+func TestABinaryTrustingTwoKeysAcceptsEither(t *testing.T) {
+	outgoing, incoming := newSigner(t), newSigner(t)
+	both := []ed25519.PublicKey{outgoing.public, incoming.public}
+
+	for name, published := range map[string]signer{"the old key": outgoing, "the new key": incoming} {
+		t.Run(name, func(t *testing.T) {
+			server := release(t, []byte("the new binary"), false, published, true)
+			checker := checkerFor(server, published)
+			checker.PublicKeys = both
+
+			found, err := checker.Latest(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(t.TempDir(), "ssh-ui")
+			if err := os.WriteFile(path, []byte("the old binary"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := checker.Apply(context.Background(), found, path); err != nil {
+				t.Fatalf("a release signed with %s was refused: %v", name, err)
+			}
+		})
+	}
+
+	// And a third key is still nobody: trusting two is not trusting anyone.
+	stranger := newSigner(t)
+	server := release(t, []byte("the new binary"), false, stranger, true)
+	checker := checkerFor(server, stranger)
+	checker.PublicKeys = both
+	found, err := checker.Latest(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "ssh-ui")
+	if err := os.WriteFile(path, []byte("the old binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := checker.Apply(context.Background(), found, path); !errors.Is(err, selfupdate.ErrBadSignature) {
+		t.Fatalf("Apply = %v, want ErrBadSignature", err)
 	}
 }

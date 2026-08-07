@@ -48,6 +48,15 @@ jobs:
       # The private half never leaves this step. An installation that cannot
       # verify the signature refuses the update rather than taking it, so a
       # release published without this one is a release nobody installs.
+      # One signature, from whichever key the secret currently holds. During a
+      # key handover that is the outgoing one, and the binary in that release
+      # lists both — see the README. Signing with the incoming key before the
+      # binary listing it has gone out is what strands every installation.
+      # One signature, from whichever key the secret currently holds. During a
+      # key handover that is the outgoing one, and the binary in that release
+      # lists both — see the README. Signing with the incoming key before the
+      # binary listing it has gone out is what strands every installation, and
+      # it does so silently.
       - name: Sign
         env:
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}

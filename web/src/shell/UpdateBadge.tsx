@@ -46,7 +46,12 @@ export function UpdateBadge({ api = integrationsApi }: UpdateBadgeProps) {
           {failed}
         </p>
       )}
-      {status.restartRequired ? (
+      {!status.updatable ? (
+        // A build made from a working tree has no key to verify a release
+        // with, and what it would replace is the output of a build somebody
+        // just ran. Its update path is the source it came from.
+        <p className="mt-1 text-ink-faint">{t("update.fromSource")}</p>
+      ) : status.restartRequired ? (
         <p className="mt-1 text-notice-ink">{t("update.restart")}</p>
       ) : status.available ? (
         <>

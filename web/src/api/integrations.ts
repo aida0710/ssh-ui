@@ -96,12 +96,13 @@ export type IntegrationsApi = {
 function validateUpdate(value: unknown): UpdateStatus {
   const record = asRecord(value);
   if (typeof record.current !== "string" || typeof record.available !== "boolean" ||
-      typeof record.restartRequired !== "boolean") {
+      typeof record.updatable !== "boolean" || typeof record.restartRequired !== "boolean") {
     throw new Error("invalid_response");
   }
   return {
     current: record.current,
     available: record.available,
+    updatable: record.updatable,
     restartRequired: record.restartRequired,
     ...(typeof record.latest === "string" ? { latest: record.latest } : {}),
     ...(typeof record.pageUrl === "string" ? { pageUrl: record.pageUrl } : {}),

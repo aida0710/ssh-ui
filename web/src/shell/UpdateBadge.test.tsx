@@ -14,7 +14,7 @@ function buildApi(status: UpdateStatus, overrides: Partial<IntegrationsApi> = {}
 
 describe("UpdateBadge", () => {
   it("shows the version and offers nothing when there is nothing newer", async () => {
-    render(<UpdateBadge api={buildApi({ current: "0.1.0", available: false, restartRequired: false })} />);
+    render(<UpdateBadge api={buildApi({ current: "0.1.0", updatable: true, available: false, restartRequired: false })} />);
 
     expect(await screen.findByText("Version 0.1.0")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Update" })).not.toBeInTheDocument();
@@ -25,6 +25,7 @@ describe("UpdateBadge", () => {
   it("names the file it would replace, and says a restart is needed after", async () => {
     const api = buildApi({
       current: "0.1.0",
+      updatable: true,
       latest: "0.2.0",
       available: true,
       restartRequired: false,
@@ -44,7 +45,7 @@ describe("UpdateBadge", () => {
 
   it("says the update failed rather than claiming it happened", async () => {
     const api = buildApi(
-      { current: "0.1.0", latest: "0.2.0", available: true, restartRequired: false },
+      { current: "0.1.0", updatable: true, latest: "0.2.0", available: true, restartRequired: false },
       { applyUpdate: vi.fn().mockRejectedValue(new Error("update_failed")) },
     );
     render(<UpdateBadge api={api} />);
@@ -55,11 +56,20 @@ describe("UpdateBadge", () => {
 
   // A machine with no network still shows its version.
   it("shows nothing at all when the check cannot run", async () => {
-    const api = buildApi({ current: "0.1.0", available: false, restartRequired: false }, {
+    const api = buildApi({ current: "0.1.0", updatable: true, available: false, restartRequired: false }, {
       updateStatus: vi.fn().mockRejectedValue(new Error("update_check_failed")),
     });
     const { container } = render(<UpdateBadge api={api} />);
     await waitFor(() => expect(api.updateStatus).toHaveBeenCalled());
     expect(container.textContent).toBe("");
+  });
+
+  // A build made from a working tree says how it is updated instead of
+  // offering a button it could not honour.
+  it("tells a source build to use make update", async () => {
+    render(<UpdateBadge api={buildApi({ current: "dev", available: false, updatable: false, restartRequired: false })} />);
+
+    expect(await screen.findByText(/make update/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Update" })).not.toBeInTheDocument();
   });
 });

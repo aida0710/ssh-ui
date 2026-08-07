@@ -82,10 +82,19 @@ type Checker struct {
 	ChecksumName string
 	// SignatureName is the detached signature over that file.
 	SignatureName string
-	// PublicKey verifies it. An empty one accepts nothing: a build with no key
-	// cannot tell an honest release from any other, and must not guess.
-	PublicKey ed25519.PublicKey
-	HTTP      *http.Client
+	// PublicKeys verify it, and any one of them is enough.
+	//
+	// There is a list rather than a key because a key has to be replaceable,
+	// and an installed binary pins whatever it was built with. Replacing one
+	// therefore takes two releases: the first is signed with the old key and
+	// carries a binary that trusts both, the second is signed with the new one.
+	// With a single key the first of those releases cannot exist, and changing
+	// the key strands every installation that has not been replaced by hand.
+	//
+	// An empty list accepts nothing: a build with no key cannot tell an honest
+	// release from any other, and must not guess.
+	PublicKeys []ed25519.PublicKey
+	HTTP       *http.Client
 }
 
 type githubRelease struct {
@@ -96,6 +105,28 @@ type githubRelease struct {
 		Name string `json:"name"`
 		URL  string `json:"browser_download_url"`
 	} `json:"assets"`
+}
+
+// hasKey reports whether this build can verify anything at all.
+func (c Checker) hasKey() bool {
+	for _, key := range c.PublicKeys {
+		if len(key) == ed25519.PublicKeySize {
+			return true
+		}
+	}
+	return false
+}
+
+// verify accepts a signature from any key this build was given. During a key
+// replacement that is two of them, which is what makes the replacement
+// possible; the rest of the time it is one.
+func (c Checker) verify(signed, signature []byte) bool {
+	for _, key := range c.PublicKeys {
+		if len(key) == ed25519.PublicKeySize && ed25519.Verify(key, signed, signature) {
+			return true
+		}
+	}
+	return false
 }
 
 func (c Checker) client() *http.Client {
@@ -201,7 +232,7 @@ func (c Checker) Apply(ctx context.Context, release Release, path string) error 
 		return err
 	}
 
-	if len(c.PublicKey) != ed25519.PublicKeySize {
+	if !c.hasKey() {
 		return ErrUnsigned
 	}
 	if release.ChecksumURL == "" || release.SignatureURL == "" {
@@ -218,7 +249,7 @@ func (c Checker) Apply(ctx context.Context, release Release, path string) error 
 	// The signature is checked before the binary is even fetched, so a release
 	// nobody signed costs one small download and stops there.
 	decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(signature)))
-	if err != nil || !ed25519.Verify(c.PublicKey, sums, decoded) {
+	if err != nil || !c.verify(sums, decoded) {
 		return ErrBadSignature
 	}
 

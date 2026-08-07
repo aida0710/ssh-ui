@@ -1198,9 +1198,13 @@ components:
     UpdateStatus:
       type: object
       additionalProperties: false
-      required: [current, available, restartRequired]
+      required: [current, available, updatable, restartRequired]
       properties:
         current: { type: string }
+        # False for a build that was not made from a tag. Such a build trusts no
+        # release signing key, so it can verify nothing and offers nothing; its
+        # update path is the source it was built from.
+        updatable: { type: boolean }
         # Empty until something is published, or until the check has run.
         latest: { type: string }
         available: { type: boolean }

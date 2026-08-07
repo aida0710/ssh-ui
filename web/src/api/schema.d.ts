@@ -987,6 +987,7 @@ export interface components {
         };
         UpdateStatus: {
             current: string;
+            updatable: boolean;
             latest?: string;
             available: boolean;
             pageUrl?: string;

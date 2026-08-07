@@ -1016,6 +1016,7 @@ type UpdateStatus struct {
 	PageUrl         *string `json:"pageUrl,omitempty"`
 	Path            *string `json:"path,omitempty"`
 	RestartRequired bool    `json:"restartRequired"`
+	Updatable       bool    `json:"updatable"`
 }
 
 // ValueSource defines model for ValueSource.

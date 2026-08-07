@@ -38,6 +38,7 @@ func (h *UpdateHandlers) answer(c *echo.Context, latest selfupdate.Release, avai
 	status := api.UpdateStatus{
 		Current:         h.Current,
 		Available:       available,
+		Updatable:       h.Checker != nil && h.Path != "",
 		RestartRequired: h.restarted,
 	}
 	if latest.Version != "" {
