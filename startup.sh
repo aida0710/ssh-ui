@@ -1,1 +1,1 @@
-git pull && make build && ./bin/ssh-ui
+git pull && make build && ./bin/sshc
