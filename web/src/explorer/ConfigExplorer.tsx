@@ -417,7 +417,7 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
                       <button
                         type="button"
                         onClick={() => void deleteFile()}
-                        className="rounded border border-control-line px-2 py-1 text-xs text-danger hover:bg-select-fill"
+                        className={dangerAction}
                       >
                         {t("explorer.confirmDelete")}
                       </button>

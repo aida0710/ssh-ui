@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslate } from "../i18n/context";
 import { ApiError, type Problem } from "../api/client";
 import { configApi, type HistoryEntry, type PendingTransaction } from "../api/config";
+import { secondaryAction } from "../ui/form";
 import { Notice } from "../ui/surface";
 
 function toProblem(error: unknown): Problem {
@@ -83,14 +84,14 @@ export function HistoryPanel() {
                   type="button"
                   disabled={!item.canComplete}
                   onClick={() => void recover(item.id, "complete")}
-                  className="rounded border border-control-line px-2 py-1 text-xs disabled:text-ink-faint"
+                  className={secondaryAction}
                 >
                   {t("history.complete")}
                 </button>
                 <button
                   type="button"
                   onClick={() => void recover(item.id, "rollback")}
-                  className="rounded border border-control-line px-2 py-1 text-xs"
+                  className={secondaryAction}
                 >
                   {t("history.rollBack")}
                 </button>
@@ -116,7 +117,7 @@ export function HistoryPanel() {
                       key={path}
                       type="button"
                       onClick={() => void restore(entry.id, path)}
-                      className="rounded border border-control-line px-2 py-1 text-xs"
+                      className={secondaryAction}
                     >
                       {t("history.restorePath", { path })}
                     </button>

@@ -8,6 +8,7 @@ import {
   type KnownHostEntry,
   type KnownHostsResponse,
 } from "../api/integrations";
+import { CheckboxField, Field, control, secondaryAction } from "../ui/form";
 import { Notice } from "../ui/surface";
 
 type KnownHostsPanelProps = { api?: IntegrationsApi };
@@ -157,15 +158,14 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
         file the user was scanning in order to add to.
       */}
       <div className="flex flex-wrap items-end gap-2">
-        <label className="flex flex-col gap-1 text-sm">
-          <span>{t("kh.hostToScan")}</span>
+        <Field label={t("kh.hostToScan")}>
           <input
             value={scanHost}
             onChange={(event) => setScanHost(event.target.value)}
-            className="rounded border border-control-line bg-control px-2 py-1"
+            className={control}
           />
-        </label>
-        <button type="button" onClick={() => void scan()} className="rounded border border-control-line px-3 py-1 text-sm">
+        </Field>
+        <button type="button" onClick={() => void scan()} className={secondaryAction}>
           {t("kh.scan")}
         </button>
       </div>
@@ -188,7 +188,7 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
                   <button
                     type="button"
                     onClick={() => openAdd(candidate)}
-                    className="rounded border border-control-line px-2 py-1"
+                    className={secondaryAction}
                   >
                     {t("kh.add")}
                   </button>
@@ -206,22 +206,18 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
           <p className="text-ink-muted">
             {adding.keyType} · {adding.fingerprint}
           </p>
-          <label className="mt-2 flex flex-col gap-1">
-            <span>{t("kh.expectedFingerprint")}</span>
+          <Field label={t("kh.expectedFingerprint")}>
             <input
               value={expectedFingerprint}
               onChange={(event) => setExpectedFingerprint(event.target.value)}
-              className="rounded border border-control-line bg-control px-2 py-1"
+              className={control}
             />
-          </label>
-          <label className="mt-2 flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={acknowledged}
-              onChange={(event) => setAcknowledged(event.target.checked)}
-            />
-            <span>{t("kh.acknowledge")}</span>
-          </label>
+          </Field>
+          <CheckboxField
+            label={t("kh.acknowledge")}
+            checked={acknowledged}
+            onChange={setAcknowledged}
+          />
           <div className="mt-2 flex gap-2">
             <button
               type="button"
@@ -231,23 +227,22 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
             >
               {t("kh.addToKnownHosts")}
             </button>
-            <button type="button" onClick={closeAdd} className="rounded border border-control-line px-3 py-1">
+            <button type="button" onClick={closeAdd} className={secondaryAction}>
               {t("kh.cancel")}
             </button>
           </div>
         </div>
       ) : null}
-      <label className="flex flex-col gap-1 text-sm">
-        <span>{t("kh.search")}</span>
+      <Field label={t("kh.search")}>
         <input
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);
             void search(event.target.value);
           }}
-          className="rounded border border-control-line bg-control px-2 py-1"
+          className={control}
         />
-      </label>
+      </Field>
 
       {listing ? (
         <table className="text-sm">
@@ -262,7 +257,7 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
                   <button
                     type="button"
                     onClick={() => setPending(item)}
-                    className="rounded border border-control-line px-2 py-1"
+                    className={secondaryAction}
                   >
                     {t("kh.delete")}
                   </button>
@@ -282,14 +277,14 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
             <button
               type="button"
               onClick={() => void confirmDelete()}
-              className="rounded border border-control-line px-3 py-1"
+              className={secondaryAction}
             >
               {t("kh.confirmDelete")}
             </button>
             <button
               type="button"
               onClick={() => setPending(null)}
-              className="rounded border border-control-line px-3 py-1"
+              className={secondaryAction}
             >
               {t("kh.cancel")}
             </button>

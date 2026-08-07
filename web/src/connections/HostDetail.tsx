@@ -244,14 +244,14 @@ export function HostDetailPanel({
                 id="new-directive"
                 value={newKeyword}
                 onChange={(event) => setNewKeyword(event.target.value)}
-                className="rounded border border-control-line bg-control px-2 py-1 text-sm"
+                className={control}
               />
               <label htmlFor="new-value" className="text-xs text-ink-muted">{t("host.newValue")}</label>
               <input
                 id="new-value"
                 value={newValue}
                 onChange={(event) => setNewValue(event.target.value)}
-                className="rounded border border-control-line bg-control px-2 py-1 text-sm"
+                className={control}
               />
               <button type="button" onClick={addDirective} className={`self-start ${secondaryAction}`}>
                 {t("host.addDirective")}

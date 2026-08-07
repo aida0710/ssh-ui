@@ -17,6 +17,7 @@ import { KnownHostsPanel } from "./knownhosts/KnownHostsPanel";
 import { RemoteKeyPanel } from "./remotekeys/RemoteKeyPanel";
 import { LanguageProvider, useLanguage } from "./i18n/context";
 import { locales, type Locale } from "./i18n/locale";
+import { control } from "./ui/form";
 import { Icon, IconSprite, type IconName } from "./ui/icons";
 import { InspectorPane, InspectorToggle, type InspectorContent } from "./ui/Inspector";
 import { useTheme } from "./theme/context";
@@ -279,7 +280,7 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
           id="appearance"
           value={theme}
           onChange={(event) => setTheme(event.target.value as Theme)}
-          className="rounded border border-control-line bg-control px-2 py-1 text-sm text-ink"
+          className={control}
         >
           {themes.map((candidate) => (
             <option key={candidate} value={candidate}>
@@ -294,7 +295,7 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
           id="language"
           value={locale}
           onChange={(event) => setLocale(event.target.value as Locale)}
-          className="rounded border border-control-line bg-control px-2 py-1 text-sm text-ink"
+          className={control}
         >
           {locales.map((candidate) => (
             <option key={candidate} value={candidate}>

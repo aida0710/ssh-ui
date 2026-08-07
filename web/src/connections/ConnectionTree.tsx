@@ -1,6 +1,7 @@
 import { Fragment, useMemo, useState, type DragEvent, type ReactNode } from "react";
 import type { HostEntry, Overview } from "../api/config";
 import { useTranslate } from "../i18n/context";
+import { control } from "../ui/form";
 import { canDrop, dragMimeType, type DragPayload } from "./dragdrop";
 
 export type HostSelection = { path: string; alias: string };
@@ -427,7 +428,7 @@ export function ConnectionTree({
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         placeholder={t("tree.filterPlaceholder")}
-        className="rounded border border-control-line bg-control px-2 py-1 text-sm"
+        className={control}
       />
 
       {visible.length === 0 ? (
