@@ -17,7 +17,7 @@ import { KnownHostsPanel } from "./knownhosts/KnownHostsPanel";
 import { RemoteKeyPanel } from "./remotekeys/RemoteKeyPanel";
 import { LanguageProvider, useLanguage } from "./i18n/context";
 import { locales, type Locale } from "./i18n/locale";
-import { control } from "./ui/form";
+import { autoControl } from "./ui/form";
 import { Icon, IconSprite, type IconName } from "./ui/icons";
 import { InspectorPane, InspectorToggle, type InspectorContent } from "./ui/Inspector";
 import { useTheme } from "./theme/context";
@@ -254,10 +254,10 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
           names by substring, so the suite's page-level queries for those
           headings would find two elements and fail.
         */}
-        <h1 className="text-xs font-medium text-ink-muted">{t("shell.title")}</h1>
+        <h1 className="shrink-0 whitespace-nowrap text-xs font-medium text-ink-muted">{t("shell.title")}</h1>
         <span aria-hidden="true" className="text-xs text-ink-faint">/</span>
-        <p className="text-sm font-semibold">{t(sectionLabels[section])}</p>
-        <p role="status" className="flex items-center gap-1.5 text-xs text-ink-muted">
+        <p className="shrink-0 whitespace-nowrap text-sm font-semibold">{t(sectionLabels[section])}</p>
+        <p role="status" className="flex min-w-0 items-center gap-1.5 truncate text-xs text-ink-muted">
           <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-live" />
           {state === "ready" ? t("shell.active", { version }) : t("shell.starting")}
         </p>
@@ -273,14 +273,14 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
             />
           </span>
         )}
-        <label htmlFor="appearance" className="text-sm text-ink-muted">
+        <label htmlFor="appearance" className="shrink-0 whitespace-nowrap text-sm text-ink-muted">
           {t("shell.theme")}
         </label>
         <select
           id="appearance"
           value={theme}
           onChange={(event) => setTheme(event.target.value as Theme)}
-          className={control}
+          className={autoControl}
         >
           {themes.map((candidate) => (
             <option key={candidate} value={candidate}>
@@ -288,14 +288,14 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
             </option>
           ))}
         </select>
-        <label htmlFor="language" className="text-sm text-ink-muted">
+        <label htmlFor="language" className="shrink-0 whitespace-nowrap text-sm text-ink-muted">
           {t("shell.language")}
         </label>
         <select
           id="language"
           value={locale}
           onChange={(event) => setLocale(event.target.value as Locale)}
-          className={control}
+          className={autoControl}
         >
           {locales.map((candidate) => (
             <option key={candidate} value={candidate}>

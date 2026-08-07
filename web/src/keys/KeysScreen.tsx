@@ -14,6 +14,7 @@ import {
   tableHeadCell,
   tableHeadRow,
 } from "../ui/form";
+import { Card, Row } from "../ui/surface";
 import type { MessageKey } from "../i18n/messages";
 import { integrationsApi, type Credential, type IntegrationsApi } from "../api/integrations";
 import {
@@ -759,7 +760,7 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
       {registering !== null && (
         <form
           aria-labelledby="agent-register-heading"
-          className={sectionCard}
+          className="flex flex-col gap-3"
           onSubmit={(event) => {
             event.preventDefault();
             void submitRegistration(registering);
@@ -769,12 +770,12 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
             {t("keys.registerHeading", { path: registering.relativePath })}
           </h3>
           <p className="text-sm text-ink-muted">{t("keys.registerNote")}</p>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <Card>
             {registering.encrypted && (
               // "Key passphrase", not "Passphrase": the generation form below
               // has a field of its own, and two controls with one name are two
               // controls a user cannot tell apart.
-              <Field
+              <Row
                 label={t("keys.keyPassphrase")}
                 {...(storedFor(phrases, registering) === undefined ? {} : { hint: t("keys.typedWins") })}
               >
@@ -784,9 +785,9 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
                   value={agentPassphrase}
                   onChange={(event) => setAgentPassphrase(event.target.value)}
                 />
-              </Field>
+              </Row>
             )}
-            <Field label={t("keys.lifetime")}>
+            <Row label={t("keys.lifetime")}>
               <select
                 className={control}
                 value={String(agentLifetime)}
@@ -797,8 +798,8 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
                 <option value="14400">{t("keys.lifetimeFourHours")}</option>
                 <option value="43200">{t("keys.lifetimeTwelveHours")}</option>
               </select>
-            </Field>
-          </div>
+            </Row>
+          </Card>
           {/*
             A stored passphrase turns adding a key into one action rather than
             two. Only key passphrases appear here: an account password offered
@@ -812,7 +813,7 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
           )}
           {registering.encrypted && phrases.length > 0 && (
             <div className="flex flex-wrap items-end gap-3">
-              <Field label={t("keys.useStoredPassphrase")}>
+              <Row label={t("keys.useStoredPassphrase")}>
                 <select
                   className={control}
                   value={chosenPhrase}
@@ -825,7 +826,7 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
                     </option>
                   ))}
                 </select>
-              </Field>
+              </Row>
               <button
                 type="button"
                 className={secondaryAction}
@@ -855,7 +856,7 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
       {relocating !== null && (
         <form
           aria-labelledby="relocate-heading"
-          className={sectionCard}
+          className="flex flex-col gap-3"
           onSubmit={(event) => {
             event.preventDefault();
             void submitRelocation(relocating);
@@ -865,11 +866,11 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
             {t("keys.relocateHeading", { path: relocating.relativePath })}
           </h3>
           <p className="text-sm text-ink-muted">{t("keys.relocateNote")}</p>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label={t("keys.relocateNewName")}>
+          <Card>
+            <Row label={t("keys.relocateNewName")}>
               <input className={control} value={newName} onChange={(event) => setNewName(event.target.value)} />
-            </Field>
-            <Field label={t("keys.relocateGroup")}>
+            </Row>
+            <Row label={t("keys.relocateGroup")}>
               <select className={control} value={newGroup} onChange={(event) => setNewGroup(event.target.value)}>
                 <option value="">{t("keys.groupNone")}</option>
                 {groups.map((group) => (
@@ -878,8 +879,8 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
                   </option>
                 ))}
               </select>
-            </Field>
-          </div>
+            </Row>
+          </Card>
           <div className="flex gap-2">
             <button type="submit" className={primaryAction}>
               {t("keys.relocateSubmit")}
@@ -900,7 +901,7 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
       {relocated !== null && (
         <section
           aria-labelledby="relocate-result-heading"
-          className={`${sectionCard} gap-2 text-sm`}
+          className="flex flex-col gap-2 text-sm"
         >
           <h3 id="relocate-result-heading" className={sectionHeading}>
             {relocated.blockers.length > 0
@@ -970,7 +971,7 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
       {changingPassphrase !== null && (
         <form
           aria-labelledby="passphrase-heading"
-          className={sectionCard}
+          className="flex flex-col gap-3"
           onSubmit={(event) => {
             event.preventDefault();
             void submitPassphrase(changingPassphrase);
@@ -980,16 +981,16 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
             {t("keys.passphraseHeading", { path: changingPassphrase.relativePath })}
           </h3>
           <p className="text-sm text-ink-muted">{t("keys.passphraseNote")}</p>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label={t("keys.currentPassphrase")}>
+          <Card>
+            <Row label={t("keys.currentPassphrase")}>
               <input
                 className={control}
                 type="password"
                 value={currentPassphrase}
                 onChange={(event) => setCurrentPassphrase(event.target.value)}
               />
-            </Field>
-            <Field label={t("keys.newPassphrase")}>
+            </Row>
+            <Row label={t("keys.newPassphrase")}>
               <input
                 className={control}
                 type="password"
@@ -997,8 +998,8 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
                 onChange={(event) => setNewPassphrase(event.target.value)}
                 disabled={removePassphrase}
               />
-            </Field>
-          </div>
+            </Row>
+          </Card>
           <CheckboxField
             label={t("keys.removePassphrase")}
             checked={removePassphrase}
@@ -1020,7 +1021,7 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
 
       <form
         aria-labelledby="create-key-heading"
-        className={sectionCard}
+        className="flex flex-col gap-3"
         onSubmit={(event) => {
           event.preventDefault();
           void submitGeneration();
@@ -1029,8 +1030,8 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
         <h3 id="create-key-heading" className={sectionHeading}>
           {t("keys.createHeading")}
         </h3>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label={t("keys.algorithm")}>
+        <Card>
+          <Row label={t("keys.algorithm")}>
             <select className={control} value={algorithm} onChange={(event) => setAlgorithm(event.target.value)}>
               {variants.map((variant) => (
                 <option key={`${variant.algorithm}-${variant.bits}`} value={variant.algorithm}>
@@ -1038,8 +1039,8 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
                 </option>
               ))}
             </select>
-          </Field>
-          <Field label={t("keys.createGroup")}>
+          </Row>
+          <Row label={t("keys.createGroup")}>
             <select className={control} value={createGroup} onChange={(event) => setCreateGroup(event.target.value)}>
               <option value="">{t("keys.groupNone")}</option>
               {groups.map((group) => (
@@ -1048,15 +1049,15 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
                 </option>
               ))}
             </select>
-          </Field>
-          <Field label={t("keys.fileName")}>
+          </Row>
+          <Row label={t("keys.fileName")}>
             <input className={control} value={fileName} onChange={(event) => setFileName(event.target.value)} />
-          </Field>
-          <Field label={t("keys.comment")}>
+          </Row>
+          <Row label={t("keys.comment")}>
             <input className={control} value={comment} onChange={(event) => setComment(event.target.value)} />
-          </Field>
+          </Row>
           {inProcess && (
-            <Field label={t("keys.passphrase")}>
+            <Row label={t("keys.passphrase")}>
               <input
                 className={control}
                 type="password"
@@ -1064,9 +1065,9 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
                 onChange={(event) => setPassphrase(event.target.value)}
                 disabled={unencrypted}
               />
-            </Field>
+            </Row>
           )}
-        </div>
+        </Card>
         {inProcess && (
           <CheckboxField
             label={t("keys.createUnencrypted")}

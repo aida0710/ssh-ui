@@ -15,6 +15,13 @@ export const control =
 // A control that should not stretch: a number, a colour, a short name.
 export const narrowControl = control.replace("w-full", "w-40");
 
+// A control that takes the width of its own contents.
+//
+// `control` is `w-full`, which is right inside a row or a column and wrong in a
+// toolbar: given to the two selects in the header it stretched them across the
+// strip and squeezed the application's name into three wrapped lines.
+export const autoControl = control.replace("w-full", "w-auto");
+
 // A button label is a name, not a paragraph. Left to wrap, "Remove office"
 // broke across two lines the moment its row ran out of room and the button grew
 // a second storey. Wrapping the row is right; wrapping the word is not.
