@@ -37,7 +37,7 @@ func connectInvocation(argv []string) (string, bool) {
 		return "", false
 	}
 	word := argv[1]
-	if word == "" || word[0] == '-' || word == AskpassSubcommand || word == OpenSubcommand || word == ListSubcommand || word == ConnectSubcommand {
+	if word == "" || word[0] == '-' || word == AskpassSubcommand || word == OpenSubcommand || word == ListSubcommand || word == ConnectSubcommand || word == HelpSubcommand {
 		return "", false
 	}
 	return word, true

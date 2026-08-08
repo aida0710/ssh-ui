@@ -47,6 +47,29 @@ func (p urlPrinter) Open(_ context.Context, target string) error {
 // ためである。
 const AskpassSubcommand = "askpass"
 
+// HelpSubcommand は使い方を出す語。
+//
+// これを予約するのは `open` と同じ理由である。裸の語は alias なので、これがないと
+// "help" はホスト名として ssh へ渡り、使い方を求めた人は
+// "Could not resolve hostname help" を受け取る。-h は flag パッケージが拾うが、
+// 打つ言葉として自然なのはこちらだ。
+const HelpSubcommand = "help"
+
+// helpInvocation は、このプロセスが使い方を求めて起動されたかを報告する。
+//
+// 引数を伴う場合は使い方ではない。`sshc help me` は、まだ理解されていない何かで
+// あって、"help" というホストへの接続ではない。
+func helpInvocation(argv []string) bool {
+	if len(argv) != 2 {
+		return false
+	}
+	switch argv[1] {
+	case HelpSubcommand, "-h", "--help":
+		return true
+	}
+	return false
+}
+
 // askpassInvocation は、このプロセスが OpenSSH のプロンプトに答えるために起動された
 // かを報告し、ヘルパーが読むべき引数を返す。
 //
@@ -83,6 +106,7 @@ func usage(out io.Writer) {
   sshc list            print every concrete Host alias, one per line
   sshc open            ask the running application for a new way in
   sshc askpass         answer an OpenSSH prompt; OpenSSH runs this, not you
+  sshc help            print this
 
 flags:
 `)
@@ -121,6 +145,10 @@ func main() {
 			},
 			os.Stderr,
 		))
+	}
+	if helpInvocation(os.Args) {
+		usage(os.Stdout)
+		os.Exit(0)
 	}
 	if len(os.Args) == 2 && os.Args[1] == ListSubcommand {
 		home, err := os.UserHomeDir()
