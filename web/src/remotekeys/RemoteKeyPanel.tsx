@@ -12,6 +12,7 @@ import {
 import { CopyButton } from "../ui/CopyButton";
 import { Button, Card, Notice, Row } from "../ui/surface";
 import { Field, control } from "../ui/form";
+import { PageHeader } from "../ui/page";
 
 type RemoteKeyPanelProps = {
   api?: RemoteKeysApi;
@@ -140,10 +141,8 @@ export function RemoteKeyPanel({ api = remoteKeysApi, keys = keysApi }: RemoteKe
   const blocked = plan === null || busy || (unavoidable.length > 0 && !acknowledged);
 
   return (
-    <section aria-labelledby="remote-keys-heading" className="flex flex-col gap-4">
-      <h2 id="remote-keys-heading" className="font-medium">
-        {t("rk.heading")}
-      </h2>
+    <section aria-label={t("rk.heading")} className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+      <PageHeader title={t("rk.heading")} description={t("rk.pageDescription")} />
 
       <p aria-live="polite" className="text-sm text-ink-muted">
         {busy ? t("rk.waiting") : t("rk.idle")}

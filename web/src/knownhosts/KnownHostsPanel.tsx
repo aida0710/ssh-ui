@@ -8,8 +8,18 @@ import {
   type KnownHostEntry,
   type KnownHostsResponse,
 } from "../api/integrations";
-import { CheckboxField, Field, control, secondaryAction } from "../ui/form";
+import {
+  CheckboxField,
+  Field,
+  control,
+  secondaryAction,
+  sectionCard,
+  sectionHeading,
+  tableHeadCell,
+  tableHeadRow,
+} from "../ui/form";
 import { Notice } from "../ui/surface";
+import { MetricCard, MetricGrid, PageHeader } from "../ui/page";
 
 type KnownHostsPanelProps = { api?: IntegrationsApi };
 
@@ -138,10 +148,20 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
   const provenOrAcknowledged = expectedFingerprint.trim() !== "" || acknowledged;
 
   return (
-    <section aria-labelledby="known-hosts-heading" className="flex flex-col gap-4">
-      <h2 id="known-hosts-heading" className="font-medium">
-        {t("kh.heading")}
-      </h2>
+    <section aria-label={t("kh.heading")} className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+      <PageHeader title={t("kh.heading")} description={t("kh.pageDescription")} />
+      <MetricGrid>
+        <MetricCard label={t("kh.metricEntries")} value={listing?.entries.length ?? 0} />
+        <MetricCard
+          label={t("kh.metricHashed")}
+          value={listing?.entries.filter((entry) => entry.hashed).length ?? 0}
+        />
+        <MetricCard
+          label={t("kh.metricCandidates")}
+          value={candidates.length}
+          attention={candidates.length > 0}
+        />
+      </MetricGrid>
 
       <p aria-live="polite" className="text-sm text-ink-muted">
         {status}
@@ -157,141 +177,172 @@ export function KnownHostsPanel({ api = integrationsApi }: KnownHostsPanelProps)
         結果はそれと共に移動する: 元の位置に残していたら、候補リストは
         ユーザーが追加しようとスキャンしているファイルより下に置かれてしまっていた。
       */}
-      <div className="flex flex-wrap items-end gap-2">
-        <Field label={t("kh.hostToScan")}>
-          <input
-            value={scanHost}
-            onChange={(event) => setScanHost(event.target.value)}
-            className={control}
-          />
-        </Field>
-        <button type="button" onClick={() => void scan()} className={secondaryAction}>
-          {t("kh.scan")}
-        </button>
-      </div>
-
-      {notice ? <p className="text-sm text-notice-ink">{notice}</p> : null}
-      {candidates.length > 0 ? (
-        <table className="text-sm">
-          <caption className="text-left text-ink-muted">{t("kh.scanCandidates")}</caption>
-          <tbody>
-            {candidates.map((candidate) => (
-              <tr key={`${candidate.host}-${candidate.fingerprint}`}>
-                <td className="pr-3">{candidate.host}</td>
-                <td className="pr-3 text-ink-muted">{candidate.keyType}</td>
-                <td className="pr-3 text-ink-muted">{candidate.fingerprint}</td>
-                {/* スキャンでは identity を確立できないので、ラベルは鍵をどう
-                    取得したかを説明し、応答の
-                    主張を繰り返すことは決してない。 */}
-                <td className="pr-3 text-notice-ink">{t("kh.unverified")}</td>
-                <td>
-                  <button
-                    type="button"
-                    onClick={() => openAdd(candidate)}
-                    className={secondaryAction}
-                  >
-                    {t("kh.add")}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : null}
-
-      {adding ? (
-        <div className="rounded border border-notice-line p-3 text-sm">
-          <h3 className="font-medium text-notice-ink">{t("kh.addHeading")}</h3>
-          <p className="text-ink-muted">{t("kh.addExplain", { host: adding.host })}</p>
-          <p className="text-ink-muted">
-            {adding.keyType} · {adding.fingerprint}
-          </p>
-          <Field label={t("kh.expectedFingerprint")}>
+      <section className={sectionCard} aria-labelledby="known-hosts-scan-heading">
+        <h3 id="known-hosts-scan-heading" className={sectionHeading}>
+          {t("kh.scanHeading")}
+        </h3>
+        <div className="flex flex-wrap items-end gap-2">
+          <Field label={t("kh.hostToScan")}>
             <input
-              value={expectedFingerprint}
-              onChange={(event) => setExpectedFingerprint(event.target.value)}
+              value={scanHost}
+              onChange={(event) => setScanHost(event.target.value)}
               className={control}
             />
           </Field>
-          <CheckboxField
-            label={t("kh.acknowledge")}
-            checked={acknowledged}
-            onChange={setAcknowledged}
+          <button type="button" onClick={() => void scan()} className={secondaryAction}>
+            {t("kh.scan")}
+          </button>
+        </div>
+
+        {notice ? <p className="text-sm text-notice-ink">{notice}</p> : null}
+        {candidates.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <caption className="mb-2 text-left text-ink-muted">{t("kh.scanCandidates")}</caption>
+              <thead>
+                <tr className={tableHeadRow}>
+                  <th scope="col" className={tableHeadCell}>{t("kh.columnHost")}</th>
+                  <th scope="col" className={tableHeadCell}>{t("kh.columnType")}</th>
+                  <th scope="col" className={tableHeadCell}>{t("kh.columnFingerprint")}</th>
+                  <th scope="col" className={tableHeadCell}>{t("kh.columnTrust")}</th>
+                  <th scope="col" className={tableHeadCell}>{t("kh.columnActions")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {candidates.map((candidate) => (
+                  <tr key={`${candidate.host}-${candidate.fingerprint}`} className="border-b border-line last:border-b-0">
+                    <td className="py-2 pr-3">{candidate.host}</td>
+                    <td className="py-2 pr-3 text-ink-muted">{candidate.keyType}</td>
+                    <td className="py-2 pr-3 font-mono text-xs text-ink-muted">{candidate.fingerprint}</td>
+                    {/* スキャンでは identity を確立できないので、ラベルは鍵をどう
+                        取得したかを説明し、応答の
+                        主張を繰り返すことは決してない。 */}
+                    <td className="py-2 pr-3 text-notice-ink">{t("kh.unverified")}</td>
+                    <td className="py-2">
+                      <button
+                        type="button"
+                        onClick={() => openAdd(candidate)}
+                        className={secondaryAction}
+                      >
+                        {t("kh.add")}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+
+        {adding ? (
+          <div className="rounded border border-notice-line p-3 text-sm">
+            <h3 className="font-medium text-notice-ink">{t("kh.addHeading")}</h3>
+            <p className="text-ink-muted">{t("kh.addExplain", { host: adding.host })}</p>
+            <p className="text-ink-muted">
+              {adding.keyType} · {adding.fingerprint}
+            </p>
+            <Field label={t("kh.expectedFingerprint")}>
+              <input
+                value={expectedFingerprint}
+                onChange={(event) => setExpectedFingerprint(event.target.value)}
+                className={control}
+              />
+            </Field>
+            <CheckboxField
+              label={t("kh.acknowledge")}
+              checked={acknowledged}
+              onChange={setAcknowledged}
+            />
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                disabled={!provenOrAcknowledged}
+                onClick={() => void confirmAdd()}
+                className="rounded border border-notice-line px-3 py-1 disabled:border-line disabled:text-ink-faint"
+              >
+                {t("kh.addToKnownHosts")}
+              </button>
+              <button type="button" onClick={closeAdd} className={secondaryAction}>
+                {t("kh.cancel")}
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </section>
+
+      <section className={sectionCard} aria-labelledby="known-hosts-trusted-heading">
+        <h3 id="known-hosts-trusted-heading" className={sectionHeading}>
+          {t("kh.trustedHeading")}
+        </h3>
+        <Field label={t("kh.search")}>
+          <input
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              void search(event.target.value);
+            }}
+            className={control}
           />
-          <div className="mt-2 flex gap-2">
-            <button
-              type="button"
-              disabled={!provenOrAcknowledged}
-              onClick={() => void confirmAdd()}
-              className="rounded border border-notice-line px-3 py-1 disabled:border-line disabled:text-ink-faint"
-            >
-              {t("kh.addToKnownHosts")}
-            </button>
-            <button type="button" onClick={closeAdd} className={secondaryAction}>
-              {t("kh.cancel")}
-            </button>
+        </Field>
+
+        {listing ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <caption className="mb-2 text-left text-ink-muted">{listing.path}</caption>
+              <thead>
+                <tr className={tableHeadRow}>
+                  <th scope="col" className={tableHeadCell}>{t("kh.columnHost")}</th>
+                  <th scope="col" className={tableHeadCell}>{t("kh.columnType")}</th>
+                  <th scope="col" className={tableHeadCell}>{t("kh.columnFingerprint")}</th>
+                  <th scope="col" className={tableHeadCell}>{t("kh.columnActions")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {listing.entries.map((item) => (
+                  <tr key={`${item.line}-${item.digest}`} className="border-b border-line last:border-b-0">
+                    <td className="py-2 pr-3">{item.hashed ? t("kh.hashed") : item.hosts.join(", ")}</td>
+                    <td className="py-2 pr-3 text-ink-muted">{item.keyType}</td>
+                    <td className="py-2 pr-3 font-mono text-xs text-ink-muted">{item.fingerprint}</td>
+                    <td className="py-2">
+                      <button
+                        type="button"
+                        onClick={() => setPending(item)}
+                        className={secondaryAction}
+                      >
+                        {t("kh.delete")}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
-      ) : null}
-      <Field label={t("kh.search")}>
-        <input
-          value={query}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            void search(event.target.value);
-          }}
-          className={control}
-        />
-      </Field>
+        ) : null}
 
-      {listing ? (
-        <table className="text-sm">
-          <caption className="text-left text-ink-muted">{listing.path}</caption>
-          <tbody>
-            {listing.entries.map((item) => (
-              <tr key={`${item.line}-${item.digest}`}>
-                <td className="pr-3">{item.hashed ? t("kh.hashed") : item.hosts.join(", ")}</td>
-                <td className="pr-3 text-ink-muted">{item.keyType}</td>
-                <td className="pr-3 text-ink-muted">{item.fingerprint}</td>
-                <td>
-                  <button
-                    type="button"
-                    onClick={() => setPending(item)}
-                    className={secondaryAction}
-                  >
-                    {t("kh.delete")}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : null}
-
-      {pending ? (
-        <div className="rounded border border-control-line p-3 text-sm">
-          <p>
-            {t("kh.confirmRemove", { line: pending.line, fingerprint: pending.fingerprint })}
-          </p>
-          <div className="mt-2 flex gap-2">
-            <button
-              type="button"
-              onClick={() => void confirmDelete()}
-              className={secondaryAction}
-            >
-              {t("kh.confirmDelete")}
-            </button>
-            <button
-              type="button"
-              onClick={() => setPending(null)}
-              className={secondaryAction}
-            >
-              {t("kh.cancel")}
-            </button>
+        {pending ? (
+          <div className="rounded border border-control-line p-3 text-sm">
+            <p>
+              {t("kh.confirmRemove", { line: pending.line, fingerprint: pending.fingerprint })}
+            </p>
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                onClick={() => void confirmDelete()}
+                className={secondaryAction}
+              >
+                {t("kh.confirmDelete")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPending(null)}
+                className={secondaryAction}
+              >
+                {t("kh.cancel")}
+              </button>
+            </div>
           </div>
-        </div>
-      ) : null}
-
+        ) : null}
+      </section>
     </section>
   );
 }

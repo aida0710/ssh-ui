@@ -21,6 +21,7 @@ import {
 } from "../ui/form";
 import { useTranslate } from "../i18n/context";
 import { Notice } from "../ui/surface";
+import { PageHeader } from "../ui/page";
 
 type DiagnosticsPanelProps = {
   api?: IntegrationsApi;
@@ -121,13 +122,10 @@ export function DiagnosticsPanel({ api = integrationsApi, host }: DiagnosticsPan
   return (
     <section
       aria-label={embedded ? t("diag.forHost", { host: host ?? "" }) : undefined}
-      aria-labelledby={embedded ? undefined : "diagnostics-heading"}
-      className="flex flex-col gap-4"
+      className={embedded ? "flex flex-col gap-4" : "mx-auto flex w-full max-w-5xl flex-col gap-6"}
     >
       {embedded ? null : (
-        <h2 id="diagnostics-heading" className="font-medium">
-          {t("diag.heading")}
-        </h2>
+        <PageHeader title={t("diag.heading")} description={t("diag.pageDescription")} />
       )}
 
       <p aria-live="polite" className={hintText}>

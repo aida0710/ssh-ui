@@ -737,7 +737,7 @@ describe("KeysScreen", () => {
     render(<KeysScreen api={buildApi()} secrets={secrets} />);
 
     const row = await screen.findByRole("row", { name: /id_work/ });
-    await user.click(within(row).getByRole("button", { name: "Stored passphrase" }));
+    await user.click(within(row).getByRole("button", { name: "Save passphrase" }));
     await user.type(screen.getByLabelText("Passphrase name"), "production-key");
     await user.type(screen.getByLabelText("Passphrase value"), "a secret phrase only for this test");
     await user.click(screen.getByRole("button", { name: "Save and use for this key" }));
@@ -768,7 +768,7 @@ describe("KeysScreen", () => {
     render(<KeysScreen api={buildApi()} secrets={secrets} />);
 
     const row = await screen.findByRole("row", { name: /id_work/ });
-    await user.click(within(row).getByRole("button", { name: "Stored passphrase" }));
+    await user.click(within(row).getByRole("button", { name: "Save passphrase" }));
     expect(await screen.findByText(/uses the stored passphrase named build-key/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Stop using it" }));
 
@@ -784,7 +784,7 @@ describe("KeysScreen", () => {
     render(<KeysScreen api={buildApi()} secrets={secrets} />);
 
     const row = await screen.findByRole("row", { name: /id_work/ });
-    await user.click(within(row).getByRole("button", { name: "Stored passphrase" }));
+    await user.click(within(row).getByRole("button", { name: "Save passphrase" }));
     await user.type(screen.getByLabelText("Passphrase name"), "build-key");
     await user.type(screen.getByLabelText("Passphrase value"), "must not replace the shared value");
     await user.click(screen.getByRole("button", { name: "Save and use for this key" }));

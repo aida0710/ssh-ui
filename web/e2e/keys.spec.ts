@@ -69,7 +69,7 @@ test("stores an encrypted key passphrase from the key row and shows only its nam
 
   const row = page.getByRole("row", { name: /id_saved_phrase\b/ }).first();
   await expect(row).toBeVisible();
-  await row.getByRole("button", { name: "Stored passphrase" }).click();
+  await row.getByRole("button", { name: "Save passphrase" }).click();
   await page.getByLabel("Passphrase name").fill("saved-e2e-key");
   await page.getByLabel("Passphrase value").fill(passphrase);
   const assigned = page.waitForResponse(
