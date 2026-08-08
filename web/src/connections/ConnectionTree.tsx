@@ -49,11 +49,12 @@ function hostLabel(host: HostEntry): string {
   return host.identity.alias === "" ? `Host ${host.patterns.join(" ")}` : host.identity.alias;
 }
 
-function matchesQuery(host: HostEntry, tags: string[], query: string): boolean {
+function matchesQuery(host: HostEntry, group: string, tags: string[], query: string): boolean {
   if (query === "") return true;
   const needle = query.toLowerCase();
   if (host.identity.alias.toLowerCase().includes(needle)) return true;
   if (host.patterns.some((pattern) => pattern.toLowerCase().includes(needle))) return true;
+  if (group.toLowerCase().includes(needle)) return true;
   return tags.some((tag) => tag.toLowerCase().includes(needle));
 }
 
@@ -70,6 +71,7 @@ export function ConnectionTree({
   // だったが、コントロールがフィルタの上に戻ってきたので、state もそれに伴って移ってきた。
   const [grouping, setGrouping] = useState<Grouping>("groups");
   const [query, setQuery] = useState("");
+  const [favouritesOnly, setFavouritesOnly] = useState(false);
   // 何がドラッグされているかを、イベントから読み戻すのではなくここで
   // 保持する。dragover ハンドラは dataTransfer.types は読めても getData
   // は読めない——データはドロップされるまで保護されている——ので、
@@ -141,7 +143,9 @@ export function ConnectionTree({
     [overview.hosts, metadataByAlias],
   );
 
-  const visible = decorated.filter((item) => matchesQuery(item.host, item.tags, query));
+  const visible = decorated.filter(
+    (item) => (!favouritesOnly || item.favourite) && matchesQuery(item.host, item.group, item.tags, query),
+  );
   const fileSections = useMemo(
     () =>
       overview.files.map((file) => ({
@@ -252,7 +256,11 @@ export function ConnectionTree({
                         onDragEnd={() => setDragging(null)}
                         aria-current={active ? "true" : undefined}
                         aria-describedby={descriptionId}
-                        className={`w-full rounded px-2 py-1 text-left text-sm ${active ? "bg-select-fill" : "hover:bg-select-fill"}`}
+                        className={`w-full rounded-lg border px-2.5 py-2 text-left text-sm transition-colors ${
+                          active
+                            ? "border-control-line bg-select-fill shadow-sm"
+                            : "border-transparent hover:border-line hover:bg-card"
+                        }`}
                       >
                         <span className="flex items-center gap-1">
                           {/*
@@ -424,7 +432,7 @@ export function ConnectionTree({
     // るバーになってしまう——ヘッダーの select 群が自前の幅を与えられる
     // 前に、同じように伸びてしまっていたのと同様だ。
     <nav aria-label={t("tree.navLabel")} className="flex h-full flex-col gap-3">
-      <div className="flex">
+      <div className="flex items-center justify-between gap-2">
         <Segmented
           label={t("tree.arrangeBy")}
           value={grouping}
@@ -434,6 +442,19 @@ export function ConnectionTree({
           ]}
           onChange={setGrouping}
         />
+        <button
+          type="button"
+          aria-pressed={favouritesOnly}
+          onClick={() => setFavouritesOnly((current) => !current)}
+          className={`rounded-md border px-2.5 py-1 text-xs ${
+            favouritesOnly
+              ? "border-notice-line bg-notice text-notice-ink"
+              : "border-control-line bg-card text-ink-muted hover:text-ink"
+          }`}
+        >
+          <span aria-hidden="true" className="me-1 text-notice-ink">★</span>
+          {t("tree.favouritesOnly")}
+        </button>
       </div>
       <label className="text-xs text-ink-muted" htmlFor="connection-filter">
         {t("tree.filter")}
@@ -444,7 +465,7 @@ export function ConnectionTree({
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         placeholder={t("tree.filterPlaceholder")}
-        className={control}
+        className={`${control} rounded-lg`}
       />
 
       {visible.length === 0 ? (

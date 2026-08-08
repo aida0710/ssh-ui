@@ -22,6 +22,8 @@ import { HostInspector, hostNeedsAttention } from "./HostInspector";
 import { control, fieldLabel, narrowControl } from "../ui/form";
 import { Button, Notice } from "../ui/surface";
 import { appendHostBlock, duplicateHostBlock, removeHostBlock } from "./blocks";
+import { integrationsApi } from "../api/integrations";
+import { Icon } from "../ui/icons";
 
 // Groups 画面が報告し、この画面は報告しないもの。
 //
@@ -63,10 +65,15 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
   const [preview, setPreview] = useState<SavePreview | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
   const [newAlias, setNewAlias] = useState("");
-  const [targetFile, setTargetFile] = useState("config");
+  // 空文字は「サーバーが報告した entry file」を意味する。entry file は通常
+  // config だが、固定すると別の root を使う構成で存在しないファイルへ
+  // 新規接続を書こうとしてしまう。
+  const [targetFile, setTargetFile] = useState("");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [localError, setLocalError] = useState("");
   const [moveTarget, setMoveTarget] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [launching, setLaunching] = useState(false);
 
   const reload = useCallback(async () => {
     try {
@@ -289,17 +296,32 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
       return;
     }
     try {
-      const current = await configApi.file(targetFile);
+      const destination = targetFile || entryPath;
+      const current = await configApi.file(destination);
       await submit({
         kind: "file_raw",
-        path: targetFile,
+        path: destination,
         base: current.contents,
         raw: appendHostBlock(current.contents, newAlias),
       });
       setNewAlias("");
       setLocalError("");
+      setCreating(false);
     } catch (error) {
       setProblem(toProblem(error));
+    }
+  }
+
+  async function connectHost() {
+    if (selection === null || launching) return;
+    setLaunching(true);
+    setLocalError("");
+    try {
+      await integrationsApi.terminalLaunch(selection.alias);
+    } catch {
+      setLocalError(t("conn.launchFailed", { alias: selection.alias }));
+    } finally {
+      setLaunching(false);
     }
   }
 
@@ -385,8 +407,23 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
     // detail に付けた minmax(0,…) は、inspector が開いたときに狭められる
     // ようにするためだ。素の 1fr は minmax(auto,1fr) であり、コンテンツの
     // 幅を保ち続けてしまい、ボタンをペインの下へ押し出してしまう。
-    <div className="grid h-full grid-cols-[18rem_minmax(0,1fr)] grid-rows-[minmax(0,1fr)]">
+    <div className="grid h-full grid-cols-[19rem_minmax(0,1fr)] grid-rows-[minmax(0,1fr)]">
       <div className="flex min-h-0 flex-col border-r border-line bg-tree">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-3 py-3">
+          <div className="min-w-0">
+            <h2 className="font-semibold">{t("conn.heading")}</h2>
+            <p className="text-xs text-ink-muted">
+              {t("conn.count", { count: overview.hosts.filter((host) => host.identity.alias !== "").length })}
+            </p>
+          </div>
+          <Button
+            kind="primary"
+            className="shrink-0 px-2.5 py-1.5 text-xs"
+            onClick={() => setCreating((current) => !current)}
+          >
+            {creating ? t("conn.cancelCreate") : t("conn.new")}
+          </Button>
+        </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
           <ConnectionTree
             overview={overview}
@@ -401,7 +438,8 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
           対して行う唯一の操作であり、だからこそ source list が "+" を置くの
           と同じ足元に置く——リストの上に置いて下へ押し出すのではなく。
         */}
-        <div className="flex shrink-0 flex-col gap-2 border-t border-line p-3">
+        {creating ? <div className="flex shrink-0 flex-col gap-2 border-t border-line bg-card p-3">
+          <p className="text-sm font-medium">{t("conn.new")}</p>
           <label htmlFor="new-alias" className={fieldLabel}>{t("conn.newAlias")}</label>
           <input
             id="new-alias"
@@ -412,7 +450,7 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
           <label htmlFor="new-file" className={fieldLabel}>{t("conn.targetFile")}</label>
           <select
             id="new-file"
-            value={targetFile}
+            value={targetFile || entryPath}
             onChange={(event) => setTargetFile(event.target.value)}
             className={control}
           >
@@ -422,8 +460,8 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
                 <option key={node.file.absolute} value={node.file.path}>{node.file.path}</option>
               ))}
           </select>
-          <Button onClick={() => void createHost()}>{t("conn.create")}</Button>
-        </div>
+          <Button kind="primary" onClick={() => void createHost()}>{t("conn.create")}</Button>
+        </div> : null}
       </div>
       <div className="flex min-h-0 flex-col gap-4 overflow-y-auto p-6">
         {/*
@@ -440,11 +478,25 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
           onSave={(metadata) => void submit({ kind: "metadata", metadata })}
         />
         {detail === null ? (
-          <p role="status" className="text-sm text-ink-muted">{t("conn.select")}</p>
+          <section className="m-auto flex max-w-sm flex-col items-center text-center" role="status">
+            <span
+              aria-hidden="true"
+              className="mb-4 flex size-14 items-center justify-center rounded-2xl border border-line bg-card text-ink-muted shadow-sm"
+            >
+              <Icon name="connections" className="size-7" />
+            </span>
+            <h2 className="text-lg font-semibold text-ink">{t("conn.emptyHeading")}</h2>
+            <p className="mt-1 text-sm leading-6 text-ink-muted">{t("conn.emptyHint")}</p>
+            <Button kind="primary" className="mt-4" onClick={() => setCreating(true)}>{t("conn.createAnother")}</Button>
+          </section>
         ) : (
           <>
             {localError === "" ? null : <Notice tone="danger">{localError}</Notice>}
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-card p-3 shadow-sm">
+              <Button kind="primary" disabled={launching} onClick={() => void connectHost()}>
+                {launching ? t("conn.opening") : t("conn.connect")}
+              </Button>
+              <span aria-hidden="true" className="mx-1 h-6 w-px bg-line" />
               <Button onClick={duplicateHost}>{t("conn.duplicate")}</Button>
               <label htmlFor="move-target" className="sr-only">{t("conn.moveToFile")}</label>
               <select

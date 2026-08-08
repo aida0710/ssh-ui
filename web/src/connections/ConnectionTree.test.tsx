@@ -173,6 +173,21 @@ describe("ConnectionTree", () => {
     expect(screen.queryByRole("button", { name: /nas/ })).not.toBeInTheDocument();
   });
 
+  it("searches group names and can show favourites only", async () => {
+    const user = userEvent.setup();
+    render(<ConnectionTree overview={overview} selected={null} onSelect={vi.fn()} onOpenPatternRule={vi.fn()} onDrop={vi.fn()} />);
+
+    const search = screen.getByRole("searchbox", { name: "Filter connections" });
+    await user.type(search, "home");
+    expect(screen.getByRole("button", { name: /nas/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /bastion/ })).not.toBeInTheDocument();
+
+    await user.clear(search);
+    await user.click(screen.getByRole("button", { name: "Favourites" }));
+    expect(screen.getByRole("button", { name: /nas/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /bastion/ })).not.toBeInTheDocument();
+  });
+
   it("selects a host", async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();

@@ -5,11 +5,16 @@ import { ConnectionsPage } from "./ConnectionsPage";
 import { ApiError } from "../api/client";
 import { configApi } from "../api/config";
 import { dragMimeType, type DragPayload } from "./dragdrop";
+import { integrationsApi } from "../api/integrations";
 
 vi.mock("../api/config", async () => {
   const actual = await vi.importActual<typeof import("../api/config")>("../api/config");
   return { ...actual, configApi: { overview: vi.fn(), host: vi.fn(), file: vi.fn(), preview: vi.fn(), save: vi.fn(), renameGroup: vi.fn() } };
 });
+
+vi.mock("../api/integrations", () => ({
+  integrationsApi: { terminalLaunch: vi.fn() },
+}));
 
 const overview = {
   entry: { path: "config", absolute: "/home/tester/.ssh/config" },
@@ -45,6 +50,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(configApi.overview).mockResolvedValue(overview as never);
   vi.mocked(configApi.host).mockResolvedValue(detail as never);
+  vi.mocked(integrationsApi.terminalLaunch).mockResolvedValue({ command: "ssh bastion" } as never);
 });
 
 describe("ConnectionsPage", () => {
@@ -70,6 +76,18 @@ describe("ConnectionsPage", () => {
       fields: [{ action: "set", line: 2, values: ["2222"] }],
     }));
     expect(configApi.host).toHaveBeenCalledWith("config", "bastion");
+  });
+
+  it("opens the selected host in Terminal only after an explicit connect action", async () => {
+    const user = userEvent.setup();
+    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} />);
+
+    expect(integrationsApi.terminalLaunch).not.toHaveBeenCalled();
+    await user.click(await screen.findByRole("button", { name: /bastion/ }));
+    expect(integrationsApi.terminalLaunch).not.toHaveBeenCalled();
+    await user.click(await screen.findByRole("button", { name: "Connect" }));
+
+    expect(integrationsApi.terminalLaunch).toHaveBeenCalledWith("bastion");
   });
 
   it("keeps the diff of what was written on screen after the save reloads the host", async () => {
@@ -173,7 +191,7 @@ describe("ConnectionsPage", () => {
 
     expect(onOpenFile).toHaveBeenCalledWith("config", 9);
     expect(configApi.host).not.toHaveBeenCalled();
-    expect(screen.getByText("Select a connection to edit it.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Choose a connection" })).toBeInTheDocument();
   });
 
   it("keeps the edit visible and shows the conflict when the file changed on disk", async () => {
@@ -214,6 +232,7 @@ describe("ConnectionsPage", () => {
 
     render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} />);
 
+    await user.click(await screen.findByRole("button", { name: "New connection" }));
     await user.type(await screen.findByLabelText("New connection alias"), "build01");
     await user.click(screen.getByRole("button", { name: "Create connection" }));
 
@@ -223,6 +242,30 @@ describe("ConnectionsPage", () => {
       base: "Host bastion\n\tPort 22\n",
       raw: "Host bastion\n\tPort 22\n\nHost build01\n\tHostName build01\n",
     }));
+  });
+
+  it("uses the entry file reported by the server instead of assuming config", async () => {
+    const user = userEvent.setup();
+    vi.mocked(configApi.overview).mockResolvedValue({
+      ...overview,
+      entry: { path: "ssh_config", absolute: "/home/tester/.ssh/ssh_config" },
+      files: [{ file: { path: "ssh_config", absolute: "/home/tester/.ssh/ssh_config" }, editable: true, loads: 1 }],
+    } as never);
+    vi.mocked(configApi.file).mockResolvedValue({
+      file: { path: "ssh_config", absolute: "/home/tester/.ssh/ssh_config" },
+      contents: "", digest: "digest", editable: true, exists: true,
+    } as never);
+    vi.mocked(configApi.save).mockResolvedValue({
+      transactionId: "t1", written: ["ssh_config"], preview: { operation: "config.file_raw", diffs: [] },
+    } as never);
+
+    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} />);
+    await user.click(await screen.findByRole("button", { name: "New connection" }));
+    await user.type(await screen.findByLabelText("New connection alias"), "build01");
+    await user.click(screen.getByRole("button", { name: "Create connection" }));
+
+    await waitFor(() => expect(configApi.file).toHaveBeenCalledWith("ssh_config"));
+    expect(configApi.save).toHaveBeenCalledWith(expect.objectContaining({ path: "ssh_config" }));
   });
 
   it("moves a host to another file with both loaded bases", async () => {
