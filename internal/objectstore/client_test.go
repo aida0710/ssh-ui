@@ -4,10 +4,13 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"sshc/internal/objectstore"
 )
@@ -196,4 +199,70 @@ func TestAnyOtherRejectionCarriesNoResponseBody(t *testing.T) {
 	if strings.Contains(err.Error(), "private-bucket") {
 		t.Error("the error carries the response body")
 	}
+}
+
+func TestAnErrorBodyIsDiscardedBeforeTheSDKReadsIt(t *testing.T) {
+	body := &observedBody{}
+	client := objectstore.Client{
+		HTTP: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusForbidden,
+				Header:     make(http.Header),
+				Body:       body,
+			}, nil
+		})},
+		Endpoint: "http://127.0.0.1",
+		Bucket:   "sshc",
+		Region:   "auto",
+		Creds:    suiteCredentials(),
+	}
+
+	if _, err := client.Get(context.Background(), "k"); !errors.Is(err, objectstore.ErrRefused) {
+		t.Fatalf("Get = %v, want ErrRefused", err)
+	}
+	if got := body.reads.Load(); got != 0 {
+		t.Errorf("error body was read %d times", got)
+	}
+	if !body.closed.Load() {
+		t.Error("error body was not closed")
+	}
+}
+
+func TestARequestThatStopsRespondingTimesOut(t *testing.T) {
+	client, _ := newClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("ETag", `"v"`)
+		w.WriteHeader(http.StatusOK)
+		w.(http.Flusher).Flush()
+		<-r.Context().Done()
+	})
+	client.RequestTimeout = 25 * time.Millisecond
+
+	started := time.Now()
+	if _, err := client.Get(context.Background(), "k"); err == nil {
+		t.Fatal("Get succeeded after the server stopped responding")
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("Get took %s despite its request timeout", elapsed)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return f(request)
+}
+
+type observedBody struct {
+	reads  atomic.Int64
+	closed atomic.Bool
+}
+
+func (b *observedBody) Read([]byte) (int, error) {
+	b.reads.Add(1)
+	return 0, io.EOF
+}
+
+func (b *observedBody) Close() error {
+	b.closed.Store(true)
+	return nil
 }

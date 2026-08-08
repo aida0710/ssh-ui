@@ -32,5 +32,8 @@
     "typescript": "5.9.3",
     "vite": "8.1.5",
     "vitest": "4.1.1"
+  },
+  "overrides": {
+    "js-yaml": "4.3.1"
   }
 }

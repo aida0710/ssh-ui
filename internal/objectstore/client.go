@@ -2,9 +2,9 @@
 //
 // 中身は aws-sdk-go-v2 である。以前はここに手書きの SigV4 署名器と、path-style で
 // URL を組み立てるだけのリクエスト構築があった。読み切れる大きさではあったが、
-// path-style に固定されていたため、本物の AWS S3 — 新しいリージョンのバケットは
-// virtual-hosted-style を要求する — には届かなかった。R2 以外のストアも使うなら、
-// アドレッシング方式とリージョン解決と署名を自前で持ち続ける理由がない。
+// S3 互換ストアごとの差や署名仕様の変更を自前で持ち続ける理由はないため、SDK に
+// それらを任せている。既存設定との互換性のため、アドレッシングは path-style の
+// ままである。
 //
 // このパッケージが残っているのは、SDK が面倒を見ない性質がいくつかあるからである。
 // エンドポイントはループバックでない限り https であること、本文には必ず上限が
@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
@@ -45,6 +46,9 @@ var (
 	ErrBothConditions = errors.New("If-Match and If-None-Match are mutually exclusive")
 	// ErrObjectTooLarge は、単一リクエストの上限を超える本文を拒否する。
 	ErrObjectTooLarge = errors.New("the object is too large for a single request")
+	// sharedDefaultHTTPClient は、操作ごとに SDK クライアントを組み立てても接続プールを
+	// 共有する。資格情報やエンドポイントは HTTP クライアントには保持されない。
+	sharedDefaultHTTPClient = awshttp.NewBuildableClient().WithTimeout(defaultRequestTimeout)
 )
 
 // MaxObjectBytes は、このクライアントが送受信する最大のスナップショットサイズ。
@@ -52,7 +56,10 @@ var (
 // S3 は 1 回の PUT で 5 GiB を許すが、これはそれよりはるかに小さい。~/.ssh は
 // キロバイト単位であり、この上限に近づくというのは、誰かの設定が大きいという
 // ことではなく、何かがおかしいということだからだ。
-const MaxObjectBytes = 256 << 20
+const (
+	MaxObjectBytes        = 256 << 20
+	defaultRequestTimeout = 60 * time.Second
+)
 
 // Credentials はアクセスキーの組。ログに出ることはなく、URL に現れることもない。
 // このクライアントはヘッダーだけで署名する。presign は使わない。
@@ -73,6 +80,9 @@ type Object struct {
 // Client は、このアプリケーションが必要とする範囲の S3 API を話す。
 type Client struct {
 	HTTP *http.Client
+	// RequestTimeout はリクエスト全体の上限。0 なら 60 秒である。テストや、明示的に
+	// より短い上限を必要とする呼び出し側だけが設定する。
+	RequestTimeout time.Duration
 	// Endpoint はアカウントのエンドポイント。たとえば
 	// https://<account>.r2.cloudflarestorage.com。https でなければならない。
 	Endpoint string
@@ -117,12 +127,9 @@ func (c Client) api() (*s3.Client, error) {
 	options := s3.Options{
 		Region:       c.Region,
 		BaseEndpoint: aws.String(c.Endpoint),
-		// path-style は https://<endpoint>/<bucket>/<key> で、R2・MinIO・SeaweedFS が
-		// 受け付ける形であり、このアプリケーションがこれまで送ってきた唯一の形でも
-		// ある。本物の AWS S3 は path-style を非推奨としており、新しいリージョンの
-		// バケットは virtual-hosted-style を要求するので、そこへは届かない。切り替え
-		// はここの false 一箇所だが、設定に出す配線が伴わなければ誰も回せない
-		// つまみになるだけなので、AWS を実際に使うときに両方まとめて入れる。
+		// path-style は https://<endpoint>/<bucket>/<key> で、R2・MinIO・SeaweedFS と
+		// 既存の AWS S3 設定が受け付ける形である。ここを暗黙に変えると、利用中の
+		// カスタムエンドポイントのホスト名と TLS 証明書を壊すため固定している。
 		UsePathStyle: true,
 		Credentials: credentials.NewStaticCredentialsProvider(
 			c.Creds.AccessKeyID, c.Creds.SecretAccessKey, ""),
@@ -132,11 +139,50 @@ func (c Client) api() (*s3.Client, error) {
 		// 回線に載るものを単純に保つ。
 		RequestChecksumCalculation: aws.RequestChecksumCalculationWhenRequired,
 		APIOptions:                 []func(*middleware.Stack) error{signThePayload},
-	}
-	if c.HTTP != nil {
-		options.HTTPClient = c.HTTP
+		HTTPClient:                 c.httpClient(),
 	}
 	return s3.New(options), nil
+}
+
+// httpClient は、接続後に応答を止めるストアにもリクエスト全体の上限を適用する。
+// 非 2xx の本文は、SDK が XML としてメモリへ全量コピーする前に捨てる。この
+// アプリケーションが拒否の分類に使うのはステータスコードだけであり、本文を
+// 読ませる理由はない。
+func (c Client) httpClient() aws.HTTPClient {
+	timeout := c.RequestTimeout
+	if timeout <= 0 {
+		timeout = defaultRequestTimeout
+	}
+
+	var base aws.HTTPClient
+	if c.HTTP == nil {
+		base = sharedDefaultHTTPClient
+		if c.RequestTimeout > 0 {
+			base = awshttp.NewBuildableClient().WithTimeout(timeout)
+		}
+	} else {
+		client := *c.HTTP
+		if c.RequestTimeout > 0 || client.Timeout <= 0 {
+			client.Timeout = timeout
+		}
+		base = &client
+	}
+	return discardErrorBodyClient{base: base}
+}
+
+type discardErrorBodyClient struct {
+	base aws.HTTPClient
+}
+
+func (c discardErrorBodyClient) Do(request *http.Request) (*http.Response, error) {
+	response, err := c.base.Do(request)
+	if err != nil || response == nil || response.StatusCode < http.StatusMultipleChoices || response.Body == nil {
+		return response, err
+	}
+	_ = response.Body.Close()
+	response.Body = http.NoBody
+	response.ContentLength = 0
+	return response, nil
 }
 
 // signThePayload は、S3 が PutObject に入れる UNSIGNED-PAYLOAD を元に戻す。
