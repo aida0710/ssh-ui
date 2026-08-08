@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"sshc/internal/config"
+	"sshc/internal/effective"
 )
 
 // ErrHostNotFound は、graph 内のどの Host ブロックも要求された
@@ -131,41 +132,17 @@ func PrimaryAlias(patterns []config.Pattern) string {
 	return ""
 }
 
-// MatchesPattern は OpenSSH の match_pattern を実装する。'*'は任意の
-// 文字の連なりに match し、'?'はちょうど 1 文字に match する。matching は
-// 大文字小文字を区別し、文字クラスは存在しない。
-func MatchesPattern(pattern, candidate string) bool {
-	patternIndex, candidateIndex := 0, 0
-	starIndex, resumeIndex := -1, 0
-	for candidateIndex < len(candidate) {
-		switch {
-		case patternIndex < len(pattern) && (pattern[patternIndex] == '?' || pattern[patternIndex] == candidate[candidateIndex]):
-			patternIndex++
-			candidateIndex++
-		case patternIndex < len(pattern) && pattern[patternIndex] == '*':
-			starIndex = patternIndex
-			resumeIndex = candidateIndex
-			patternIndex++
-		case starIndex >= 0:
-			patternIndex = starIndex + 1
-			resumeIndex++
-			candidateIndex = resumeIndex
-		default:
-			return false
-		}
-	}
-	for patternIndex < len(pattern) && pattern[patternIndex] == '*' {
-		patternIndex++
-	}
-	return patternIndex == len(pattern)
-}
-
 // MatchHostLine は、match する negated pattern が 1 個でもあれば行全体を却下し、positive
 // pattern が少なくとも 1 個 match しなければならないという OpenSSH の規則を適用する。
+//
+// パターンの照合そのものは effective.MatchPattern に委ねる。以前はここに同じ 29 行の
+// 実装を持っていた。片方が大文字小文字を区別し、もう片方がしなかったので別物に
+// 見えていたが、あちらを実物の OpenSSH に合わせて直した時点で同じ判断になった。
+// 同じ問いに答えるものが 2 つあれば、また片方だけずれる。
 func MatchHostLine(patterns []config.Pattern, candidate string) bool {
 	matched := false
 	for _, pattern := range patterns {
-		if !MatchesPattern(pattern.Value, candidate) {
+		if !effective.MatchPattern(pattern.Value, candidate) {
 			continue
 		}
 		if pattern.Negated {
