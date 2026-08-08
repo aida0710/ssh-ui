@@ -250,21 +250,26 @@ func blockApplies(block config.Block, alias string) (kind string, applies bool) 
 }
 
 // MatchPattern は OpenSSH の match_pattern を実装する。'*' は任意の並びに、'?' は
-// ちょうど 1 文字に一致し、比較は大文字小文字を区別せず、他のメタ文字に特別な意味は
-// ない。
+// ちょうど 1 文字に一致し、他のメタ文字に特別な意味はない。
+//
+// 比較は大文字小文字を区別する。以前は区別しておらず、Host BASTION のブロックが
+// alias bastion に適用されると答えていた。実物はそうしない — Host BASTION だけを
+// 持つ設定に `ssh -G bastion` を投げると、そのブロックではなく Host * の値が返る。
+// 区別しない実装は、OpenSSH が適用しないブロックへ値の出所を帰属させることになり、
+// それは「実際に使われる設定を説明する」というこのパッケージの仕事を外す。
+//
+// known_hosts の側は区別しないままでよい。あちらのホスト名は OpenSSH が小文字化して
+// 保存するので、同じ 29 行に見えても同じ判断ではない。
 func MatchPattern(pattern, value string) bool {
-	loweredPattern := strings.ToLower(pattern)
-	loweredValue := strings.ToLower(value)
-
 	patternIndex, valueIndex := 0, 0
 	starIndex, resumeIndex := -1, 0
-	for valueIndex < len(loweredValue) {
+	for valueIndex < len(value) {
 		switch {
-		case patternIndex < len(loweredPattern) &&
-			(loweredPattern[patternIndex] == '?' || loweredPattern[patternIndex] == loweredValue[valueIndex]):
+		case patternIndex < len(pattern) &&
+			(pattern[patternIndex] == '?' || pattern[patternIndex] == value[valueIndex]):
 			patternIndex++
 			valueIndex++
-		case patternIndex < len(loweredPattern) && loweredPattern[patternIndex] == '*':
+		case patternIndex < len(pattern) && pattern[patternIndex] == '*':
 			starIndex = patternIndex
 			resumeIndex = valueIndex
 			patternIndex++
@@ -276,8 +281,8 @@ func MatchPattern(pattern, value string) bool {
 			return false
 		}
 	}
-	for patternIndex < len(loweredPattern) && loweredPattern[patternIndex] == '*' {
+	for patternIndex < len(pattern) && pattern[patternIndex] == '*' {
 		patternIndex++
 	}
-	return patternIndex == len(loweredPattern)
+	return patternIndex == len(pattern)
 }

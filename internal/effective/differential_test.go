@@ -47,6 +47,14 @@ func TestProjectionMatchesInstalledOpenSSH(t *testing.T) {
 			wantSimple: true,
 		},
 		{
+			// 大小の混ざった alias。これがないと、区別しない実装でも差分テストが
+			// 通ってしまう — 他のフィクスチャがすべて小文字だからである。
+			name:     "host patterns are case sensitive",
+			contents: "Host BASTION\n\tUser fromupper\n\nHost *\n\tUser fallback\n",
+			alias:    "bastion",
+			keywords: []string{"user"},
+		},
+		{
 			name:     "wildcard defaults",
 			contents: "Host web-01\n\tHostName 198.51.100.20\n\nHost *\n\tUser deploy\n\tPort 2022\n",
 			alias:    "web-01",
