@@ -33,6 +33,7 @@ func registerDiagnosticsRoutes(engine *echo.Echo, handlers DiagnosticsHandlers) 
 	engine.POST("/api/v1/diagnostics/reachability", handlers.Reachability)
 	engine.POST("/api/v1/diagnostics/authentication", handlers.Authentication)
 	engine.POST("/api/v1/terminal/command", handlers.TerminalCommand)
+	engine.GET("/api/v1/terminal/options", handlers.TerminalOptions)
 	engine.POST("/api/v1/terminal/launch", handlers.TerminalLaunch)
 }
 
@@ -258,6 +259,31 @@ func (h DiagnosticsHandlers) TerminalCommand(c *echo.Context) error {
 	})
 }
 
+// TerminalOptions は、選べる端末と、いま接続に使われるものを返す。
+//
+// 何も起動せず、設定も変えない。画面が「選べるが、このマシンには無い」を
+// 選ぶ前に言えるようにするためだけの読み取りである。
+func (h DiagnosticsHandlers) TerminalOptions(c *echo.Context) error {
+	available, applications, selected := h.Service.TerminalOptions()
+	response := api.TerminalOptionsResponse{
+		Selected:     api.TerminalID(selected.ID),
+		Terminals:    make([]api.TerminalOption, 0, len(available)),
+		Applications: make([]api.TerminalApplication, 0, len(applications)),
+	}
+	for _, option := range available {
+		response.Terminals = append(response.Terminals, api.TerminalOption{
+			Id:        api.TerminalID(option.ID),
+			Installed: option.Installed,
+		})
+	}
+	for _, application := range applications {
+		response.Applications = append(response.Applications, api.TerminalApplication{
+			Name: application.Name, Path: application.Path,
+		})
+	}
+	return c.JSON(http.StatusOK, response)
+}
+
 // TerminalLaunch は、確認済みで安全な alias に対して Terminal を開く。
 //
 // alias は確認が消費される前にチェックされる。したがって、このアプリケーションが
@@ -284,14 +310,22 @@ func (h DiagnosticsHandlers) TerminalLaunch(c *echo.Context) error {
 		if err := h.Service.LaunchTerminalWithPassword(
 			c.Request().Context(), request.Alias, h.AskpassHelper, h.AskpassURL, token,
 		); err != nil {
-			return problem(c, http.StatusInternalServerError, "terminal_launch_failed")
+			return terminalProblem(c, err)
 		}
 		return c.JSON(http.StatusOK, api.TerminalLaunchResponse{Launched: true})
 	}
 	if err := h.Service.LaunchTerminal(c.Request().Context(), request.Alias); err != nil {
-		return problem(c, http.StatusInternalServerError, "terminal_launch_failed")
+		return terminalProblem(c, err)
 	}
 	return c.JSON(http.StatusOK, api.TerminalLaunchResponse{Launched: true})
+}
+
+// terminalProblem は、選び直せば直る失敗を、そうでないものと区別して返す。
+func terminalProblem(c *echo.Context, err error) error {
+	if errors.Is(err, platform.ErrTerminalNotInstalled) {
+		return problem(c, http.StatusConflict, "terminal_not_installed")
+	}
+	return problem(c, http.StatusInternalServerError, "terminal_launch_failed")
 }
 
 func describeDirectives(directives []effective.Executable) []api.ExecutableDirective {

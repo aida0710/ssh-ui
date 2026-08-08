@@ -24,6 +24,11 @@ import (
 
 var version = "dev"
 
+// openBrowser はここで宣言される。フラグを解析するのはサブコマンドを見分けた
+// 後だが、usage はどの経路からでもフラグを一覧できなければならないからである。
+var openBrowser = flag.Bool("open", true,
+	"open the UI in the default browser; -open=false prints the URL on standard output instead")
+
 // urlPrinter は URL を開く代わりに書き出すことで platform.BrowserLauncher を満たす。
 // これは自動化のためにある — エンドツーエンドのスイートとパッケージングのスモーク
 // テストで、ユーザー自身のブラウザに有効なブートストラップトークンを渡してはならない
@@ -63,6 +68,29 @@ func askpassInvocation(argv []string, lookup func(string) string) ([]string, boo
 		return argv[1:], true
 	}
 	return nil, false
+}
+
+// usage は、このバイナリが答える語をすべて並べる。
+//
+// `sshc <alias>` は裸の語であり、ここに並ぶ語だけがそれより先に読まれる。
+// それを書いておかないと、`open` という名前のホストに接続できない理由が
+// どこにも書かれていないことになる。
+func usage(out io.Writer) {
+	fmt.Fprint(out, `usage:
+  sshc                 open the user interface in the default browser
+  sshc <alias>         connect to a host from ~/.ssh/config in this terminal
+  sshc connect [text]  choose a host in this terminal, then connect
+  sshc list            print every concrete Host alias, one per line
+  sshc open            ask the running application for a new way in
+  sshc askpass         answer an OpenSSH prompt; OpenSSH runs this, not you
+
+flags:
+`)
+	flag.PrintDefaults()
+	fmt.Fprint(out, `
+Those words are read before the alias, so a host named after one of them is
+still reachable with ssh itself, but not through this command.
+`)
 }
 
 func main() {
@@ -107,6 +135,11 @@ func main() {
 			fmt.Fprintln(os.Stderr, "usage: sshc connect [search]")
 			os.Exit(2)
 		}
+		// 検索語はフラグではないが、ヘルプを求めた人に接続先を探させはしない。
+		if query == "-h" || query == "--help" {
+			usage(os.Stdout)
+			os.Exit(0)
+		}
 		home, err := os.UserHomeDir()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "sshc: %v\n", err)
@@ -141,8 +174,9 @@ func main() {
 		))
 	}
 
-	openBrowser := flag.Bool("open", true,
-		"open the UI in the default browser; -open=false prints the URL on standard output instead")
+	// 既定の usage はフラグしか知らない。サブコマンドは argv の裸の語であり、
+	// flag パッケージから見えないので、ここで一度だけ書く。
+	flag.Usage = func() { usage(flag.CommandLine.Output()) }
 	flag.Parse()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -202,7 +236,7 @@ func main() {
 		Runner:    runner,
 		Toolchain: toolchain,
 		KeyAgent:  macos.NewKeyAgent(runner, toolchain, os.LookupEnv),
-		Terminal:  macos.NewTerminal(runner),
+		Terminal:  macos.NewTerminal(runner, home),
 		Lookup:    os.LookupEnv,
 		// ヘルパーとサーバーは同じ関数から同じルールを適用する。そのため「このプロンプト
 		// には答えるのか」という問いに対して、両者の答えが食い違っていくことは

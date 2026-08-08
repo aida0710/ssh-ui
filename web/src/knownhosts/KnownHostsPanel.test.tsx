@@ -46,6 +46,14 @@ function buildApi(overrides: Partial<IntegrationsApi> = {}): IntegrationsApi {
     reachability: vi.fn(),
     authentication: vi.fn(),
     terminalCommand: vi.fn(),
+    terminalOptions: vi.fn().mockResolvedValue({
+      selected: "terminal",
+      terminals: [
+        { id: "terminal", installed: true },
+        { id: "iterm2", installed: true },
+        { id: "kitty", installed: true },
+      ],
+    }),
     terminalLaunch: vi.fn(),
     knownHosts: vi.fn().mockResolvedValue({ path: "~/.ssh/known_hosts", entries: [entry] }),
     deleteKnownHosts: vi.fn().mockResolvedValue({ changed: true, transactionId: "tx-1" }),

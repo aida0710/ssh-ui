@@ -194,10 +194,12 @@ func (terminal *recordingTerminal) Launch(_ context.Context, alias string) error
 
 type recordingSelectableTerminal struct {
 	recordingTerminal
-	selected platform.TerminalID
+	selected platform.TerminalChoice
 }
 
-func (terminal *recordingSelectableTerminal) LaunchIn(_ context.Context, selected platform.TerminalID, alias string) error {
+func (terminal *recordingSelectableTerminal) LaunchIn(
+	_ context.Context, selected platform.TerminalChoice, alias string,
+) error {
 	terminal.selected = selected
 	terminal.aliases = append(terminal.aliases, alias)
 	return nil
@@ -239,13 +241,21 @@ func TestServiceUsesTheStoredTerminalChoice(t *testing.T) {
 	terminal := &recordingSelectableTerminal{}
 	service := newTestService(t, &scriptedRunner{})
 	service.Terminal = terminal
-	service.PreferredTerminal = func() platform.TerminalID { return platform.TerminalKitty }
+	// 選択は ID だけではない。custom では、開く先のアプリケーションとその
+	// 前に置く引数も、そのままランチャーへ届かなければならない。
+	chosen := platform.TerminalChoice{
+		ID: platform.TerminalCustom, Application: "/Applications/Term.app", Arguments: []string{"-e"},
+	}
+	service.PreferredTerminal = func() platform.TerminalChoice { return chosen }
 
 	if err := service.LaunchTerminal(context.Background(), "bastion"); err != nil {
 		t.Fatal(err)
 	}
-	if terminal.selected != platform.TerminalKitty || len(terminal.aliases) != 1 {
-		t.Fatalf("terminal = %q, aliases = %#v", terminal.selected, terminal.aliases)
+	if terminal.selected.ID != platform.TerminalCustom || terminal.selected.Application != "/Applications/Term.app" {
+		t.Fatalf("terminal = %#v", terminal.selected)
+	}
+	if len(terminal.selected.Arguments) != 1 || terminal.selected.Arguments[0] != "-e" || len(terminal.aliases) != 1 {
+		t.Fatalf("terminal = %#v, aliases = %#v", terminal.selected, terminal.aliases)
 	}
 }
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, type Problem } from "../api/client";
+import { ApiError, failureCode, type Problem } from "../api/client";
 import {
   configApi,
   type EditRequest,
@@ -22,7 +22,7 @@ import { HostInspector, hostNeedsAttention } from "./HostInspector";
 import { control, fieldLabel, narrowControl } from "../ui/form";
 import { Button, Notice } from "../ui/surface";
 import { appendHostBlock, duplicateHostBlock, removeHostBlock } from "./blocks";
-import { integrationsApi } from "../api/integrations";
+import { integrationsApi, type TerminalID, type TerminalOptionsResponse } from "../api/integrations";
 import { Icon } from "../ui/icons";
 
 // Groups 画面が報告し、この画面は報告しないもの。
@@ -37,6 +37,24 @@ const groupNoticeCodes = new Set([
   "group_empty",
   "group_directory_leftover",
 ]);
+
+type TerminalOption = TerminalOptionsResponse["terminals"][number];
+type TerminalApplication = TerminalOptionsResponse["applications"][number];
+type CustomTerminal = NonNullable<Metadata["customTerminal"]>;
+
+// 端末の表示名。ID は語彙であって、画面に出す名前ではない。custom だけは
+// 翻訳される——それはアプリケーションの名前ではなく、選び方の名前だからだ。
+const terminalNames: Record<Exclude<TerminalID, "custom">, string> = {
+  terminal: "Terminal.app",
+  iterm2: "iTerm2",
+  kitty: "kitty",
+  ghostty: "Ghostty",
+  wezterm: "WezTerm",
+};
+
+// 引数は空白で区切られた語であり、シェルの文字列ではない。引用も展開もない
+// ので、語の中に空白を持たせる方法は無い。
+const splitArguments = (value: string) => value.split(/\s+/).filter((word) => word !== "");
 
 function toProblem(error: unknown): Problem {
   if (error instanceof ApiError && error.problem !== null) return error.problem;
@@ -60,6 +78,9 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
   // つけるのではなく、サーバーがエントリファイルを報告する。"config" は
   // 最初の overview が届くまでの、あくまで暫定のフォールバックである。
   const entryPath = overview?.entry.path ?? "config";
+  // 開く先は metadata が正本である。サーバーの起動経路も同じ値を読むので、
+  // ここが表示するものと実際に開くものは同じである。
+  const selectedTerminal: TerminalID = overview?.metadata.terminal ?? "terminal";
   const [selection, setSelection] = useState<HostSelection | null>(null);
   const [detail, setDetail] = useState<HostDetail | null>(null);
   const [preview, setPreview] = useState<SavePreview | null>(null);
@@ -76,6 +97,16 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
   const [launching, setLaunching] = useState(false);
   const [managing, setManaging] = useState(false);
   const [savingTerminal, setSavingTerminal] = useState(false);
+  // このマシンにどの端末があるか。答えが届くまでは、選択肢を疑わない。
+  // 分からないことを「無い」として見せる画面は、無いことより悪い。
+  const [terminals, setTerminals] = useState<TerminalOption[]>([]);
+  // custom として選べるアプリケーション。ここに出たものだけが選べる。
+  const [applications, setApplications] = useState<TerminalApplication[]>([]);
+  // 引数はテキストとして編集し、保存するときに語へ分ける。入力の途中に
+  // ある空白で語が消えると、打っている本人には何が起きたか分からない。
+  const [customArguments, setCustomArguments] = useState<string | null>(null);
+  // custom を選んだが、まだ開く先を選んでいない状態。保存はされていない。
+  const [pendingCustom, setPendingCustom] = useState(false);
 
   const reload = useCallback(async () => {
     try {
@@ -88,6 +119,40 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  // 一覧が届く前と、届かなかったときの選択肢。語彙そのものであり、どれも
+  // 見つからなかったとは言わない。
+  const terminalOptions: TerminalOption[] =
+    terminals.length === 0
+      ? ([...Object.keys(terminalNames), "custom"] as TerminalID[]).map((id) => ({ id, installed: true }))
+      : terminals;
+  const custom: CustomTerminal | undefined = overview?.metadata.customTerminal;
+  const customArgumentText = customArguments ?? (custom?.arguments ?? []).join(" ");
+
+  // 画面に出す名前。custom は選ばれているアプリケーションの名前で呼ぶ。
+  // 「その他のアプリ」では、開けなかったときに何が開けなかったか分からない。
+  function terminalLabel(id: TerminalID): string {
+    if (id !== "custom") return terminalNames[id];
+    const chosen = applications.find((application) => application.path === custom?.application);
+    return chosen?.name ?? custom?.application ?? t("conn.otherApplication");
+  }
+
+  // 端末の一覧は設定を変えず、何も起動しない。読み取りに失敗しても画面は
+  // そのまま使えるので、ここでは何も報告しない。
+  useEffect(() => {
+    let active = true;
+    void integrationsApi
+      .terminalOptions()
+      .then((options) => {
+        if (!active) return;
+        setTerminals(options.terminals);
+        setApplications(options.applications);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // ペインは開いている connection に追従し、開くまでは空である——背後
   // に何も無いトグルは、トグルが無いことより悪い。
@@ -322,18 +387,54 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
     setLocalError("");
     try {
       await integrationsApi.terminalLaunch(selection.alias);
-    } catch {
-      setLocalError(t("conn.launchFailed", { alias: selection.alias }));
+    } catch (error) {
+      // 「入っていない」と「開けなかった」は別の答えである。前者は選び直すか
+      // インストールすれば直り、それは画面が言えることの中でいちばん役に立つ。
+      setLocalError(
+        failureCode(error) === "terminal_not_installed"
+          ? t("conn.terminalMissing", { terminal: terminalLabel(selectedTerminal) })
+          : t("conn.launchFailed", { alias: selection.alias }),
+      );
     } finally {
       setLaunching(false);
     }
   }
 
-  async function chooseTerminal(terminal: NonNullable<Metadata["terminal"]>) {
+  async function chooseTerminal(terminal: TerminalID) {
+    if (overview === null) return;
+    // custom は開く先を持って初めて選択になる。アプリケーションを選ぶまでは
+    // 保存せず、欄だけを出す。保存できない状態を保存しに行くと、
+    // 「選んだのに戻った」だけが残る。
+    if (terminal === "custom" && custom === undefined) {
+      setCustomArguments("");
+      setLocalError("");
+      setPendingCustom(true);
+      return;
+    }
+    setPendingCustom(false);
+    await saveTerminal(terminal, terminal === "custom" ? custom : undefined);
+  }
+
+  async function saveTerminal(terminal: TerminalID, customTerminal: CustomTerminal | undefined) {
     if (overview === null) return;
     setSavingTerminal(true);
-    await submit({ kind: "metadata", metadata: { ...overview.metadata, terminal } });
+    const metadata: Metadata = { ...overview.metadata, terminal };
+    if (customTerminal === undefined) delete metadata.customTerminal;
+    else metadata.customTerminal = customTerminal;
+    await submit({ kind: "metadata", metadata });
     setSavingTerminal(false);
+  }
+
+  // 開く先のアプリケーションを選ぶことが、custom を選ぶことである。
+  async function chooseApplication(application: string) {
+    if (application === "") return;
+    setPendingCustom(false);
+    await saveTerminal("custom", { application, arguments: splitArguments(customArgumentText) });
+  }
+
+  async function saveCustomArguments() {
+    if (custom === undefined) return;
+    await saveTerminal("custom", { application: custom.application, arguments: splitArguments(customArgumentText) });
   }
 
   function duplicateHost() {
@@ -503,21 +604,68 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
         ) : (
           <>
             {localError === "" ? null : <Notice tone="danger">{localError}</Notice>}
+            {terminals.some((option) => option.id === selectedTerminal && !option.installed) ? (
+              <Notice>{t("conn.terminalMissing", { terminal: terminalLabel(selectedTerminal) })}</Notice>
+            ) : null}
             <div className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-card p-3 shadow-sm">
               <label className="flex items-center gap-2 text-sm text-ink-muted">
                 <span>{t("conn.openWith")}</span>
                 <select
                   aria-label={t("conn.openWith")}
-                  value={overview.metadata.terminal ?? "terminal"}
+                  value={pendingCustom ? "custom" : selectedTerminal}
                   disabled={savingTerminal}
-                  onChange={(event) => void chooseTerminal(event.target.value as NonNullable<Metadata["terminal"]>)}
+                  onChange={(event) => void chooseTerminal(event.target.value as TerminalID)}
                   className={narrowControl}
                 >
-                  <option value="terminal">Terminal.app</option>
-                  <option value="iterm2">iTerm2</option>
-                  <option value="kitty">kitty</option>
+                  {/*
+                    入っていない端末も一覧から消さない。これから入れる人には理由
+                    の分からない欠落になり、既に選んでいる人は自分の設定が消えた
+                    ように見えるからだ。開けないことは名前の横に書く。
+                  */}
+                  {terminalOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.id === "custom" ? t("conn.otherApplication") : terminalNames[option.id]}
+                      {option.installed || option.id === "custom" ? "" : ` — ${t("conn.notInstalled")}`}
+                    </option>
+                  ))}
                 </select>
               </label>
+              {/*
+                開く先は、このマシンで見つかったアプリケーションの中からしか
+                選べない。引数はシェルの文字列ではなく argv の語であり、
+                空白で区切る以外の構文を持たない。
+              */}
+              {selectedTerminal === "custom" || pendingCustom ? (
+                <>
+                  <label className="flex items-center gap-2 text-sm text-ink-muted">
+                    <span>{t("conn.application")}</span>
+                    <select
+                      aria-label={t("conn.application")}
+                      value={custom?.application ?? ""}
+                      disabled={savingTerminal}
+                      onChange={(event) => void chooseApplication(event.target.value)}
+                      className={narrowControl}
+                    >
+                      <option value="">{t("conn.chooseApplication")}</option>
+                      {applications.map((application) => (
+                        <option key={application.path} value={application.path}>{application.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-ink-muted">
+                    <span>{t("conn.terminalArguments")}</span>
+                    <input
+                      aria-label={t("conn.terminalArguments")}
+                      placeholder="-e"
+                      value={customArgumentText}
+                      disabled={savingTerminal}
+                      onChange={(event) => setCustomArguments(event.target.value)}
+                      onBlur={() => void saveCustomArguments()}
+                      className={narrowControl}
+                    />
+                  </label>
+                </>
+              ) : null}
               <Button kind="primary" disabled={launching || savingTerminal} onClick={() => void connectHost()}>
                 {launching ? t("conn.opening") : t("conn.connect")}
               </Button>

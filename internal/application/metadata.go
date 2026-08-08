@@ -3,6 +3,7 @@ package application
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"path/filepath"
 	"sort"
@@ -105,13 +106,34 @@ type GroupMetadata struct {
 	Settings []Setting `json:"settings,omitempty"`
 }
 
+// CustomTerminal は、表に無いアプリケーションで開くための選択である。
+//
+// Application はこのマシンで実際に見つかったバンドルのパスで、Arguments は
+// その前に置く argv の要素である。**シェルは間に無い。** それでも開く先へは
+// 渡るので、値は platform.ValidateTerminalChoice が検証する。
+type CustomTerminal struct {
+	Application string   `json:"application"`
+	Arguments   []string `json:"arguments,omitempty"`
+}
+
 // Metadata は~/.ssh/sshc/metadata.json の全体である。
 type Metadata struct {
-	SchemaVersion int                 `json:"schemaVersion"`
-	GroupsFile    string              `json:"groupsFile,omitempty"`
-	Terminal      platform.TerminalID `json:"terminal,omitempty"`
-	Groups        []GroupMetadata     `json:"groups,omitempty"`
-	Hosts         []HostMetadata      `json:"hosts,omitempty"`
+	SchemaVersion  int                 `json:"schemaVersion"`
+	GroupsFile     string              `json:"groupsFile,omitempty"`
+	Terminal       platform.TerminalID `json:"terminal,omitempty"`
+	CustomTerminal *CustomTerminal     `json:"customTerminal,omitempty"`
+	Groups         []GroupMetadata     `json:"groups,omitempty"`
+	Hosts          []HostMetadata      `json:"hosts,omitempty"`
+}
+
+// TerminalChoice は、保存された選択を起動側の語彙へ移す。
+func (metadata Metadata) TerminalChoice() platform.TerminalChoice {
+	choice := platform.TerminalChoice{ID: metadata.Terminal}
+	if metadata.Terminal == platform.TerminalCustom && metadata.CustomTerminal != nil {
+		choice.Application = metadata.CustomTerminal.Application
+		choice.Arguments = metadata.CustomTerminal.Arguments
+	}
+	return choice
 }
 
 func NewMetadata() Metadata {
@@ -145,11 +167,16 @@ func DecodeMetadata(contents []byte) (Metadata, error) {
 	if metadata.GroupsFile == "" {
 		metadata.GroupsFile = DefaultGroupsFile
 	}
-	if metadata.Terminal == "" {
+	// 知らない端末は既定へ戻す。ここは読み取りであり、これは画面の飾りひとつで
+	// ある。グループも色もお気に入りも道連れに読めなくするほどの値ではない。
+	// 書き込み側は依然として厳格で、ValidateMetadata が語彙の外を拒否する。
+	if err := platform.ValidateTerminalChoice(metadata.TerminalChoice()); err != nil {
 		metadata.Terminal = platform.TerminalApple
+		metadata.CustomTerminal = nil
 	}
-	if !platform.ValidTerminalID(metadata.Terminal) {
-		return Metadata{}, ErrMetadataTerminal
+	if (metadata.Terminal == platform.TerminalCustom) != (metadata.CustomTerminal != nil) {
+		metadata.Terminal = platform.TerminalApple
+		metadata.CustomTerminal = nil
 	}
 	return metadata, nil
 }
@@ -187,7 +214,11 @@ func EncodeMetadata(metadata Metadata) ([]byte, error) {
 
 // ValidateMetadata は設計の不変条件を破る文書を拒否する。
 func ValidateMetadata(metadata Metadata) error {
-	if !platform.ValidTerminalID(metadata.Terminal) {
+	if err := platform.ValidateTerminalChoice(metadata.TerminalChoice()); err != nil {
+		return fmt.Errorf("%w: %w", ErrMetadataTerminal, err)
+	}
+	// custom は開く先を持たなければ選択として成立せず、それ以外は持ってはならない。
+	if (metadata.Terminal == platform.TerminalCustom) != (metadata.CustomTerminal != nil) {
 		return ErrMetadataTerminal
 	}
 	if _, err := checkRelative(metadata.GroupsPath()); err != nil {

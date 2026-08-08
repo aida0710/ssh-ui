@@ -215,12 +215,16 @@ func NewService(workspace *storage.Workspace, manager *storage.Manager) *Service
 
 // PreferredTerminal は画面と端末ランチャーが共有する現在の選択を返す。
 // metadata が壊れて読めない場合は、起動そのものを失わせず安全な既定へ戻る。
-func (s *Service) PreferredTerminal() platform.TerminalID {
+func (s *Service) PreferredTerminal() platform.TerminalChoice {
 	metadata, _, err := s.metadata.Load()
-	if err != nil || !platform.ValidTerminalID(metadata.Terminal) {
-		return platform.TerminalApple
+	if err != nil {
+		return platform.TerminalChoice{ID: platform.TerminalApple}
 	}
-	return metadata.Terminal
+	choice := metadata.TerminalChoice()
+	if platform.ValidateTerminalChoice(choice) != nil {
+		return platform.TerminalChoice{ID: platform.TerminalApple}
+	}
+	return choice
 }
 
 // displayPath は、UI とエラー payload のために path を表す。ファイルが

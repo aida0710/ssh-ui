@@ -40,8 +40,68 @@ func TestDecodeMetadataAcceptsAnAbsentFileAndRejectsAFutureSchema(t *testing.T) 
 	if _, err := DecodeMetadata([]byte(`{"schemaVersion":1,`)); err == nil {
 		t.Fatal("truncated metadata was accepted")
 	}
-	if _, err := DecodeMetadata([]byte(`{"schemaVersion":2,"terminal":"$(id)"}`)); !errors.Is(err, ErrMetadataTerminal) {
-		t.Fatalf("unsafe terminal error = %v, want ErrMetadataTerminal", err)
+	// 知らない端末で文書全体を失わない。読み取り側の答えは既定の端末であり、
+	// グループもお気に入りも、そのまま読めていなければならない。
+	unknown, err := DecodeMetadata([]byte(
+		`{"schemaVersion":2,"terminal":"$(id)","hosts":[{"identity":{"path":"config","alias":"bastion"},"favourite":true}]}`))
+	if err != nil {
+		t.Fatalf("unknown terminal = %v, want the document to survive", err)
+	}
+	if unknown.Terminal != platform.TerminalApple || len(unknown.Hosts) != 1 {
+		t.Fatalf("metadata with an unknown terminal = %#v", unknown)
+	}
+	// 書き込み側は語彙の外を受け付けない。UI が新しい語を作れないための境界である。
+	rejected := unknown
+	rejected.Terminal = "$(id)"
+	if _, err := EncodeMetadata(rejected); !errors.Is(err, ErrMetadataTerminal) {
+		t.Fatalf("encoding an unknown terminal = %v, want ErrMetadataTerminal", err)
+	}
+}
+
+// custom が運ぶのはアプリケーションバンドルと argv の要素である。シェルの
+// 文字列ではないので、語の中に空白は入らず、開く先はバンドルでしかありえない。
+func TestMetadataAcceptsAChosenApplicationAndRefusesAnythingElse(t *testing.T) {
+	chosen := NewMetadata()
+	chosen.Terminal = platform.TerminalCustom
+	chosen.CustomTerminal = &CustomTerminal{Application: "/Applications/Term.app", Arguments: []string{"-e"}}
+	encoded, err := EncodeMetadata(chosen)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := DecodeMetadata(encoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	choice := decoded.TerminalChoice()
+	if choice.ID != platform.TerminalCustom || choice.Application != "/Applications/Term.app" {
+		t.Fatalf("choice = %#v", choice)
+	}
+
+	for name, broken := range map[string]Metadata{
+		// 開く先を持たない custom は選択として成立しない。
+		"no application":  {Terminal: platform.TerminalCustom},
+		"not a bundle":    {Terminal: platform.TerminalCustom, CustomTerminal: &CustomTerminal{Application: "/usr/bin/ssh"}},
+		"relative bundle": {Terminal: platform.TerminalCustom, CustomTerminal: &CustomTerminal{Application: "Term.app"}},
+		"traversal": {Terminal: platform.TerminalCustom,
+			CustomTerminal: &CustomTerminal{Application: "/Applications/../usr/bin/Evil.app"}},
+		// 空白を含む語は、それを二つの引数だと思って書いた人の設定を黙って
+		// 別の意味にする。argv は分かち書きしない。
+		"argument with a space": {Terminal: platform.TerminalCustom,
+			CustomTerminal: &CustomTerminal{Application: "/Applications/Term.app", Arguments: []string{"-e ssh"}}},
+		// 表にある端末は、開く先を設定から受け取らない。
+		"application on a listed terminal": {Terminal: platform.TerminalKitty,
+			CustomTerminal: &CustomTerminal{Application: "/Applications/Term.app"}},
+	} {
+		if _, err := EncodeMetadata(broken); !errors.Is(err, ErrMetadataTerminal) {
+			t.Errorf("%s = %v, want ErrMetadataTerminal", name, err)
+		}
+	}
+
+	// 読み取りは文書ごと落とさない。開く先が壊れていれば既定の端末へ戻る。
+	recovered, err := DecodeMetadata([]byte(
+		`{"schemaVersion":2,"terminal":"custom","customTerminal":{"application":"/usr/bin/ssh"},"hosts":[]}`))
+	if err != nil || recovered.Terminal != platform.TerminalApple || recovered.CustomTerminal != nil {
+		t.Fatalf("recovered = %#v, %v", recovered, err)
 	}
 }
 
