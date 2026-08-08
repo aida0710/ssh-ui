@@ -52,18 +52,6 @@ type HostIdentity struct {
 	Alias string `json:"alias"`
 }
 
-// NewHostIdentity は絶対設定パスを識別子へと正規化する。
-func NewHostIdentity(root, absolute, alias string) (HostIdentity, error) {
-	relative, err := RelativePath(root, absolute)
-	if err != nil {
-		return HostIdentity{}, err
-	}
-	if alias == "" {
-		return HostIdentity{}, ErrMetadataPath
-	}
-	return HostIdentity{Path: relative, Alias: alias}, nil
-}
-
 func (identity HostIdentity) IsZero() bool { return identity.Path == "" || identity.Alias == "" }
 
 // Setting は、グループがメンバーに提供する 1 個のディレクティブである。

@@ -244,19 +244,6 @@ func groupMembers(direct map[string][]string, aliasOrder []string, name string) 
 	return members
 }
 
-// InsertIncludeLine は、指定された index に Include ディレクティブを書き込む。
-func InsertIncludeLine(file *config.File, relative string, index int) error {
-	line, err := buildLine("", "Include", []string{relative}, dominantEnding(file))
-	if err != nil {
-		return err
-	}
-	if index < 0 || index > len(file.Lines) {
-		return ErrEditLineOutsideBlock
-	}
-	insertLine(file, index, line)
-	return nil
-}
-
 // declaredGroupSet は、保存が宣言するグループ集合である。
 //
 // グループが region に届くのは、既にそこで宣言されているか、
