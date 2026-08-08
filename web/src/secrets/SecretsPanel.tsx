@@ -23,6 +23,7 @@ import {
   sectionHeading,
 } from "../ui/form";
 import { Notice } from "../ui/surface";
+import { MetricCard, MetricGrid, PageHeader } from "../ui/page";
 
 type SecretsPanelProps = {
   api?: IntegrationsApi;
@@ -120,26 +121,29 @@ export function SecretsPanel({ api = integrationsApi, onLock }: SecretsPanelProp
   if (!status.unlocked) {
     const creating = !status.exists;
     return (
-      <section aria-label={t("secrets.heading")} className={sectionCard}>
-        <h3 className={sectionHeading}>{t("secrets.heading")}</h3>
-        <p className={hintText}>{creating ? t("secrets.explainNew") : t("secrets.explainLocked")}</p>
-        {error === "" ? null : <Notice tone="danger">{error}</Notice>}
-        <PasswordField label={t("secrets.master")} value={master} onChange={setMaster} />
-        <div>
-          <button
-            type="button"
-            className={primaryAction}
-            onClick={() =>
-              void run(
-                () => (creating ? api.initialiseVault(master) : api.unlockVault(master)),
-                creating ? t("secrets.createFailed") : t("secrets.unlockFailed"),
-              ).then(() => setMaster(""))
-            }
-          >
-            {creating ? t("secrets.create") : t("secrets.unlock")}
-          </button>
-        </div>
-      </section>
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+        <PageHeader title={t("secrets.heading")} description={t("secrets.pageDescription")} />
+        <section aria-label={t("secrets.heading")} className={sectionCard}>
+          <h3 className={sectionHeading}>{creating ? t("secrets.create") : t("secrets.unlock")}</h3>
+          <p className={hintText}>{creating ? t("secrets.explainNew") : t("secrets.explainLocked")}</p>
+          {error === "" ? null : <Notice tone="danger">{error}</Notice>}
+          <PasswordField label={t("secrets.master")} value={master} onChange={setMaster} />
+          <div>
+            <button
+              type="button"
+              className={primaryAction}
+              onClick={() =>
+                void run(
+                  () => (creating ? api.initialiseVault(master) : api.unlockVault(master)),
+                  creating ? t("secrets.createFailed") : t("secrets.unlockFailed"),
+                ).then(() => setMaster(""))
+              }
+            >
+              {creating ? t("secrets.create") : t("secrets.unlock")}
+            </button>
+          </div>
+        </section>
+      </div>
     );
   }
 
@@ -168,7 +172,22 @@ export function SecretsPanel({ api = integrationsApi, onLock }: SecretsPanelProp
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+      <PageHeader title={t("secrets.heading")} description={t("secrets.pageDescription")} />
+      <MetricGrid>
+        <MetricCard
+          label={t("secrets.metricPasswords")}
+          value={credentials.filter((credential) => credential.kind === "password").length}
+        />
+        <MetricCard
+          label={t("secrets.metricPassphrases")}
+          value={credentials.filter((credential) => credential.kind === "key_passphrase").length}
+        />
+        <MetricCard
+          label={t("secrets.metricAssignments")}
+          value={credentials.reduce((count, credential) => count + credential.uses.length, 0)}
+        />
+      </MetricGrid>
       {error === "" ? null : <Notice tone="danger">{error}</Notice>}
       {changed === "" ? null : <p role="status" className="text-sm text-live">{changed}</p>}
       <div>

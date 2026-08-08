@@ -8,14 +8,17 @@ import type { IntegrationsApi } from "../api/integrations";
 // 鍵画面から見た vault: 両種類の名前を持つのは、テストの
 // 要点が一方の種類だけがピッカーに届くことにあるからだ。
 function buildSecrets(overrides: Partial<IntegrationsApi> = {}): IntegrationsApi {
+  const listed = {
+    credentials: [
+      { kind: "key_passphrase", name: "build-key", uses: [] },
+      { kind: "password", name: "office-vm", uses: ["web-1"] },
+    ],
+  };
   return {
-    credentials: vi.fn().mockResolvedValue({
-      credentials: [
-        { kind: "key_passphrase", name: "build-key", uses: [] },
-        { kind: "password", name: "office-vm", uses: ["web-1"] },
-      ],
-    }),
-    assignCredential: vi.fn().mockResolvedValue({ credentials: [] }),
+    credentials: vi.fn().mockResolvedValue(listed),
+    storeCredential: vi.fn().mockResolvedValue(listed),
+    assignCredential: vi.fn().mockResolvedValue(listed),
+    unassignCredential: vi.fn().mockResolvedValue(listed),
     ...overrides,
   } as unknown as IntegrationsApi;
 }
@@ -726,6 +729,70 @@ describe("KeysScreen", () => {
 
     await user.click(screen.getByRole("button", { name: "Move it to the trash" }));
     await waitFor(() => expect(api.trash).toHaveBeenCalled());
+  });
+
+  it("stores a key passphrase from the private key row and assigns it without retaining the value", async () => {
+    const user = userEvent.setup();
+    const secrets = buildSecrets();
+    render(<KeysScreen api={buildApi()} secrets={secrets} />);
+
+    const row = await screen.findByRole("row", { name: /id_work/ });
+    await user.click(within(row).getByRole("button", { name: "Stored passphrase" }));
+    await user.type(screen.getByLabelText("Passphrase name"), "production-key");
+    await user.type(screen.getByLabelText("Passphrase value"), "a secret phrase only for this test");
+    await user.click(screen.getByRole("button", { name: "Save and use for this key" }));
+
+    await waitFor(() =>
+      expect(secrets.storeCredential).toHaveBeenCalledWith(
+        "key_passphrase",
+        "production-key",
+        "a secret phrase only for this test",
+      ),
+    );
+    expect(secrets.assignCredential).toHaveBeenCalledWith("key_passphrase", "id_work", "production-key");
+    expect(document.body).not.toHaveTextContent("a secret phrase only for this test");
+    expect(screen.queryByLabelText("Passphrase value")).not.toBeInTheDocument();
+  });
+
+  it("detaches a stored passphrase without deleting the named credential", async () => {
+    const user = userEvent.setup();
+    const assigned = {
+      credentials: [{ kind: "key_passphrase", name: "build-key", uses: ["id_work"] }],
+    };
+    const secrets = buildSecrets({
+      credentials: vi.fn().mockResolvedValue(assigned),
+      unassignCredential: vi.fn().mockResolvedValue({
+        credentials: [{ kind: "key_passphrase", name: "build-key", uses: [] }],
+      }),
+    });
+    render(<KeysScreen api={buildApi()} secrets={secrets} />);
+
+    const row = await screen.findByRole("row", { name: /id_work/ });
+    await user.click(within(row).getByRole("button", { name: "Stored passphrase" }));
+    expect(await screen.findByText(/uses the stored passphrase named build-key/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Stop using it" }));
+
+    await waitFor(() =>
+      expect(secrets.unassignCredential).toHaveBeenCalledWith("key_passphrase", "id_work"),
+    );
+    expect(screen.getByRole("option", { name: "build-key" })).toBeInTheDocument();
+  });
+
+  it("does not rotate a shared passphrase from the create-and-assign form", async () => {
+    const user = userEvent.setup();
+    const secrets = buildSecrets();
+    render(<KeysScreen api={buildApi()} secrets={secrets} />);
+
+    const row = await screen.findByRole("row", { name: /id_work/ });
+    await user.click(within(row).getByRole("button", { name: "Stored passphrase" }));
+    await user.type(screen.getByLabelText("Passphrase name"), "build-key");
+    await user.type(screen.getByLabelText("Passphrase value"), "must not replace the shared value");
+    await user.click(screen.getByRole("button", { name: "Save and use for this key" }));
+
+    expect(secrets.storeCredential).not.toHaveBeenCalled();
+    expect(secrets.assignCredential).not.toHaveBeenCalled();
+    expect(screen.getByText(/That name already exists/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Passphrase value")).toHaveValue("");
   });
 
 });

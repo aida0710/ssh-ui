@@ -4,6 +4,7 @@ import { CopyButton } from "../ui/CopyButton";
 import { useTranslate, type Translate } from "../i18n/context";
 import {
   CheckboxField,
+  Field,
   control,
   hintText,
   primaryAction,
@@ -184,8 +185,11 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
   const [newPassphrase, setNewPassphrase] = useState("");
   const [removePassphrase, setRemovePassphrase] = useState(false);
   const [registering, setRegistering] = useState<KeyItem | null>(null);
+  const [managingPassphrase, setManagingPassphrase] = useState<KeyItem | null>(null);
   const [phrases, setPhrases] = useState<Credential[]>([]);
   const [chosenPhrase, setChosenPhrase] = useState("");
+  const [storedPhraseName, setStoredPhraseName] = useState("");
+  const [storedPhraseSecret, setStoredPhraseSecret] = useState("");
   const [agentPassphrase, setAgentPassphrase] = useState("");
   const [agentLifetime, setAgentLifetime] = useState(0);
   const [storeInKeychain, setStoreInKeychain] = useState(false);
@@ -315,10 +319,54 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
 
   async function assignPhrase(item: KeyItem) {
     try {
-      await secrets.assignCredential("key_passphrase", item.relativePath, chosenPhrase);
-      await loadPhrases();
+      const listed = await secrets.assignCredential("key_passphrase", item.relativePath, chosenPhrase);
+      setPhrases(listed.credentials.filter((credential) => credential.kind === "key_passphrase"));
+      setChosenPhrase("");
     } catch {
       setFailure(t("keys.assignPassphraseFailed"));
+    }
+  }
+
+  function closeStoredPassphraseForm() {
+    setStoredPhraseName("");
+    setStoredPhraseSecret("");
+    setChosenPhrase("");
+    setManagingPassphrase(null);
+  }
+
+  async function storeAndAssignPhrase(item: KeyItem) {
+    if (storedPhraseName === "" || storedPhraseSecret === "") return;
+    setFailure("");
+    // SetCredential は同名の値を置き換える（共有資格情報の rotation）操作でもある。
+    // 鍵一覧の「新規保存」でそれを行うと、この名前を使う別の鍵まで黙って変わる。
+    // 既存名は上の picker から割り当てさせ、値の更新は用途を一覧できる Secrets
+    // 画面だけに限定する。
+    if (phrases.some((credential) => credential.name === storedPhraseName)) {
+      setStoredPhraseSecret("");
+      setFailure(t("keys.storedPassphraseExists"));
+      return;
+    }
+    try {
+      await secrets.storeCredential("key_passphrase", storedPhraseName, storedPhraseSecret);
+      const listed = await secrets.assignCredential("key_passphrase", item.relativePath, storedPhraseName);
+      setPhrases(listed.credentials.filter((credential) => credential.kind === "key_passphrase"));
+      closeStoredPassphraseForm();
+    } catch {
+      // 値は成功時にも失敗時にもDOMから消す。名前は、入力を直せるよう
+      // 残してよいが、秘密そのものには同じ扱いをしない。
+      setStoredPhraseSecret("");
+      setFailure(t("keys.storePassphraseFailed"));
+    }
+  }
+
+  async function unassignPhrase(item: KeyItem) {
+    setFailure("");
+    try {
+      const listed = await secrets.unassignCredential("key_passphrase", item.relativePath);
+      setPhrases(listed.credentials.filter((credential) => credential.kind === "key_passphrase"));
+      setChosenPhrase("");
+    } catch {
+      setFailure(t("keys.unassignPassphraseFailed"));
     }
   }
 
@@ -552,11 +600,29 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
                       onClick={() => {
                         closePassphraseForm();
                         closeAgentForm();
+                        closeStoredPassphraseForm();
                         setChangingPassphrase(item);
                       }}
                     >
                       {t("keys.changePassphrase")}
                     </button>
+                    {item.encrypted ? (
+                      <button
+                        type="button"
+                        className={rowAction}
+                        onClick={() => {
+                          closePassphraseForm();
+                          closeAgentForm();
+                          setStoredPhraseName("");
+                          setStoredPhraseSecret("");
+                          setChosenPhrase("");
+                          setManagingPassphrase(item);
+                          void loadPhrases();
+                        }}
+                      >
+                        {t("keys.manageStoredPassphrase")}
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className={rowAction}
@@ -564,6 +630,7 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
                       onClick={() => {
                         closePassphraseForm();
                         closeAgentForm();
+                        closeStoredPassphraseForm();
                         setRegistering(item);
                         if (item.encrypted) void loadPhrases();
                       }}
@@ -577,6 +644,7 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
                         onClick={() => {
                           closePassphraseForm();
                           closeAgentForm();
+                          closeStoredPassphraseForm();
                           void removeFromAgent(item.id);
                         }}
                       >
@@ -589,6 +657,7 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
                       onClick={() => {
                         closePassphraseForm();
                         closeAgentForm();
+                        closeStoredPassphraseForm();
                         setPendingTrash(item);
                       }}
                     >
@@ -603,6 +672,7 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
                     onClick={() => {
                       closePassphraseForm();
                       closeAgentForm();
+                      closeStoredPassphraseForm();
                       setRelocated(null);
                       setNewName(relocateStem(item));
                       setNewGroup(groupOfKeyPath(item.relativePath));
@@ -626,6 +696,81 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
         </tbody>
       </table>
       </div>
+
+      {managingPassphrase !== null && (
+        <section aria-labelledby="stored-passphrase-heading" className={sectionCard}>
+          <h3 id="stored-passphrase-heading" className={sectionHeading}>
+            {t("keys.storedPassphraseHeading", { path: managingPassphrase.relativePath })}
+          </h3>
+          <p className={hintText}>{t("keys.storedPassphraseNote")}</p>
+          {storedFor(phrases, managingPassphrase) === undefined ? null : (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-line bg-card p-3">
+              <p className="grow text-sm text-ink">
+                {t("keys.usesStoredPassphrase", { name: storedFor(phrases, managingPassphrase)!.name })}
+              </p>
+              <button type="button" className={secondaryAction} onClick={() => void unassignPhrase(managingPassphrase)}>
+                {t("keys.unassignPassphrase")}
+              </button>
+            </div>
+          )}
+
+          {phrases.length === 0 ? null : (
+            <div className="flex flex-wrap items-end gap-3">
+              <Field label={t("keys.useStoredPassphrase")}>
+                <select
+                  className={control}
+                  value={chosenPhrase}
+                  onChange={(event) => setChosenPhrase(event.target.value)}
+                >
+                  <option value="">{t("keys.choosePassphraseName")}</option>
+                  {phrases.map((credential) => (
+                    <option key={credential.name} value={credential.name}>{credential.name}</option>
+                  ))}
+                </select>
+              </Field>
+              <button
+                type="button"
+                className={secondaryAction}
+                disabled={chosenPhrase === ""}
+                onClick={() => void assignPhrase(managingPassphrase)}
+              >
+                {t("keys.useThisPassphrase")}
+              </button>
+            </div>
+          )}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label={t("keys.newStoredPassphraseName")}>
+              <input
+                value={storedPhraseName}
+                onChange={(event) => setStoredPhraseName(event.target.value)}
+                className={control}
+              />
+            </Field>
+            <Field label={t("keys.newStoredPassphraseValue")}>
+              <input
+                type="password"
+                value={storedPhraseSecret}
+                onChange={(event) => setStoredPhraseSecret(event.target.value)}
+                className={control}
+              />
+            </Field>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={storedPhraseName === "" || storedPhraseSecret === ""}
+              className={primaryAction}
+              onClick={() => void storeAndAssignPhrase(managingPassphrase)}
+            >
+              {t("keys.storeAndUsePassphrase")}
+            </button>
+            <button type="button" className={secondaryAction} onClick={closeStoredPassphraseForm}>
+              {t("keys.cancel")}
+            </button>
+          </div>
+        </section>
+      )}
 
       {pendingTrash !== null && (
         <section aria-labelledby="trash-confirm-heading" className={sectionCard}>

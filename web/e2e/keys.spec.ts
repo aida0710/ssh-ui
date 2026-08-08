@@ -56,6 +56,39 @@ test("lists generated keys and reveals one only after an explicit confirmation",
   expect(await page.evaluate(() => document.cookie)).toBe("");
 });
 
+test("stores an encrypted key passphrase from the key row and shows only its name afterwards", async ({
+  page,
+  installation,
+}) => {
+  const passphrase = "e2e key phrase that must leave the DOM";
+  await openApplication(page, installation);
+  await openSection(page, "Keys");
+  await page.getByLabel("File name").fill("id_saved_phrase");
+  await page.getByRole("textbox", { name: "Passphrase" }).fill(passphrase);
+  expect(await clickAndAwait(page, "Create key", "/api/v1/keys")).toBe(201);
+
+  const row = page.getByRole("row", { name: /id_saved_phrase\b/ }).first();
+  await expect(row).toBeVisible();
+  await row.getByRole("button", { name: "Stored passphrase" }).click();
+  await page.getByLabel("Passphrase name").fill("saved-e2e-key");
+  await page.getByLabel("Passphrase value").fill(passphrase);
+  const assigned = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/v1/credentials/key_passphrase/assign" &&
+      response.request().method() === "PUT",
+  );
+  await page.getByRole("button", { name: "Save and use for this key" }).click();
+  expect((await assigned).status()).toBe(200);
+
+  await expect(page.getByLabel("Passphrase value")).toHaveCount(0);
+  await expect(page.locator("body")).not.toContainText(passphrase);
+  await openSection(page, "Secrets");
+  const passphrases = page.getByRole("region", { name: "Key passphrases" });
+  await expect(passphrases).toContainText("saved-e2e-key");
+  await expect(passphrases).toContainText("id_saved_phrase");
+  await expect(page.locator("body")).not.toContainText(passphrase);
+});
+
 // 試験対象のバイナリは HOME と PATH だけで起動されるため、SSH_AUTH_SOCK
 // を渡されずどの agent にも到達できない。これがこの試験を自動化
 // しても安全にしている理由だ。開発者自身の agent や Keychain には一
