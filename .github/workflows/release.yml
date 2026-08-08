@@ -47,9 +47,6 @@ jobs:
           cp bin/sshc "dist/sshc-darwin-arm64"
           cd dist && shasum -a 256 sshc-darwin-arm64 > checksums.txt
 
-      # 秘密鍵側がこのステップの外へ出ることは決してない。署名を検証できない
-      # インストールは、更新を受け取るのではなく拒否する。したがって、これなしで
-      # 公開されたリリースは、誰もインストールしないリリースになる。
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}

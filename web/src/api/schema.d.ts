@@ -1278,6 +1278,7 @@ export interface components {
             locked: boolean;
             endpoint: string;
             bucket: string;
+            region?: string;
             path?: string;
             synced: boolean;
             direction: components["schemas"]["SyncDirection"];

@@ -213,6 +213,27 @@ func TestSyncStatusNeverCarriesTheAccessKey(t *testing.T) {
 	}
 }
 
+// リージョンは秘密ではない。それは署名スコープに入る値であり、R2 の "auto" と
+// 本物の AWS のバケットのリージョンとでは違うので、画面が現在値を出せなければ
+// 利用者は自分が何を設定したのかを確かめられない。
+func TestSyncStatusSaysWhichRegionIsConfigured(t *testing.T) {
+	engine, _, secrets := syncEngineWithVault(t)
+	if err := secrets.Initialise(syncTestPassphrase); err != nil {
+		t.Fatal(err)
+	}
+
+	configure := `{"endpoint":"https://s3.example.invalid","bucket":"b","region":"eu-west-2",` +
+		`"accessKeyId":"AKIAEXAMPLE","secretAccessKey":"s3cret-key"}`
+	if code := sendSync(t, engine, http.MethodPut, "/api/v1/sync/settings", configure).Code; code != http.StatusOK {
+		t.Fatalf("configure = %d", code)
+	}
+
+	response := sendSync(t, engine, http.MethodGet, "/api/v1/sync", "")
+	if !strings.Contains(response.Body.String(), "eu-west-2") {
+		t.Errorf("the status does not say which region: %s", response.Body.String())
+	}
+}
+
 // 起動時には何も尋ねないため、画面は「設定済みなのに壊れている」
 // ように見える空の form を出す代わりに、なぜ空なのかを言えなければならない。
 func TestSyncStatusSaysWhenTheVaultIsShut(t *testing.T) {
@@ -256,7 +277,7 @@ func TestATrailingSlashOnTheEndpointIsRemoved(t *testing.T) {
 	if code := sendSync(t, engine, http.MethodPut, "/api/v1/sync/settings", body).Code; code != http.StatusOK {
 		t.Fatalf("configure = %d", code)
 	}
-	endpoint, _, _ := service.Target()
+	endpoint, _, _, _ := service.Target()
 	if endpoint != "https://s3.example.invalid" {
 		t.Errorf("endpoint = %q, want the trailing slash gone", endpoint)
 	}
@@ -383,7 +404,7 @@ func TestTheObjectPathIsStoredAndRefusedWhenItCouldEscape(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("configure = %d: %s", recorder.Code, recorder.Body.String())
 	}
-	if _, _, path := service.Target(); path != "laptops" {
+	if _, _, path, _ := service.Target(); path != "laptops" {
 		t.Errorf("path = %q, want it trimmed to laptops", path)
 	}
 	if !strings.Contains(recorder.Body.String(), `"path":"laptops"`) {
@@ -398,7 +419,7 @@ func TestTheObjectPathIsStoredAndRefusedWhenItCouldEscape(t *testing.T) {
 		}
 	}
 	// そして拒否によって何も変わらなかった。
-	if _, _, path := service.Target(); path != "laptops" {
+	if _, _, path, _ := service.Target(); path != "laptops" {
 		t.Errorf("path = %q after refusals, want laptops", path)
 	}
 }

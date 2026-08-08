@@ -1,3 +1,15 @@
+// Package objectstore は、このアプリケーションが必要とする範囲の S3 API を話す。
+//
+// 中身は aws-sdk-go-v2 である。以前はここに手書きの SigV4 署名器と、path-style で
+// URL を組み立てるだけのリクエスト構築があった。読み切れる大きさではあったが、
+// path-style に固定されていたため、本物の AWS S3 — 新しいリージョンのバケットは
+// virtual-hosted-style を要求する — には届かなかった。R2 以外のストアも使うなら、
+// アドレッシング方式とリージョン解決と署名を自前で持ち続ける理由がない。
+//
+// このパッケージが残っているのは、SDK が面倒を見ない性質がいくつかあるからである。
+// エンドポイントはループバックでない限り https であること、本文には必ず上限が
+// あること、そしてストアの拒否理由がこのアプリケーションの語彙へ畳まれ、S3 の
+// エラードキュメントが呼び出し側へ漏れないこと。
 package objectstore
 
 import (
@@ -8,7 +20,13 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
+	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/smithy-go/middleware"
 )
 
 var (
@@ -36,6 +54,13 @@ var (
 // ことではなく、何かがおかしいということだからだ。
 const MaxObjectBytes = 256 << 20
 
+// Credentials はアクセスキーの組。ログに出ることはなく、URL に現れることもない。
+// このクライアントはヘッダーだけで署名する。presign は使わない。
+type Credentials struct {
+	AccessKeyID     string
+	SecretAccessKey string
+}
+
 // Object は、取得したオブジェクトとその entity tag。
 type Object struct {
 	Body []byte
@@ -52,10 +77,10 @@ type Client struct {
 	// https://<account>.r2.cloudflarestorage.com。https でなければならない。
 	Endpoint string
 	Bucket   string
-	// Region は R2 では "auto"。
+	// Region は R2 では "auto"。本物の AWS ではバケットのリージョンでなければ
+	// ならない。署名スコープに入るので、食い違えばストアが拒否する。
 	Region string
 	Creds  Credentials
-	Now    func() time.Time
 }
 
 // ErrInsecureEndpoint は、ループバックでない平文のエンドポイントを拒否する。
@@ -78,61 +103,113 @@ var ErrInsecureEndpoint = errors.New("the object store endpoint must be https un
 // 場合の代案は、統合テストの網羅をまったく持たないことである。
 var loopbackHosts = map[string]bool{"127.0.0.1": true, "::1": true, "localhost": true}
 
-func (c Client) now() time.Time {
-	if c.Now == nil {
-		return time.Now()
+// api は、この呼び出しのために構成された SDK のクライアントを返す。
+//
+// LoadDefaultConfig は通らない。あれは環境変数・共有プロファイル・SSO・そして
+// インスタンスメタデータの順に資格情報を探しに行くもので、そのうちひとつは
+// ネットワークへ手を伸ばす。ここで欲しいのは利用者が入力した鍵ひとつだけなので、
+// 静的なプロバイダを直接渡す。これにより、このアプリケーションが自分以外へ通信する
+// のは更新確認だけ、という性質が保たれる。
+func (c Client) api() (*s3.Client, error) {
+	if err := c.checkEndpoint(); err != nil {
+		return nil, err
 	}
-	return c.Now()
+	options := s3.Options{
+		Region:       c.Region,
+		BaseEndpoint: aws.String(c.Endpoint),
+		// path-style は https://<endpoint>/<bucket>/<key> で、R2・MinIO・SeaweedFS が
+		// 受け付ける形であり、このアプリケーションがこれまで送ってきた唯一の形でも
+		// ある。本物の AWS S3 は path-style を非推奨としており、新しいリージョンの
+		// バケットは virtual-hosted-style を要求するので、そこへは届かない。切り替え
+		// はここの false 一箇所だが、設定に出す配線が伴わなければ誰も回せない
+		// つまみになるだけなので、AWS を実際に使うときに両方まとめて入れる。
+		UsePathStyle: true,
+		Credentials: credentials.NewStaticCredentialsProvider(
+			c.Creds.AccessKeyID, c.Creds.SecretAccessKey, ""),
+		// 既定では、送るものごとに CRC32 を計算して aws-chunked のトレーラーで
+		// 送る。本文はここへ届く前に封をされており、その中身は AEAD のタグが
+		// 守っている。転送の破損は署名が捕まえる。要求されたときだけ計算させて、
+		// 回線に載るものを単純に保つ。
+		RequestChecksumCalculation: aws.RequestChecksumCalculationWhenRequired,
+		APIOptions:                 []func(*middleware.Stack) error{signThePayload},
+	}
+	if c.HTTP != nil {
+		options.HTTPClient = c.HTTP
+	}
+	return s3.New(options), nil
 }
 
-func (c Client) client() *http.Client {
-	if c.HTTP == nil {
-		return &http.Client{Timeout: 60 * time.Second}
-	}
-	return c.HTTP
+// signThePayload は、S3 が PutObject に入れる UNSIGNED-PAYLOAD を元に戻す。
+//
+// SDK は HTTPS の PutObject に UseDynamicPayloadSigningMiddleware を入れる。
+// 本文が seekable でなくても送れるようにするためのもので、その代償として
+// X-Amz-Content-Sha256 が "UNSIGNED-PAYLOAD" になり、署名は本文を覆わなくなる。
+// ここで送るものは誰かの ~/.ssh のスナップショットであり、しかも常に
+// []byte なので seekable である。本文に署名することが、改変された本文を、
+// 受理されるリクエストではなく拒否されるリクエストにしている。
+//
+// これら 3 つのミドルウェアは ID を共有しているので、Swap がそのまま入れ替えになる。
+func signThePayload(stack *middleware.Stack) error {
+	compute := &v4.ComputePayloadSHA256{}
+	_, err := stack.Finalize.Swap(compute.ID(), compute)
+	return err
 }
 
-func (c Client) objectURL(key string) (string, error) {
+func (c Client) checkEndpoint() error {
 	parsed, err := url.Parse(c.Endpoint)
 	if err != nil {
-		return "", err
+		return err
 	}
-	if parsed.Scheme != "https" {
-		host := parsed.Hostname()
-		if parsed.Scheme != "http" || !loopbackHosts[host] {
-			return "", ErrInsecureEndpoint
-		}
+	if parsed.Scheme == "https" {
+		return nil
 	}
-	parsed.Path = "/" + strings.Trim(c.Bucket, "/") + "/" + strings.TrimPrefix(key, "/")
-	return parsed.String(), nil
+	if parsed.Scheme == "http" && loopbackHosts[parsed.Hostname()] {
+		return nil
+	}
+	return ErrInsecureEndpoint
+}
+
+func objectKey(key string) string {
+	return strings.TrimPrefix(key, "/")
 }
 
 // Get は、オブジェクトとその ETag を取得する。
 func (c Client) Get(ctx context.Context, key string) (Object, error) {
-	response, err := c.do(ctx, http.MethodGet, key, nil, "", "")
+	api, err := c.api()
 	if err != nil {
 		return Object{}, err
 	}
-	defer func() { _ = response.Body.Close() }()
+	output, err := api.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(c.Bucket), Key: aws.String(objectKey(key)),
+	})
+	if err != nil {
+		return Object{}, classify(err)
+	}
+	defer func() { _ = output.Body.Close() }()
 
-	body, err := io.ReadAll(io.LimitReader(response.Body, MaxObjectBytes+1))
+	body, err := io.ReadAll(io.LimitReader(output.Body, MaxObjectBytes+1))
 	if err != nil {
 		return Object{}, err
 	}
 	if len(body) > MaxObjectBytes {
 		return Object{}, ErrObjectTooLarge
 	}
-	return Object{Body: body, ETag: response.Header.Get("ETag")}, nil
+	return Object{Body: body, ETag: aws.ToString(output.ETag)}, nil
 }
 
 // Head は、本文なしで ETag を返す。
 func (c Client) Head(ctx context.Context, key string) (string, error) {
-	response, err := c.do(ctx, http.MethodHead, key, nil, "", "")
+	api, err := c.api()
 	if err != nil {
 		return "", err
 	}
-	defer func() { _ = response.Body.Close() }()
-	return response.Header.Get("ETag"), nil
+	output, err := api.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(c.Bucket), Key: aws.String(objectKey(key)),
+	})
+	if err != nil {
+		return "", classify(err)
+	}
+	return aws.ToString(output.ETag), nil
 }
 
 // Put はオブジェクトを書き、新しい ETag を返す。
@@ -149,61 +226,51 @@ func (c Client) Put(ctx context.Context, key string, body []byte, ifMatch, ifNon
 	if len(body) > MaxObjectBytes {
 		return "", ErrObjectTooLarge
 	}
-	response, err := c.do(ctx, http.MethodPut, key, body, ifMatch, ifNoneMatch)
+	api, err := c.api()
 	if err != nil {
 		return "", err
 	}
-	defer func() { _ = response.Body.Close() }()
-	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4<<10))
-	return response.Header.Get("ETag"), nil
-}
-
-func (c Client) do(ctx context.Context, method, key string, body []byte, ifMatch, ifNoneMatch string) (*http.Response, error) {
-	target, err := c.objectURL(key)
-	if err != nil {
-		return nil, err
-	}
-	var reader io.Reader
-	if body != nil {
-		reader = bytes.NewReader(body)
-	}
-	request, err := http.NewRequestWithContext(ctx, method, target, reader)
-	if err != nil {
-		return nil, err
-	}
-	if body != nil {
-		request.ContentLength = int64(len(body))
-		request.Header.Set("Content-Type", "application/octet-stream")
+	input := &s3.PutObjectInput{
+		Bucket:        aws.String(c.Bucket),
+		Key:           aws.String(objectKey(key)),
+		Body:          bytes.NewReader(body),
+		ContentLength: aws.Int64(int64(len(body))),
+		ContentType:   aws.String("application/octet-stream"),
 	}
 	if ifMatch != "" {
-		request.Header.Set("If-Match", ifMatch)
+		input.IfMatch = aws.String(ifMatch)
 	}
 	if ifNoneMatch != "" {
-		request.Header.Set("If-None-Match", ifNoneMatch)
+		input.IfNoneMatch = aws.String(ifNoneMatch)
 	}
-	if err := Sign(request, c.Creds, c.Region, "s3", body, c.now()); err != nil {
-		return nil, err
-	}
-
-	response, err := c.client().Do(request)
+	output, err := api.PutObject(ctx, input)
 	if err != nil {
-		return nil, err
+		return "", classify(err)
 	}
-	switch response.StatusCode {
-	case http.StatusOK, http.StatusCreated, http.StatusNoContent:
-		return response, nil
+	return aws.ToString(output.ETag), nil
+}
+
+// classify は、ストアの答えをこのアプリケーションの語彙へ畳む。
+//
+// レスポンスを伴わないエラー — 接続の拒否、名前解決の失敗、タイムアウト — は
+// そのまま返す。S3 のエラードキュメントを含みようがないからだ。レスポンスを
+// 伴うものは番兵へ写し、本文はここで捨てる。SDK のエラーはストアが述べた
+// メッセージを持っており、それはバケット名とリクエスト ID を名指しする。
+func classify(err error) error {
+	var response *awshttp.ResponseError
+	if !errors.As(err, &response) {
+		return err
 	}
-	_ = response.Body.Close()
-	switch response.StatusCode {
+	switch response.HTTPStatusCode() {
 	case http.StatusNotFound:
-		return nil, ErrNotFound
+		return ErrNotFound
+	// 412 は、If-Match または If-None-Match の失敗に対する文書化された答え。
+	// 409 をここに入れているのは、衝突する書き込みを直列化するストアが代わりに
+	// これを返すことがあるからで、呼び出し側にとって両者の意味は同じ。すなわち、
+	// 誰かが先に到達した、ということである。
 	case http.StatusPreconditionFailed, http.StatusConflict:
-		// 412 は、If-Match または If-None-Match の失敗に対する文書化された答え。
-		// 409 をここに入れているのは、衝突する書き込みを直列化するストアが代わりに
-		// これを返すことがあるからで、呼び出し側にとって両者の意味は同じ。すなわち、
-		// 誰かが先に到達した、ということである。
-		return nil, ErrPreconditionFailed
+		return ErrPreconditionFailed
 	default:
-		return nil, ErrRefused
+		return ErrRefused
 	}
 }

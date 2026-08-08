@@ -944,6 +944,7 @@ type SyncStatus struct {
 	Locked       bool          `json:"locked"`
 	Origin       *string       `json:"origin,omitempty"`
 	Path         *string       `json:"path,omitempty"`
+	Region       *string       `json:"region,omitempty"`
 	Synced       bool          `json:"synced"`
 }
 

@@ -79,13 +79,14 @@ func (h SyncHandlers) restore() {
 
 func (h SyncHandlers) status(c *echo.Context) error {
 	h.restore()
-	endpoint, bucket, path := h.Service.Target()
+	endpoint, bucket, path, region := h.Service.Target()
 	synced, at, origin, files := h.Service.LastSync()
 	response := api.SyncStatus{
 		Configured: h.Service.Configured(),
 		Endpoint:   endpoint,
 		Bucket:     bucket,
 		Path:       &path,
+		Region:     &region,
 		Synced:     synced,
 		Direction:  api.SyncDirection(h.Service.Direction()),
 		// form が空である理由を、空であるときに伝える。access key や

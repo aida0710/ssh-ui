@@ -132,6 +132,7 @@ func (b *fakeBucket) handler() http.HandlerFunc {
 type installation struct {
 	service   *remotesync.Service
 	workspace *storage.Workspace
+	manager   *storage.Manager
 	home      string
 
 	// Configure が何で呼ばれたか。テストがフィクスチャを組み立て直さずに、
@@ -200,11 +201,10 @@ func newInstallation(t *testing.T, bucket *fakeBucket, files map[string]string) 
 	client := &objectstore.Client{
 		HTTP: server.Client(), Endpoint: server.URL, Bucket: "sshc", Region: "auto",
 		Creds: credentials,
-		Now:   func() time.Time { return time.Unix(0, 0).UTC() },
 	}
 	service.Configure(config, credentials, client)
 	return installation{
-		service: service, workspace: workspace, home: home,
+		service: service, workspace: workspace, manager: manager, home: home,
 		config: config, creds: credentials, client: client,
 	}
 }
@@ -314,6 +314,37 @@ func TestPullOnAnEmptyBucketSaysSo(t *testing.T) {
 	machine := newInstallation(t, &fakeBucket{}, map[string]string{})
 	if _, err := machine.service.Pull(context.Background(), syncPassphrase); !errors.Is(err, remotesync.ErrNoSnapshot) {
 		t.Fatalf("Pull = %v, want ErrNoSnapshot", err)
+	}
+}
+
+// pull が作るディレクトリは、それを埋めるファイルと同じトランザクションに乗る。
+//
+// 以前は Apply がジャーナルの外で EnsureDirectory を呼んでおり、その mkdir とコミット
+// のあいだで落ちれば空のディレクトリが残った。コメント自身がそれを認めていた。バリ
+// データが拒否したリクエストがディスクに何も残さないのは、ディレクトリがその同じ
+// リクエストの一部になったときだけである。
+func TestARefusedPullLeavesNoDirectoryBehind(t *testing.T) {
+	bucket := &fakeBucket{}
+	first := newInstallation(t, bucket, map[string]string{
+		"config":                    "Include connections/work/*.conf\n",
+		"connections/work/lon.conf": "Host lon\n",
+	})
+	if err := first.service.Push(context.Background(), syncPassphrase); err != nil {
+		t.Fatal(err)
+	}
+
+	second := newInstallation(t, bucket, map[string]string{})
+	second.manager.Validate = func(storage.Request) error { return errors.New("refused") }
+
+	result, err := second.service.Pull(context.Background(), syncPassphrase)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := second.service.Apply(result); err == nil {
+		t.Fatal("Apply は、拒否するバリデータに対して成功した")
+	}
+	if _, err := os.Stat(filepath.Join(second.home, ".ssh", "connections", "work")); !errors.Is(err, os.ErrNotExist) {
+		t.Error("拒否された pull が空のディレクトリを残した")
 	}
 }
 
@@ -558,7 +589,7 @@ func TestAStoredTrailingSlashIsTrimmedWhenItIsConfigured(t *testing.T) {
 		remotesync.Config{Endpoint: "https://s3.example.invalid/", Bucket: "b", Region: "auto"},
 		installation.creds, installation.client)
 
-	if endpoint, _, _ := installation.service.Target(); endpoint != "https://s3.example.invalid" {
+	if endpoint, _, _, _ := installation.service.Target(); endpoint != "https://s3.example.invalid" {
 		t.Errorf("endpoint = %q, want the trailing slash gone", endpoint)
 	}
 }
@@ -624,7 +655,6 @@ func TestPushKeepsOneRemoteBindingWhenReconfigured(t *testing.T) {
 		return &objectstore.Client{
 			HTTP: server.Client(), Endpoint: server.URL, Bucket: "sshc", Region: "auto",
 			Creds: credentials,
-			Now:   func() time.Time { return time.Unix(0, 0).UTC() },
 		}
 	}
 	service.Configure(remotesync.Config{
