@@ -7,6 +7,8 @@ export type ReachabilityResponse = components["schemas"]["ReachabilityResponse"]
 export type AuthenticationResponse = components["schemas"]["AuthenticationResponse"];
 export type TerminalCommandResponse = components["schemas"]["TerminalCommandResponse"];
 export type TerminalLaunchResponse = components["schemas"]["TerminalLaunchResponse"];
+export type TerminalOptionsResponse = components["schemas"]["TerminalOptionsResponse"];
+export type TerminalID = components["schemas"]["TerminalID"];
 export type KnownHostsResponse = components["schemas"]["KnownHostsResponse"];
 export type KnownHostEntry = components["schemas"]["KnownHostEntry"];
 export type KnownHostsChangeResponse = components["schemas"]["KnownHostsChangeResponse"];
@@ -49,6 +51,7 @@ export type IntegrationsApi = {
   reachability(alias: string): Promise<ReachabilityResponse>;
   authentication(alias: string, acknowledgeExecutable: boolean): Promise<AuthenticationResponse>;
   terminalCommand(alias: string): Promise<TerminalCommandResponse>;
+  terminalOptions(): Promise<TerminalOptionsResponse>;
   terminalLaunch(alias: string): Promise<TerminalLaunchResponse>;
   knownHosts(query: string): Promise<KnownHostsResponse>;
   deleteKnownHosts(entries: { line: number; digest: string }[], path: string): Promise<KnownHostsChangeResponse>;
@@ -243,6 +246,17 @@ function validateTerminalCommand(value: unknown): TerminalCommandResponse {
   return record as unknown as TerminalCommandResponse;
 }
 
+function validateTerminalOptions(value: unknown): TerminalOptionsResponse {
+  const record = asRecord(value);
+  asString(record.selected);
+  for (const entry of asArray(record.terminals)) {
+    const option = asRecord(entry);
+    asString(option.id);
+    asBoolean(option.installed);
+  }
+  return record as unknown as TerminalOptionsResponse;
+}
+
 function validateTerminalLaunch(value: unknown): TerminalLaunchResponse {
   const record = asRecord(value);
   asBoolean(record.launched);
@@ -395,6 +409,9 @@ export const integrationsApi: IntegrationsApi = {
   },
   async terminalCommand(alias) {
     return validateTerminalCommand(await postJSON<unknown>("/api/v1/terminal/command", { alias }));
+  },
+  async terminalOptions() {
+    return validateTerminalOptions(await apiClient.read("/api/v1/terminal/options"));
   },
   async terminalLaunch(alias) {
     const token = await issueAction(TERMINAL_LAUNCH_ACTION_KIND, alias);

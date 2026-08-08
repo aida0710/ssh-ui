@@ -39,6 +39,9 @@ test("stores kitty as the terminal used by Connect", async ({ page, installation
   const saved = page.waitForResponse(
     (response) => new URL(response.url()).pathname === "/api/v1/config/save" && response.request().method() === "POST",
   );
+  // 端末が入っているかに関わらず、選択肢そのものは消えない。このマシンに何が
+  // あるかで一覧の中身が変わると、設定は「消えた」ようにしか見えなくなる。
+  await expect(page.getByLabel("Open with").locator("option")).toHaveCount(6);
   await page.getByLabel("Open with").selectOption("kitty");
   expect((await saved).status()).toBe(200);
   expect(await installation.read("sshc/metadata.json")).toContain('"terminal": "kitty"');

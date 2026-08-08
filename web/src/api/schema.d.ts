@@ -244,6 +244,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/terminal/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getTerminalOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/terminal/launch": {
         parameters: {
             query?: never;
@@ -1271,6 +1287,19 @@ export interface components {
             launchable: boolean;
             warning: string;
         };
+        TerminalOption: {
+            id: components["schemas"]["TerminalID"];
+            installed: boolean;
+        };
+        TerminalApplication: {
+            name: string;
+            path: string;
+        };
+        TerminalOptionsResponse: {
+            selected: components["schemas"]["TerminalID"];
+            terminals: components["schemas"]["TerminalOption"][];
+            applications: components["schemas"]["TerminalApplication"][];
+        };
         /** @enum {string} */
         SyncDirection: "both" | "push" | "pull";
         SyncStatus: {
@@ -1506,11 +1535,16 @@ export interface components {
             schemaVersion: number;
             groupsFile?: string;
             terminal?: components["schemas"]["TerminalID"];
+            customTerminal?: components["schemas"]["CustomTerminal"];
             groups?: components["schemas"]["GroupMetadata"][];
             hosts?: components["schemas"]["HostMetadata"][];
         };
         /** @enum {string} */
-        TerminalID: "terminal" | "iterm2" | "kitty";
+        TerminalID: "terminal" | "iterm2" | "kitty" | "ghostty" | "wezterm" | "custom";
+        CustomTerminal: {
+            application: string;
+            arguments?: string[];
+        };
         PendingTransaction: {
             id: string;
             operation: string;
@@ -2086,6 +2120,27 @@ export interface operations {
             401: components["responses"]["Problem"];
         };
     };
+    getTerminalOptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Which terminals this machine can open, and which one Connect uses */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalOptionsResponse"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
     launchTerminal: {
         parameters: {
             query?: never;
@@ -2111,6 +2166,7 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     getSyncStatus: {

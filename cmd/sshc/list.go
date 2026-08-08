@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -37,22 +38,33 @@ func concreteAliases(graph *config.Graph) []string {
 	return aliases
 }
 
-func runList(home string, stdout, stderr io.Writer) int {
+// readConfigGraph は、`~/.ssh/config` と到達できる Include を解決する。
+//
+// 一覧も接続の選択画面も、同じ設定について同じことを答えなければならない。
+// 特に「読めなかった」については、片方が「ホストが無い」と言い換えてしまうと、
+// 壊れた設定が空の設定に見える。
+func readConfigGraph(home string) (*storage.Workspace, *config.Graph, error) {
 	workspace, err := storage.NewWorkspace(storage.OSFileSystem{}, home)
 	if err != nil {
-		fmt.Fprintf(stderr, "sshc: %v\n", err)
-		return 1
+		return nil, nil, err
 	}
 	entry := filepath.Join(workspace.Root(), "config")
 	graph, err := storage.NewResolver(workspace).Resolve(entry)
 	if err != nil {
-		fmt.Fprintf(stderr, "sshc: read config: %v\n", err)
-		return 1
+		return nil, nil, fmt.Errorf("read config: %w", err)
 	}
 	// config がまだ存在しないことは空の一覧である。一方、存在するのに読めない場合は、
 	// 正しい一覧を返せないので成功したふりをしない。
 	if root := graph.Nodes[graph.Root]; root != nil && root.File == nil && !root.Missing {
-		fmt.Fprintln(stderr, "sshc: cannot read ~/.ssh/config")
+		return nil, nil, errors.New("cannot read ~/.ssh/config")
+	}
+	return workspace, graph, nil
+}
+
+func runList(home string, stdout, stderr io.Writer) int {
+	_, graph, err := readConfigGraph(home)
+	if err != nil {
+		fmt.Fprintf(stderr, "sshc: %v\n", err)
 		return 1
 	}
 	for _, alias := range concreteAliases(graph) {

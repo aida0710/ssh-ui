@@ -51,7 +51,7 @@ type Service struct {
 	Reachability      Reachability
 	Authentication    Authentication
 	Terminal          platform.TerminalLauncher
-	PreferredTerminal func() platform.TerminalID
+	PreferredTerminal func() platform.TerminalChoice
 	// Self はこのバイナリの絶対パス。ユーザーに見せるコマンドを、実際に実行できる
 	// ものにするためである。アプリケーションの内側には、それがどこにインストール
 	// されたかを知るものがない。エントリポイントが一度だけ解決して渡す。空の場合は
@@ -238,17 +238,41 @@ func (s *Service) LaunchTerminal(ctx context.Context, alias string) error {
 	if s.Terminal == nil {
 		return ErrTerminalNotConfigured
 	}
-	terminal := platform.TerminalApple
-	if s.PreferredTerminal != nil {
-		terminal = s.PreferredTerminal()
-	}
+	terminal := s.selectedTerminal()
 	if selectable, ok := s.Terminal.(platform.SelectableTerminalLauncher); ok {
 		return selectable.LaunchIn(ctx, terminal, alias)
 	}
-	if terminal != platform.TerminalApple {
+	if terminal.ID != platform.TerminalApple {
 		return ErrTerminalNotConfigured
 	}
 	return s.Terminal.Launch(ctx, alias)
+}
+
+// selectedTerminal は、いま開く先として選ばれている端末を返す。
+func (s *Service) selectedTerminal() platform.TerminalChoice {
+	if s.PreferredTerminal == nil {
+		return platform.TerminalChoice{ID: platform.TerminalApple}
+	}
+	return s.PreferredTerminal()
+}
+
+// TerminalOptions は、選べる端末、custom として選べるアプリケーション、そして
+// いま選ばれているものを返す。
+//
+// 在庫を答えられないランチャーでは、すべて見つかったことにする。画面が選択肢を
+// 隠す根拠は「無いと分かっている」ことだけで、「分からない」ことではない。
+func (s *Service) TerminalOptions() (
+	[]platform.TerminalAvailability, []platform.Application, platform.TerminalChoice,
+) {
+	selected := s.selectedTerminal()
+	if inventory, ok := s.Terminal.(platform.TerminalInventory); ok {
+		return inventory.Terminals(), inventory.Applications(), selected
+	}
+	available := make([]platform.TerminalAvailability, 0, len(platform.TerminalIDs))
+	for _, id := range platform.TerminalIDs {
+		available = append(available, platform.TerminalAvailability{ID: id, Installed: true})
+	}
+	return available, nil, selected
 }
 
 // TerminalCommand は、ユーザーが手で実行するであろうコマンドを返す。
@@ -307,10 +331,7 @@ func (s *Service) LaunchTerminalWithPassword(ctx context.Context, alias, helperP
 	if s.Terminal == nil {
 		return ErrTerminalNotConfigured
 	}
-	terminal := platform.TerminalApple
-	if s.PreferredTerminal != nil {
-		terminal = s.PreferredTerminal()
-	}
+	terminal := s.selectedTerminal()
 	if selectable, ok := s.Terminal.(platform.SelectablePasswordTerminalLauncher); ok {
 		return selectable.LaunchWithPasswordIn(ctx, terminal, alias, helperPath, endpoint, token)
 	}
@@ -318,7 +339,7 @@ func (s *Service) LaunchTerminalWithPassword(ctx context.Context, alias, helperP
 	if !ok {
 		return ErrPasswordLaunchUnsupported
 	}
-	if terminal != platform.TerminalApple {
+	if terminal.ID != platform.TerminalApple {
 		return ErrPasswordLaunchUnsupported
 	}
 	return launcher.LaunchWithPassword(ctx, alias, helperPath, endpoint, token)

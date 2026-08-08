@@ -45,6 +45,14 @@ function buildApi(overrides: Partial<IntegrationsApi> = {}): IntegrationsApi {
       elapsedMs: 40,
     }),
     terminalCommand: vi.fn().mockResolvedValue({ command: "ssh -- bastion", launchable: true, warning: "" }),
+    terminalOptions: vi.fn().mockResolvedValue({
+      selected: "terminal",
+      terminals: [
+        { id: "terminal", installed: true },
+        { id: "iterm2", installed: true },
+        { id: "kitty", installed: true },
+      ],
+    }),
     terminalLaunch: vi.fn().mockResolvedValue({ launched: true }),
     knownHosts: vi.fn().mockResolvedValue({ path: "~/.ssh/known_hosts", entries: [] }),
     deleteKnownHosts: vi.fn().mockResolvedValue({ changed: true, transactionId: "tx" }),

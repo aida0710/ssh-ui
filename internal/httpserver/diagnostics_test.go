@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -284,6 +285,76 @@ type recordingLauncher struct{ aliases []string }
 func (launcher *recordingLauncher) Launch(_ context.Context, alias string) error {
 	launcher.aliases = append(launcher.aliases, alias)
 	return nil
+}
+
+// inventoryLauncher は、選べる端末のうち一つだけがこのマシンに無い状態を表す。
+type inventoryLauncher struct{ recordingLauncher }
+
+func (launcher *inventoryLauncher) Terminals() []platform.TerminalAvailability {
+	return []platform.TerminalAvailability{
+		{ID: platform.TerminalApple, Installed: true},
+		{ID: platform.TerminalITerm2, Installed: true},
+		{ID: platform.TerminalKitty, Installed: false},
+	}
+}
+
+func (launcher *inventoryLauncher) Applications() []platform.Application {
+	return []platform.Application{{Name: "Term", Path: "/Applications/Term.app"}}
+}
+
+func (launcher *inventoryLauncher) LaunchIn(
+	_ context.Context, choice platform.TerminalChoice, alias string,
+) error {
+	if choice.ID == platform.TerminalKitty {
+		return fmt.Errorf("%s: %w", choice.ID, platform.ErrTerminalNotInstalled)
+	}
+	launcher.aliases = append(launcher.aliases, alias)
+	return nil
+}
+
+// 「入っていない」は「開けなかった」とは別の答えとして届かなければならない。
+// 前者は選び直せば直り、画面はそれを言える。
+func TestTerminalOptionsAreReadableAndAMissingTerminalIsItsOwnAnswer(t *testing.T) {
+	engine, credentials, _, service := newDiagnosticsServer(t)
+	launcher := &inventoryLauncher{}
+	service.Terminal = launcher
+	service.PreferredTerminal = func() platform.TerminalChoice {
+		return platform.TerminalChoice{ID: platform.TerminalKitty}
+	}
+
+	listed := sendKeyRequest(t, engine, credentials, http.MethodGet, "/api/v1/terminal/options", nil, "")
+	if listed.Code != http.StatusOK {
+		t.Fatalf("terminal options = %d: %s", listed.Code, listed.Body.String())
+	}
+	var options api.TerminalOptionsResponse
+	if err := json.Unmarshal(listed.Body.Bytes(), &options); err != nil {
+		t.Fatal(err)
+	}
+	if options.Selected != api.TerminalID(platform.TerminalKitty) || len(options.Terminals) != 3 {
+		t.Fatalf("options = %#v", options)
+	}
+	// 見つからなかった端末も一覧からは消えない。消せば、これから入れる人には
+	// 理由の分からない欠落になる。
+	if options.Terminals[2].Id != api.Kitty || options.Terminals[2].Installed {
+		t.Errorf("kitty = %#v, want it listed as missing", options.Terminals[2])
+	}
+	// custom の選択肢は、このマシンで見つかったアプリケーションそのものである。
+	if len(options.Applications) != 1 || options.Applications[0].Path != "/Applications/Term.app" {
+		t.Errorf("applications = %#v", options.Applications)
+	}
+
+	token := diagnosticsToken(t, engine, credentials, session.ActionTerminalLaunch, "bastion")
+	refused := sendKeyRequest(t, engine, credentials, http.MethodPost, "/api/v1/terminal/launch",
+		mustMarshal(t, api.AliasRequest{Alias: "bastion"}), token)
+	if refused.Code != http.StatusConflict {
+		t.Fatalf("launch into a missing terminal = %d, want 409", refused.Code)
+	}
+	if code := problemCode(t, refused.Body.Bytes()); code != "terminal_not_installed" {
+		t.Fatalf("problem code = %q, want terminal_not_installed", code)
+	}
+	if len(launcher.aliases) != 0 {
+		t.Fatalf("a launch happened anyway: %#v", launcher.aliases)
+	}
 }
 
 // TestTerminalEndpointsSeparateCopyableCommandsFromLaunches は、

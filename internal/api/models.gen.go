@@ -26,19 +26,28 @@ func (e SyncDirection) Valid() bool {
 
 // Defines values for TerminalID.
 const (
+	Custom   TerminalID = "custom"
+	Ghostty  TerminalID = "ghostty"
 	Iterm2   TerminalID = "iterm2"
 	Kitty    TerminalID = "kitty"
 	Terminal TerminalID = "terminal"
+	Wezterm  TerminalID = "wezterm"
 )
 
 // Valid indicates whether the value is a known member of the TerminalID enum.
 func (e TerminalID) Valid() bool {
 	switch e {
+	case Custom:
+		return true
+	case Ghostty:
+		return true
 	case Iterm2:
 		return true
 	case Kitty:
 		return true
 	case Terminal:
+		return true
+	case Wezterm:
 		return true
 	default:
 		return false
@@ -174,6 +183,12 @@ type Credential struct {
 // CredentialList defines model for CredentialList.
 type CredentialList struct {
 	Credentials []Credential `json:"credentials"`
+}
+
+// CustomTerminal defines model for CustomTerminal.
+type CustomTerminal struct {
+	Application string    `json:"application"`
+	Arguments   *[]string `json:"arguments,omitempty"`
 }
 
 // Diagnostic defines model for Diagnostic.
@@ -648,11 +663,12 @@ type LoginItem struct {
 
 // Metadata defines model for Metadata.
 type Metadata struct {
-	Groups        *[]GroupMetadata `json:"groups,omitempty"`
-	GroupsFile    *string          `json:"groupsFile,omitempty"`
-	Hosts         *[]HostMetadata  `json:"hosts,omitempty"`
-	SchemaVersion int              `json:"schemaVersion"`
-	Terminal      *TerminalID      `json:"terminal,omitempty"`
+	CustomTerminal *CustomTerminal  `json:"customTerminal,omitempty"`
+	Groups         *[]GroupMetadata `json:"groups,omitempty"`
+	GroupsFile     *string          `json:"groupsFile,omitempty"`
+	Hosts          *[]HostMetadata  `json:"hosts,omitempty"`
+	SchemaVersion  int              `json:"schemaVersion"`
+	Terminal       *TerminalID      `json:"terminal,omitempty"`
 }
 
 // Notice defines model for Notice.
@@ -970,6 +986,12 @@ type SyncStatus struct {
 	Synced       bool          `json:"synced"`
 }
 
+// TerminalApplication defines model for TerminalApplication.
+type TerminalApplication struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
 // TerminalCommandResponse defines model for TerminalCommandResponse.
 type TerminalCommandResponse struct {
 	Command    string `json:"command"`
@@ -983,6 +1005,19 @@ type TerminalID string
 // TerminalLaunchResponse defines model for TerminalLaunchResponse.
 type TerminalLaunchResponse struct {
 	Launched bool `json:"launched"`
+}
+
+// TerminalOption defines model for TerminalOption.
+type TerminalOption struct {
+	Id        TerminalID `json:"id"`
+	Installed bool       `json:"installed"`
+}
+
+// TerminalOptionsResponse defines model for TerminalOptionsResponse.
+type TerminalOptionsResponse struct {
+	Applications []TerminalApplication `json:"applications"`
+	Selected     TerminalID            `json:"selected"`
+	Terminals    []TerminalOption      `json:"terminals"`
 }
 
 // TrashEntrySummary defines model for TrashEntrySummary.

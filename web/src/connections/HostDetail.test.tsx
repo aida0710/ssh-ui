@@ -21,6 +21,14 @@ function buildIntegrations(overrides: Partial<IntegrationsApi> = {}): Integratio
     }),
     authentication: vi.fn(),
     terminalCommand: vi.fn(),
+    terminalOptions: vi.fn().mockResolvedValue({
+      selected: "terminal",
+      terminals: [
+        { id: "terminal", installed: true },
+        { id: "iterm2", installed: true },
+        { id: "kitty", installed: true },
+      ],
+    }),
     terminalLaunch: vi.fn(),
     knownHosts: vi.fn(),
     deleteKnownHosts: vi.fn(),

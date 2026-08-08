@@ -249,6 +249,16 @@ paths:
               schema: { $ref: "#/components/schemas/TerminalCommandResponse" }
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
+  /api/v1/terminal/options:
+    get:
+      operationId: getTerminalOptions
+      responses:
+        "200":
+          description: Which terminals this machine can open, and which one Connect uses
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TerminalOptionsResponse" }
+        "401": { $ref: "#/components/responses/Problem" }
   /api/v1/terminal/launch:
     post:
       operationId: launchTerminal
@@ -266,6 +276,7 @@ paths:
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
   /api/v1/sync:
     get:
       operationId: getSyncStatus
@@ -1645,6 +1656,33 @@ components:
         command: { type: string }
         launchable: { type: boolean }
         warning: { type: string }
+    # 見つからなかった端末も一覧には残る。選択肢を隠すと、これから
+    # インストールする人には理由の分からない欠落になるからである。
+    TerminalOption:
+      type: object
+      additionalProperties: false
+      required: [id, installed]
+      properties:
+        id: { $ref: "#/components/schemas/TerminalID" }
+        installed: { type: boolean }
+    # custom として選べるアプリケーション。ユーザーはここに出たものだけを選べ、
+    # 保存されるのはここに出たパスだけなので、設定からパスを組み立てて渡す経路は
+    # どこにもない。
+    TerminalApplication:
+      type: object
+      additionalProperties: false
+      required: [name, path]
+      properties:
+        name: { type: string }
+        path: { type: string }
+    TerminalOptionsResponse:
+      type: object
+      additionalProperties: false
+      required: [selected, terminals, applications]
+      properties:
+        selected: { $ref: "#/components/schemas/TerminalID" }
+        terminals: { type: array, items: { $ref: "#/components/schemas/TerminalOption" } }
+        applications: { type: array, items: { $ref: "#/components/schemas/TerminalApplication" } }
     # このマシンがどちら向きにデータを動かしてよいか。支配するのは書き込みだけで、
     # それ以外は何も支配しない。"push" はこのディスクへのスナップショット適用を
     # 拒否し、"pull" はバケットへの書き込みを拒否する。プレビューは読むだけで何も
@@ -2037,11 +2075,21 @@ components:
         schemaVersion: { type: integer }
         groupsFile: { type: string }
         terminal: { $ref: "#/components/schemas/TerminalID" }
+        customTerminal: { $ref: "#/components/schemas/CustomTerminal" }
         groups: { type: array, items: { $ref: "#/components/schemas/GroupMetadata" } }
         hosts: { type: array, items: { $ref: "#/components/schemas/HostMetadata" } }
     TerminalID:
       type: string
-      enum: [terminal, iterm2, kitty]
+      enum: [terminal, iterm2, kitty, ghostty, wezterm, custom]
+    # custom で開く先。application はこのマシンで見つかったバンドルのパスで、
+    # arguments はその前に置く argv の要素である。シェルは間に無い。
+    CustomTerminal:
+      type: object
+      additionalProperties: false
+      required: [application]
+      properties:
+        application: { type: string }
+        arguments: { type: array, items: { type: string } }
     PendingTransaction:
       type: object
       additionalProperties: false
