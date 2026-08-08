@@ -552,15 +552,11 @@ func (s *Service) Apply(result PullResult) error {
 		// 別のマシンからのスナップショットは、このマシンにはないかもしれない
 		// ディレクトリ — connections/work/、keys/work/ — を名指しする。そして
 		// トランザクションマネージャが所有するのはファイルであってディレクトリでは
-		// ない。ResolveForWrite は、親のない書き込みを拒否する。先にそれらを作るのは、
-		// このアプリケーションの他のすべての書き手がしていることであり、同じ既知の
-		// 制約も受け継ぐ。mkdir はジャーナルの外なので、それとコミットのあいだで
-		// クラッシュすれば空のディレクトリが残る。空のディレクトリは無害である。
-		for _, change := range result.Request.Changes {
-			if err := s.workspace.EnsureDirectory(filepath.Dir(change.Path)); err != nil {
-				return err
-			}
-		}
+		// ない。ResolveForWrite は、親のない書き込みを拒否する。そこで、その
+		// ディレクトリを同じリクエストに載せる。以前はジャーナルの外で作っており、
+		// mkdir とコミットのあいだで落ちれば空のディレクトリが残った。
+		result.Request.Directories = append(result.Request.Directories,
+			changeDirectories(s.workspace.Root(), result.Request.Changes)...)
 		if _, err := s.transactions.Commit(result.Request); err != nil {
 			return err
 		}
@@ -577,6 +573,24 @@ func (s *Service) Apply(result PullResult) error {
 	}
 	manifest := result.Manifest
 	return s.writeState(state{ETag: result.ETag, Key: result.objectKey, Base: &manifest, Origin: origin})
+}
+
+// changeDirectories は、変更が着地する先のディレクトリを重複なく返す。
+//
+// 直接の親だけでよい。DirectoryCreate はルートより下で欠けている親も作るので、
+// 設定エンジンの書き手が渡しているのと同じものである。
+func changeDirectories(root string, changes []storage.Change) []storage.DirectoryCreate {
+	seen := map[string]bool{}
+	var directories []storage.DirectoryCreate
+	for _, change := range changes {
+		parent := filepath.Dir(change.Path)
+		if parent == root || seen[parent] {
+			continue
+		}
+		seen[parent] = true
+		directories = append(directories, storage.DirectoryCreate{Path: parent})
+	}
+	return directories
 }
 
 // localDigests は、どちらかの側が知っているすべてのパスをハッシュする。これにより、
@@ -660,10 +674,10 @@ func (s *Service) writeState(next state) error {
 
 // Target は、この実行が指しているエンドポイントとバケットを、表示のために返す。
 // アクセスキーと秘密が何かによって返されることは決してない。
-func (s *Service) Target() (endpoint, bucket, path string) {
+func (s *Service) Target() (endpoint, bucket, path, region string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.binding.config.Endpoint, s.binding.config.Bucket, s.binding.config.Path
+	return s.binding.config.Endpoint, s.binding.config.Bucket, s.binding.config.Path, s.binding.config.Region
 }
 
 // LastSync は、state ファイルから、このマシンが最後に同期した内容を報告する。

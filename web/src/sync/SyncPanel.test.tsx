@@ -65,6 +65,7 @@ describe("SyncPanel", () => {
         endpoint: "https://acc.r2.cloudflarestorage.com",
         bucket: "sshc",
         path: "",
+        region: "",
         accessKeyId: "AKID",
         secretAccessKey: "the-secret",
         direction: "both",
@@ -74,6 +75,27 @@ describe("SyncPanel", () => {
       expect((screen.getByLabelText("Secret access key") as HTMLInputElement).value).toBe(""),
     );
     expect(document.body.textContent ?? "").not.toContain("the-secret");
+  });
+
+  // リージョンは署名スコープに入る。R2 の "auto" と本物の AWS のバケットの
+  // リージョンでは違うので、空欄のままサーバーの既定に任せるのではなく、打ち込んだ
+  // ものがそのまま届かなければならない。
+  it("sends the region it was given", async () => {
+    const api = buildApi(unconfigured, nothingToDo);
+    render(<SyncPanel api={api} />);
+
+    await userEvent.type(await screen.findByLabelText("Endpoint"), "https://s3.eu-west-2.amazonaws.com");
+    await userEvent.type(screen.getByLabelText("Bucket name"), "sshc");
+    await userEvent.type(screen.getByLabelText("Region"), "eu-west-2");
+    await userEvent.type(screen.getByLabelText("Access key ID"), "AKID");
+    await userEvent.type(screen.getByLabelText("Secret access key"), "the-secret");
+    await userEvent.click(screen.getByRole("button", { name: "Use this bucket" }));
+
+    await waitFor(() =>
+      expect(api.configureSync).toHaveBeenCalledWith(
+        expect.objectContaining({ region: "eu-west-2" }),
+      ),
+    );
   });
 
   it("offers no push or pull until a bucket and a passphrase are given", async () => {

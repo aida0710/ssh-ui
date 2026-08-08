@@ -43,6 +43,7 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
   const [endpoint, setEndpoint] = useState("");
   const [bucket, setBucket] = useState("");
   const [path, setPath] = useState("");
+  const [region, setRegion] = useState("");
   const [accessKeyId, setAccessKeyId] = useState("");
   const [secretAccessKey, setSecretAccessKey] = useState("");
   const [direction, setDirection] = useState<SyncDirection>("both");
@@ -156,6 +157,9 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
         {status.configured ? (
           <p className="font-mono text-xs text-ink-muted">
             {[status.endpoint, status.bucket, status.path].filter((part) => part !== "" && part !== undefined).join("/")}
+            {/* リージョンはパスの一部ではないので、"/" では繋がない。署名スコープに
+                入る別の事実であり、それが何かを利用者が確かめられる必要がある。 */}
+            {status.region !== undefined && status.region !== "" ? ` (${status.region})` : ""}
           </p>
         ) : (
           <p className="text-sm text-ink-muted">{t("sync.notConfigured")}</p>
@@ -184,6 +188,14 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
           */}
           <Row label={t("sync.path")} hint={t("sync.pathHint")}>
             <input value={path} onChange={(event) => setPath(event.target.value)} className={control} />
+          </Row>
+          {/*
+            自由入力にしてある。正しい値は相手のストアごとに違い、選択肢を並べれば
+            そこに無いものが設定できなくなる。空欄はサーバー側で "auto" になり、
+            それが R2 の答えである。
+          */}
+          <Row label={t("sync.region")} hint={t("sync.regionHint")}>
+            <input value={region} onChange={(event) => setRegion(event.target.value)} className={control} />
           </Row>
           <Row label={t("sync.accessKeyId")}>
             <input
@@ -230,7 +242,7 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
           disabled={busy || endpoint === "" || bucket === "" || accessKeyId === "" || secretAccessKey === ""}
           onClick={() =>
             void run(
-              () => api.configureSync({ endpoint, bucket, path, accessKeyId, secretAccessKey, direction }),
+              () => api.configureSync({ endpoint, bucket, path, region, accessKeyId, secretAccessKey, direction }),
               (next) => {
                 setStatus(next);
                 setAccessKeyId("");

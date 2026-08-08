@@ -275,6 +275,9 @@ export const en = {
   "sync.bucket": "Bucket name",
   "sync.path": "Path in the bucket",
   "sync.pathHint": "Optional. Empty puts the snapshot at the root of the bucket.",
+  "sync.region": "Region",
+  "sync.regionHint":
+    "Optional. Empty means auto, which is what R2 wants. Real AWS wants the region the bucket is in.",
   "sync.accessKeyId": "Access key ID",
   "sync.secretAccessKey": "Secret access key",
   "sync.credentialsNote":
@@ -1001,6 +1004,9 @@ export const ja: Record<MessageKey, string> = {
   "sync.bucket": "バケット名",
   "sync.path": "バケット内のパス",
   "sync.pathHint": "任意です。空ならバケットのルートに置きます。",
+  "sync.region": "リージョン",
+  "sync.regionHint":
+    "任意です。空は auto を意味し、R2 が求めるのはそれです。本物の AWS はバケットのあるリージョンを求めます。",
   "sync.accessKeyId": "アクセスキー ID",
   "sync.secretAccessKey": "シークレットアクセスキー",
   "sync.credentialsNote":

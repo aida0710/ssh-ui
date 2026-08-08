@@ -2,15 +2,27 @@ package objectstore_test
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"sshc/internal/objectstore"
 )
+
+// AWS が公開している SigV4 テストスイートの資格情報。署名そのものはもう SDK の
+// 責任なので既知解テストは持たないが、鍵が回線へ漏れていないことを確かめる
+// テストには、探すべき具体的な文字列が要る。
+const (
+	suiteAccessKeyID     = "AKIDEXAMPLE"
+	suiteSecretAccessKey = "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY"
+)
+
+func suiteCredentials() objectstore.Credentials {
+	return objectstore.Credentials{AccessKeyID: suiteAccessKeyID, SecretAccessKey: suiteSecretAccessKey}
+}
 
 // ここのテストはすべて httptest に対して走る。このパッケージのものが Cloudflare
 // や、その他のどのネットワークにも到達することはない。
@@ -24,7 +36,6 @@ func newClient(t *testing.T, handler http.HandlerFunc) (objectstore.Client, *htt
 		Bucket:   "sshc",
 		Region:   "auto",
 		Creds:    suiteCredentials(),
-		Now:      func() time.Time { return suiteStamp },
 	}, server
 }
 
@@ -129,8 +140,13 @@ func TestEveryRequestIsSignedAndCarriesNoCredentialInTheURL(t *testing.T) {
 		if !strings.HasPrefix(authorization, "AWS4-HMAC-SHA256 Credential=") {
 			t.Errorf("%s %s is unsigned", request.Method, request.URL.Path)
 		}
-		if request.Header.Get("X-Amz-Content-Sha256") == "" {
-			t.Errorf("%s %s does not sign its payload", request.Method, request.URL.Path)
+		// 空でないことだけでは足りない。"UNSIGNED-PAYLOAD" も空ではないが、それは
+		// 本文に署名していないという意味である。送るものは誰かの ~/.ssh の
+		// スナップショットなので、実際のハッシュが載っていなければならない。
+		payloadHash := request.Header.Get("X-Amz-Content-Sha256")
+		if len(payloadHash) != sha256.Size*2 {
+			t.Errorf("%s %s の X-Amz-Content-Sha256 が %q で、SHA-256 の 16 進ダイジェストではない",
+				request.Method, request.URL.Path, payloadHash)
 		}
 		if strings.Contains(request.URL.RawQuery, "Signature") ||
 			strings.Contains(request.URL.String(), suiteSecretAccessKey) {
@@ -146,7 +162,6 @@ func TestAPlaintextEndpointIsRefused(t *testing.T) {
 		Bucket:   "sshc",
 		Region:   "auto",
 		Creds:    suiteCredentials(),
-		Now:      func() time.Time { return suiteStamp },
 	}
 	if _, err := client.Get(context.Background(), "k"); !errors.Is(err, objectstore.ErrInsecureEndpoint) {
 		t.Fatalf("Get = %v, want ErrInsecureEndpoint", err)
