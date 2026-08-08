@@ -46,6 +46,28 @@ type Resolver struct {
 	Normalise func(string) string
 	Tokens    map[byte]string
 	MaxDepth  int
+	// GeneratedRegion は、そのファイルのうち、このアプリケーション自身が書いた
+	// Include が並ぶ行範囲を半開区間 [start, end] で返す。見つからなければ ok が
+	// false になる。
+	//
+	// 何のためにあるかというと、その範囲内の Include が何にも一致しなかったことを
+	// 報告しないためである。その行は宣言されたグループごとに 1 本ずつ置かれており、
+	// 宣言済みで中身が空のグループは、作った直後と最後の接続を出した後の正常な
+	// 状態だ。application 層は同じ事実を group_empty として持っていて、それを注意
+	// としては出さないと決めている。engine が同じことを別の名前で言えば、片方を
+	// 黙らせた判断が無意味になる。
+	//
+	// 領域の書式を知っているのは application 層なので、ここでは尋ねる。省略可能で、
+	// これを持たないリゾルバは、範囲の内外を問わず報告する。
+	GeneratedRegion func(*File) (start, end int, ok bool)
+}
+
+// generatedLines は、報告を控える行番号の集合を返す。file ごとに一度だけ呼ぶ。
+func (r Resolver) generatedLines(file *File) (start, end int, ok bool) {
+	if r.GeneratedRegion == nil {
+		return 0, 0, false
+	}
+	return r.GeneratedRegion(file)
 }
 
 func (r Resolver) maxDepth() int {

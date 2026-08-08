@@ -201,11 +201,19 @@ type Service struct {
 	pendingBaseline map[string]bool
 }
 
+// resolverFor は、生成領域を答えられるリゾルバを組み立てる。これにより、この
+// アプリケーション自身が書いた Include が何にも一致しなかったことは報告されない。
+func resolverFor(workspace *storage.Workspace) config.Resolver {
+	resolver := storage.NewResolver(workspace)
+	resolver.GeneratedRegion = GeneratedRegion
+	return resolver
+}
+
 func NewService(workspace *storage.Workspace, manager *storage.Manager) *Service {
 	service := &Service{
 		workspace: workspace,
 		manager:   manager,
-		resolver:  storage.NewResolver(workspace),
+		resolver:  resolverFor(workspace),
 		metadata:  NewMetadataStore(workspace),
 		entryPath: filepath.Join(workspace.Root(), entryFileName),
 	}

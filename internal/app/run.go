@@ -145,6 +145,12 @@ func Build(dependencies Dependencies, version string) (*httpserver.Server, strin
 	diagnosticsService := diagnostics.NewService(
 		workspace, dependencies.Runner, dependencies.Toolchain, dependencies.Terminal, dependencies.Lookup)
 	diagnosticsService.PreferredTerminal = configService.PreferredTerminal
+	// 生成領域の書式を知っているのは設定エンジンであり、それを尋ねられるのは
+	// diagnostics ではなくここである。あちらは internal/application を import
+	// しない。これがないと、宣言済みで空のグループのために書かれた Include が
+	// include_no_match として報告され、application 層が group_empty を注意として
+	// 出さないと決めた判断が、別の名前で破られる。
+	diagnosticsService.Resolver.GeneratedRegion = application.GeneratedRegion
 	// ユーザーに見せるコマンドはこのバイナリと alias なので、このバイナリがどこに
 	// あるかを知る必要がある。アプリケーションの内側でそれを割り出せるものはない。
 	// エントリポイントが一度だけ解決して渡す。

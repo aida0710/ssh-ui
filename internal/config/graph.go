@@ -119,6 +119,8 @@ func (r Resolver) walk(graph *Graph, filePath string, chain []string, depth int)
 	currentChain = append(currentChain, chain...)
 	currentChain = append(currentChain, filePath)
 
+	generatedStart, generatedEnd, generated := r.generatedLines(node.File)
+
 	for index, line := range node.File.Lines {
 		lineNumber := index + 1
 		if line.Kind == LineUnstructured {
@@ -156,7 +158,11 @@ func (r Resolver) walk(graph *Graph, filePath string, chain []string, depth int)
 				continue
 			}
 			sort.Strings(matches)
-			if len(matches) == 0 {
+			// 生成領域の内側は黙る。その行を書いたのはこのアプリケーション自身で、
+			// 宣言されたグループがまだ空であることは正常な状態である。外側は人が
+			// 書いた行なので、何にも一致しないのは打ち間違いかもしれない。
+			insideGenerated := generated && index > generatedStart && index < generatedEnd
+			if len(matches) == 0 && !insideGenerated {
 				graph.diagnose(SeverityWarning, DiagnosticIncludeNoMatch, filePath, lineNumber, expanded)
 			}
 			edge.Matches = matches

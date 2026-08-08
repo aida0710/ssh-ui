@@ -54,6 +54,20 @@ type RegionPlan struct {
 	Lines       []config.Line
 }
 
+// GeneratedRegion は FindRegion を config.Resolver が求める形へ畳む。
+//
+// engine は、自分が読んでいる Include をこのアプリケーションが書いたのかどうかを
+// 知る必要がある。書式を知っているのはこちらなので、こちらが答える。半分だけ
+// mark された領域は FindRegion が found=false にするので、範囲なしとして扱う —
+// どこで終わっているかを推測しないという、あちらの判断がそのまま効く。
+func GeneratedRegion(file *config.File) (start, end int, ok bool) {
+	start, end, found, err := FindRegion(file)
+	if err != nil || !found {
+		return 0, 0, false
+	}
+	return start, end, true
+}
+
 // FindRegion は、マーカーによって生成領域を見つける。
 //
 // マーカーを 1 個だけ持つファイルは、修復されるのではなく拒否される。
