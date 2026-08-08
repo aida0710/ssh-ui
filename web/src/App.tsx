@@ -15,6 +15,7 @@ import { SecretsPanel } from "./secrets/SecretsPanel";
 import { SyncPanel } from "./sync/SyncPanel";
 import { KnownHostsPanel } from "./knownhosts/KnownHostsPanel";
 import { RemoteKeyPanel } from "./remotekeys/RemoteKeyPanel";
+import { OverviewPanel } from "./overview/OverviewPanel";
 import { useLanguage } from "./i18n/context";
 import { locales, type Locale } from "./i18n/locale";
 import { autoControl } from "./ui/form";
@@ -34,6 +35,7 @@ type AppProps = {
 };
 
 const sections = [
+  "Home",
   "Connections",
   "Config",
   "Groups",
@@ -52,6 +54,7 @@ const enabledSections: Section[] = [...sections];
 // ルーティング語彙であり、訳してしまうとどのパネルが開いているかが表示
 // 言語に依存することになってしまう。
 const sectionLabels: Record<Section, MessageKey> = {
+  Home: "section.home",
   Connections: "section.connections",
   Config: "section.config",
   Groups: "section.groups",
@@ -70,6 +73,7 @@ const localeLabels: Record<Locale, MessageKey> = {
 };
 
 const sectionIcons: Record<Section, IconName> = {
+  Home: "home",
   Connections: "connections",
   Config: "config",
   Groups: "groups",
@@ -89,6 +93,7 @@ const sectionIcons: Record<Section, IconName> = {
 // ネームを部分一致で照合するため、見出しを "Keys and hosts" にすると、end-to-end
 // スイートの "Keys" へのページレベルクエリが二重に一致し、strict モードで失敗する。
 const navGroups: { label: MessageKey; sections: Section[] }[] = [
+  { label: "shell.navStart", sections: ["Home"] },
   { label: "shell.navConnections", sections: ["Connections", "Config", "Groups"] },
   { label: "shell.navKeysHosts", sections: ["Keys", "Known Hosts", "Remote Keys"] },
   { label: "shell.navMaintenance", sections: ["Diagnostics", "Secrets", "Sync", "History"] },
@@ -109,7 +114,7 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
   const [state, setState] = useState<"starting" | "locked" | "ready" | "error">("starting");
   const [vaultExists, setVaultExists] = useState(false);
   const [version, setVersion] = useState("");
-  const [section, setSection] = useState<Section>("Connections");
+  const [section, setSection] = useState<Section>("Home");
   const [fileTarget, setFileTarget] = useState<FileTarget | null>(null);
   // 宣言済みのグループ名は、セッションが立ち上がった時点で一度だけ読む。
   // Keys 画面は移動先としてそれらを提示するだけで、ディレクトリからグルー
@@ -370,6 +375,7 @@ export function App({ bootstrap, health, vault = integrationsApi.passwordVault }
               onOpenFile={openFile}
               onLock={() => setState("locked")}
               onInspector={setInspector}
+              onNavigate={setSection}
             />
           ) : null}
         </main>
@@ -390,6 +396,7 @@ type SectionViewProps = {
   fileTarget: FileTarget | null;
   onOpenFile: (path: string, line: number) => void;
   onLock: () => void;
+  onNavigate: (section: Section) => void;
   // セクションは右側ペインの中身を提供するか、調べるものが無ければ
   // null を返す。現時点でそれを埋めているのは Connections だけだ。
   onInspector: (content: InspectorContent) => void;
@@ -409,7 +416,10 @@ function SectionView(props: SectionViewProps) {
   return <div className="h-full overflow-y-auto p-6">{<PaddedSection {...props} />}</div>;
 }
 
-function PaddedSection({ section, fileTarget, groups, onLock, onInspector }: SectionViewProps) {
+function PaddedSection({ section, fileTarget, groups, onLock, onInspector, onNavigate }: SectionViewProps) {
+  if (section === "Home") {
+    return <OverviewPanel onNavigate={onNavigate} />;
+  }
   if (section === "Config") {
     return <ConfigExplorer target={fileTarget} />;
   }

@@ -14,6 +14,7 @@ import type { ReactNode } from "react";
 // ここにあるすべてのアイコンは自分自身のラベルの隣に座る。それらは
 // 装飾なので accessibility tree から隠され、accessible name は語の方になる。
 export const iconNames = [
+  "home",
   "connections",
   "config",
   "groups",
@@ -30,6 +31,12 @@ export const iconNames = [
 export type IconName = (typeof iconNames)[number];
 
 const shapes: Record<IconName, ReactNode> = {
+  home: (
+    <>
+      <path d="M3 11.5L12 4l9 7.5" />
+      <path d="M5.5 10v10h13V10M9.5 20v-6h5v6" />
+    </>
+  ),
   connections: (
     <>
       <rect x="3" y="4" width="18" height="7" rx="2" />

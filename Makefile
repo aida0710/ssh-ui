@@ -61,8 +61,10 @@ build:
 #
 # どちらのスイートも、環境変数が設定されていなければスキップする。したがって
 # `make test` は密閉されたまま、オフラインのままである。
-S3_IMAGE   ?= chrislusf/seaweedfs:latest
-SSHD_IMAGE ?= linuxserver/openssh-server:latest
+# タグは同じ名前のまま別の内容を指せる。統合テストが昨日と今日で異なる
+# サーバーを起動しないよう、マルチアーキテクチャの manifest digest を固定する。
+S3_IMAGE   ?= chrislusf/seaweedfs@sha256:43b768cd62b00d132439cda881b93fd1adebf1b315e996e794087743821d771d
+SSHD_IMAGE ?= linuxserver/openssh-server@sha256:96b9a4d3b5106746d08d43a6911650d4d21f7d5c7f2ac9660e792bdb5e63157c
 S3_PORT    ?= 8333
 SSHD_PORT  ?= 2222
 S3_KEY     ?= SSHUITESTKEY

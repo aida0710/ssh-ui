@@ -2,6 +2,7 @@ import { expect, test } from "./support/environment";
 import { openApplication, openSection, sessionStatus } from "./support/environment";
 
 const sections = [
+  "Home",
   "Connections",
   "Config",
   "Groups",
@@ -61,6 +62,7 @@ test("the connections controls are legible in light", async ({ page, installatio
   await page.getByLabel("Appearance").selectOption("light");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 
+  await openSection(page, "Connections");
   await page.getByRole("button", { name: "bastion", exact: true }).click();
   await expect(page.getByRole("heading", { name: "bastion", level: 2 })).toBeVisible();
 

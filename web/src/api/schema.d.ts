@@ -912,7 +912,7 @@ export interface components {
             csrfToken: string;
         };
         HealthResponse: {
-            /** @constant */
+            /** @enum {string} */
             status: "ok";
             version: string;
         };
@@ -1673,7 +1673,7 @@ export interface components {
             action: string;
         };
         RecoverResponse: {
-            /** @constant */
+            /** @enum {string} */
             status: "ok";
         };
     };

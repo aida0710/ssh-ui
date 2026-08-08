@@ -39,7 +39,7 @@ make build            # UI を生成し bin/sshc へ単一バイナリを作成
 
 ## CI
 
-`.github/workflows/ci.yml` が push と pull request のたびに上と同じゲートを回します。ジョブは 4 つで、赤くなったチェック名がそのまま壊れた箇所を指します。
+`.github/workflows/ci.yml` が push と pull request のたびに上と同じゲートを回します。ジョブは 6 つで、赤くなったチェック名がそのまま壊れた箇所を指します。
 
 | ジョブ | 内容 |
 | --- | --- |
@@ -47,6 +47,8 @@ make build            # UI を生成し bin/sshc へ単一バイナリを作成
 | Web | `npm ci`、`npm run typecheck`、`npm test`、`npm run build` |
 | Generated files | `make verify-generated` |
 | End to end | `make build`、`internal/ui/dist` が最新かの確認、Playwright |
+| Integration | digest 固定した SeaweedFS と sshd に対する実サービス試験 |
+| Dependency security | `govulncheck` と `npm audit` |
 
 ESLint は導入していません。TypeScript の型検査（`tsc -b` と e2e 用 tsconfig）が web 側の lint を兼ねます。Go 側のスタイルは gofmt が全てです。
 
@@ -75,6 +77,9 @@ ESLint は導入していません。TypeScript の型検査（`tsc -b` と e2e 
 - このエンジンは `/api/v1/config/*` として同一オリジンの HTTP API に公開済みです。境界は次節を参照してください。
 
 ## Connections UI とグループの境界
+
+- 起動直後の Home はホスト中心のランチャーです。具体的な alias を検索し、お気に入り、グループ、タグを見ながら Terminal で開けます。Home を表示しただけでは DNS、TCP、SSH のどれも開始せず、「接続」を選んだときだけ既存の確認トークン付き起動経路を使います。
+- Home は設定上の警告、中断した変更、同期状態を要約しますが、それらの編集機能を複製しません。詳細操作は Connections、Diagnostics、History、Sync の各正本画面へ移動します。
 
 - `~/.ssh/config` と `Include` 先を正本として編集します。フォーム編集、任意キー・値編集、ブロック Raw 編集、ファイル全体 Raw 編集はすべて同じ lossless 構文木を更新し、変更していない行は 1 バイトも書き換えません。
 - 保存は必ず「読み込んだ内容」を base として送り、その SHA-256 を precondition にします。外部変更があった場合は書き込まず、三者差分を表示します。

@@ -69,6 +69,7 @@ describe("App", () => {
 
     // どの section ボタンも元の名前のままである。
     for (const label of [
+      "Home",
       "Connections",
       "Config",
       "Groups",
@@ -94,6 +95,7 @@ describe("App", () => {
       />,
     );
 
+    await user.click(await screen.findByRole("button", { name: "Connections" }));
     await screen.findByText("connections panel");
 
     // 中身がなければトグルも出さない。常に提示されながら
@@ -150,7 +152,9 @@ describe("App", () => {
 
     expect(await screen.findByRole("heading", { name: "sshc" })).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("Local session active · 0.1.0");
+    expect(screen.getByRole("button", { name: "Home" })).toHaveAttribute("aria-current", "page");
     for (const label of [
+      "Home",
       "Connections",
       "Config",
       "Groups",
@@ -243,6 +247,7 @@ describe("App", () => {
       />,
     );
 
+    await user.click(await screen.findByRole("button", { name: "Connections" }));
     await user.click(await screen.findByRole("button", { name: "open pattern rule" }));
 
     expect(screen.getByText("config panel config:9")).toBeInTheDocument();

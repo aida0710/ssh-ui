@@ -1,4 +1,4 @@
-openapi: 3.1.0
+openapi: 3.0.3
 info:
   title: sshc Local API
   version: 0.1.0
@@ -16,7 +16,7 @@ paths:
           description: Session established
           headers:
             Cache-Control:
-              schema: { type: string, const: no-store }
+              schema: { type: string, enum: [no-store] }
           content:
             application/json:
               schema: { $ref: "#/components/schemas/BootstrapResponse" }
@@ -689,7 +689,7 @@ paths:
           description: Private key material, never cached and never logged
           headers:
             Cache-Control:
-              schema: { type: string, const: no-store }
+              schema: { type: string, enum: [no-store] }
           content:
             application/json:
               schema: { $ref: "#/components/schemas/RevealPrivateKeyResponse" }
@@ -1082,7 +1082,7 @@ components:
       additionalProperties: false
       required: [status, version]
       properties:
-        status: { type: string, const: ok }
+        status: { type: string, enum: [ok], x-go-type: string }
         version: { type: string, minLength: 1 }
     Problem:
       type: object
@@ -2288,7 +2288,7 @@ components:
       additionalProperties: false
       required: [status]
       properties:
-        status: { type: string, const: ok }
+        status: { type: string, enum: [ok], x-go-type: string }
   responses:
     Problem:
       description: Request rejected
