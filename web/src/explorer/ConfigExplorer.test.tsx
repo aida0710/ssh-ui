@@ -33,16 +33,58 @@ const overview = {
 
 beforeEach(() => {
   vi.mocked(configApi.overview).mockResolvedValue(overview as never);
-  vi.mocked(configApi.file).mockResolvedValue({
-    file: { path: "conf.d/10-home.conf", absolute: "/home/tester/.ssh/conf.d/10-home.conf" },
-    contents: "Host nas\n\tUser aida\n",
+  vi.mocked(configApi.file).mockImplementation(async (path) => ({
+    file: { path, absolute: `/home/tester/.ssh/${path}` },
+    contents: path === "config" ? "Include conf.d/*.conf\n" : "Host nas\n\tUser aida\n",
     digest: "digest",
     editable: true,
     exists: true,
-  } as never);
+  }) as never);
 });
 
 describe("ConfigExplorer", () => {
+  it("opens the entry file by default instead of leaving the editor empty", async () => {
+    render(<ConfigExplorer />);
+
+    await waitFor(() => expect(configApi.file).toHaveBeenCalledWith("config"));
+    expect(await screen.findByLabelText(/File text.*config/)).toHaveValue("Include conf.d/*.conf\n");
+  });
+
+  it("keeps the latest file selection when the automatic entry load returns late", async () => {
+    let finishEntry: ((value: unknown) => void) | undefined;
+    vi.mocked(configApi.file).mockImplementation((path) => {
+      if (path === "config") {
+        return new Promise((resolve) => {
+          finishEntry = resolve;
+        }) as never;
+      }
+      return Promise.resolve({
+        file: { path, absolute: `/home/tester/.ssh/${path}` },
+        contents: "Host nas\n\tUser aida\n",
+        digest: "digest",
+        editable: true,
+        exists: true,
+      }) as never;
+    });
+    const user = userEvent.setup();
+    render(<ConfigExplorer />);
+
+    await user.click(await screen.findByRole("button", { name: "conf.d/10-home.conf" }));
+    expect(await screen.findByLabelText(/File text.*conf\.d\/10-home\.conf/)).toBeInTheDocument();
+
+    finishEntry?.({
+      file: { path: "config", absolute: "/home/tester/.ssh/config" },
+      contents: "Include conf.d/*.conf\n",
+      digest: "entry-digest",
+      editable: true,
+      exists: true,
+    });
+    await waitFor(() =>
+      expect(screen.getByLabelText(/File text.*conf\.d\/10-home\.conf/)).toBeInTheDocument(),
+    );
+    expect(screen.queryByLabelText(/File text — config\./)).not.toBeInTheDocument();
+  });
+
   it("shows the include hierarchy, the reference graph and the diagnostics", async () => {
     render(<ConfigExplorer />);
 

@@ -10,8 +10,10 @@ import {
   hintText,
   primaryAction,
   secondaryAction,
+  sectionCard,
   sectionHeading,
 } from "../ui/form";
+import { MetricCard, MetricGrid, PageHeader } from "../ui/page";
 
 // FileTarget はエクスプローラに一つのファイルを開き、キャレットを一行に置くよう
 // 求める。行番号は 1 始まりであり、API が報告するすべての行と同じである。
@@ -50,6 +52,8 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
   const [jump, setJump] = useState("");
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const jumped = useRef<FileTarget | null>(null);
+  const openRequest = useRef(0);
+  const autoOpened = useRef(false);
 
   const reload = useCallback(async () => {
     try {
@@ -70,6 +74,16 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
     void open(target.path);
   }, [target]);
 
+  // Config を開いた直後に右側を空のままにしない。entry file はこの
+  // workspace の起点であり、読み取るだけなら副作用も外部接続もない。
+  // 別画面から明示的な target が届いた場合は、そちらを優先する。
+  useEffect(() => {
+    if (autoOpened.current || target !== null || overview === null || file !== null) return;
+    if (overview.entry.path === undefined) return;
+    autoOpened.current = true;
+    void open(overview.entry.path);
+  }, [file, overview, target]);
+
   // キャレットは読み込んだファイルが画面に出て初めて置ける。各 target は
   // 一度だけ適用されるため、その後で同じファイルを手動で開いても
   // キャレットを引き戻すことはない。
@@ -86,8 +100,16 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
   }, [file, target]);
 
   async function open(path: string) {
+    const request = ++openRequest.current;
+    // 別ファイルの本文と操作欄を残したまま次の読み込みを待つと、利用者は
+    // 新しいファイルを選んだつもりで古いファイルを編集できてしまう。
+    setFile(null);
+    setDraft("");
     try {
       const loaded = await configApi.file(path);
+      // entry file の自動読み込みと手動選択が重なっても、最後に選んだ
+      // ファイルだけを採用する。遅く返った古い応答は画面を巻き戻さない。
+      if (request !== openRequest.current) return;
       setFile(loaded);
       setDraft(loaded.contents);
       setPreview(null);
@@ -95,6 +117,7 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
       setRenameTo("");
       setConfirmingDelete(false);
     } catch (error) {
+      if (request !== openRequest.current) return;
       setProblem(toProblem(error));
     }
   }
@@ -216,10 +239,23 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
 
   const openPath = file?.file.path ?? file?.file.absolute ?? "";
   const modified = file !== null && draft !== file.contents;
+  const editableFiles = overview.files.filter((node) => node.editable).length;
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[22rem_1fr]">
-      <section aria-labelledby="explorer-heading" className="flex flex-col gap-3">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+      <PageHeader title={t("explorer.pageTitle")} description={t("explorer.pageDescription")} />
+      <MetricGrid>
+        <MetricCard label={t("explorer.metricFiles")} value={overview.files.length} />
+        <MetricCard label={t("explorer.metricEditable")} value={editableFiles} />
+        <MetricCard
+          label={t("explorer.metricDiagnostics")}
+          value={overview.diagnostics.length}
+          attention={overview.diagnostics.length > 0}
+        />
+      </MetricGrid>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[20rem_minmax(0,1fr)]">
+      <section aria-labelledby="explorer-heading" className={`${sectionCard} self-start`}>
         <h3 id="explorer-heading" className={sectionHeading}>{t("explorer.hierarchy")}</h3>
         <ul className="flex flex-col gap-2">
           {overview.files.map((node) => {
@@ -283,7 +319,8 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
           })}
         </ul>
 
-        <div className="flex flex-col gap-2 rounded border border-line p-3">
+        <div className="flex flex-col gap-2 rounded-lg border border-line bg-canvas p-3">
+          <h3 className={sectionHeading}>{t("explorer.workspaceActions")}</h3>
           <label htmlFor="new-file-path" className={fieldLabel}>{t("explorer.newFilePath")}</label>
           <input
             id="new-file-path"
@@ -324,7 +361,10 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
             </button>
           </div>
           <p className={hintText}>{t("explorer.newFileNote")}</p>
-          <p className={hintText}>{t("explorer.directoryNote")}</p>
+          <details className="text-xs text-ink-muted">
+            <summary className="cursor-pointer text-ink">{t("explorer.directoryHelp")}</summary>
+            <p className="mt-2 leading-5">{t("explorer.directoryNote")}</p>
+          </details>
         </div>
 
         <h3 className={sectionHeading}>{t("explorer.diagnostics")}</h3>
@@ -345,11 +385,14 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
       </section>
 
       <section className="flex flex-col gap-3">
-        <p aria-live="polite" className={hintText}>{jump}</p>
+        {jump === "" ? null : <p aria-live="polite" className={hintText}>{jump}</p>}
         {file === null ? (
-          <p role="status" className="text-sm text-ink-muted">{t("explorer.selectFile")}</p>
+          <div role="status" className={`${sectionCard} min-h-64 items-center justify-center text-center`}>
+            <h3 className={sectionHeading}>{t("explorer.emptyHeading")}</h3>
+            <p className={hintText}>{t("explorer.selectFile")}</p>
+          </div>
         ) : (
-          <div className="flex flex-col gap-2">
+          <div className={sectionCard}>
             <div className="flex items-baseline justify-between gap-2">
               <label htmlFor="file-raw" className={fieldLabel}>
                 {t("explorer.fileText", { path: file.file.path ?? file.file.absolute })}
@@ -454,6 +497,7 @@ export function ConfigExplorer({ target = null }: ConfigExplorerProps) {
         )}
         <SavePreviewPanel preview={preview} conflict={problem?.conflict ?? null} problem={problem} />
       </section>
+      </div>
     </div>
   );
 }

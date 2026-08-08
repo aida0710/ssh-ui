@@ -326,15 +326,18 @@ export function GroupsPanel({ onInspector }: GroupsPanelProps = {}) {
         />
         <MetricCard label={t("groups.metricDraft")} value={unsaved ? 1 : 0} attention={unsaved} />
       </MetricGrid>
-      <div className="rounded-xl border border-line bg-card p-4">
-        <p className="text-sm text-ink-muted">
-          {t("groups.directoryNote", { connections: "connections", keys: "keys" })}
-        </p>
-        <p className="mt-1 text-xs text-ink-muted">
-          {t("groups.compileNote", { file: loaded.groupsFile ?? "groups.sshc.conf" })}
-        </p>
-        <p className="mt-1 text-xs text-ink-faint">{t("groups.orderNote")}</p>
-      </div>
+      <details className="rounded-xl border border-line bg-card p-4">
+        <summary className="cursor-pointer text-sm font-medium text-ink">{t("groups.howItWorks")}</summary>
+        <div className="mt-3 border-t border-line pt-3">
+          <p className="text-sm text-ink-muted">
+            {t("groups.directoryNote", { connections: "connections", keys: "keys" })}
+          </p>
+          <p className="mt-1 text-xs text-ink-muted">
+            {t("groups.compileNote", { file: loaded.groupsFile ?? "groups.sshc.conf" })}
+          </p>
+          <p className="mt-1 text-xs text-ink-faint">{t("groups.orderNote")}</p>
+        </div>
+      </details>
       {localError === "" ? null : <Notice tone="danger">{localError}</Notice>}
       {/*
         宣言とディスクが互いについて何を語るか。connections/下にあり、

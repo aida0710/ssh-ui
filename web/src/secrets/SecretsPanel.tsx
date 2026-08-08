@@ -200,24 +200,6 @@ export function SecretsPanel({ api = integrationsApi, onLock }: SecretsPanelProp
         </button>
       </div>
 
-      <LoginItemSection api={api} />
-
-      <section aria-label={t("secrets.changeHeading")} className={sectionCard}>
-        <h3 className={sectionHeading}>{t("secrets.changeHeading")}</h3>
-        <p className={hintText}>{t("secrets.changeNote")}</p>
-        <PasswordField label={t("secrets.currentMaster")} value={currentMaster} onChange={setCurrentMaster} />
-        <PasswordField label={t("secrets.newMaster")} value={nextMaster} onChange={setNextMaster} />
-        <PasswordField label={t("secrets.confirmMaster")} value={confirmMaster} onChange={setConfirmMaster} />
-        <button
-          type="button"
-          className={`self-start ${primaryAction}`}
-          disabled={currentMaster === "" || nextMaster.length < 12 || nextMaster !== confirmMaster}
-          onClick={() => void changeMaster()}
-        >
-          {t("secrets.change")}
-        </button>
-      </section>
-
       {kinds.map((group) => {
         const draft = draftFor(group.kind);
         const mine = credentials.filter((credential) => credential.kind === group.kind);
@@ -283,6 +265,24 @@ export function SecretsPanel({ api = integrationsApi, onLock }: SecretsPanelProp
           </section>
         );
       })}
+
+      <LoginItemSection api={api} />
+
+      <section aria-label={t("secrets.changeHeading")} className={sectionCard}>
+        <h3 className={sectionHeading}>{t("secrets.changeHeading")}</h3>
+        <p className={hintText}>{t("secrets.changeNote")}</p>
+        <PasswordField label={t("secrets.currentMaster")} value={currentMaster} onChange={setCurrentMaster} />
+        <PasswordField label={t("secrets.newMaster")} value={nextMaster} onChange={setNextMaster} />
+        <PasswordField label={t("secrets.confirmMaster")} value={confirmMaster} onChange={setConfirmMaster} />
+        <button
+          type="button"
+          className={`self-start ${primaryAction}`}
+          disabled={currentMaster === "" || nextMaster.length < 12 || nextMaster !== confirmMaster}
+          onClick={() => void changeMaster()}
+        >
+          {t("secrets.change")}
+        </button>
+      </section>
     </div>
   );
 }
