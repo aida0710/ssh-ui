@@ -1,6 +1,10 @@
 package storage
 
-import "sshc/internal/config"
+import (
+	"os/user"
+
+	"sshc/internal/config"
+)
 
 // ConfigLoader は、Include グラフにディスクへの読み取り専用アクセスを与える。
 //
@@ -26,10 +30,19 @@ func (l ConfigLoader) Glob(pattern string) ([]string, error) {
 
 // NewResolver は、ワークスペースのための Include リゾルバを組み立てる。
 //
-// パーセントトークンとして供給するのは '%d' だけである。'%u' と '%i' はローカルの
-// ユーザー名と uid を必要とし、それはプラットフォーム層が後のサブシステムで提供
-// する。それまでは、それらのパターンは推測されるのではなく非対応として報告される。
+// 供給するパーセントトークンは、接続先ホストが決まる前に確定しているものだけである。
+// '%d'、'%u'、'%i' がそれにあたる。'%h' や '%C' は決まっていないので供給せず、それを
+// 使う Include は推測されるのではなく非対応として報告される。
 func NewResolver(workspace *Workspace) config.Resolver {
+	tokens := map[byte]string{'d': workspace.Home()}
+	// ユーザー名と uid はプロセスの性質であってワークスペースの性質ではないので、
+	// Home のように注入するのではなくここで読む。ファイルには触れないため、これで
+	// テストが本物のホームディレクトリに届くことはない。読めない環境では、その
+	// トークンを供給しないことで、以前と同じく非対応として報告される。
+	if current, err := user.Current(); err == nil {
+		tokens['u'] = current.Username
+		tokens['i'] = current.Uid
+	}
 	return config.Resolver{
 		Loader: NewConfigLoader(workspace),
 		Home:   workspace.Home(),
@@ -38,6 +51,6 @@ func NewResolver(workspace *Workspace) config.Resolver {
 		// すべて解決済みのルートに対して行われる。両者を同じファイルに保つのが
 		// Normalise である。
 		Normalise: workspace.Normalise,
-		Tokens:    map[byte]string{'d': workspace.Home()},
+		Tokens:    tokens,
 	}
 }
