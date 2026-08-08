@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"sshc/internal/platform"
 	"sshc/internal/storage"
 )
 
@@ -30,15 +31,26 @@ func TestDecodeMetadataAcceptsAnAbsentFileAndRejectsAFutureSchema(t *testing.T) 
 	if empty.SchemaVersion != MetadataSchemaVersion || len(empty.Hosts) != 0 || len(empty.Groups) != 0 {
 		t.Fatalf("empty metadata = %#v", empty)
 	}
+	if empty.Terminal != platform.TerminalApple {
+		t.Errorf("default terminal = %q", empty.Terminal)
+	}
 	if _, err := DecodeMetadata([]byte(`{"schemaVersion":99}`)); !errors.Is(err, ErrMetadataVersion) {
 		t.Fatalf("future schema error = %v, want ErrMetadataVersion", err)
 	}
 	if _, err := DecodeMetadata([]byte(`{"schemaVersion":1,`)); err == nil {
 		t.Fatal("truncated metadata was accepted")
 	}
+	if _, err := DecodeMetadata([]byte(`{"schemaVersion":2,"terminal":"$(id)"}`)); !errors.Is(err, ErrMetadataTerminal) {
+		t.Fatalf("unsafe terminal error = %v, want ErrMetadataTerminal", err)
+	}
 }
 
 func TestValidateMetadataRefusesKeyMaterialAndUnknownPaths(t *testing.T) {
+	withUnknownTerminal := NewMetadata()
+	withUnknownTerminal.Terminal = "$(open -a Calculator)"
+	if err := ValidateMetadata(withUnknownTerminal); !errors.Is(err, ErrMetadataTerminal) {
+		t.Fatalf("terminal error = %v, want ErrMetadataTerminal", err)
+	}
 	withNote := NewMetadata()
 	withNote.Hosts = []HostMetadata{{
 		Identity: HostIdentity{Path: "config", Alias: "bastion"},

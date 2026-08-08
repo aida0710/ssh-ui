@@ -90,6 +90,23 @@ describe("ConnectionsPage", () => {
     expect(integrationsApi.terminalLaunch).toHaveBeenCalledWith("bastion");
   });
 
+  it("stores a predefined terminal choice without accepting a command string", async () => {
+    const user = userEvent.setup();
+    vi.mocked(configApi.save).mockResolvedValue({
+      transactionId: "t-terminal", written: ["sshc/metadata.json"], preview: { operation: "config.metadata", diffs: [] },
+    } as never);
+    render(<ConnectionsPage onOpenFile={vi.fn()} onInspector={() => undefined} />);
+
+    await user.click(await screen.findByRole("button", { name: /bastion/ }));
+    await user.selectOptions(screen.getByLabelText("Open with"), "kitty");
+
+    await waitFor(() => expect(configApi.save).toHaveBeenCalledWith({
+      kind: "metadata",
+      metadata: expect.objectContaining({ terminal: "kitty" }),
+    }));
+    expect(screen.getByLabelText("Open with")).toHaveValue("terminal");
+  });
+
   it("keeps the diff of what was written on screen after the save reloads the host", async () => {
     // save は自分が書いたホストを再選択する。以前はこれが選択
     // effect に、同じ二つの値を持つ新しいオブジェクトを渡していたため、

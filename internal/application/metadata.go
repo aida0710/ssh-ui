@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"sshc/internal/platform"
 	"sshc/internal/storage"
 )
 
@@ -31,10 +32,11 @@ const (
 )
 
 var (
-	ErrMetadataVersion = errors.New("metadata schema version is newer than this build supports")
-	ErrMetadataSecret  = errors.New("metadata may not contain key material")
-	ErrMetadataPath    = errors.New("metadata host path must be relative to the ssh directory")
-	ErrMetadataGroup   = errors.New("metadata group definition is invalid")
+	ErrMetadataVersion  = errors.New("metadata schema version is newer than this build supports")
+	ErrMetadataSecret   = errors.New("metadata may not contain key material")
+	ErrMetadataPath     = errors.New("metadata host path must be relative to the ssh directory")
+	ErrMetadataGroup    = errors.New("metadata group definition is invalid")
+	ErrMetadataTerminal = errors.New("metadata terminal is invalid")
 )
 
 // secretMarkers は、整理用のフィールドに鍵材料を保存しようとした痕跡を示す
@@ -105,14 +107,15 @@ type GroupMetadata struct {
 
 // Metadata は~/.ssh/sshc/metadata.json の全体である。
 type Metadata struct {
-	SchemaVersion int             `json:"schemaVersion"`
-	GroupsFile    string          `json:"groupsFile,omitempty"`
-	Groups        []GroupMetadata `json:"groups,omitempty"`
-	Hosts         []HostMetadata  `json:"hosts,omitempty"`
+	SchemaVersion int                 `json:"schemaVersion"`
+	GroupsFile    string              `json:"groupsFile,omitempty"`
+	Terminal      platform.TerminalID `json:"terminal,omitempty"`
+	Groups        []GroupMetadata     `json:"groups,omitempty"`
+	Hosts         []HostMetadata      `json:"hosts,omitempty"`
 }
 
 func NewMetadata() Metadata {
-	return Metadata{SchemaVersion: MetadataSchemaVersion, GroupsFile: DefaultGroupsFile}
+	return Metadata{SchemaVersion: MetadataSchemaVersion, GroupsFile: DefaultGroupsFile, Terminal: platform.TerminalApple}
 }
 
 // GroupsPath は設定されたグループファイルを返し、無ければデフォルトに fallback する。
@@ -142,6 +145,12 @@ func DecodeMetadata(contents []byte) (Metadata, error) {
 	if metadata.GroupsFile == "" {
 		metadata.GroupsFile = DefaultGroupsFile
 	}
+	if metadata.Terminal == "" {
+		metadata.Terminal = platform.TerminalApple
+	}
+	if !platform.ValidTerminalID(metadata.Terminal) {
+		return Metadata{}, ErrMetadataTerminal
+	}
 	return metadata, nil
 }
 
@@ -150,6 +159,9 @@ func EncodeMetadata(metadata Metadata) ([]byte, error) {
 	metadata.SchemaVersion = MetadataSchemaVersion
 	if metadata.GroupsFile == "" {
 		metadata.GroupsFile = DefaultGroupsFile
+	}
+	if metadata.Terminal == "" {
+		metadata.Terminal = platform.TerminalApple
 	}
 	if err := ValidateMetadata(metadata); err != nil {
 		return nil, err
@@ -175,6 +187,9 @@ func EncodeMetadata(metadata Metadata) ([]byte, error) {
 
 // ValidateMetadata は設計の不変条件を破る文書を拒否する。
 func ValidateMetadata(metadata Metadata) error {
+	if !platform.ValidTerminalID(metadata.Terminal) {
+		return ErrMetadataTerminal
+	}
 	if _, err := checkRelative(metadata.GroupsPath()); err != nil {
 		return err
 	}

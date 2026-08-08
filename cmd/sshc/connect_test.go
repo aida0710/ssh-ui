@@ -22,6 +22,7 @@ func TestWhatCountsAsAConnectInvocation(t *testing.T) {
 		// ホストではなくコマンドである語。
 		{[]string{"sshc", "open"}, "", false},
 		{[]string{"sshc", "list"}, "", false},
+		{[]string{"sshc", "connect"}, "", false},
 		// OpenSSH が実行するヘルパー。プロンプトを引数に取る。
 		{[]string{"sshc", "askpass"}, "", false},
 		{[]string{"sshc", "askpass", "password:"}, "", false},

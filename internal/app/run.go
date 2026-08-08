@@ -144,6 +144,7 @@ func Build(dependencies Dependencies, version string) (*httpserver.Server, strin
 	keyService := buildKeyService(workspace, dependencies, configService)
 	diagnosticsService := diagnostics.NewService(
 		workspace, dependencies.Runner, dependencies.Toolchain, dependencies.Terminal, dependencies.Lookup)
+	diagnosticsService.PreferredTerminal = configService.PreferredTerminal
 	// ユーザーに見せるコマンドはこのバイナリと alias なので、このバイナリがどこに
 	// あるかを知る必要がある。アプリケーションの内側でそれを割り出せるものはない。
 	// エントリポイントが一度だけ解決して渡す。

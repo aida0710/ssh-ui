@@ -75,6 +75,7 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
   const [creating, setCreating] = useState(false);
   const [launching, setLaunching] = useState(false);
   const [managing, setManaging] = useState(false);
+  const [savingTerminal, setSavingTerminal] = useState(false);
 
   const reload = useCallback(async () => {
     try {
@@ -328,6 +329,13 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
     }
   }
 
+  async function chooseTerminal(terminal: NonNullable<Metadata["terminal"]>) {
+    if (overview === null) return;
+    setSavingTerminal(true);
+    await submit({ kind: "metadata", metadata: { ...overview.metadata, terminal } });
+    setSavingTerminal(false);
+  }
+
   function duplicateHost() {
     if (detail === null || selection === null) return;
     try {
@@ -496,7 +504,21 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
           <>
             {localError === "" ? null : <Notice tone="danger">{localError}</Notice>}
             <div className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-card p-3 shadow-sm">
-              <Button kind="primary" disabled={launching} onClick={() => void connectHost()}>
+              <label className="flex items-center gap-2 text-sm text-ink-muted">
+                <span>{t("conn.openWith")}</span>
+                <select
+                  aria-label={t("conn.openWith")}
+                  value={overview.metadata.terminal ?? "terminal"}
+                  disabled={savingTerminal}
+                  onChange={(event) => void chooseTerminal(event.target.value as NonNullable<Metadata["terminal"]>)}
+                  className={narrowControl}
+                >
+                  <option value="terminal">Terminal.app</option>
+                  <option value="iterm2">iTerm2</option>
+                  <option value="kitty">kitty</option>
+                </select>
+              </label>
+              <Button kind="primary" disabled={launching || savingTerminal} onClick={() => void connectHost()}>
                 {launching ? t("conn.opening") : t("conn.connect")}
               </Button>
               <Button aria-expanded={managing} onClick={() => setManaging((current) => !current)}>

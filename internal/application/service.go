@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"sshc/internal/config"
+	"sshc/internal/platform"
 	"sshc/internal/storage"
 )
 
@@ -210,6 +211,16 @@ func NewService(workspace *storage.Workspace, manager *storage.Manager) *Service
 	}
 	manager.Validate = service.validate
 	return service
+}
+
+// PreferredTerminal は画面と端末ランチャーが共有する現在の選択を返す。
+// metadata が壊れて読めない場合は、起動そのものを失わせず安全な既定へ戻る。
+func (s *Service) PreferredTerminal() platform.TerminalID {
+	metadata, _, err := s.metadata.Load()
+	if err != nil || !platform.ValidTerminalID(metadata.Terminal) {
+		return platform.TerminalApple
+	}
+	return metadata.Terminal
 }
 
 // displayPath は、UI とエラー payload のために path を表す。ファイルが

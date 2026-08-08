@@ -16,6 +16,17 @@ type terminalRunner struct {
 	output   platform.Output
 }
 
+type terminalStarter struct {
+	path string
+	args []string
+}
+
+func (starter *terminalStarter) Start(path string, args ...string) error {
+	starter.path = path
+	starter.args = append([]string(nil), args...)
+	return nil
+}
+
 func (runner *terminalRunner) RunOutput(_ context.Context, command platform.Command) (platform.Output, error) {
 	runner.commands = append(runner.commands, command)
 	return runner.output, nil
@@ -92,6 +103,43 @@ func TestTerminalReportsAFailedLaunch(t *testing.T) {
 	var launchError *macos.LaunchError
 	if !errors.As(err, &launchError) || launchError.ExitCode != 1 {
 		t.Fatalf("Launch = %v, want *LaunchError", err)
+	}
+}
+
+func TestKittyReceivesAProgramAndArgumentsWithoutAShell(t *testing.T) {
+	starter := &terminalStarter{}
+	terminal := macos.Terminal{Runner: &terminalRunner{}, Starter: starter}
+
+	if err := terminal.LaunchIn(context.Background(), platform.TerminalKitty, "bastion"); err != nil {
+		t.Fatal(err)
+	}
+	if starter.path != "/Applications/kitty.app/Contents/MacOS/kitty" {
+		t.Errorf("path = %q", starter.path)
+	}
+	if !slices.Equal(starter.args, []string{"/usr/bin/ssh", "--", "bastion"}) {
+		t.Errorf("args = %#v", starter.args)
+	}
+
+	if err := terminal.LaunchWithPasswordIn(context.Background(), platform.TerminalKitty,
+		"bastion", "/Applications/sshc", "http://127.0.0.1:1", "token"); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(starter.args, []string{"/Applications/sshc", "bastion"}) {
+		t.Errorf("password args = %#v", starter.args)
+	}
+}
+
+func TestITermUsesTheSameArgumentBoundaryAsTerminal(t *testing.T) {
+	runner := &terminalRunner{}
+	terminal := macos.Terminal{Runner: runner, Starter: &terminalStarter{}}
+	if err := terminal.LaunchIn(context.Background(), platform.TerminalITerm2, "bastion"); err != nil {
+		t.Fatal(err)
+	}
+	if len(runner.commands) != 1 || string(runner.commands[0].Stdin) != macos.ITermScript {
+		t.Fatalf("commands = %#v", runner.commands)
+	}
+	if !slices.Equal(runner.commands[0].Arguments, []string{"-", "bastion"}) {
+		t.Errorf("arguments = %#v", runner.commands[0].Arguments)
 	}
 }
 

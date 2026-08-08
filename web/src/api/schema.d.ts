@@ -1505,9 +1505,12 @@ export interface components {
         Metadata: {
             schemaVersion: number;
             groupsFile?: string;
+            terminal?: components["schemas"]["TerminalID"];
             groups?: components["schemas"]["GroupMetadata"][];
             hosts?: components["schemas"]["HostMetadata"][];
         };
+        /** @enum {string} */
+        TerminalID: "terminal" | "iterm2" | "kitty";
         PendingTransaction: {
             id: string;
             operation: string;

@@ -192,6 +192,17 @@ func (terminal *recordingTerminal) Launch(_ context.Context, alias string) error
 	return nil
 }
 
+type recordingSelectableTerminal struct {
+	recordingTerminal
+	selected platform.TerminalID
+}
+
+func (terminal *recordingSelectableTerminal) LaunchIn(_ context.Context, selected platform.TerminalID, alias string) error {
+	terminal.selected = selected
+	terminal.aliases = append(terminal.aliases, alias)
+	return nil
+}
+
 func TestServiceLaunchesOnlySafeAliases(t *testing.T) {
 	terminal := &recordingTerminal{}
 	service := newTestService(t, &scriptedRunner{})
@@ -221,6 +232,20 @@ func TestServiceLaunchesOnlySafeAliases(t *testing.T) {
 	}
 	if command, launchable, warning := service.TerminalCommand("bastion"); !launchable || warning != "" || command != "ssh -- bastion" {
 		t.Fatalf("TerminalCommand = %q, %v, %q", command, launchable, warning)
+	}
+}
+
+func TestServiceUsesTheStoredTerminalChoice(t *testing.T) {
+	terminal := &recordingSelectableTerminal{}
+	service := newTestService(t, &scriptedRunner{})
+	service.Terminal = terminal
+	service.PreferredTerminal = func() platform.TerminalID { return platform.TerminalKitty }
+
+	if err := service.LaunchTerminal(context.Background(), "bastion"); err != nil {
+		t.Fatal(err)
+	}
+	if terminal.selected != platform.TerminalKitty || len(terminal.aliases) != 1 {
+		t.Fatalf("terminal = %q, aliases = %#v", terminal.selected, terminal.aliases)
 	}
 }
 

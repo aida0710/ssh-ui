@@ -2036,8 +2036,12 @@ components:
       properties:
         schemaVersion: { type: integer }
         groupsFile: { type: string }
+        terminal: { $ref: "#/components/schemas/TerminalID" }
         groups: { type: array, items: { $ref: "#/components/schemas/GroupMetadata" } }
         hosts: { type: array, items: { $ref: "#/components/schemas/HostMetadata" } }
+    TerminalID:
+      type: string
+      enum: [terminal, iterm2, kitty]
     PendingTransaction:
       type: object
       additionalProperties: false

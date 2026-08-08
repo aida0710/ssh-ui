@@ -102,6 +102,29 @@ func main() {
 		}
 		os.Exit(runList(home, os.Stdout, os.Stderr))
 	}
+	if query, ok := tuiInvocation(os.Args); ok {
+		if len(os.Args) > 3 {
+			fmt.Fprintln(os.Stderr, "usage: sshc connect [search]")
+			os.Exit(2)
+		}
+		home, err := os.UserHomeDir()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "sshc: %v\n", err)
+			os.Exit(1)
+		}
+		alias, err := chooseTUIHost(home, query, os.Stdin, os.Stdout, os.Stderr)
+		if err != nil {
+			if errors.Is(err, errTUIClosed) {
+				os.Exit(0)
+			}
+			fmt.Fprintf(os.Stderr, "sshc: %v\n", err)
+			os.Exit(1)
+		}
+		os.Exit(runConnect(
+			context.Background(), alias, app.HandoffDir(home),
+			&http.Client{Timeout: connectTimeout}, macos.NewToolchain(), os.Stderr,
+		))
+	}
 
 	// `sshc <alias>` は接続する。askpass の分岐のあと、フラグ解析の前で判定する。alias は
 	// 裸の語であり、flag.Parse はそこで止まってしまうため、接続する代わりにアプリケーション

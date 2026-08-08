@@ -34,6 +34,17 @@ test("edits a host through the form and writes only the line that changed", asyn
   expect(after.split("\n").length).toBe(before.split("\n").length);
 });
 
+test("stores kitty as the terminal used by Connect", async ({ page, installation }) => {
+  await openBastion(page, installation.url);
+  const saved = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === "/api/v1/config/save" && response.request().method() === "POST",
+  );
+  await page.getByLabel("Open with").selectOption("kitty");
+  expect((await saved).status()).toBe(200);
+  expect(await installation.read("sshc/metadata.json")).toContain('"terminal": "kitty"');
+  await expect(page.getByLabel("Open with")).toHaveValue("kitty");
+});
+
 test("edits the same host through Raw and keeps every other byte", async ({
   page,
   installation,

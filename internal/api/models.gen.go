@@ -24,6 +24,27 @@ func (e SyncDirection) Valid() bool {
 	}
 }
 
+// Defines values for TerminalID.
+const (
+	Iterm2   TerminalID = "iterm2"
+	Kitty    TerminalID = "kitty"
+	Terminal TerminalID = "terminal"
+)
+
+// Valid indicates whether the value is a known member of the TerminalID enum.
+func (e TerminalID) Valid() bool {
+	switch e {
+	case Iterm2:
+		return true
+	case Kitty:
+		return true
+	case Terminal:
+		return true
+	default:
+		return false
+	}
+}
+
 // AgentIdentitiesResponse defines model for AgentIdentitiesResponse.
 type AgentIdentitiesResponse struct {
 	AgentAvailable bool            `json:"agentAvailable"`
@@ -631,6 +652,7 @@ type Metadata struct {
 	GroupsFile    *string          `json:"groupsFile,omitempty"`
 	Hosts         *[]HostMetadata  `json:"hosts,omitempty"`
 	SchemaVersion int              `json:"schemaVersion"`
+	Terminal      *TerminalID      `json:"terminal,omitempty"`
 }
 
 // Notice defines model for Notice.
@@ -954,6 +976,9 @@ type TerminalCommandResponse struct {
 	Launchable bool   `json:"launchable"`
 	Warning    string `json:"warning"`
 }
+
+// TerminalID defines model for TerminalID.
+type TerminalID string
 
 // TerminalLaunchResponse defines model for TerminalLaunchResponse.
 type TerminalLaunchResponse struct {

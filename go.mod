@@ -11,6 +11,7 @@ require (
 	github.com/aws/smithy-go v1.27.6
 	github.com/labstack/echo/v5 v5.3.1
 	golang.org/x/crypto v0.54.0
+	golang.org/x/term v0.45.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 

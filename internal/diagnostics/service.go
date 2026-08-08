@@ -45,12 +45,13 @@ type Inspection struct {
 // たびに設定を読み直す。ファイルこそが真実の源であり、二つのリクエストのあいだに
 // 変わりうるからである。
 type Service struct {
-	Workspace      *storage.Workspace
-	Resolver       config.Resolver
-	Evaluator      effective.Evaluator
-	Reachability   Reachability
-	Authentication Authentication
-	Terminal       platform.TerminalLauncher
+	Workspace         *storage.Workspace
+	Resolver          config.Resolver
+	Evaluator         effective.Evaluator
+	Reachability      Reachability
+	Authentication    Authentication
+	Terminal          platform.TerminalLauncher
+	PreferredTerminal func() platform.TerminalID
 	// Self はこのバイナリの絶対パス。ユーザーに見せるコマンドを、実際に実行できる
 	// ものにするためである。アプリケーションの内側には、それがどこにインストール
 	// されたかを知るものがない。エントリポイントが一度だけ解決して渡す。空の場合は
@@ -237,6 +238,16 @@ func (s *Service) LaunchTerminal(ctx context.Context, alias string) error {
 	if s.Terminal == nil {
 		return ErrTerminalNotConfigured
 	}
+	terminal := platform.TerminalApple
+	if s.PreferredTerminal != nil {
+		terminal = s.PreferredTerminal()
+	}
+	if selectable, ok := s.Terminal.(platform.SelectableTerminalLauncher); ok {
+		return selectable.LaunchIn(ctx, terminal, alias)
+	}
+	if terminal != platform.TerminalApple {
+		return ErrTerminalNotConfigured
+	}
 	return s.Terminal.Launch(ctx, alias)
 }
 
@@ -296,8 +307,18 @@ func (s *Service) LaunchTerminalWithPassword(ctx context.Context, alias, helperP
 	if s.Terminal == nil {
 		return ErrTerminalNotConfigured
 	}
+	terminal := platform.TerminalApple
+	if s.PreferredTerminal != nil {
+		terminal = s.PreferredTerminal()
+	}
+	if selectable, ok := s.Terminal.(platform.SelectablePasswordTerminalLauncher); ok {
+		return selectable.LaunchWithPasswordIn(ctx, terminal, alias, helperPath, endpoint, token)
+	}
 	launcher, ok := s.Terminal.(platform.PasswordTerminalLauncher)
 	if !ok {
+		return ErrPasswordLaunchUnsupported
+	}
+	if terminal != platform.TerminalApple {
 		return ErrPasswordLaunchUnsupported
 	}
 	return launcher.LaunchWithPassword(ctx, alias, helperPath, endpoint, token)
