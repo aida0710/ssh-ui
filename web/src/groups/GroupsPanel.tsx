@@ -19,6 +19,7 @@ import { useTranslate } from "../i18n/context";
 import { Notice } from "../ui/surface";
 import type { InspectorContent } from "../ui/Inspector";
 import { GroupInspector } from "./GroupInspector";
+import { MetricCard, MetricGrid, PageHeader } from "../ui/page";
 
 function toProblem(error: unknown): Problem {
   if (error instanceof ApiError && error.problem !== null) return error.problem;
@@ -315,14 +316,25 @@ export function GroupsPanel({ onInspector }: GroupsPanelProps = {}) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <p className="text-xs text-ink-muted">
-        {t("groups.directoryNote", { connections: "connections", keys: "keys" })}
-      </p>
-      <p className="text-xs text-ink-muted">
-        {t("groups.compileNote", { file: loaded.groupsFile ?? "groups.sshc.conf" })}
-      </p>
-      <p className="text-xs text-ink-faint">{t("groups.orderNote")}</p>
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+      <PageHeader title={t("groups.pageTitle")} description={t("groups.pageDescription")} />
+      <MetricGrid>
+        <MetricCard label={t("groups.metricGroups")} value={groups.length} />
+        <MetricCard
+          label={t("groups.metricConnections")}
+          value={hosts.filter((host) => host.identity.alias !== "").length}
+        />
+        <MetricCard label={t("groups.metricDraft")} value={unsaved ? 1 : 0} attention={unsaved} />
+      </MetricGrid>
+      <div className="rounded-xl border border-line bg-card p-4">
+        <p className="text-sm text-ink-muted">
+          {t("groups.directoryNote", { connections: "connections", keys: "keys" })}
+        </p>
+        <p className="mt-1 text-xs text-ink-muted">
+          {t("groups.compileNote", { file: loaded.groupsFile ?? "groups.sshc.conf" })}
+        </p>
+        <p className="mt-1 text-xs text-ink-faint">{t("groups.orderNote")}</p>
+      </div>
       {localError === "" ? null : <Notice tone="danger">{localError}</Notice>}
       {/*
         宣言とディスクが互いについて何を語るか。connections/下にあり、
@@ -332,6 +344,9 @@ export function GroupsPanel({ onInspector }: GroupsPanelProps = {}) {
       */}
       <NoticeList notices={groupNotices} />
 
+      {groups.length === 0 ? (
+        <p className="rounded-xl border border-line bg-card p-5 text-sm text-ink-muted">{t("groups.empty")}</p>
+      ) : null}
       <ul aria-label={t("groups.listLabel")} className="flex flex-col gap-3">
         {groups.map((group) => (
           <li
@@ -340,8 +355,8 @@ export function GroupsPanel({ onInspector }: GroupsPanelProps = {}) {
             // 接続ツリーと同じ方法でどれが開いているかを示す。
             onFocus={() => setSelected(group.name)}
             onClick={() => setSelected(group.name)}
-            className={`rounded-lg border p-3 ${
-              selected === group.name ? "border-line bg-select-fill" : "border-line"
+            className={`rounded-xl border bg-card p-4 transition-colors ${
+              selected === group.name ? "border-control-line bg-select-fill shadow-sm" : "border-line hover:bg-select-fill"
             }`}
             style={{ marginInlineStart: `${(depthOf(group.name) - 1) * 1.5}rem` }}
           >

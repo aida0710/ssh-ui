@@ -18,6 +18,7 @@ import {
   sectionHeading,
 } from "../ui/form";
 import { Card, Notice, Row } from "../ui/surface";
+import { MetricCard, MetricGrid, PageHeader } from "../ui/page";
 
 type SyncPanelProps = { api?: IntegrationsApi };
 
@@ -98,10 +99,10 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
   // それはまさに、保存することが防ぐはずだったことだ。
   if (status.locked) {
     return (
-      <div className="flex flex-col gap-4">
-        <h2 className="font-medium">{t("sync.heading")}</h2>
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+        <PageHeader title={t("sync.heading")} description={t("sync.pageDescription")} />
         {error === "" ? null : <Notice tone="danger">{error}</Notice>}
-        <section className="flex flex-col gap-3">
+        <section className="flex flex-col gap-3 rounded-xl border border-line bg-card p-5">
           <h3 className={sectionHeading}>{t("sync.bucketHeading")}</h3>
           <p className="text-sm text-ink-muted">{t("sync.sealed")}</p>
           <Field label={t("secrets.master")}>
@@ -141,8 +142,20 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
   const conflicted = (preview?.conflicts ?? []).length > 0;
 
   return (
-    <div className="flex flex-col gap-4">
-      <h2 className="font-medium">{t("sync.heading")}</h2>
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+      <PageHeader title={t("sync.heading")} description={t("sync.pageDescription")} />
+      <MetricGrid>
+        <MetricCard
+          label={t("sync.metricConfiguration")}
+          value={t(status.configured ? "sync.stateConfigured" : "sync.stateNotConfigured")}
+        />
+        <MetricCard label={t("sync.metricDirection")} value={t(`sync.direction.${status.direction}`)} />
+        <MetricCard
+          label={t("sync.metricSnapshot")}
+          value={status.synced ? status.fileCount ?? 0 : "—"}
+          detail={status.synced ? status.lastSyncedAt ?? "" : t("sync.neverSynced")}
+        />
+      </MetricGrid>
       {/*
         フォームの後ではなく前に伝える。~/.ssh の中身はすべて、秘密鍵を
         含めて移動する。バケットとそれらの間にあるのは
@@ -152,7 +165,7 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
       {error === "" ? null : <Notice tone="danger">{error}</Notice>}
       {notice === "" ? null : <p role="status" className="text-sm text-ink-muted">{notice}</p>}
 
-      <section className="flex flex-col gap-3">
+      <section className="flex flex-col gap-3 rounded-xl border border-line bg-card p-5">
         <h3 className={sectionHeading}>{t("sync.bucketHeading")}</h3>
         {status.configured ? (
           <p className="font-mono text-xs text-ink-muted">
@@ -257,7 +270,7 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
         </button>
       </section>
 
-      <section className="flex flex-col gap-3">
+      <section className="flex flex-col gap-3 rounded-xl border border-line bg-card p-5">
         <h3 className={sectionHeading}>{t("sync.snapshotHeading")}</h3>
         <p className={hintText}>
           {status.synced
@@ -326,7 +339,7 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
       </section>
 
       {preview === null ? null : (
-        <section className="flex flex-col gap-3">
+        <section className="flex flex-col gap-3 rounded-xl border border-line bg-card p-5">
           <h3 className={sectionHeading}>{t("sync.previewHeading")}</h3>
           {conflicted ? (
             <>

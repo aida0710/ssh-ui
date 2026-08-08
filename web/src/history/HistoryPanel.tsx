@@ -4,6 +4,7 @@ import { ApiError, type Problem } from "../api/client";
 import { configApi, type HistoryEntry, type PendingTransaction } from "../api/config";
 import { secondaryAction } from "../ui/form";
 import { Notice } from "../ui/surface";
+import { MetricCard, MetricGrid, PageHeader } from "../ui/page";
 
 function toProblem(error: unknown): Problem {
   if (error instanceof ApiError && error.problem !== null) return error.problem;
@@ -59,14 +60,27 @@ export function HistoryPanel() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+      <PageHeader title={t("history.pageTitle")} description={t("history.pageDescription")} />
+      <MetricGrid>
+        <MetricCard label={t("history.metricChanges")} value={entries.length} />
+        <MetricCard
+          label={t("history.metricInterrupted")}
+          value={pending.length}
+          attention={pending.length > 0}
+        />
+        <MetricCard
+          label={t("history.metricRestorable")}
+          value={entries.reduce((count, entry) => count + (entry.restorable?.length ?? 0), 0)}
+        />
+      </MetricGrid>
       {problem === null ? null : (
         <Notice tone="danger">{t("history.requestRejected", { code: problem.code })}</Notice>
       )}
       {message === "" ? null : <p role="status" className="text-sm text-live">{message}</p>}
 
       {pending.length === 0 ? null : (
-        <section aria-labelledby="pending-heading" className="flex flex-col gap-2 rounded border border-notice-line p-3">
+        <section aria-labelledby="pending-heading" className="flex flex-col gap-3 rounded-xl border border-notice-line bg-notice p-4">
           <h3 id="pending-heading" className="text-sm font-medium text-notice-ink">{t("history.interrupted")}</h3>
           {pending.map((item) => (
             <div key={item.id} className="flex flex-col gap-1">
@@ -101,15 +115,15 @@ export function HistoryPanel() {
         </section>
       )}
 
-      <section aria-labelledby="history-heading" className="flex flex-col gap-2">
-        <h3 id="history-heading" className="text-sm font-medium">{t("history.completed")}</h3>
+      <section aria-labelledby="history-heading" className="flex flex-col gap-3">
+        <h3 id="history-heading" className="font-medium">{t("history.completed")}</h3>
         {entries.length === 0 ? (
-          <p className="text-xs text-ink-faint">{t("history.empty")}</p>
+          <p className="rounded-xl border border-line bg-card p-5 text-sm text-ink-muted">{t("history.empty")}</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {entries.map((entry) => (
-              <li key={entry.id} className="rounded border border-line p-3">
-                <p className="text-sm text-ink">{entry.operation}</p>
+              <li key={entry.id} className="rounded-xl border border-line bg-card p-4">
+                <p className="font-medium text-ink">{entry.operation}</p>
                 <p className="text-xs text-ink-muted">{`${entry.startedAt} · ${entry.status} · ${entry.paths.join(", ")}`}</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {(entry.restorable ?? []).map((path) => (

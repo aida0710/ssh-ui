@@ -228,6 +228,22 @@ describe("KeysScreen", () => {
     expect(within(legacyRow).getByText("Fingerprint unavailable")).toBeInTheDocument();
   });
 
+  it("summarises the inventory and searches file, host and fingerprint", async () => {
+    const user = userEvent.setup();
+    render(<KeysScreen api={buildApi()} />);
+
+    expect((await screen.findByText("Key files")).parentElement).toHaveTextContent("2");
+    const search = screen.getByRole("searchbox", { name: "Search keys" });
+    await user.type(search, "build-*");
+    expect(screen.getByRole("row", { name: /id_work/ })).toBeInTheDocument();
+    expect(screen.queryByRole("row", { name: /legacy/ })).not.toBeInTheDocument();
+
+    await user.clear(search);
+    await user.type(search, "sha256:abcdef");
+    expect(screen.getByRole("row", { name: /id_work/ })).toBeInTheDocument();
+    expect(screen.queryByRole("row", { name: /legacy/ })).not.toBeInTheDocument();
+  });
+
   it("shows the exact ssh-keygen command for a hardware method instead of generating", async () => {
     const api = buildApi();
     render(<KeysScreen api={api} />);

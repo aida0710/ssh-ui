@@ -14,6 +14,7 @@ import {
   tableHeadRow,
 } from "../ui/form";
 import { Card, Row } from "../ui/surface";
+import { MetricCard, MetricGrid, PageHeader } from "../ui/page";
 import type { MessageKey } from "../i18n/messages";
 import { integrationsApi, type Credential, type IntegrationsApi } from "../api/integrations";
 import {
@@ -197,6 +198,7 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
   const [pendingPurge, setPendingPurge] = useState("");
   const [pendingTrash, setPendingTrash] = useState<KeyItem | null>(null);
   const [failure, setFailure] = useState("");
+  const [keyQuery, setKeyQuery] = useState("");
 
   const refresh = useCallback(async () => {
     try {
@@ -438,18 +440,55 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
     return <p role="alert">{t("keys.unreadable")}</p>;
   }
 
+  const query = keyQuery.trim().toLowerCase();
+  const visibleItems = inventory.items.filter((item) =>
+    query === "" ||
+    item.relativePath.toLowerCase().includes(query) ||
+    item.kind.toLowerCase().includes(query) ||
+    item.algorithm.toLowerCase().includes(query) ||
+    item.fingerprint.toLowerCase().includes(query) ||
+    item.references.some((reference) =>
+      reference.hostPatterns.some((pattern) => pattern.toLowerCase().includes(query)),
+    ),
+  );
+  const keyAttention =
+    inventory.unreadable.length +
+    inventory.unresolvedReferences.length +
+    inventory.items.filter((item) => item.permissionRisk).length;
+
   return (
-    <section aria-labelledby="keys-heading" className="flex flex-col gap-8">
-      <h2 id="keys-heading" className="text-lg font-medium">
-        {t("keys.heading")}
-      </h2>
+    <section className="mx-auto flex w-full max-w-7xl flex-col gap-6">
+      <PageHeader
+        title={t("keys.heading")}
+        description={t("keys.pageDescription")}
+        actions={
+          <label className="w-72 max-w-full">
+            <span className="sr-only">{t("keys.search")}</span>
+            <input
+              type="search"
+              value={keyQuery}
+              onChange={(event) => setKeyQuery(event.target.value)}
+              placeholder={t("keys.searchPlaceholder")}
+              className={control}
+            />
+          </label>
+        }
+      />
+      <MetricGrid>
+        <MetricCard label={t("keys.metricFiles")} value={inventory.items.length} />
+        <MetricCard
+          label={t("keys.metricPrivate")}
+          value={inventory.items.filter((item) => item.kind === "private_key").length}
+        />
+        <MetricCard label={t("keys.metricAttention")} value={keyAttention} attention={keyAttention > 0} />
+      </MetricGrid>
       {failure !== "" && (
         <p role="alert" className="rounded-md border border-control-line p-3 text-sm text-danger">
           {failure}
         </p>
       )}
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto rounded-xl border border-line bg-card">
       <table className="w-full min-w-[56rem] text-left text-sm">
         <caption className="sr-only">{t("keys.tableCaption")}</caption>
         <thead>
@@ -464,9 +503,9 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
           </tr>
         </thead>
         <tbody>
-          {inventory.items.map((item) => (
-            <tr key={item.id} className="border-b border-line align-top">
-              <td className="py-2 pr-3 font-mono text-xs">{item.relativePath}</td>
+          {visibleItems.map((item) => (
+            <tr key={item.id} className="border-b border-line align-top transition-colors last:border-b-0 hover:bg-select-fill">
+              <td className="py-3 pl-3 pr-3 font-mono text-xs">{item.relativePath}</td>
               <td className="py-2 pr-3">
                 {item.kind}
                 {item.certificate === undefined ? null : (
@@ -577,10 +616,10 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
               </td>
             </tr>
           ))}
-          {inventory.items.length === 0 && (
+          {visibleItems.length === 0 && (
             <tr>
-              <td colSpan={7} className="py-3 text-sm text-ink-muted">
-                {t("keys.inventoryEmpty")}
+              <td colSpan={7} className="p-5 text-sm text-ink-muted">
+                {inventory.items.length === 0 ? t("keys.inventoryEmpty") : t("keys.noMatches")}
               </td>
             </tr>
           )}
