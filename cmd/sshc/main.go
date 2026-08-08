@@ -141,7 +141,7 @@ func main() {
 			context.Background(), app.HandoffDir(home),
 			&http.Client{Timeout: connectTimeout},
 			func(target string) error {
-				return macos.NewBrowser(macos.NewExecRunner()).Open(context.Background(), target)
+				return macos.NewBrowser(macos.NewOutputRunner()).Open(context.Background(), target)
 			},
 			os.Stderr,
 		))
@@ -239,7 +239,7 @@ func main() {
 	runner := macos.NewOutputRunner()
 	toolchain := macos.NewToolchain()
 
-	var browser platform.BrowserLauncher = macos.NewBrowser(macos.NewExecRunner())
+	var browser platform.BrowserLauncher = macos.NewBrowser(runner)
 	if !*openBrowser {
 		browser = urlPrinter{out: os.Stdout}
 	}
