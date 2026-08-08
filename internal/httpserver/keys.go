@@ -16,6 +16,7 @@ import (
 	"sshc/internal/application"
 	"sshc/internal/keys"
 	"sshc/internal/platform"
+	"sshc/internal/secret"
 	"sshc/internal/session"
 	"sshc/internal/storage"
 )
@@ -65,6 +66,7 @@ type KeyHandlers struct {
 	// これは何かが反映される前に再パースと再解決を行う——鍵 vault 自身の
 	// マネージャには、意図的にそのような validator がない。
 	Config   *application.Service
+	Secrets  *secret.Service
 	Sessions *session.Manager
 	// Actions は確認を発行し、消費する。それを発行するエンドポイントは
 	// 他のすべてのサブシステムと共有されるので、どこか別の場所で一度だけ登録される。
@@ -302,7 +304,20 @@ func (h KeyHandlers) Relocate(c *echo.Context) error {
 	if err != nil {
 		return keyProblem(c, err)
 	}
+	if h.Secrets != nil {
+		if err := h.Secrets.RelocateKeyPassphrases(keyRelocationMap(result.Files)); err != nil {
+			return serviceProblem(c, err)
+		}
+	}
 	return c.JSON(http.StatusOK, response)
+}
+
+func keyRelocationMap(files []application.RelocatedKeyFile) map[string]string {
+	relocations := make(map[string]string, len(files))
+	for _, file := range files {
+		relocations[file.From] = file.To
+	}
+	return relocations
 }
 
 func relocateKeyResponse(result application.KeyRelocateResult) api.RelocateKeyResponse {

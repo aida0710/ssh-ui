@@ -74,6 +74,7 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
   const [moveTarget, setMoveTarget] = useState("");
   const [creating, setCreating] = useState(false);
   const [launching, setLaunching] = useState(false);
+  const [managing, setManaging] = useState(false);
 
   const reload = useCallback(async () => {
     try {
@@ -161,6 +162,8 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
     // もう開いていないブロックのバイトを記述しているからだ。保存はここで
     // はなく submit を通じて再選択を行い、その diff は画面に残しておく。
     setPreview(null);
+    setManaging(false);
+    setConfirmingDelete(false);
     setSelection({ path: host.identity.path, alias: host.identity.alias });
   }
 
@@ -496,7 +499,10 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
               <Button kind="primary" disabled={launching} onClick={() => void connectHost()}>
                 {launching ? t("conn.opening") : t("conn.connect")}
               </Button>
-              <span aria-hidden="true" className="mx-1 h-6 w-px bg-line" />
+              <Button aria-expanded={managing} onClick={() => setManaging((current) => !current)}>
+                {t("conn.manage")}
+              </Button>
+              {managing ? <div className="flex w-full flex-wrap items-center gap-2 border-t border-line pt-3">
               <Button onClick={duplicateHost}>{t("conn.duplicate")}</Button>
               <label htmlFor="move-target" className="sr-only">{t("conn.moveToFile")}</label>
               <select
@@ -522,6 +528,7 @@ export function ConnectionsPage({ onOpenFile, onInspector }: ConnectionsPageProp
               ) : (
                 <Button kind="danger" onClick={() => setConfirmingDelete(true)}>{t("conn.delete")}</Button>
               )}
+              </div> : null}
             </div>
             <HostDetailPanel
               detail={detail}

@@ -386,6 +386,46 @@ func (v *Vault) Rename(kind Kind, from, to string) error {
 	return nil
 }
 
+// RelocateSubjects は複数の subject 名を一つのスナップショットとして移す。
+//
+// グループ名の変更では、親と子の鍵が同時に移動する。1 件ずつ Rename すると、
+// ある移動先が別の移動元でもある場合に先の値を上書きし得るため、変更前の
+// map から値を集め、すべての移動元を消してから移動先へ置く。
+func (v *Vault) RelocateSubjects(kind Kind, relocations map[string]string) (bool, error) {
+	if !ValidKind(kind) {
+		return false, ErrUnknownKind
+	}
+	if len(relocations) == 0 {
+		return false, nil
+	}
+	moved := make(map[string]string)
+	for from, to := range relocations {
+		if from == to {
+			continue
+		}
+		if kind == KindPassword {
+			if err := platform.ValidateAlias(to); err != nil {
+				return false, ErrUnsafeName
+			}
+		} else if to == "" || strings.ContainsRune(to, '\x00') {
+			return false, ErrUnsafeName
+		}
+		if name, ok := v.subjects[kind][from]; ok {
+			moved[to] = name
+		}
+	}
+	if len(moved) == 0 {
+		return false, nil
+	}
+	for from := range relocations {
+		delete(v.subjects[kind], from)
+	}
+	for to, name := range moved {
+		v.subjects[kind][to] = name
+	}
+	return true, nil
+}
+
 // validCredentialName は、人が打ち込み、画面が表示できる名前を受け付ける。これは
 // alias ではない。資格情報は、それが何のためのものかにちなんで名付けられ、それは
 // ホスト名ではなく「オフィスの VM 群」かもしれないからだ。

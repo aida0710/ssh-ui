@@ -87,6 +87,17 @@ test("stores an encrypted key passphrase from the key row and shows only its nam
   await expect(passphrases).toContainText("saved-e2e-key");
   await expect(passphrases).toContainText("id_saved_phrase");
   await expect(page.locator("body")).not.toContainText(passphrase);
+
+  await openSection(page, "Keys");
+  const assignedRow = page.getByRole("row", { name: /id_saved_phrase\b/ }).first();
+  await assignedRow.getByRole("button", { name: "More actions" }).click();
+  await assignedRow.getByRole("button", { name: "Rename or move" }).click();
+  await page.getByLabel("Name", { exact: true }).fill("id_saved_phrase_renamed");
+  expect(await clickAndAwait(page, "Rename or move the key", "/api/v1/keys/")).toBe(200);
+
+  await openSection(page, "Secrets");
+  await expect(passphrases).toContainText("id_saved_phrase_renamed");
+  await expect(passphrases).not.toContainText(/\bid_saved_phrase\b(?!_renamed)/);
 });
 
 // 試験対象のバイナリは HOME と PATH だけで起動されるため、SSH_AUTH_SOCK
@@ -136,6 +147,7 @@ test("renames a key and carries every directive that named it", async ({ page, i
   expect(await clickAndAwait(page, "Create key", "/api/v1/keys")).toBe(201);
 
   const row = page.getByRole("row", { name: /id_rename\b/ }).first();
+  await row.getByRole("button", { name: "More actions" }).click();
   await row.getByRole("button", { name: "Rename or move" }).click();
   await page.getByLabel("Name", { exact: true }).fill("id_renamed");
   expect(await clickAndAwait(page, "Rename or move the key", "/api/v1/keys/")).toBe(200);
@@ -166,6 +178,7 @@ test("refuses a rename whose destination is taken, and writes nothing", async ({
 
   const before = await installation.read("id_first");
   const row = page.getByRole("row", { name: /id_first\b/ }).first();
+  await row.getByRole("button", { name: "More actions" }).click();
   await row.getByRole("button", { name: "Rename or move" }).click();
   await page.getByLabel("Name", { exact: true }).fill("id_second");
   expect(await clickAndAwait(page, "Rename or move the key", "/api/v1/keys/")).toBe(409);

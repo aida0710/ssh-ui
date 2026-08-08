@@ -203,6 +203,7 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
   const [pendingTrash, setPendingTrash] = useState<KeyItem | null>(null);
   const [failure, setFailure] = useState("");
   const [keyQuery, setKeyQuery] = useState("");
+  const [moreActionsFor, setMoreActionsFor] = useState("");
 
   const refresh = useCallback(async () => {
     try {
@@ -594,18 +595,6 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
                     <button type="button" className={rowAction} onClick={() => setRevealing(item)}>
                       {t("keys.showPrivateKey")}
                     </button>
-                    <button
-                      type="button"
-                      className={rowAction}
-                      onClick={() => {
-                        closePassphraseForm();
-                        closeAgentForm();
-                        closeStoredPassphraseForm();
-                        setChangingPassphrase(item);
-                      }}
-                    >
-                      {t("keys.changePassphrase")}
-                    </button>
                     {item.encrypted ? (
                       <button
                         type="button"
@@ -654,18 +643,62 @@ export function KeysScreen({ api = keysApi, groups = [], secrets = integrationsA
                     <button
                       type="button"
                       className={rowAction}
-                      onClick={() => {
-                        closePassphraseForm();
-                        closeAgentForm();
-                        closeStoredPassphraseForm();
-                        setPendingTrash(item);
-                      }}
+                      aria-expanded={moreActionsFor === item.id}
+                      onClick={() => setMoreActionsFor((current) => current === item.id ? "" : item.id)}
                     >
-                      {t("keys.moveToTrash")}
+                      {t("keys.moreActions")}
                     </button>
+                    {moreActionsFor === item.id ? (
+                      <div className="flex flex-wrap gap-1 rounded-md border border-line bg-surface-subtle p-1">
+                        <button
+                          type="button"
+                          className={rowAction}
+                          onClick={() => {
+                            setMoreActionsFor("");
+                            closePassphraseForm();
+                            closeAgentForm();
+                            closeStoredPassphraseForm();
+                            setChangingPassphrase(item);
+                          }}
+                        >
+                          {t("keys.changePassphrase")}
+                        </button>
+                        {renameable(item, inventory.items) ? (
+                          <button
+                            type="button"
+                            className={rowAction}
+                            onClick={() => {
+                              setMoreActionsFor("");
+                              closePassphraseForm();
+                              closeAgentForm();
+                              closeStoredPassphraseForm();
+                              setRelocated(null);
+                              setNewName(relocateStem(item));
+                              setNewGroup(groupOfKeyPath(item.relativePath));
+                              setRelocating(item);
+                            }}
+                          >
+                            {t("keys.relocate")}
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          className={rowDanger}
+                          onClick={() => {
+                            setMoreActionsFor("");
+                            closePassphraseForm();
+                            closeAgentForm();
+                            closeStoredPassphraseForm();
+                            setPendingTrash(item);
+                          }}
+                        >
+                          {t("keys.moveToTrash")}
+                        </button>
+                      </div>
+                    ) : null}
                   </>
                 )}
-                {renameable(item, inventory.items) && (
+                {item.kind !== "private_key" && renameable(item, inventory.items) && (
                   <button
                     type="button"
                     className={rowAction}

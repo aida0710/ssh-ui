@@ -469,6 +469,23 @@ func (s *Service) KeyPassphraseFor(relativePath string) (string, bool) {
 	return vault.SecretFor(KindKeyPassphrase, relativePath)
 }
 
+// RelocateKeyPassphrases は鍵のパス変更に名前付きパスフレーズの割り当てを
+// 追従させる。秘密の値には触れず、vault 内の subject 参照だけを一度に移す。
+func (s *Service) RelocateKeyPassphrases(relocations map[string]string) error {
+	s.mu.Lock()
+	vault := s.use()
+	if vault == nil {
+		s.mu.Unlock()
+		return ErrLocked
+	}
+	changed, err := vault.RelocateSubjects(KindKeyPassphrase, relocations)
+	s.mu.Unlock()
+	if err != nil || !changed {
+		return err
+	}
+	return s.write()
+}
+
 // SealBackup は世代バックアップをひとつ封じ、OpenBackup はそれを開く。
 //
 // これらはストレージ層に import されるのではなく、そこへ渡される。秘密がどこに

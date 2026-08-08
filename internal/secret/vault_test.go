@@ -324,6 +324,34 @@ func TestVaultKeepsTheTwoNamespacesApart(t *testing.T) {
 	}
 }
 
+func TestVaultRelocatesKeySubjectsFromOneSnapshot(t *testing.T) {
+	vault, err := secret.Create(passphrase)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = vault.Set(secret.KindKeyPassphrase, "work", "phrase")
+	_ = vault.Assign(secret.KindKeyPassphrase, "keys/work/id_a", "work")
+	_ = vault.Assign(secret.KindKeyPassphrase, "keys/work/id_b", "work")
+
+	changed, err := vault.RelocateSubjects(secret.KindKeyPassphrase, map[string]string{
+		"keys/work/id_a": "keys/client/id_a",
+		"keys/work/id_b": "keys/client/id_b",
+	})
+	if err != nil || !changed {
+		t.Fatalf("RelocateSubjects = %v, %v", changed, err)
+	}
+	for _, old := range []string{"keys/work/id_a", "keys/work/id_b"} {
+		if _, ok := vault.SecretFor(secret.KindKeyPassphrase, old); ok {
+			t.Errorf("old subject %q still resolves", old)
+		}
+	}
+	for _, next := range []string{"keys/client/id_a", "keys/client/id_b"} {
+		if value, ok := vault.SecretFor(secret.KindKeyPassphrase, next); !ok || value != "phrase" {
+			t.Errorf("new subject %q = %q, %v", next, value, ok)
+		}
+	}
+}
+
 // 秘密に名前を付ける意味は、20 台のマシンがひとつのエントリを共有することにある。
 // だからそのエントリは、まだどれかが指しているあいだは取り除けない。
 func TestVaultRefusesToDeleteACredentialInUseAndSaysWhatUsesIt(t *testing.T) {

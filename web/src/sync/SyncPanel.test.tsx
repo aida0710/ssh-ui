@@ -71,10 +71,20 @@ describe("SyncPanel", () => {
         direction: "both",
       }),
     );
-    await waitFor(() =>
-      expect((screen.getByLabelText("Secret access key") as HTMLInputElement).value).toBe(""),
-    );
+    await waitFor(() => expect(screen.queryByLabelText("Secret access key")).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Edit bucket settings" })).toBeInTheDocument();
     expect(document.body.textContent ?? "").not.toContain("the-secret");
+  });
+
+  it("keeps configured credentials collapsed until they need editing", async () => {
+    render(<SyncPanel api={buildApi(configured, nothingToDo)} />);
+
+    expect(await screen.findByText("https://acc.r2.cloudflarestorage.com/sshc")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Secret access key")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Edit bucket settings" }));
+    expect(screen.getByLabelText("Endpoint")).toHaveValue("https://acc.r2.cloudflarestorage.com");
+    expect(screen.getByLabelText("Bucket name")).toHaveValue("sshc");
+    expect(screen.getByLabelText("Secret access key")).toHaveValue("");
   });
 
   // リージョンは署名スコープに入る。R2 の "auto" と本物の AWS のバケットの

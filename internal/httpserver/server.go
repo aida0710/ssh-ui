@@ -128,7 +128,7 @@ func New(options Options) (*Server, error) {
 	e.POST("/api/v1/session/renew", handlers.Renew)
 	e.GET("/api/v1/health", handlers.Health)
 	if options.Config != nil {
-		registerConfigRoutes(e, ConfigHandlers{Service: options.Config, Keys: options.Keys})
+		registerConfigRoutes(e, ConfigHandlers{Service: options.Config, Keys: options.Keys, Secrets: options.Passwords})
 	}
 
 	// 操作を確認するすべてのサブシステムは、自分の evidence resolver を
@@ -148,7 +148,8 @@ func New(options Options) (*Server, error) {
 
 	if options.Keys != nil {
 		registerKeyRoutes(e, KeyHandlers{
-			Keys: options.Keys, Config: options.Config, Sessions: options.Sessions, Actions: actions,
+			Keys: options.Keys, Config: options.Config, Secrets: options.Passwords,
+			Sessions: options.Sessions, Actions: actions,
 		})
 	}
 	if options.Diagnostics != nil {

@@ -54,6 +54,18 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [editingSettings, setEditingSettings] = useState(false);
+
+  function editSettings(current: SyncStatus) {
+    setEndpoint(current.endpoint ?? "");
+    setBucket(current.bucket ?? "");
+    setPath(current.path ?? "");
+    setRegion(current.region ?? "");
+    setDirection(current.direction);
+    setAccessKeyId("");
+    setSecretAccessKey("");
+    setEditingSettings(true);
+  }
 
   const reload = useCallback(async () => {
     try {
@@ -168,12 +180,19 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
       <section className="flex flex-col gap-3 rounded-xl border border-line bg-card p-5">
         <h3 className={sectionHeading}>{t("sync.bucketHeading")}</h3>
         {status.configured ? (
-          <p className="font-mono text-xs text-ink-muted">
-            {[status.endpoint, status.bucket, status.path].filter((part) => part !== "" && part !== undefined).join("/")}
-            {/* リージョンはパスの一部ではないので、"/" では繋がない。署名スコープに
-                入る別の事実であり、それが何かを利用者が確かめられる必要がある。 */}
-            {status.region !== undefined && status.region !== "" ? ` (${status.region})` : ""}
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="font-mono text-xs text-ink-muted">
+              {[status.endpoint, status.bucket, status.path].filter((part) => part !== "" && part !== undefined).join("/")}
+              {/* リージョンはパスの一部ではないので、"/" では繋がない。署名スコープに
+                  入る別の事実であり、それが何かを利用者が確かめられる必要がある。 */}
+              {status.region !== undefined && status.region !== "" ? ` (${status.region})` : ""}
+            </p>
+            {!editingSettings ? (
+              <button type="button" className={secondaryAction} onClick={() => editSettings(status)}>
+                {t("sync.editSettings")}
+              </button>
+            ) : null}
+          </div>
         ) : (
           <p className="text-sm text-ink-muted">{t("sync.notConfigured")}</p>
         )}
@@ -182,6 +201,7 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
           ここのヒントは完全な文であり、コントロールの脇に置けば
           半分の列に押し込まれてしまうが、行の下ならその幅がある。
         */}
+        {!status.configured || editingSettings ? <>
         <Card>
           <Row label={t("sync.endpoint")} hint={t("sync.endpointHint")}>
             <input
@@ -260,6 +280,7 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
                 setStatus(next);
                 setAccessKeyId("");
                 setSecretAccessKey("");
+                setEditingSettings(false);
               },
               t("sync.configureFailed"),
             )
@@ -268,6 +289,12 @@ export function SyncPanel({ api = integrationsApi }: SyncPanelProps) {
         >
           {t("sync.configure")}
         </button>
+        {status.configured ? (
+          <button type="button" disabled={busy} onClick={() => setEditingSettings(false)} className={secondaryAction}>
+            {t("sync.cancelSettings")}
+          </button>
+        ) : null}
+        </> : null}
       </section>
 
       <section className="flex flex-col gap-3 rounded-xl border border-line bg-card p-5">

@@ -30,8 +30,21 @@ func groupRenameFixture(t *testing.T) (*Service, *storage.Workspace) {
 func TestGroupRenameMovesEveryFileAndRewritesEveryLineThatNamedIt(t *testing.T) {
 	service, workspace := groupRenameFixture(t)
 
-	if _, err := service.RenameGroup(keyInventory(t, workspace), "work", "client-a"); err != nil {
+	result, err := service.RenameGroup(keyInventory(t, workspace), "work", "client-a")
+	if err != nil {
 		t.Fatalf("RenameGroup error = %v", err)
+	}
+	wantRelocations := map[string]string{
+		"keys/work/id_work":     "keys/client-a/id_work",
+		"keys/work/id_work.pub": "keys/client-a/id_work.pub",
+	}
+	for _, relocation := range result.KeyRelocations {
+		if wantRelocations[relocation.From] == relocation.To {
+			delete(wantRelocations, relocation.From)
+		}
+	}
+	if len(wantRelocations) != 0 {
+		t.Errorf("KeyRelocations omitted %#v: %#v", wantRelocations, result.KeyRelocations)
 	}
 
 	// すべてのファイルが移動した。ネストしたグループはその親と共に…

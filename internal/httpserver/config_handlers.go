@@ -6,6 +6,7 @@ import (
 	"github.com/labstack/echo/v5"
 
 	"sshc/internal/application"
+	"sshc/internal/secret"
 )
 
 // ConfigHandlers は、configuration・metadata・history の各エンドポイントを提供する。
@@ -13,6 +14,7 @@ import (
 // 変更操作については Security.Middleware が強制する CSRF ヘッダーの背後にある。
 type ConfigHandlers struct {
 	Service *application.Service
+	Secrets *secret.Service
 	// Keys は group 操作が必要とするインベントリを供給する。group の rename は
 	// その鍵を移動させることを意味し、それらを指す IdentityFile をすべて書き換える。
 	Keys KeyService
@@ -138,6 +140,11 @@ func (h ConfigHandlers) RenameGroup(c *echo.Context) error {
 	if err != nil {
 		return serviceProblem(c, err)
 	}
+	if h.Secrets != nil {
+		if err := h.Secrets.RelocateKeyPassphrases(keyRelocationMap(result.KeyRelocations)); err != nil {
+			return serviceProblem(c, err)
+		}
+	}
 	return c.JSON(http.StatusOK, result)
 }
 
@@ -154,6 +161,11 @@ func (h ConfigHandlers) DeleteGroup(c *echo.Context) error {
 	result, err := h.Service.DeleteGroup(inventory, request.Name, request.Destination)
 	if err != nil {
 		return serviceProblem(c, err)
+	}
+	if h.Secrets != nil {
+		if err := h.Secrets.RelocateKeyPassphrases(keyRelocationMap(result.KeyRelocations)); err != nil {
+			return serviceProblem(c, err)
+		}
 	}
 	return c.JSON(http.StatusOK, result)
 }

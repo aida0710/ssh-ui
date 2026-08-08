@@ -426,6 +426,35 @@ func TestTheServiceWillNotCrossTheNamespaces(t *testing.T) {
 	}
 }
 
+func TestKeyPassphraseRelocationPersists(t *testing.T) {
+	service, home := newService(t)
+	if err := service.Initialise(passphrase); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.SetCredential(secret.KindKeyPassphrase, "work", "phrase"); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.AssignCredential(secret.KindKeyPassphrase, "keys/work/id_work", "work"); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.RelocateKeyPassphrases(map[string]string{
+		"keys/work/id_work": "keys/client-a/id_work",
+	}); err != nil {
+		t.Fatalf("RelocateKeyPassphrases = %v", err)
+	}
+
+	reopened := mustReopen(t, home)
+	if err := reopened.Unlock(passphrase); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := reopened.KeyPassphraseFor("keys/work/id_work"); ok {
+		t.Error("the old key path still resolves")
+	}
+	if value, ok := reopened.KeyPassphraseFor("keys/client-a/id_work"); !ok || value != "phrase" {
+		t.Errorf("relocated key passphrase = %q, %v", value, ok)
+	}
+}
+
 // オブジェクトストアの設定は同じマスターパスワードで封じられ、vault の中ではなく
 // 隣に置かれる。vault は移動する — remotesync.Collect は sshc/secrets を明示的に
 // 名指しする — のであり、バケットへの鍵がバケットの中にあってはならない。

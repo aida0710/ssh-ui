@@ -97,7 +97,12 @@ func (s *Service) commitGroupPlan(plan func(*config.Graph) (planned, error)) (Sa
 	for _, path := range result.Written {
 		written = append(written, s.displayPath(path))
 	}
-	return SaveResult{TransactionID: result.ID, Written: written, Preview: prepared.preview}, nil
+	return SaveResult{
+		TransactionID:  result.ID,
+		Written:        written,
+		Preview:        prepared.preview,
+		KeyRelocations: prepared.keyRelocations,
+	}, nil
 }
 
 // groupRelocation は、グループ操作が移動する 1 つのファイルである。
@@ -227,6 +232,12 @@ func (s *Service) planGroupLayout(
 	keyMoves, err := s.groupFileMoves(renamed, KeysDirectory, GroupKeyDirectory)
 	if err != nil {
 		return planned{}, err
+	}
+	for _, relocation := range keyMoves {
+		prepared.keyRelocations = append(prepared.keyRelocations, RelocatedKeyFile{
+			From: relocation.from,
+			To:   relocation.to,
+		})
 	}
 
 	stored, metadataPrecondition, err := s.metadata.Load()

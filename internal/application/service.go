@@ -111,6 +111,9 @@ type SaveResult struct {
 	TransactionID string      `json:"transactionId"`
 	Written       []string    `json:"written"`
 	Preview       SavePreview `json:"preview"`
+	// KeyRelocations は HTTP 応答には出さず、同じプロセス内で鍵パスに
+	// 結び付いた資格情報を追従させるためだけに運ぶ。
+	KeyRelocations []RelocatedKeyFile `json:"-"`
 }
 
 // IncludeReference は、1 個の Include 引数と、それが解決した先である。
@@ -468,6 +471,7 @@ type planned struct {
 	base              map[string][]byte
 	baseline          map[string]bool
 	preview           SavePreview
+	keyRelocations    []RelocatedKeyFile
 }
 
 // Preview は transaction を準備し、書き込まずにその diff を返す。

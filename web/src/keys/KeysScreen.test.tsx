@@ -274,6 +274,7 @@ describe("KeysScreen", () => {
     render(<KeysScreen api={api} />);
 
     const workRow = await screen.findByRole("row", { name: /id_work/ });
+    await userEvent.click(within(workRow).getByRole("button", { name: "More actions" }));
     await userEvent.click(within(workRow).getByRole("button", { name: "Change passphrase" }));
 
     await userEvent.type(screen.getByLabelText("Current passphrase"), "first passphrase");
@@ -290,6 +291,7 @@ describe("KeysScreen", () => {
     await waitFor(() => expect(screen.queryByLabelText("Current passphrase")).not.toBeInTheDocument());
 
     const reopened = await screen.findByRole("row", { name: /id_work/ });
+    await userEvent.click(within(reopened).getByRole("button", { name: "More actions" }));
     await userEvent.click(within(reopened).getByRole("button", { name: "Change passphrase" }));
     expect(screen.getByLabelText("Current passphrase")).toHaveValue("");
     expect(screen.getByLabelText("New passphrase")).toHaveValue("");
@@ -606,6 +608,7 @@ describe("KeysScreen", () => {
     render(<KeysScreen api={api} />);
 
     const row = await screen.findByRole("row", { name: /id_work\b/ });
+    await user.click(within(row).getByRole("button", { name: "More actions" }));
     await user.click(within(row).getByRole("button", { name: "Rename or move" }));
 
     // フィールドはリネームが変える名前から始まる。ユーザーが打ち直すのではなく
@@ -642,6 +645,7 @@ describe("KeysScreen", () => {
     render(<KeysScreen api={api} />);
 
     const row = await screen.findByRole("row", { name: /id_work\b/ });
+    await user.click(within(row).getByRole("button", { name: "More actions" }));
     await user.click(within(row).getByRole("button", { name: "Rename or move" }));
     await user.clear(screen.getByLabelText("Name"));
     await user.type(screen.getByLabelText("Name"), "id_build");
@@ -670,6 +674,7 @@ describe("KeysScreen", () => {
     expect(within(publicRow).queryByRole("button", { name: "Rename or move" })).not.toBeInTheDocument();
     // リネームの本来の場所は秘密鍵側であり、そこに提供される。
     const privateRow = screen.getByRole("row", { name: /id_work\s/ });
+    await userEvent.click(within(privateRow).getByRole("button", { name: "More actions" }));
     expect(within(privateRow).getByRole("button", { name: "Rename or move" })).toBeInTheDocument();
   });
 
@@ -721,7 +726,9 @@ describe("KeysScreen", () => {
     const api = buildApi();
     render(<KeysScreen api={api} />);
 
-    await user.click((await screen.findAllByRole("button", { name: "Move to trash" }))[0]!);
+    const privateRow = (await screen.findByText("id_work", { selector: "td" })).closest("tr")!;
+    await user.click(within(privateRow).getByRole("button", { name: "More actions" }));
+    await user.click(within(privateRow).getByRole("button", { name: "Move to trash" }));
 
     expect(await screen.findByText(/These files move together/)).toBeInTheDocument();
     expect(screen.getByText(/Nothing is deleted/)).toBeInTheDocument();
